@@ -206,7 +206,7 @@ public sealed class DatasetGenerationExecutorTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 

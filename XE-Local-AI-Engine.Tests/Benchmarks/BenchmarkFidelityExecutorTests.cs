@@ -494,7 +494,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             IReadOnlyList<string> arguments,
             CancellationToken cancellationToken)
         {
-            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(Timeout.Infinite, cancellationToken);
             throw new InvalidOperationException("The hanging runner only ever ends by cancellation.");
         }
     }
@@ -510,7 +510,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             var index = arguments.ToList().IndexOf("--kl-divergence-base");
             if (index >= 0 && !arguments.Contains("--kl-divergence", StringComparer.Ordinal))
             {
-                await File.WriteAllTextAsync(arguments[index + 1], "logits", cancellationToken).ConfigureAwait(false);
+                await File.WriteAllTextAsync(arguments[index + 1], "logits", cancellationToken);
             }
 
             return new BenchmarkPerplexityProcessResult(0, output());

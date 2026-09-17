@@ -44,15 +44,14 @@ public sealed class DatasetGenerationService(
         }
 
         var dataset = await _store.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definitionId, expectedDefinitionVersion, name),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
         _signal.Wake();
         return dataset;
     }
 
     public async Task<bool> CancelAsync(Guid datasetId, CancellationToken cancellationToken = default)
     {
-        var dataset = await _store.GetDatasetAsync(datasetId, cancellationToken).ConfigureAwait(false);
+        var dataset = await _store.GetDatasetAsync(datasetId, cancellationToken);
         if (dataset?.WorkStatus is not (DatasetGenerationWorkStatus.Queued or DatasetGenerationWorkStatus.Running))
         {
             return false;
@@ -65,8 +64,7 @@ public sealed class DatasetGenerationService(
             return true;
         }
 
-        _ = await _store.CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, "Cancelled before generation started.", cancellationToken)
-                        .ConfigureAwait(false);
+        _ = await _store.CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, "Cancelled before generation started.", cancellationToken);
         return true;
     }
 }

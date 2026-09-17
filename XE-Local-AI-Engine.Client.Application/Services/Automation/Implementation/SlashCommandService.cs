@@ -15,20 +15,20 @@ internal sealed partial class SlashCommandService(ISlashCommandStore store) : IS
 
     public async Task<IReadOnlyList<SlashCommandCatalogItem>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var custom = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var custom = await _store.ListAsync(cancellationToken);
         return custom.Select(ToCatalogItem).Append(Ping).OrderBy(item => item.Name, StringComparer.Ordinal).ToArray();
     }
 
     public async Task<SlashCommandCatalogItem?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var record = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetByIdAsync(id, cancellationToken);
         return record is null ? null : ToCatalogItem(record);
     }
 
     public async Task<SlashCommandCatalogItem> CreateAsync(SlashCommandInput input, CancellationToken cancellationToken = default)
     {
         var normalized = Normalize(input);
-        try { return ToCatalogItem(await _store.AddAsync(normalized, cancellationToken).ConfigureAwait(false)); }
+        try { return ToCatalogItem(await _store.AddAsync(normalized, cancellationToken)); }
         catch (SlashCommandCapacityException exception) { throw new SlashCommandConflictException(exception.Message, exception); }
         catch (DbUpdateException exception) when (IsUniqueNameViolation(exception))
         {
@@ -41,7 +41,7 @@ internal sealed partial class SlashCommandService(ISlashCommandStore store) : IS
         var normalized = Normalize(input);
         try
         {
-            var record = await _store.UpdateAsync(id, normalized, cancellationToken).ConfigureAwait(false);
+            var record = await _store.UpdateAsync(id, normalized, cancellationToken);
             return record is null ? null : ToCatalogItem(record);
         }
         catch (DbUpdateException exception) when (IsUniqueNameViolation(exception))

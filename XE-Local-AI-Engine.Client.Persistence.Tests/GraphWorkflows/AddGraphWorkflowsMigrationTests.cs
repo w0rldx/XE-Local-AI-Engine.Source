@@ -26,21 +26,21 @@ public sealed class AddGraphWorkflowsMigrationTests
     [Test]
     public async Task Migrate_CreatesTheFourTablesWithTheirColumnsAndIndexes()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows.sqlite", PreviousMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.False(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must not exist before the migration.");
+            AssertEx.False(await probe.TableExistsAsync(table), $"{table} must not exist before the migration.");
         }
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist after the migration.");
+            AssertEx.True(await probe.TableExistsAsync(table), $"{table} must exist after the migration.");
         }
 
-        var definitionColumns = await probe.ColumnsAsync("graph_workflow_definitions").ConfigureAwait(false);
+        var definitionColumns = await probe.ColumnsAsync("graph_workflow_definitions");
         foreach (var column in new[]
                  {
                      "id",
@@ -60,7 +60,7 @@ public sealed class AddGraphWorkflowsMigrationTests
 
         // graph_hash and version are two of the four inert columns: nothing in this slice reads either, and the run
         // engine that will needs them to be here rather than in a migration of its own.
-        var runColumns = await probe.ColumnsAsync("graph_workflow_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("graph_workflow_runs");
         foreach (var column in new[]
                  {
                      "id",
@@ -86,7 +86,7 @@ public sealed class AddGraphWorkflowsMigrationTests
 
         // decision_operation_id and decided_by_subject are the other two inert columns — the decide endpoint's
         // idempotency key and its decider, both of which belong to a later slice that ships no migration.
-        var nodeRunColumns = await probe.ColumnsAsync("graph_workflow_node_runs").ConfigureAwait(false);
+        var nodeRunColumns = await probe.ColumnsAsync("graph_workflow_node_runs");
         foreach (var column in new[]
                  {
                      "id",
@@ -111,7 +111,7 @@ public sealed class AddGraphWorkflowsMigrationTests
             AssertEx.True(nodeRunColumns.Contains(column), $"graph_workflow_node_runs must carry '{column}'.");
         }
 
-        var eventColumns = await probe.ColumnsAsync("graph_workflow_run_events").ConfigureAwait(false);
+        var eventColumns = await probe.ColumnsAsync("graph_workflow_run_events");
         foreach (var column in new[]
                  {
                      "id",
@@ -134,23 +134,21 @@ public sealed class AddGraphWorkflowsMigrationTests
                      "graph_workflow_node_runs"
                  })
         {
-            AssertEx.Equal("TEXT", await ColumnTypeAsync(probe, table, "failure_class").ConfigureAwait(false),
+            AssertEx.Equal("TEXT", await ColumnTypeAsync(probe, table, "failure_class"),
                 $"{table}.failure_class must be TEXT — the failure class is persisted by name, not by ordinal.");
         }
 
-        AssertEx.True(await probe.IndexExistsAsync("graph_workflow_node_runs", "ux_graph_workflow_node_runs_run_node", unique: true, "run_id", "node_key")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("graph_workflow_node_runs", "ux_graph_workflow_node_runs_run_node", unique: true, "run_id", "node_key"),
             "One row per (run, node key) is the node run's identity, so it is a unique index.");
         AssertEx.True(await probe
-                            .IndexExistsAsync("graph_workflow_node_runs", "ux_graph_workflow_node_runs_decision_operation", unique: true, "run_id", "decision_operation_id")
-                            .ConfigureAwait(false),
+                            .IndexExistsAsync("graph_workflow_node_runs", "ux_graph_workflow_node_runs_decision_operation", unique: true, "run_id", "decision_operation_id"),
             "The decide endpoint's idempotency key is unique run-wide, filtered to the rows that carry one.");
         AssertEx.Equal("\"decision_operation_id\" IS NOT NULL",
-            await IndexFilterAsync(probe, "ux_graph_workflow_node_runs_decision_operation").ConfigureAwait(false),
+            await IndexFilterAsync(probe, "ux_graph_workflow_node_runs_decision_operation"),
             "Unfiltered, the index would let exactly one node run per run stay undecided.");
-        AssertEx.True(await probe.IndexExistsAsync("graph_workflow_run_events", "ux_graph_workflow_run_events_run_seq", unique: true, "run_id", "seq").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("graph_workflow_run_events", "ux_graph_workflow_run_events_run_seq", unique: true, "run_id", "seq"),
             "The event watermark must be unique per run.");
-        AssertEx.True(await probe.IndexExistsAsync("graph_workflow_runs", "ux_graph_workflow_runs_request_id", unique: true, "request_id").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("graph_workflow_runs", "ux_graph_workflow_runs_request_id", unique: true, "request_id"),
             "The caller-minted request id is what makes a retried start idempotent, so it is a database constraint.");
     }
 
@@ -176,26 +174,26 @@ public sealed class AddGraphWorkflowsMigrationTests
                                         """;
         const string IndexNames = "SELECT group_concat(name, ', ') FROM (SELECT name FROM pragma_index_list($table) ORDER BY name);";
 
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows-schema-parity.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows-schema-parity.sqlite");
 
         // CreateEnsureCreatedSchemaAsync, not CreateSchemaAsync: the latter copies the migrated template, which is
         // what every other suite here wants and what would make this test compare the migrated schema against itself.
         using var fixture = new GraphWorkflowTestFixture();
-        await using var created = await fixture.CreateEnsureCreatedSchemaAsync().ConfigureAwait(false);
+        await using var created = await fixture.CreateEnsureCreatedSchemaAsync();
 
         foreach (var table in Tables)
         {
-            var migrated = await probe.ColumnsAsync(table).ConfigureAwait(false);
-            var ensured = await EnsureCreatedColumnsAsync(fixture, table).ConfigureAwait(false);
+            var migrated = await probe.ColumnsAsync(table);
+            var ensured = await EnsureCreatedColumnsAsync(fixture, table);
             AssertEx.Empty(migrated.Except(ensured, StringComparer.Ordinal), $"{table}: the migration created column(s) EnsureCreated does not.");
             AssertEx.Empty(ensured.Except(migrated, StringComparer.Ordinal), $"{table}: EnsureCreated created column(s) the migration does not.");
 
-            AssertEx.Equal(await ProbeTextAsync(probe, ColumnSignatures, table).ConfigureAwait(false),
-                await EnsuredTextAsync(fixture, ColumnSignatures, table).ConfigureAwait(false),
+            AssertEx.Equal(await ProbeTextAsync(probe, ColumnSignatures, table),
+                await EnsuredTextAsync(fixture, ColumnSignatures, table),
                 $"{table}: the migrated columns and the ones EnsureCreated builds differ in declared type or nullability.");
 
-            AssertEx.Equal(await ProbeTextAsync(probe, IndexNames, table).ConfigureAwait(false),
-                await EnsuredTextAsync(fixture, IndexNames, table).ConfigureAwait(false),
+            AssertEx.Equal(await ProbeTextAsync(probe, IndexNames, table),
+                await EnsuredTextAsync(fixture, IndexNames, table),
                 $"{table}: the migration and EnsureCreated do not create the same indexes.");
         }
     }
@@ -203,18 +201,18 @@ public sealed class AddGraphWorkflowsMigrationTests
     [Test]
     public async Task Rollback_DropsTheFourTablesAndLeavesTheRestOfTheSchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows-rollback.sqlite", ThisMigrationId);
 
-        await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreviousMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.False(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must be gone after the rollback.");
+            AssertEx.False(await probe.TableExistsAsync(table), $"{table} must be gone after the rollback.");
         }
 
         // Nothing else may go with them: the migration only ever created tables, so `Down` has nothing else to touch.
-        AssertEx.True(await probe.TableExistsAsync("dev_workflow_runs").ConfigureAwait(false), "The rollback must not disturb the Dev Workflow tables.");
-        AssertEx.True(await probe.TableExistsAsync("agent_work_sessions").ConfigureAwait(false), "The rollback must not disturb the work-session tables.");
+        AssertEx.True(await probe.TableExistsAsync("dev_workflow_runs"), "The rollback must not disturb the Dev Workflow tables.");
+        AssertEx.True(await probe.TableExistsAsync("agent_work_sessions"), "The rollback must not disturb the work-session tables.");
     }
 
     private static async Task<string?> ColumnTypeAsync(MigrationSchemaProbe probe, string table, string column)
@@ -224,16 +222,14 @@ public sealed class AddGraphWorkflowsMigrationTests
                                    {
                                        command.Parameters.AddWithValue("$table", table);
                                        command.Parameters.AddWithValue("$column", column);
-                                   })
-                               .ConfigureAwait(false);
+                                   });
         return value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
     }
 
     private static async Task<string?> IndexFilterAsync(MigrationSchemaProbe probe, string indexName)
     {
         var value = await probe.ScalarAsync("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = $name;",
-                                   command => command.Parameters.AddWithValue("$name", indexName))
-                               .ConfigureAwait(false);
+                                   command => command.Parameters.AddWithValue("$name", indexName));
         var sql = value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
         var whereIndex = sql?.IndexOf(" WHERE ", StringComparison.Ordinal) ?? -1;
         return whereIndex < 0 ? null : sql![(whereIndex + " WHERE ".Length)..].Trim();
@@ -242,14 +238,14 @@ public sealed class AddGraphWorkflowsMigrationTests
     /// <summary>One <c>group_concat</c> row from the MIGRATED database, as text.</summary>
     private static async Task<string> ProbeTextAsync(MigrationSchemaProbe probe, string sql, string table)
     {
-        var value = await probe.ScalarAsync(sql, command => command.Parameters.AddWithValue("$table", table)).ConfigureAwait(false);
+        var value = await probe.ScalarAsync(sql, command => command.Parameters.AddWithValue("$table", table));
         return value is null ? string.Empty : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
     /// <summary>The same row from the database <c>EnsureCreated</c> built.</summary>
     private static async Task<string> EnsuredTextAsync(GraphWorkflowTestFixture fixture, string sql, string table)
     {
-        var value = await fixture.RawScalarAsync(sql, command => command.Parameters.AddWithValue("$table", table)).ConfigureAwait(false);
+        var value = await fixture.RawScalarAsync(sql, command => command.Parameters.AddWithValue("$table", table));
         return value is null ? string.Empty : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
@@ -257,12 +253,12 @@ public sealed class AddGraphWorkflowsMigrationTests
     {
         var columns = new HashSet<string>(StringComparer.Ordinal);
         await using var connection = new SqliteConnection($"Data Source={fixture.DatabasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM pragma_table_info($table);";
         command.Parameters.AddWithValue("$table", table);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             _ = columns.Add(reader.GetString(ordinal: 0));
         }

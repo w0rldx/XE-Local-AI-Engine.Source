@@ -25,6 +25,6 @@ public sealed class GetWhisperCppSourceBuildStatusEndpoint(WhisperRuntimeOrchest
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct);
     }
 }

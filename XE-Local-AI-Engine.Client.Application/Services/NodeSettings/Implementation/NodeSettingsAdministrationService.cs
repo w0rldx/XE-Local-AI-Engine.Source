@@ -41,11 +41,11 @@ internal sealed class NodeSettingsAdministrationService(
     private readonly INodeSettingsStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<StoredNodeSettings> GetTrustedSettingsAsync(CancellationToken cancellationToken = default) =>
-        await _store.LoadAsync(cancellationToken).ConfigureAwait(false) ?? new StoredNodeSettings();
+        await _store.LoadAsync(cancellationToken) ?? new StoredNodeSettings();
 
     public async Task<NodeSettingsAgenticView> GetAgenticViewAsync(CancellationToken cancellationToken = default)
     {
-        var settings = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
+        var settings = await GetTrustedSettingsAsync(cancellationToken);
         return ToAgenticView(settings);
     }
 
@@ -53,7 +53,7 @@ internal sealed class NodeSettingsAdministrationService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(merge);
-        var current = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
+        var current = await GetTrustedSettingsAsync(cancellationToken);
 
         // The MERGE, not a merged record: the wire DTO looks whole but is optional field by optional field, so the
         // caller resolves every omitted one from the record it is handed. Handing it a pre-validation snapshot made a
@@ -75,14 +75,14 @@ internal sealed class NodeSettingsAdministrationService(
                 TranscriptionIdleTimeoutMinutes = record.TranscriptionIdleTimeoutMinutes
             },
             current,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<NodeSettingsAdministrationResult> ApplyAgenticPatchAsync(NodeSettingsAgenticPatch patch,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(patch);
-        var current = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
+        var current = await GetTrustedSettingsAsync(cancellationToken);
         var fieldErrors = NodeSettingsAgenticPatchValidation.Validate(patch);
         if (fieldErrors.Count > 0)
         {
@@ -91,8 +91,7 @@ internal sealed class NodeSettingsAdministrationService(
 
         if (patch.DefaultModelName is not null
             && await _defaultModelSelectionPolicy
-                     .ValidateAsync(patch.DefaultModelName, LocalModelSelectionPolicy.ConfiguredModel, cancellationToken)
-                     .ConfigureAwait(false) is { } selectionFailure)
+                     .ValidateAsync(patch.DefaultModelName, LocalModelSelectionPolicy.ConfiguredModel, cancellationToken) is { } selectionFailure)
         {
             return NodeSettingsAdministrationResult.Rejected(current,
             [
@@ -137,12 +136,11 @@ internal sealed class NodeSettingsAdministrationService(
             };
         }
 
-        var result = await ValidateAndSaveAsync(Apply, current, cancellationToken).ConfigureAwait(false);
+        var result = await ValidateAndSaveAsync(Apply, current, cancellationToken);
         if (result.Updated && patch.DefaultModelName is not null)
         {
             await _defaultModelSelectionPolicy
-                  .InvalidateCacheForTransitionAsync(previousDefaultModelName, result.Settings.DefaultModelName, cancellationToken)
-                  .ConfigureAwait(false);
+                  .InvalidateCacheForTransitionAsync(previousDefaultModelName, result.Settings.DefaultModelName, cancellationToken);
         }
 
         return result;
@@ -197,7 +195,7 @@ internal sealed class NodeSettingsAdministrationService(
             // refused where it would actually be used rather than blocking the settings page.
             if (!string.Equals(settings.AutoEffortFastModelName, validatedAgainst.AutoEffortFastModelName, StringComparison.Ordinal)
                 && !string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName)
-                && !await IsInstalledNodeLocalModelAsync(settings.AutoEffortFastModelName, cancellationToken).ConfigureAwait(false))
+                && !await IsInstalledNodeLocalModelAsync(settings.AutoEffortFastModelName, cancellationToken))
             {
                 return NodeSettingsAdministrationResult.Rejected(settings,
                 [
@@ -205,7 +203,7 @@ internal sealed class NodeSettingsAdministrationService(
                 ]);
             }
 
-            var errors = await NodeSettingsPolicy.ValidateMergedAsync(settings, _runtimeSettings, cancellationToken).ConfigureAwait(false);
+            var errors = await NodeSettingsPolicy.ValidateMergedAsync(settings, _runtimeSettings, cancellationToken);
             if (errors.Count > 0)
             {
                 return NodeSettingsAdministrationResult.Rejected(settings, errors);
@@ -239,16 +237,15 @@ internal sealed class NodeSettingsAdministrationService(
                                                     TranscriptionIdleTimeoutMinutes = latest.TranscriptionIdleTimeoutMinutes
                                                 };
                                             },
-                                            cancellationToken)
-                                        .ConfigureAwait(false);
+                                            cancellationToken);
 
             if (changedUnderTheValidation)
             {
-                validatedAgainst = await GetTrustedSettingsAsync(cancellationToken).ConfigureAwait(false);
+                validatedAgainst = await GetTrustedSettingsAsync(cancellationToken);
                 continue;
             }
 
-            await TryReportCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
+            await TryReportCapabilitiesAsync(cancellationToken);
             return NodeSettingsAdministrationResult.Saved(persisted);
         }
 
@@ -285,7 +282,7 @@ internal sealed class NodeSettingsAdministrationService(
     {
         try
         {
-            await _capabilityReporter.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
+            await _capabilityReporter.ReportToApiAsync(cancellationToken);
         }
         catch (Exception exception)
         {

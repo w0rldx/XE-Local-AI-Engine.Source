@@ -41,7 +41,7 @@ public sealed class GgufImportEndpointDesktopGateTests
             factory.AddNodeBearerToken(request);
             request.Headers.Add("Origin", "http://localhost");
 
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
+            using var response = await client.SendAsync(request);
 
             // Unmapped POST path → routing rejects it. A registered endpoint with a valid operator token would have
             // returned 200/400; 404/405 proves the endpoint was never mapped off the desktop flag.
@@ -66,10 +66,10 @@ public sealed class GgufImportEndpointDesktopGateTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/import/capability");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.False(doc.RootElement.GetProperty("available").GetBoolean(),
             "The default test host is not desktop-launched, so capability must report available:false.");
@@ -83,10 +83,10 @@ public sealed class GgufImportEndpointDesktopGateTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/imports");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.True(doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array,
             "Imports list must respond with an 'items' array even off the desktop flag.");
@@ -107,10 +107,10 @@ public sealed class GgufImportEndpointDesktopGateTests
 
         using var statusRequest = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/imports/{operationId}");
         factory.AddNodeBearerToken(statusRequest);
-        using var statusResponse = await client.SendAsync(statusRequest).ConfigureAwait(false);
+        using var statusResponse = await client.SendAsync(statusRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, statusResponse.StatusCode);
-        var statusJson = await statusResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var statusJson = await statusResponse.Content.ReadAsStringAsync();
         using var statusDoc = JsonDocument.Parse(statusJson);
         AssertEx.Equal(operationId, statusDoc.RootElement.GetProperty("operationId").GetGuid());
 
@@ -121,10 +121,10 @@ public sealed class GgufImportEndpointDesktopGateTests
         cancelRequest.Content = JsonContent.Create(new
         {
         });
-        using var cancelResponse = await client.SendAsync(cancelRequest).ConfigureAwait(false);
+        using var cancelResponse = await client.SendAsync(cancelRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);
-        var cancelJson = await cancelResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var cancelJson = await cancelResponse.Content.ReadAsStringAsync();
         using var cancelDoc = JsonDocument.Parse(cancelJson);
         AssertEx.Equal(operationId, cancelDoc.RootElement.GetProperty("operationId").GetGuid());
         AssertEx.True(cancelDoc.RootElement.GetProperty("cancellationRequested").GetBoolean(),

@@ -25,24 +25,23 @@ public sealed class SelectLocalModelEndpoint(
 
     public override async Task HandleAsync(SelectLocalModelRequest req, CancellationToken ct)
     {
-        if (!await ValidateModelNameAsync(req.ModelName, ct).ConfigureAwait(false))
+        if (!await ValidateModelNameAsync(req.ModelName, ct))
         {
             return;
         }
 
-        if (!await ValidateExternalRegistrationAsync(req.ModelName, ct).ConfigureAwait(false))
+        if (!await ValidateExternalRegistrationAsync(req.ModelName, ct))
         {
             return;
         }
 
         var result = await _administrationService
-                           .SelectDefaultAsync(req.ModelName, LocalModelSelectionPolicy.ConfiguredModel, ct)
-                           .ConfigureAwait(false);
+                           .SelectDefaultAsync(req.ModelName, LocalModelSelectionPolicy.ConfiguredModel, ct);
 
         await Send.OkAsync(new SelectLocalModelResponse
         {
             SelectedModelName = result.SelectedModelName!
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
@@ -54,7 +53,7 @@ public sealed class SelectLocalModelEndpoint(
         }
 
         AddError(validationError);
-        await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        await Send.ErrorsAsync(cancellation: ct);
         return false;
     }
 
@@ -76,14 +75,14 @@ public sealed class SelectLocalModelEndpoint(
             return true;
         }
 
-        var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, ct).ConfigureAwait(false);
+        var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, ct);
         if (registration is not null)
         {
             return true;
         }
 
         AddError("No external connection registers that model. Refresh the model list and select it again.");
-        await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        await Send.ErrorsAsync(cancellation: ct);
         return false;
     }
 }

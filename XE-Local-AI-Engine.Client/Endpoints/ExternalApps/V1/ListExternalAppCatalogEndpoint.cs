@@ -27,9 +27,9 @@ public sealed class ListExternalAppCatalogEndpoint(IApplicationCatalogProvider c
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var snapshot = await _catalog.GetCatalogAsync(ct).ConfigureAwait(false);
-        var installed = await ExternalAppCatalogEndpointSupport.InstalledByApplicationIdAsync(_apps, ct).ConfigureAwait(false);
+        var snapshot = await _catalog.GetCatalogAsync(ct);
+        var installed = await ExternalAppCatalogEndpointSupport.InstalledByApplicationIdAsync(_apps, ct);
 
-        await Send.OkAsync(ExternalAppMapper.ToCatalogResponse(snapshot, refreshFailureMessage: null, installed), ct).ConfigureAwait(false);
+        await Send.OkAsync(ExternalAppMapper.ToCatalogResponse(snapshot, refreshFailureMessage: null, installed), ct);
     }
 }

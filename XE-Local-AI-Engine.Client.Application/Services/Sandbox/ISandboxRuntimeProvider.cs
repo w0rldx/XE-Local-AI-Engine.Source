@@ -65,7 +65,7 @@ public interface ISandboxRuntimeProvider
         int maxBytes,
         CancellationToken cancellationToken = default)
     {
-        var content = await ReadFileAsync(handle, sandboxPath, cancellationToken).ConfigureAwait(false);
+        var content = await ReadFileAsync(handle, sandboxPath, cancellationToken);
         if (Encoding.UTF8.GetByteCount(content) > maxBytes)
         {
             throw new InvalidDataException("The sandbox file exceeds the requested read bound.");

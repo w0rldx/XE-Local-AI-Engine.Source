@@ -20,22 +20,22 @@ public sealed class LocalModelEndpointSecurityTests
         await using var factory = CreateFactory(modelService);
         using var client = factory.CreateClient();
 
-        using var listResponse = await client.GetAsync("/api/local/v1/models").ConfigureAwait(false);
-        using var detailsResponse = await client.GetAsync("/api/local/v1/models/llama3:8b/details").ConfigureAwait(false);
+        using var listResponse = await client.GetAsync("/api/local/v1/models");
+        using var detailsResponse = await client.GetAsync("/api/local/v1/models/llama3:8b/details");
         using var selectResponse = await client.PostAsJsonAsync("/api/local/v1/models/select", new SelectLocalModelRequest
         {
             ModelName = "llama3:8b"
-        }).ConfigureAwait(false);
-        using var deleteResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b").ConfigureAwait(false);
+        });
+        using var deleteResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b");
         using var setKindResponse = await client.PutAsJsonAsync("/api/local/v1/models/llama3:8b/kind", new SetModelKindRequest
         {
             Kind = "Chat"
-        }).ConfigureAwait(false);
-        using var resetKindResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b/kind").ConfigureAwait(false);
-        using var runningResponse = await client.GetAsync("/api/local/v1/models/running").ConfigureAwait(false);
+        });
+        using var resetKindResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b/kind");
+        using var runningResponse = await client.GetAsync("/api/local/v1/models/running");
         // Body-less, like the real client: the route-only unload POST sends no body and no Content-Type, so this also
         // proves auth runs ahead of content negotiation (401, never a 415 that would mask the missing token).
-        using var unloadResponse = await client.PostAsync("/api/local/v1/models/llama3:8b/unload", content: null).ConfigureAwait(false);
+        using var unloadResponse = await client.PostAsync("/api/local/v1/models/llama3:8b/unload", content: null);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, detailsResponse.StatusCode);

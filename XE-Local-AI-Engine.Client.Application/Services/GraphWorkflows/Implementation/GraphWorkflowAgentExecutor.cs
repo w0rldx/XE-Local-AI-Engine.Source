@@ -157,7 +157,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // The attempt is compared rather than assumed: a retry re-attempts a row WITHOUT coming through this lane,
             // and admitting such a row against the turn belonging to the attempt before would settle one off the other.
             return nodeRun.Status == GraphWorkflowNodeRunStatus.Queued && existing.LeaseAcquired.Value
-                ? await RunningAsync(store, run, nodeRun, existing.InvocationId, inputJson: null, cancellationToken).ConfigureAwait(false)
+                ? await RunningAsync(store, run, nodeRun, existing.InvocationId, inputJson: null, cancellationToken)
                 : 0;
         }
 
@@ -173,8 +173,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                     GraphWorkflowFailureClass.ValidationFailed,
                     $"Node '{node.NodeKey}' is an Agent node without agent settings.",
                     eventType: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         string inputJson;
@@ -183,7 +182,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         {
             // Composed here rather than in the task body: it is the same set the admission that got us here judged, and
             // reading the rows again a model call later could see a different world.
-            inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken).ConfigureAwait(false);
+            inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken);
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
                                    nodeRun.Id,
@@ -191,8 +190,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                    GraphWorkflowNodeRunStatus.Queued,
                                    QueueReason: AwaitingAgentSlot,
                                    InputJson: inputJson),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             written++;
         }
         else
@@ -200,7 +198,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // A re-offer of a row this lane already queued. Only that first write persists a document, so composing a
             // second one here would hand the turn something the row does not carry — and something a later reader of
             // the row could not reconcile with the answer it produced.
-            inputJson = nodeRun.InputJson ?? await InputDocumentAsync(store, graph, node, run, cancellationToken).ConfigureAwait(false);
+            inputJson = nodeRun.InputJson ?? await InputDocumentAsync(store, graph, node, run, cancellationToken);
         }
 
         // Minted HERE, before the task starts: it is the first argument of the runtime package request AND what the
@@ -211,8 +209,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                     nodeRun.Attempt,
                                     invocationId,
                                     (leaseAcquired, token) => RunTurnAsync(run.Id, nodeRun.Id, node, config, invocationId, inputJson, leaseAcquired, token),
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                                    cancellationToken);
         if (flight is null)
         {
             // Queueing, not failure: every slot is held. No event and no failure class — the row's reason says what it
@@ -257,14 +254,13 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                     GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Interrupted, nodeRun.Attempt, node.MaxAttempts),
                     "The host stopped while this node run's agent turn was in flight.",
                     GraphWorkflowEventTypes.NodeInterrupted,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         if (!flight.Work.IsCompleted)
         {
             return nodeRun.Status == GraphWorkflowNodeRunStatus.Queued && flight.LeaseAcquired.Value
-                ? await RunningAsync(store, run, nodeRun, flight.InvocationId, inputJson: null, cancellationToken).ConfigureAwait(false)
+                ? await RunningAsync(store, run, nodeRun, flight.InvocationId, inputJson: null, cancellationToken)
                 : 0;
         }
 
@@ -274,29 +270,29 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // Checked BEFORE the await, and that is the load-bearing half of this branch: a stop can cancel a turn
             // still parked on the invocation lease, which ends it Canceled with no state to map. Awaiting it would
             // rethrow, the dispatcher would swallow it, and the row would rethrow again on every tick forever.
-            written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken).ConfigureAwait(false);
+            written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken);
         }
         else
         {
             // A Queued row whose turn landed between ticks: the state machine has no Queued → Succeeded edge, and
             // deliberately so — an attempt that produced an answer ran, whatever the row managed to say while it did.
             written = nodeRun.Status == GraphWorkflowNodeRunStatus.Queued
-                ? await RunningAsync(store, run, nodeRun, flight.InvocationId, inputJson: null, cancellationToken).ConfigureAwait(false)
+                ? await RunningAsync(store, run, nodeRun, flight.InvocationId, inputJson: null, cancellationToken)
                 : 0;
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Running
             };
 
-            var turn = await flight.Work.ConfigureAwait(false);
+            var turn = await flight.Work;
 
             // A turn that ended Cancelled WITHOUT this node asking — the shutdown drain, a model eject, a CancelAll —
             // returns normally with a cancelled terminal rather than a cancelled task, so it reaches here rather than
             // the branch above. It is still a cancellation: settling it as a failure would classify it, fail the row
             // and make the run recompute Failed for work nobody judged.
             written += turn.FailureClass == GraphWorkflowFailureClass.Cancelled
-                ? await SettleCancelledAsync(store, run, nodeRun, turn.SanitizedReason ?? CancelledInFlight, cancellationToken).ConfigureAwait(false)
-                : await SettleLandedAsync(store, graph, run, node, nodeRun, turn, cancellationToken).ConfigureAwait(false);
+                ? await SettleCancelledAsync(store, run, nodeRun, turn.SanitizedReason ?? CancelledInFlight, cancellationToken)
+                : await SettleLandedAsync(store, graph, run, node, nodeRun, turn, cancellationToken);
         }
 
         // Consumed only once the settle has COMMITTED. Doing it first would spend the answer on a write that may throw
@@ -314,7 +310,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     {
         // The no-on-a-repeat answer is the lane's, and it is the whole reason a cancelling drain does not spin. See
         // GraphWorkflowInFlightLane.StopAsync for the ceiling that buys.
-        if (!_lane.TryGet(nodeRunId, out var flight) || !await _lane.StopAsync(nodeRunId).ConfigureAwait(false))
+        if (!_lane.TryGet(nodeRunId, out var flight) || !await _lane.StopAsync(nodeRunId))
         {
             return false;
         }
@@ -358,7 +354,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             string? pinnedModel = null;
             if (config.AgentDefinitionId is { } agentDefinitionId)
             {
-                var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+                var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId, cancellationToken);
                 if (definition is null)
                 {
                     return Invalid("The agent this node runs could not be found. It may have been deleted.");
@@ -370,10 +366,9 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // 2. The EFFECTIVE model: what the node pins, else what the agent pins, else the node's local default.
             //    The same settings carry MaxMessageRequestTimeoutSeconds, which is deliberately NOT read — step 6 says
             //    why: the graph author declared this node's budget, and the runner must end before the deadline stage.
-            var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(cancellationToken).ConfigureAwait(false);
+            var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(cancellationToken);
             var localDefault = await services.GetRequiredService<ILocalDefaultChatModelResolver>()
-                                             .ResolveAsync(nodeSettings.DefaultModelName, cancellationToken)
-                                             .ConfigureAwait(false);
+                                             .ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
             var effectiveModel = config.Model ?? pinnedModel ?? localDefault;
             if (string.IsNullOrWhiteSpace(effectiveModel))
             {
@@ -383,7 +378,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // 3. LOCALITY GATE. Classified on the EFFECTIVE model and refused before capacity and before any
             //    invocation: a graph workflow run is unattended by construction, so node-local prompt and upstream
             //    content is never handed to a cloud model.
-            var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
+            var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
             if (capabilities.IsCloud)
             {
                 _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and unattended runs are node-local only.",
@@ -394,7 +389,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
             // 4. CAPACITY. A local Allow carries a footprint reservation that MUST be released on every terminal path:
             //    a leaked one wrongly rejects later spawns node-wide.
-            var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken).ConfigureAwait(false);
+            var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
                 return Failure(GraphWorkflowFailureClass.NodeFailed, decision.Reason);
@@ -417,8 +412,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                              capabilities.SupportsTools,
                                              config.Model is null,
                                              activeModelIsCloud: false,
-                                             cancellationToken)
-                                         .ConfigureAwait(false);
+                                             cancellationToken);
             if (resolved is null)
             {
                 if (config.AgentDefinitionId is not null)
@@ -429,7 +423,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                     return Invalid("The agent this node runs could not be found. It may have been deleted.");
                 }
 
-                resolved = await DefaultPersonaAsync(services, effectiveModel, capabilities, cancellationToken).ConfigureAwait(false);
+                resolved = await DefaultPersonaAsync(services, effectiveModel, capabilities, cancellationToken);
             }
 
             // 6. The headless package.
@@ -447,8 +441,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                     _invocationRunner,
                     package,
                     leaseAcquired,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
 
             // 11. What the turn came to.
             return Map(terminal, config);
@@ -501,8 +494,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         {
             var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
             var offer = await services.GetRequiredService<ILocalToolOfferProvider>()
-                                      .GetOfferedToolsAsync(effectiveModel, isCloudModel: false, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .GetOfferedToolsAsync(effectiveModel, isCloudModel: false, cancellationToken);
             offered.AddRange(offer.Select(tool => tool with
             {
                 RequiresApproval = approvalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
@@ -543,18 +535,18 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             }
         }
 
-        var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken).ConfigureAwait(false);
+        var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
         leaseAcquired.Value = true;
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         try
         {
             using var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
-            await invocationRunner.RunAsync(executionContext, cancellationToken).ConfigureAwait(false);
+            await invocationRunner.RunAsync(executionContext, cancellationToken);
         }
         finally
         {
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
         }
 
         // The runner reports Cancelled and returns normally rather than rethrowing, so a stop would otherwise land here
@@ -784,7 +776,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         GraphWorkflowRunSnapshot run,
         CancellationToken cancellationToken)
     {
-        var byKey = (await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false))
+        var byKey = (await store.ListNodeRunsAsync(run.Id, cancellationToken))
             .ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
         return GraphWorkflowDocuments.ComposeInput(run.InputJson, GraphWorkflowInlineExecutor.Upstream(graph, node, byKey));
     }
@@ -804,8 +796,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                GraphWorkflowNodeRunStatus.Running,
                                InputJson: inputJson,
                                InvocationId: invocationId),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -832,8 +823,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         catch (GraphWorkflowOutputTooLargeException exception)
         {
             // Not retryable, and deliberately: the same turn composes the same bytes, and this one is already spent.
-            return await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.OutputTooLarge, exception.Message, eventType: null, cancellationToken)
-                .ConfigureAwait(false);
+            return await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.OutputTooLarge, exception.Message, eventType: null, cancellationToken);
         }
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, status, nodeRun.NodeKey);
@@ -848,8 +838,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                // afterwards.
                                FailureClass: turn.Succeeded ? null : GraphWorkflowFailures.Classify(turn.FailureClass, nodeRun.Attempt, node.MaxAttempts),
                                TerminalReason: turn.SanitizedReason),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -867,8 +856,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                GraphWorkflowNodeRunStatus.Cancelled,
                                FailureClass: GraphWorkflowFailureClass.Cancelled,
                                TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -894,8 +882,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                    nodeRun.Id,
                                    GraphWorkflowVersions.Any,
                                    GraphWorkflowNodeRunStatus.Running),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Running
@@ -927,8 +914,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                                FailureClass: failureClass,
                                TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
                                EventType: eventType),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return written + 1;
     }
 

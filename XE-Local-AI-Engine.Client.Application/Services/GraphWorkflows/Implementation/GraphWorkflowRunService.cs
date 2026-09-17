@@ -41,7 +41,7 @@ internal sealed class GraphWorkflowRunService(
 
         // The FAST path, not the gate. Two genuinely concurrent identical starts can both pass it, which is why the
         // insert below is the real idempotency guarantee.
-        if (await _store.FindRunByRequestAsync(requestId, cancellationToken).ConfigureAwait(false) is { } replayed)
+        if (await _store.FindRunByRequestAsync(requestId, cancellationToken) is { } replayed)
         {
             // A replay has to be a replay of THIS request. A reused request id naming a different definition is a
             // caller bug, and answering it with another run would hand out a run they never asked for.
@@ -49,10 +49,10 @@ internal sealed class GraphWorkflowRunService(
 
             // Signalled, not merely composed: a replay is what a caller sends when it never saw the first answer, and
             // the run may still be waiting for its first tick.
-            return await SignalAndComposeAsync(replayed.Id, cancellationToken).ConfigureAwait(false);
+            return await SignalAndComposeAsync(replayed.Id, cancellationToken);
         }
 
-        var definition = await _store.GetDefinitionAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await _store.GetDefinitionAsync(definitionId, cancellationToken);
         if (definitionVersion is { } expected && expected != definition.Version)
         {
             throw new GraphWorkflowRunConflictException($"Graph workflow definition '{definition.Name}' is at version {definition.Version}, "
@@ -67,7 +67,7 @@ internal sealed class GraphWorkflowRunService(
         // Validated again HERE, not trusted from save time: an agent definition can be deleted between the two, and the
         // parse is the same one the dispatcher routes with.
         var graph = GraphWorkflowGraph.Parse(definition.GraphJson);
-        await EnsureToolNodesAreRunnableAsync(graph, cancellationToken).ConfigureAwait(false);
+        await EnsureToolNodesAreRunnableAsync(graph, cancellationToken);
 
         if (graph.Nodes.Count > _options.MaxNodeRunsPerRun)
         {
@@ -85,20 +85,19 @@ internal sealed class GraphWorkflowRunService(
                                       definition.GraphJson,
                                       inputJson,
                                       [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed(Guid.NewGuid(), node.NodeKey, node.Kind))]),
-                                  cancellationToken)
-                              .ConfigureAwait(false);
+                                  cancellationToken);
 
         // The lookup above is a fast path both concurrent callers can pass, and the store answers a lost race on the
         // request id with the run that WON — which may be a run of somebody else's definition. Re-checked here, or the
         // loser of that race would receive a run it never asked for by the one route the fast path cannot cover.
         EnsureReplayIsOfTheSameDefinition(run, definitionId, requestId);
 
-        return await SignalAndComposeAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        return await SignalAndComposeAsync(run.Id, cancellationToken);
     }
 
     public async Task<GraphWorkflowRunDetail> CancelAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await _store.GetRunAsync(runId, cancellationToken);
         if (GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
             throw new GraphWorkflowRunConflictException($"This run is already {run.Status}, so there is nothing to cancel.");
@@ -109,7 +108,7 @@ internal sealed class GraphWorkflowRunService(
         // that never saw the first answer is exactly the caller that sends this one.
         if (run.Status == GraphWorkflowRunStatus.Cancelling)
         {
-            return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
+            return await SignalAndComposeAsync(runId, cancellationToken);
         }
 
         GraphWorkflowStateMachine.EnsureLegal(run.Status, GraphWorkflowRunStatus.Cancelling);
@@ -120,9 +119,8 @@ internal sealed class GraphWorkflowRunService(
         // Node runs are deliberately NOT settled here: the dispatcher drains them, asking each live lane to stop rather
         // than writing a terminal status over work that is still in flight.
         _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, run.Version, GraphWorkflowRunStatus.Cancelling),
-                            cancellationToken)
-                        .ConfigureAwait(false);
-        return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
+                            cancellationToken);
+        return await SignalAndComposeAsync(runId, cancellationToken);
     }
 
     public async Task<GraphWorkflowDecisionResult> DecideAsync(Guid runId,
@@ -148,28 +146,28 @@ internal sealed class GraphWorkflowRunService(
         // (run, node key) row is read at all: without this, one id reused across two pauses of a run passes every check
         // below and then violates that index inside the write, as a database error rather than the conflict this API
         // promises.
-        if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } recorded)
+        if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken) is { } recorded)
         {
-            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, recorded, cancellationToken).ConfigureAwait(false);
+            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, recorded, cancellationToken);
         }
 
         // 2. The row must be waiting — and a row that is not gets the SAME resolution a lost write does, replay
         // lookup first. Two identical requests both miss step 1, one commits, and the other reads a Succeeded row: it
         // is this caller's own answer arriving twice, so refusing it here would 409 a decision that did land.
-        var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken).ConfigureAwait(false);
+        var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
         if (nodeRun.Status != GraphWorkflowNodeRunStatus.WaitingForApproval)
         {
-            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
         }
 
         // 3. The run must be live. A drain is already settling this row, and a terminal run has no tick left to route
         // the answer with — but the SAME resolution as step 2, replay lookup first: this caller's own answer can have
         // committed under its own id and the run stopped between the row read and here, and refusing then would 409 a
         // decision that did land.
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await _store.GetRunAsync(runId, cancellationToken);
         if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
-            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
         }
 
         // 4. The answer must be one the PINNED graph offers. A graph that does not offer it is wrong, not the request.
@@ -224,28 +222,27 @@ internal sealed class GraphWorkflowRunService(
                                           decision,
                                           decidedBySubject,
                                           document),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
         }
         catch (GraphWorkflowInvalidTransitionException)
         {
-            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
         }
 
         if (written is null)
         {
-            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken).ConfigureAwait(false);
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
         }
 
         // 8. The run follows its rows, written against the version this read saw; then the dispatcher is told, AFTER
         // the commit, so the downstream nodes are admitted on its own clock rather than inside this request.
-        await RecomputeRunStatusAsync(runId, graph, cancellationToken).ConfigureAwait(false);
+        await RecomputeRunStatusAsync(runId, graph, cancellationToken);
         _signal.Signal(runId);
-        return await ComposeDecisionAsync(runId, nodeKey, decision, cancellationToken).ConfigureAwait(false);
+        return await ComposeDecisionAsync(runId, nodeKey, decision, cancellationToken);
     }
 
     public async Task<GraphWorkflowRunDetail> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken), cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status,
         int limit,
@@ -263,7 +260,7 @@ internal sealed class GraphWorkflowRunService(
         }
 
         // One over the cap, so truncation is observed rather than inferred from a full page.
-        var events = await _store.ListEventsAsync(runId, afterSeq, _options.EventReplayLimit + 1, cancellationToken).ConfigureAwait(false);
+        var events = await _store.ListEventsAsync(runId, afterSeq, _options.EventReplayLimit + 1, cancellationToken);
         var page = events.Take(_options.EventReplayLimit).ToList();
         return new GraphWorkflowRunEventPage(page, page.Count == 0 ? afterSeq : page[^1].Seq, events.Count > _options.EventReplayLimit);
     }
@@ -292,7 +289,7 @@ internal sealed class GraphWorkflowRunService(
             throw StandingConflict(recorded, $"Operation '{operationId}' already recorded a different decision on the pause '{nodeKey}'.");
         }
 
-        return await ComposeDecisionAsync(runId, nodeKey, decision, cancellationToken).ConfigureAwait(false);
+        return await ComposeDecisionAsync(runId, nodeKey, decision, cancellationToken);
     }
 
     /// <summary>
@@ -308,21 +305,21 @@ internal sealed class GraphWorkflowRunService(
         string? decidedBySubject,
         CancellationToken cancellationToken)
     {
-        if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } settled)
+        if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken) is { } settled)
         {
-            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, settled, cancellationToken).ConfigureAwait(false);
+            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, settled, cancellationToken);
         }
 
         // Before the row: the store also declines once the RUN stops being live, and answering that with a node-status
         // refusal would name the pause when the cancel is the reason — or, worse, name a standing decision on a row the
         // drain has since cancelled.
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await _store.GetRunAsync(runId, cancellationToken);
         if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
             throw new GraphWorkflowRunConflictException($"This run is {run.Status}, so the pause '{nodeKey}' can no longer be answered.");
         }
 
-        var current = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken).ConfigureAwait(false);
+        var current = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
         throw StandingConflict(current, $"Node run '{nodeKey}' is {current.Status}, so there is nothing to decide on it.");
     }
 
@@ -395,8 +392,8 @@ internal sealed class GraphWorkflowRunService(
     /// </summary>
     private async Task RecomputeRunStatusAsync(Guid runId, GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
-        var current = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
-        var nodeRuns = await _store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false);
+        var current = await _store.GetRunAsync(runId, cancellationToken);
+        var nodeRuns = await _store.ListNodeRunsAsync(runId, cancellationToken);
         var outcome = GraphWorkflowStateMachine.Recompute(current.Status, graph, nodeRuns);
         if (outcome.Status == current.Status
             || GraphWorkflowStateMachine.IsTerminal(outcome.Status)
@@ -407,7 +404,7 @@ internal sealed class GraphWorkflowRunService(
 
         try
         {
-            _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, current.Version, outcome.Status), cancellationToken).ConfigureAwait(false);
+            _ = await _store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, current.Version, outcome.Status), cancellationToken);
         }
         catch (GraphWorkflowInvalidTransitionException)
         {
@@ -421,8 +418,8 @@ internal sealed class GraphWorkflowRunService(
         GraphWorkflowDecisionKind decision,
         CancellationToken cancellationToken)
     {
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
-        var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken).ConfigureAwait(false);
+        var run = await _store.GetRunAsync(runId, cancellationToken);
+        var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
         return new GraphWorkflowDecisionResult(decision, run.Status, nodeRun.Status);
     }
 
@@ -450,7 +447,7 @@ internal sealed class GraphWorkflowRunService(
     /// </summary>
     private async Task EnsureToolNodesAreRunnableAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
-        var errors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken).ConfigureAwait(false);
+        var errors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken);
         if (errors.Count > 0)
         {
             throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
@@ -464,9 +461,9 @@ internal sealed class GraphWorkflowRunService(
     private async Task<GraphWorkflowRunDetail> SignalAndComposeAsync(Guid runId, CancellationToken cancellationToken)
     {
         _signal.Signal(runId);
-        return await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        return await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken), cancellationToken);
     }
 
     private async Task<GraphWorkflowRunDetail> ComposeAsync(GraphWorkflowRunSnapshot run, CancellationToken cancellationToken) =>
-        new(run, await _store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false));
+        new(run, await _store.ListNodeRunsAsync(run.Id, cancellationToken));
 }

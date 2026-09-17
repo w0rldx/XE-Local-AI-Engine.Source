@@ -65,9 +65,9 @@ internal sealed class EntraBearerTokenPipelinePolicy : AuthenticationPolicy
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var token = await _credential.GetTokenAsync(_requestContext, message.CancellationToken).ConfigureAwait(false);
+        var token = await _credential.GetTokenAsync(_requestContext, message.CancellationToken);
         ApplyToken(message, token.Token);
-        await ProcessNextAsync(message, pipeline, currentIndex).ConfigureAwait(false);
+        await ProcessNextAsync(message, pipeline, currentIndex);
     }
 
     private static void ApplyToken(PipelineMessage message, string accessToken)

@@ -79,18 +79,18 @@ public sealed class DevWorkflowUpstreamArtifactTests
     public async Task ANodeBehindAHumanGate_InheritsTheArtifactsOfTheProducerBehindIt()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(AgentGateAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(AgentGateAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "plan", "plan.md", "1. Add Subtract").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "plan").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "plan", "plan.md", "1. Add Subtract");
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await harness.DecideAsync(runId, "planapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "planapproval", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).SingleOrDefault());
-        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "decompose").ConfigureAwait(false);
+        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId)).SingleOrDefault());
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "decompose");
         AssertEx.Equal(expected: 1, consumed.Count, "the gate is a routing decision, not a dead end for the plan it approved.");
         AssertEx.Contains(consumed, promoted.Id);
     }
@@ -103,18 +103,18 @@ public sealed class DevWorkflowUpstreamArtifactTests
     public async Task ANodeBehindAJoin_InheritsEveryBranchsProducers()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(TwoBranchesThroughAJoin).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(TwoBranchesThroughAJoin);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "left", "left.md", "the left branch").ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "right", "right.md", "the right branch").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "left").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "right").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "left", "left.md", "the left branch");
+        _ = await harness.SaveAgentArtifactAsync(runId, "right", "right.md", "the right branch");
+        await harness.SettleAgentAsync(runId, "left");
+        await harness.SettleAgentAsync(runId, "right");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var artifacts = await harness.ReadArtifactsAsync(runId).ConfigureAwait(false);
+        var artifacts = await harness.ReadArtifactsAsync(runId);
         AssertEx.Equal(expected: 2, artifacts.Count);
-        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "verify").ConfigureAwait(false);
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "verify");
         AssertEx.Equal(expected: 2, consumed.Count, "both branches are upstream of the verification, and a join hides neither.");
         foreach (var artifact in artifacts)
         {
@@ -134,15 +134,15 @@ public sealed class DevWorkflowUpstreamArtifactTests
         // another test's script answer this node run.
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("check", FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ToolAfterAProducer, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ToolAfterAProducer, developmentProjectId: Guid.NewGuid());
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "specify", "specification.md", "Add Subtract").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "specify").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        _ = await harness.SaveAgentArtifactAsync(runId, "specify", "specification.md", "Add Subtract");
+        await harness.SettleAgentAsync(runId, "specify");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var specification = (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Single(static artifact => artifact.Name == "specification.md");
-        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "check").ConfigureAwait(false);
+        var specification = (await harness.ReadArtifactsAsync(runId)).Single(static artifact => artifact.Name == "specification.md");
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "check");
         AssertEx.Equal(expected: 1, consumed.Count, "the sandbox lane consumed the step before it, and the record is what makes that decidable.");
         AssertEx.Contains(consumed, specification.Id);
     }
@@ -156,23 +156,23 @@ public sealed class DevWorkflowUpstreamArtifactTests
     public async Task AProducerInBetween_ShadowsTheOneFurtherBack()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(TwoProducersThenGate).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(TwoProducersThenGate);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", "what the code does today").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", "what the code does today");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "plan", "plan.md", "1. Add Subtract").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "plan").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "plan", "plan.md", "1. Add Subtract");
+        await harness.SettleAgentAsync(runId, "plan");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await harness.DecideAsync(runId, "planapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "planapproval", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var artifacts = await harness.ReadArtifactsAsync(runId).ConfigureAwait(false);
+        var artifacts = await harness.ReadArtifactsAsync(runId);
         var plan = AssertEx.NotNull(artifacts.SingleOrDefault(artifact => artifact.Name == "plan.md"));
-        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "decompose").ConfigureAwait(false);
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "decompose");
         AssertEx.Equal(expected: 1, consumed.Count, "the plan node is a producer, so the walk back ends there.");
         AssertEx.Contains(consumed, plan.Id);
     }

@@ -28,15 +28,15 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
     [Test]
     public async Task ChatHeadTemplate_IsIndistinguishableFromAFromScratchMigratedDatabase()
     {
-        await using var replayed = await MigrationSchemaProbe.MigrateChatAsync("chat-head-replayed.sqlite").ConfigureAwait(false);
-        await using var copied = await MigrationSchemaProbe.FromChatTemplateAsync("chat-head-copied.sqlite").ConfigureAwait(false);
+        await using var replayed = await MigrationSchemaProbe.MigrateChatAsync("chat-head-replayed.sqlite");
+        await using var copied = await MigrationSchemaProbe.FromChatTemplateAsync("chat-head-copied.sqlite");
 
-        var replayedMigrations = await replayed.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
-        var copiedMigrations = await copied.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
+        var replayedMigrations = await replayed.AppliedMigrationsAsync(identityContext: false);
+        var copiedMigrations = await copied.AppliedMigrationsAsync(identityContext: false);
         AssertEx.True(copiedMigrations.SetEquals(replayedMigrations),
             "A copied head template must record exactly the migrations a from-scratch replay records.");
 
-        await AssertSameSchemaObjectsAsync(replayed, copied).ConfigureAwait(false);
+        await AssertSameSchemaObjectsAsync(replayed, copied);
     }
 
     [Test]
@@ -46,37 +46,37 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
         // would stop exercising a mid-chain stop the moment a new migration landed.
         var target = PenultimateDeclaredChatMigration();
 
-        await using var replayed = await MigrationSchemaProbe.MigrateChatAsync("chat-at-replayed.sqlite", target).ConfigureAwait(false);
-        await using var copied = await MigrationSchemaProbe.FromChatTemplateAsync("chat-at-copied.sqlite", target).ConfigureAwait(false);
+        await using var replayed = await MigrationSchemaProbe.MigrateChatAsync("chat-at-replayed.sqlite", target);
+        await using var copied = await MigrationSchemaProbe.FromChatTemplateAsync("chat-at-copied.sqlite", target);
 
-        var replayedMigrations = await replayed.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
-        var copiedMigrations = await copied.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
+        var replayedMigrations = await replayed.AppliedMigrationsAsync(identityContext: false);
+        var copiedMigrations = await copied.AppliedMigrationsAsync(identityContext: false);
         AssertEx.True(copiedMigrations.SetEquals(replayedMigrations),
             $"A template stopped at {target} must record exactly the migrations a replay to {target} records.");
         AssertEx.True(!copiedMigrations.Contains(HeadDeclaredChatMigration()),
             "A template stopped short of head must not record the head migration — otherwise the tail no longer runs for real.");
 
-        await AssertSameSchemaObjectsAsync(replayed, copied).ConfigureAwait(false);
+        await AssertSameSchemaObjectsAsync(replayed, copied);
     }
 
     [Test]
     public async Task IdentityHeadTemplate_IsIndistinguishableFromAFromScratchMigratedDatabase()
     {
-        await using var replayed = await MigrationSchemaProbe.MigrateIdentityAsync("identity-head-replayed.sqlite").ConfigureAwait(false);
-        await using var copied = await MigrationSchemaProbe.FromIdentityTemplateAsync("identity-head-copied.sqlite").ConfigureAwait(false);
+        await using var replayed = await MigrationSchemaProbe.MigrateIdentityAsync("identity-head-replayed.sqlite");
+        await using var copied = await MigrationSchemaProbe.FromIdentityTemplateAsync("identity-head-copied.sqlite");
 
-        var replayedMigrations = await replayed.AppliedMigrationsAsync(identityContext: true).ConfigureAwait(false);
-        var copiedMigrations = await copied.AppliedMigrationsAsync(identityContext: true).ConfigureAwait(false);
+        var replayedMigrations = await replayed.AppliedMigrationsAsync(identityContext: true);
+        var copiedMigrations = await copied.AppliedMigrationsAsync(identityContext: true);
         AssertEx.True(copiedMigrations.SetEquals(replayedMigrations),
             "A copied identity template must record exactly the migrations a from-scratch replay records.");
 
-        await AssertSameSchemaObjectsAsync(replayed, copied).ConfigureAwait(false);
+        await AssertSameSchemaObjectsAsync(replayed, copied);
     }
 
     [Test]
     public async Task PublishedTemplate_CarriesTheMigrationsAssemblyKeyAndNoWriteAheadLogSidecar()
     {
-        var templatePath = await MigratedDatabaseTemplate.ChatHeadPathAsync().ConfigureAwait(false);
+        var templatePath = await MigratedDatabaseTemplate.ChatHeadPathAsync();
 
         var moduleVersionId = typeof(NodeChatDbContext).Assembly.ManifestModule.ModuleVersionId.ToString("N", CultureInfo.InvariantCulture);
         AssertEx.True(Path.GetFileName(templatePath).Contains(moduleVersionId, StringComparison.Ordinal),
@@ -91,7 +91,7 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
     {
         var databasePath = Path.Combine(_rootPath, "copy-only", "node.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         AssertEx.True(File.Exists(databasePath), "The copy must land at the requested path, creating its directory.");
         AssertNoSidecars(databasePath, "a copied database");
@@ -106,8 +106,7 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
 
         var failure = await AssertEx
                             .ThrowsAsync<InvalidOperationException>(async () =>
-                                await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "undeclared.sqlite"), undeclared).ConfigureAwait(false))
-                            .ConfigureAwait(false);
+                                await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "undeclared.sqlite"), undeclared));
 
         AssertEx.True(failure.Message.Contains(undeclared, StringComparison.Ordinal),
             "The message must name the rejected id, or the caller cannot tell which call site is wrong.");
@@ -118,18 +117,16 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
     {
         // A second copy onto one path would replace the main file and leave the first database's -wal/-shm beside it.
         var databasePath = Path.Combine(_rootPath, "double-copy", "node.sqlite");
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        _ = await AssertEx.ThrowsAsync<IOException>(async () => await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<IOException>(async () => await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath));
     }
 
     [Test]
     public async Task CopyChatAtAsync_RejectsABlankTargetMigrationId()
     {
         // The guard that keeps a caller from silently keying a template on nothing and getting the head chain.
-        _ = await AssertEx.ThrowsAsync<ArgumentException>(async () => await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "blank.sqlite"), "   ").ConfigureAwait(false))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(async () => await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "blank.sqlite"), "   "));
     }
 
     private static void AssertNoSidecars(string databasePath, string subject)
@@ -143,8 +140,8 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
 
     private static async Task AssertSameSchemaObjectsAsync(MigrationSchemaProbe replayed, MigrationSchemaProbe copied)
     {
-        var replayedObjects = await SchemaObjectsAsync(replayed.DatabasePath).ConfigureAwait(false);
-        var copiedObjects = await SchemaObjectsAsync(copied.DatabasePath).ConfigureAwait(false);
+        var replayedObjects = await SchemaObjectsAsync(replayed.DatabasePath);
+        var copiedObjects = await SchemaObjectsAsync(copied.DatabasePath);
 
         AssertEx.True(copiedObjects.SetEquals(replayedObjects),
             "The copy and the replay must expose the same tables, indexes and triggers; "
@@ -155,15 +152,15 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
     private static async Task<IReadOnlySet<string>> SchemaObjectsAsync(string databasePath)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         // The DDL text is in the compared string, not just the object name: without it a copy and a replay could
         // agree on every table, index and trigger name while differing in a column.
         command.CommandText = "SELECT type || ':' || name || ':' || COALESCE(sql, '') FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';";
 
         var names = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             _ = names.Add(reader.GetString(ordinal: 0));
         }

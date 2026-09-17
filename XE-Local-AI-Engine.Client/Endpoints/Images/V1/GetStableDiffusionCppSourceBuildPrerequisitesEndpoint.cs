@@ -21,7 +21,7 @@ public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(ImageR
     public override async Task HandleAsync(GetStableDiffusionCppSourceBuildPrerequisitesRequest request, CancellationToken ct)
     {
         var backend = request.Backend.ToContract();
-        var report = await imageRuntime.ProbeAsync(backend, ct).ConfigureAwait(false);
-        await Send.OkAsync(report.ToResponse(backend), ct).ConfigureAwait(false);
+        var report = await imageRuntime.ProbeAsync(backend, ct);
+        await Send.OkAsync(report.ToResponse(backend), ct);
     }
 }

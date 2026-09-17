@@ -92,8 +92,8 @@ internal sealed class AsyncReaderWriterLock
 
     private async Task WaitAsync(Waiter waiter, CancellationToken cancellationToken)
     {
-        await using var registration = cancellationToken.Register(() => OnWaiterCancelled(waiter, cancellationToken)).ConfigureAwait(false);
-        await waiter.Task.ConfigureAwait(false);
+        await using var registration = cancellationToken.Register(() => OnWaiterCancelled(waiter, cancellationToken));
+        await waiter.Task;
     }
 
     private void OnWaiterCancelled(Waiter waiter, CancellationToken cancellationToken)

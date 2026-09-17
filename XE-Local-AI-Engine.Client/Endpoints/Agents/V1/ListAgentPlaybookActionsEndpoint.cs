@@ -19,7 +19,7 @@ public sealed class ListAgentPlaybookActionsEndpoint(IPlaybookActionService play
 
     public override async Task HandleAsync(ListAgentPlaybookActionsRequest req, CancellationToken ct)
     {
-        var records = await _playbookActionService.ListByAgentAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
+        var records = await _playbookActionService.ListByAgentAsync(req.AgentDefinitionId, ct);
 
         // Optional adaptive-memory scope filter: applied here so the service read path stays unchanged. When no scope is
         // supplied the projection is byte-identical to the pre-filter behavior.
@@ -31,6 +31,6 @@ public sealed class ListAgentPlaybookActionsEndpoint(IPlaybookActionService play
             {
                 Items = [.. filtered.Select(static record => record.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

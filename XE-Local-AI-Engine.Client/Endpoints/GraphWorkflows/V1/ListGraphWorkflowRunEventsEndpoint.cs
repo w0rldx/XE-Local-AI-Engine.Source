@@ -26,10 +26,10 @@ public sealed class ListGraphWorkflowRunEventsEndpoint(IGraphWorkflowRunService 
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var page = await _runs.ListEventsAsync(req.RunId, req.AfterSeq, ct).ConfigureAwait(false);
+        var page = await _runs.ListEventsAsync(req.RunId, req.AfterSeq, ct);
         await Send.OkAsync(new ListGraphWorkflowRunEventsResponse([.. page.Events.Select(GraphWorkflowContractMapper.ToResponse)],
                 page.LastSeq,
                 page.ReplayTruncated),
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

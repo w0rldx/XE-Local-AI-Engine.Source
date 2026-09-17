@@ -37,16 +37,16 @@ public sealed class ListIntegrationExecutionsEndpoint(IntegrationExecutionQueryS
             Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListIntegrationExecutionsRequestValidator.MaxLimit),
             Math.Max(req.Offset ?? 0, val2: 0));
 
-        var rows = await _executions.ListAsync(filter, ct).ConfigureAwait(false);
+        var rows = await _executions.ListAsync(filter, ct);
 
         // The SAME filter instance for both reads, so the total can only ever describe the page beside it.
-        var totalCount = await _executions.CountAsync(filter, ct).ConfigureAwait(false);
+        var totalCount = await _executions.CountAsync(filter, ct);
 
         await Send.OkAsync(new ListIntegrationExecutionsResponse
             {
                 Items = rows.Select(IntegrationMapper.ToSummary).ToArray(),
                 TotalCount = totalCount
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

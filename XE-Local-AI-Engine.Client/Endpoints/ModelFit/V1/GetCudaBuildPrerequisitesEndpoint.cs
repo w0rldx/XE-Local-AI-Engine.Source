@@ -25,7 +25,7 @@ public sealed class GetCudaBuildPrerequisitesEndpoint(LlamaCppRuntimeOrchestrati
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var report = await _runtime.ProbeCudaBuildPrerequisitesAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(report.ToResponse(), ct).ConfigureAwait(false);
+        var report = await _runtime.ProbeCudaBuildPrerequisitesAsync(ct);
+        await Send.OkAsync(report.ToResponse(), ct);
     }
 }

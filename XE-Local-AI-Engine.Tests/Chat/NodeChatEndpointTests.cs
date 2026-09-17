@@ -36,16 +36,16 @@ public sealed class NodeChatEndpointTests
                 Title = "API chat",
                 UserId = "local-operator"
             });
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
-        var created = await ReadJsonAsync<NodeChatConversationResponse>(createResponse).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
+        var created = await ReadJsonAsync<NodeChatConversationResponse>(createResponse);
 
         using var listRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/chat/conversations?limit=10");
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
-        var listed = await ReadJsonAsync<ListNodeChatConversationsResponse>(listResponse).ConfigureAwait(false);
+        using var listResponse = await client.SendAsync(listRequest);
+        var listed = await ReadJsonAsync<ListNodeChatConversationsResponse>(listResponse);
 
         using var getRequest = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/chat/conversations/{created.ConversationId}");
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
-        var loaded = await ReadJsonAsync<NodeChatConversationResponse>(getResponse).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
+        var loaded = await ReadJsonAsync<NodeChatConversationResponse>(getResponse);
 
         AssertEx.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         AssertEx.Equal("API chat", created.Title);
@@ -66,8 +66,8 @@ public sealed class NodeChatEndpointTests
         using var client = factory.CreateClient();
 
         using var listRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/chat/conversations");
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
-        var listed = await ReadJsonAsync<ListNodeChatConversationsResponse>(listResponse).ConfigureAwait(false);
+        using var listResponse = await client.SendAsync(listRequest);
+        var listed = await ReadJsonAsync<ListNodeChatConversationsResponse>(listResponse);
 
         AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         AssertEx.Equal(expected: 7, listed.MaxMessageSizeKb);
@@ -79,16 +79,14 @@ public sealed class NodeChatEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel API", UserId: null, CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel API", UserId: null, CreatedAtUtc: 10));
         var targetMessageId = Guid.NewGuid();
         var otherMessageId = Guid.NewGuid();
         var targetRequestId = Guid.NewGuid();
         var otherRequestId = Guid.NewGuid();
 
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, targetMessageId, targetRequestId, CreatedAtUtc: 11))
-                         .ConfigureAwait(false);
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, otherMessageId, otherRequestId, CreatedAtUtc: 12))
-                         .ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, targetMessageId, targetRequestId, CreatedAtUtc: 11));
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, otherMessageId, otherRequestId, CreatedAtUtc: 12));
 
         using var cancelRequest = CreateJsonRequest(factory,
             HttpMethod.Post,
@@ -99,9 +97,9 @@ public sealed class NodeChatEndpointTests
                 MessageId = targetMessageId,
                 RequestId = targetRequestId
             });
-        using var cancelResponse = await client.SendAsync(cancelRequest).ConfigureAwait(false);
-        var cancelled = await ReadJsonAsync<NodeChatCancelMessageResponse>(cancelResponse).ConfigureAwait(false);
-        var loaded = await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false);
+        using var cancelResponse = await client.SendAsync(cancelRequest);
+        var cancelled = await ReadJsonAsync<NodeChatCancelMessageResponse>(cancelResponse);
+        var loaded = await persistence.GetConversationAsync(conversation.ConversationId);
 
         AssertEx.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);
         AssertEx.True(cancelled.Cancelled);
@@ -117,18 +115,18 @@ public sealed class NodeChatEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete API", UserId: null, CreatedAtUtc: 20)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete API", UserId: null, CreatedAtUtc: 20));
 
         using var deleteRequest = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{conversation.ConversationId}");
-        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
-        var deleted = await ReadJsonAsync<NodeChatDeleteConversationResponse>(deleteResponse).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
+        var deleted = await ReadJsonAsync<NodeChatDeleteConversationResponse>(deleteResponse);
 
         using var getRequest = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/chat/conversations/{conversation.ConversationId}");
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
 
         using var listRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/chat/conversations");
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
-        var listed = await ReadJsonAsync<ListNodeChatConversationsResponse>(listResponse).ConfigureAwait(false);
+        using var listResponse = await client.SendAsync(listRequest);
+        var listed = await ReadJsonAsync<ListNodeChatConversationsResponse>(listResponse);
 
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
         AssertEx.Equal(conversation.ConversationId, deleted.ConversationId);
@@ -143,7 +141,7 @@ public sealed class NodeChatEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Selected path API", UserId: null, CreatedAtUtc: 50)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Selected path API", UserId: null, CreatedAtUtc: 50));
         var groupId = Guid.NewGuid();
         var chosenId = Guid.NewGuid();
 
@@ -157,15 +155,15 @@ public sealed class NodeChatEndpointTests
                     [groupId] = chosenId
                 }
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<NodeChatSelectedPathResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<NodeChatSelectedPathResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(conversation.ConversationId, body.ConversationId);
         AssertEx.Equal(chosenId, body.SelectedPath[groupId]);
 
         // The selection is persisted: a follow-up service read returns the same map.
-        var persisted = AssertEx.NotNull(await persistence.GetSelectedPathAsync(conversation.ConversationId).ConfigureAwait(false));
+        var persisted = AssertEx.NotNull(await persistence.GetSelectedPathAsync(conversation.ConversationId));
         AssertEx.Equal(chosenId, persisted[groupId]);
     }
 
@@ -187,7 +185,7 @@ public sealed class NodeChatEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 }

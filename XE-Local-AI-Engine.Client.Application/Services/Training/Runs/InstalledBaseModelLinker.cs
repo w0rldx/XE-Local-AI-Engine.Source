@@ -32,7 +32,7 @@ public sealed class InstalledBaseModelLinker(IGgufModelRegistry registry) : IIns
     public async Task<IReadOnlyList<InstalledBaseModelLink>> SuggestAsync(string baseRepoId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseRepoId);
-        var entries = await _registry.ListAsync(cancellationToken).ConfigureAwait(false);
+        var entries = await _registry.ListAsync(cancellationToken);
         return entries
                .Where(entry => MatchesBase(entry.RepoId, baseRepoId))
                // Adapter entries are themselves derived from a base and cannot serve as one.
@@ -47,12 +47,12 @@ public sealed class InstalledBaseModelLinker(IGgufModelRegistry registry) : IIns
     {
         if (!string.IsNullOrWhiteSpace(explicitModelName))
         {
-            var entry = await _registry.FindAsync(explicitModelName, cancellationToken).ConfigureAwait(false)
+            var entry = await _registry.FindAsync(explicitModelName, cancellationToken)
                         ?? throw new TrainingRunRejectedException($"'{explicitModelName}' is not an installed model.");
             return new InstalledBaseModelLink(entry.ModelName, entry.RepoId, entry.ModelContentFingerprint);
         }
 
-        var suggestions = await SuggestAsync(baseRepoId, cancellationToken).ConfigureAwait(false);
+        var suggestions = await SuggestAsync(baseRepoId, cancellationToken);
         return suggestions.Count > 0 ? suggestions[0] : null;
     }
 

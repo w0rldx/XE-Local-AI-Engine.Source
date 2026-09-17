@@ -60,8 +60,8 @@ public sealed class InvocationMonitorEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/invocations");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var monitor = Deserialize<InvocationMonitorResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -112,8 +112,8 @@ public sealed class InvocationMonitorEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/invocations");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var monitor = Deserialize<InvocationMonitorResponse>(body);
 
         var current = AssertEx.NotNull(monitor.Current);
@@ -135,8 +135,8 @@ public sealed class InvocationMonitorEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/invocations");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var monitor = await ReadJsonAsync<InvocationMonitorResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var monitor = await ReadJsonAsync<InvocationMonitorResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Null(monitor.Current);
@@ -151,7 +151,7 @@ public sealed class InvocationMonitorEndpointTests
         await using var factory = CreateFactory(dispatcher, history);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/api/local/v1/invocations").ConfigureAwait(false);
+        using var response = await client.GetAsync("/api/local/v1/invocations");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         history.DidNotReceive().Snapshot();
@@ -188,7 +188,7 @@ public sealed class InvocationMonitorEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync();
         return Deserialize<T>(body);
     }
 }

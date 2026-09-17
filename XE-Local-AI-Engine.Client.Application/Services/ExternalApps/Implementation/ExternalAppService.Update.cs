@@ -20,16 +20,16 @@ internal sealed partial class ExternalAppService : IExternalAppService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
 
-        var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
+        var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken);
         var installed = DeserializeManifest(row.ManifestSnapshotJson);
         var stored = ParseVariables(row.VariablesJson);
-        var target = await services.Catalog.GetApplicationAsync(row.ApplicationId, cancellationToken).ConfigureAwait(false);
+        var target = await services.Catalog.GetApplicationAsync(row.ApplicationId, cancellationToken);
 
         if (target is null)
         {
             // 200, not 404. A blocked preview is renderable information — the dialog can say WHY there is nothing to
             // update to — where a mutating call against a manifest that no longer exists is not executable.
-            var verdict = await _resourceGate.EvaluateAsync(installed, _layout.Root, cancellationToken).ConfigureAwait(false);
+            var verdict = await _resourceGate.EvaluateAsync(installed, _layout.Root, cancellationToken);
             return new UpdatePreview(row.ApplicationId,
                 instanceId,
                 row.ManifestVersion,
@@ -44,7 +44,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
                 ExternalAppBlockedReason.CatalogMissing);
         }
 
-        var admission = await EvaluateTargetAsync(services, target, cancellationToken).ConfigureAwait(false);
+        var admission = await EvaluateTargetAsync(services, target, cancellationToken);
         var newer = target.ManifestVersion > row.ManifestVersion;
 
         return new UpdatePreview(row.ApplicationId,
@@ -76,10 +76,10 @@ internal sealed partial class ExternalAppService : IExternalAppService
         IDisposable? lease = null;
         try
         {
-            lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId)).ConfigureAwait(false)
+            lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
                     ?? throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
 
-            var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
+            var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken);
             RequireVersion(row, expectedVersion);
 
             var admitted = AdmittedStatusFor(ExternalAppOperationKind.Update, row.Status)
@@ -87,10 +87,10 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
             // The application must still be in the catalog. If it has left, the instance keeps running untouched:
             // there is no target manifest, so there is nothing this could update INTO.
-            var target = await services.Catalog.GetApplicationAsync(row.ApplicationId, cancellationToken).ConfigureAwait(false)
+            var target = await services.Catalog.GetApplicationAsync(row.ApplicationId, cancellationToken)
                          ?? throw new ExternalAppNotFoundException($"The catalog no longer declares '{row.ApplicationId}', so this application cannot be updated.");
 
-            var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken).ConfigureAwait(false);
+            var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken);
             if (target.ManifestVersion <= row.ManifestVersion)
             {
                 // Already current — also the answer when an offline fallback to the bundled seed serves an OLDER
@@ -100,7 +100,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
             // Every install precondition, against the TARGET and BEFORE anything is stopped: an installed
             // application must not be able to update into a manifest this version would refuse to install.
-            var admission = await EvaluateTargetAsync(services, target, cancellationToken).ConfigureAwait(false);
+            var admission = await EvaluateTargetAsync(services, target, cancellationToken);
             if (admission.BlockedReason is { } blocked)
             {
                 throw Refuse(blocked, admission);
@@ -147,15 +147,13 @@ internal sealed partial class ExternalAppService : IExternalAppService
                 _ = await ApplyAsync(services.Store,
                         cursor,
                         Transition(cursor, row.Status, ExternalAppInstanceEventKind.PermissionAccepted),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
             }
 
             if (!await ApplyAsync(services.Store,
                         cursor,
                         Transition(cursor, admitted, ExternalAppInstanceEventKind.UpdateRequested),
-                        cancellationToken)
-                    .ConfigureAwait(false))
+                        cancellationToken))
             {
                 throw new ExternalAppConcurrencyException("The instance changed while this update was being admitted.");
             }
@@ -209,14 +207,14 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
         try
         {
-            var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken);
+            runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken);
 
-            await StopInstanceAsync(runtime, context.Row, cancellationToken).ConfigureAwait(false);
+            await StopInstanceAsync(runtime, context.Row, cancellationToken);
 
             // Confirmed, not attempted: the rebuild below creates this instance's containers again, and one survivor
             // of the old version would collide with its replacement by name and keep serving the old image.
-            await RequireTeardownAsync(runtime, context.InstanceId, cancellationToken).ConfigureAwait(false);
+            await RequireTeardownAsync(runtime, context.InstanceId, cancellationToken);
 
             var snapshotJson = SerializeManifest(target);
             var variablesJson = SerializeVariables(variables);
@@ -246,8 +244,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
                                                        target.ManifestVersion,
                                                        Now(),
                                                        mintedBridgeToken,
-                                                       token)
-                                                   .ConfigureAwait(false);
+                                                       token);
 
                         if (!result.Applied)
                         {
@@ -259,8 +256,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
                         cursor.Sequence = result.Sequence;
                         committed = true;
                     },
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
 
             // The desired state is the user's and an update is not a decision to start something that was stopped.
             // Against the TARGET manifest: the containers standing here are the ones the rebuild just created, so the
@@ -268,7 +264,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
             var restoreStopped = context.Row.DesiredState == ExternalAppDesiredState.Stopped;
             if (restoreStopped)
             {
-                await StopInstanceAsync(runtime, context.InstanceId, target, cancellationToken).ConfigureAwait(false);
+                await StopInstanceAsync(runtime, context.InstanceId, target, cancellationToken);
             }
 
             _ = await ApplyAsync(services.Store,
@@ -282,16 +278,15 @@ internal sealed partial class ExternalAppService : IExternalAppService
                             NeedsRecreate = false,
                             ClearFailure = true
                         },
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
         catch (Exception exception)
         {
-            await SettleFailureAsync(services.Store, runtime, cursor, exception).ConfigureAwait(false);
+            await SettleFailureAsync(services.Store, runtime, cursor, exception);
         }
         finally
         {
-            await DisposeRuntimeAsync(runtime).ConfigureAwait(false);
+            await DisposeRuntimeAsync(runtime);
         }
     }
 
@@ -339,9 +334,9 @@ internal sealed partial class ExternalAppService : IExternalAppService
         ApplicationManifest target,
         CancellationToken cancellationToken)
     {
-        var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken);
         var missing = resolution.Capabilities.FindMissing(target.Requires);
-        var resources = await _resourceGate.EvaluateAsync(target, _layout.Root, cancellationToken).ConfigureAwait(false);
+        var resources = await _resourceGate.EvaluateAsync(target, _layout.Root, cancellationToken);
 
         // alreadyInstalled is false on purpose: this application IS installed, and that is the precondition of an
         // update rather than a reason to refuse one.

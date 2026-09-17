@@ -60,7 +60,7 @@ public sealed class ToolInvocationServiceTests
     public async Task Invoke_TheTimeTool_RunsInProcessAndReturnsItsOwnText()
     {
         // GetCurrentTime is the end-to-end tool: no feature flag, no workspace, no model behind it.
-        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context()).ConfigureAwait(false);
+        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context());
 
         AssertEx.Equal(ToolInvocationOutcomeKind.Executed, outcome.Kind, outcome.Reason);
         AssertEx.NotNullOrEmpty(outcome.Result);
@@ -70,7 +70,7 @@ public sealed class ToolInvocationServiceTests
     [Test]
     public async Task Invoke_TheCalculatorTool_PassesItsArgumentsThrough()
     {
-        var outcome = await ServiceOf(Factory).InvokeAsync("Calculate", """{"expression":"2+2"}""", Context()).ConfigureAwait(false);
+        var outcome = await ServiceOf(Factory).InvokeAsync("Calculate", """{"expression":"2+2"}""", Context());
 
         AssertEx.Equal(ToolInvocationOutcomeKind.Executed, outcome.Kind, outcome.Reason);
         AssertEx.Contains(outcome.Result, "4");
@@ -81,7 +81,7 @@ public sealed class ToolInvocationServiceTests
     {
         // The set IS the invocation envelope, so it is asserted as a set rather than a spot-check: a future category or
         // approval change on any node tool moves this list and fails here rather than silently widening a Tool node.
-        var invocable = await ServiceOf(Factory).ListInvocableToolsAsync().ConfigureAwait(false);
+        var invocable = await ServiceOf(Factory).ListInvocableToolsAsync();
 
         AssertEx.Equal(string.Join(',', ExpectedInvocable),
             string.Join(',', invocable.Select(static tool => tool.Name).Order(StringComparer.Ordinal)));
@@ -99,7 +99,7 @@ public sealed class ToolInvocationServiceTests
     [Test]
     public async Task ListInvocableTools_IncludesReadFile_WhoseExecutableComesFromTheWorkerRegistry()
     {
-        var invocable = await ServiceOf(Factory).ListInvocableToolsAsync().ConfigureAwait(false);
+        var invocable = await ServiceOf(Factory).ListInvocableToolsAsync();
 
         var readFile = AssertEx.NotNull(invocable.SingleOrDefault(static tool => tool.Name == "read_file"),
             "read_file resolves through IClientLocalToolRegistry, which the promoted precedent never consulted.");
@@ -115,11 +115,11 @@ public sealed class ToolInvocationServiceTests
     {
         var service = ServiceOf(Factory);
 
-        var outcome = await service.InvokeAsync(toolName, "{}", Context()).ConfigureAwait(false);
+        var outcome = await service.InvokeAsync(toolName, "{}", Context());
 
         AssertEx.Equal(ToolInvocationOutcomeKind.NotInvocable, outcome.Kind);
         AssertEx.Equal(expectedReason, outcome.Reason);
-        AssertEx.False((await service.ListInvocableToolsAsync().ConfigureAwait(false)).Any(tool => tool.Name == toolName),
+        AssertEx.False((await service.ListInvocableToolsAsync()).Any(tool => tool.Name == toolName),
             $"{toolName} must not be offered to a picker it can never run from.");
     }
 
@@ -129,7 +129,7 @@ public sealed class ToolInvocationServiceTests
     [Arguments("   ")]
     public async Task Invoke_ANameTheCatalogDoesNotCarry_IsUnknownTool(string toolName)
     {
-        var outcome = await ServiceOf(Factory).InvokeAsync(toolName, "{}", Context()).ConfigureAwait(false);
+        var outcome = await ServiceOf(Factory).InvokeAsync(toolName, "{}", Context());
 
         AssertEx.Equal(ToolInvocationOutcomeKind.UnknownTool, outcome.Kind);
         AssertEx.NotNullOrEmpty(outcome.Reason);
@@ -142,7 +142,7 @@ public sealed class ToolInvocationServiceTests
     [Arguments("{not json", "the arguments are not JSON at all")]
     public async Task Invoke_WithArgumentsTheSchemaRefuses_IsInvalidArguments(string argumentsJson, string why)
     {
-        var outcome = await ServiceOf(Factory).InvokeAsync("Calculate", argumentsJson, Context()).ConfigureAwait(false);
+        var outcome = await ServiceOf(Factory).InvokeAsync("Calculate", argumentsJson, Context());
 
         AssertEx.Equal(ToolInvocationOutcomeKind.InvalidArguments, outcome.Kind, why);
         AssertEx.NotNullOrEmpty(outcome.Reason);
@@ -153,9 +153,9 @@ public sealed class ToolInvocationServiceTests
     public async Task Invoke_WithAnAlreadyCancelledCallerToken_IsCancelled()
     {
         using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync().ConfigureAwait(false);
+        await cancellation.CancelAsync();
 
-        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context(), cancellation.Token).ConfigureAwait(false);
+        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context(), cancellation.Token);
 
         AssertEx.Equal(ToolInvocationOutcomeKind.Cancelled, outcome.Kind, "the caller's own token fired, so this is a cancel and not a timeout.");
     }
@@ -165,7 +165,7 @@ public sealed class ToolInvocationServiceTests
     {
         // A zero budget is cancelled synchronously rather than through a timer, so this asserts the classification
         // without waiting on — or racing — a clock.
-        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.Zero)).ConfigureAwait(false);
+        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.Zero));
 
         AssertEx.Equal(ToolInvocationOutcomeKind.Timeout, outcome.Kind, "no caller token fired, so a spent budget is a timeout.");
     }
@@ -185,7 +185,7 @@ public sealed class ToolInvocationServiceTests
                   .Returns(async call =>
                   {
                       using var parked = CancellationTokenSource.CreateLinkedTokenSource(call.Arg<CancellationToken>(), release.Token);
-                      await Task.Delay(Timeout.Infinite, parked.Token).ConfigureAwait(false);
+                      await Task.Delay(Timeout.Infinite, parked.Token);
                       return (IReadOnlyList<LocalToolCatalogEntry>)[];
                   });
         await using var factory = new TestServerWebAppFactory
@@ -204,12 +204,11 @@ public sealed class ToolInvocationServiceTests
             // own, so the outcome is decided by the deadline firing and not by a race between two timers. The outer
             // wait is the backstop for the case this test exists to catch — a budget that never reaches the catalog.
             outcome = await ServiceOf(factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.FromMilliseconds(200)))
-                                              .WaitAsync(TestBudgets.Contended)
-                                              .ConfigureAwait(false);
+                                              .WaitAsync(TestBudgets.Contended);
         }
         finally
         {
-            await release.CancelAsync().ConfigureAwait(false);
+            await release.CancelAsync();
         }
 
         AssertEx.Equal(ToolInvocationOutcomeKind.Timeout, outcome.Kind, "no caller token fired, so the spent budget is a timeout.");
@@ -225,7 +224,7 @@ public sealed class ToolInvocationServiceTests
     [Test]
     public async Task Invoke_WithABudgetTooLargeToArm_IsFaultedRatherThanThrown()
     {
-        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.FromDays(60))).ConfigureAwait(false);
+        var outcome = await ServiceOf(Factory).InvokeAsync("GetCurrentTime", "{}", Context(TimeSpan.FromDays(60)));
 
         AssertEx.Equal(ToolInvocationOutcomeKind.Faulted, outcome.Kind, "the refusal is an outcome, not an ArgumentOutOfRangeException out of the call.");
         AssertEx.Null(outcome.Result);
@@ -253,11 +252,11 @@ public sealed class ToolInvocationServiceTests
         };
         var service = ServiceOf(factory);
 
-        var outcome = await service.InvokeAsync("GetCurrentTime", "{}", Context()).ConfigureAwait(false);
+        var outcome = await service.InvokeAsync("GetCurrentTime", "{}", Context());
 
         AssertEx.Equal(ToolInvocationOutcomeKind.NotInvocable, outcome.Kind);
         AssertEx.Equal("approval-gated", outcome.Reason);
-        AssertEx.Empty(await service.ListInvocableToolsAsync().ConfigureAwait(false),
+        AssertEx.Empty(await service.ListInvocableToolsAsync(),
             "a tightened ReadLocal closes the whole invocable set, and the picker must agree with the runtime.");
     }
 
@@ -282,12 +281,11 @@ public sealed class ToolInvocationServiceTests
                            ConfigJson: """{"method":"GET","urlTemplate":"https://api.example.com/things","headers":[]}""",
                            ParametersJson: "[]",
                            Enabled: true,
-                           Acknowledged: true))
-                       .ConfigureAwait(false);
+                           Acknowledged: true));
         }
 
         var entry = AssertEx.NotNull((await factory.Services.GetRequiredService<ILocalToolOfferProvider>()
-                                                   .GetKnownToolsAsync().ConfigureAwait(false))
+                                                   .GetKnownToolsAsync())
             .SingleOrDefault(candidate => candidate.Name == name),
             "the seeded tool must reach the catalog, or the rest of this test proves nothing.");
         AssertEx.Equal("custom", entry.Source);
@@ -296,9 +294,9 @@ public sealed class ToolInvocationServiceTests
 
         var service = ServiceOf(factory);
         AssertEx.Equal(ToolInvocationOutcomeKind.UnknownTool,
-            (await service.InvokeAsync(name, "{}", Context()).ConfigureAwait(false)).Kind,
+            (await service.InvokeAsync(name, "{}", Context())).Kind,
             "a non-builtin source is not invocable at all, which is a stronger refusal than its category or approval.");
-        var invocable = await service.ListInvocableToolsAsync().ConfigureAwait(false);
+        var invocable = await service.ListInvocableToolsAsync();
         AssertEx.Equal(string.Join(',', ExpectedInvocable), string.Join(',', invocable.Select(static tool => tool.Name).Order(StringComparer.Ordinal)));
     }
 
@@ -330,11 +328,11 @@ public sealed class ToolInvocationServiceTests
             }
         };
 
-        var catalog = await factory.Services.GetRequiredService<ILocalToolOfferProvider>().GetKnownToolsAsync().ConfigureAwait(false);
+        var catalog = await factory.Services.GetRequiredService<ILocalToolOfferProvider>().GetKnownToolsAsync();
         AssertEx.Equal(expected: 2, catalog.Count(static candidate => candidate.Name == "read_file"),
             "the catalog must actually carry both entries, or the de-duplication below is vacuous.");
 
-        var invocable = await ServiceOf(factory).ListInvocableToolsAsync().ConfigureAwait(false);
+        var invocable = await ServiceOf(factory).ListInvocableToolsAsync();
 
         var readFile = AssertEx.NotNull(invocable.SingleOrDefault(static tool => tool.Name == "read_file"),
             "exactly one read_file: the shadowing entry is skipped on its source, not on its category.");
@@ -364,7 +362,7 @@ public sealed class ToolInvocationServiceTests
             }
         };
 
-        var outcome = await ServiceOf(factory).InvokeAsync("GetCurrentTime", "{}", Context()).ConfigureAwait(false);
+        var outcome = await ServiceOf(factory).InvokeAsync("GetCurrentTime", "{}", Context());
 
         AssertEx.Equal(ToolInvocationOutcomeKind.InvalidArguments, outcome.Kind, "a repair envelope is not a tool answer.");
         AssertEx.Equal("timezone must be a string.", outcome.Reason, "the envelope's own reason is carried through.");

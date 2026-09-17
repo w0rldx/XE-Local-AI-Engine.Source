@@ -132,8 +132,8 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         {
             // After the existing gates and before the entry marker and ProvisionAsync, so a disabled node starts no
             // download and an undecided one waits for the operator's choice instead of deciding for them.
-            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken).ConfigureAwait(false);
-            if (!await _nodeRuntimeSettings.GetAutoProvisionFirstRunModelAsync(stoppingToken).ConfigureAwait(false))
+            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken);
+            if (!await _nodeRuntimeSettings.GetAutoProvisionFirstRunModelAsync(stoppingToken))
             {
                 _logger.LogDebug("First-run model provisioning is disabled by the node's external-access settings.");
                 return;
@@ -143,7 +143,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             // later phase stalls. The desktop gate above stays silent to preserve the headless/CI off-flag invariant.
             _logger.LogInformation("First-run model provisioning starting (desktop mode).");
 
-            await ProvisionAsync(stoppingToken).ConfigureAwait(false);
+            await ProvisionAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -160,14 +160,14 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     {
         // Idempotency: if any GGUF is already installed, or a non-default model is already selected, there is nothing to
         // provision. This makes the service safe to run on every boot.
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(ct);
         _logger.LogInformation("First-run provisioning: {Count} GGUF model(s) already installed.", installed.Count);
         if (installed.Count > 0)
         {
             return;
         }
 
-        var settings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false);
+        var settings = await _nodeSettingsStore.LoadAsync(ct);
         var configuredDefault = _configuration.GetValue<string>("Agent:LocalChat:DefaultModel");
         if (!MayAutoSelectDefaultModel(settings.DefaultModelName, configuredDefault))
         {
@@ -205,7 +205,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             // binary manager reports that one itself). Reporting is fire-and-forget inside the registry, so it adds no
             // await to the startup path.
             _acquisitionStatus.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.DetectingGpu));
-            variant = await _variantSelector.SelectVariantAsync(probeCts.Token).ConfigureAwait(false);
+            variant = await _variantSelector.SelectVariantAsync(probeCts.Token);
         }
         catch (OperationCanceledException) when (probeCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
@@ -233,7 +233,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _logger.LogInformation(
             "First-run provisioning acquiring the llama.cpp runtime ({Variant}) for first-run model '{RepoId}' — this downloads the runtime on first run and can take a few minutes.", variant,
             repoId.Trim());
-        var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+        var binary = await _binaryManager.EnsureBinaryAsync(variant, ct);
         _logger.LogInformation("First-run provisioning ensured the llama.cpp runtime ({Variant}, version {Version}).", variant, binary.Version);
 
         // Download the default GGUF through the coordinator's detached path so progress/cancel AND the llamacpp
@@ -246,12 +246,12 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             Role = GgufRole.Chat
         };
         _logger.LogInformation("First-run provisioning starting model download '{RepoId}' (quant {Quant}).", request.RepoId, request.Quant ?? "(none)");
-        var ticket = await _downloadCoordinator.StartAsync(request, ct).ConfigureAwait(false);
+        var ticket = await _downloadCoordinator.StartAsync(request, ct);
         _logger.LogInformation("First-run provisioning download started for '{Model}'; waiting for completion.", ticket.ModelName);
 
         // The download runs detached; wait for it to reach a terminal phase so DefaultModelName is set only once the
         // file is actually present (a half-downloaded model must not be selected).
-        var completed = await WaitForDownloadAsync(ticket.ModelName, ct).ConfigureAwait(false);
+        var completed = await WaitForDownloadAsync(ticket.ModelName, ct);
         if (!completed)
         {
             _logger.LogWarning("First-run model '{Model}' did not finish downloading; leaving the picker empty for onboarding.", ticket.ModelName);
@@ -280,7 +280,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             {
                 DefaultModelName = ticket.ModelName
             };
-        }, ct).ConfigureAwait(false);
+        }, ct);
 
         if (operatorSelection is not null)
         {
@@ -324,7 +324,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     {
         using var timer = new PeriodicTimer(_pollInterval);
 
-        while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        while (await timer.WaitForNextTickAsync(ct))
         {
             var status = _downloadCoordinator.GetStatus(modelName);
             switch (status?.Phase)

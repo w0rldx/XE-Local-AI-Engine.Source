@@ -32,6 +32,6 @@ public sealed class GetRuntimeAcquisitionStatusEndpoint(ILlamaCppRuntimeAdminist
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(_administrationService.GetAcquisitionStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(_administrationService.GetAcquisitionStatus().ToResponse(), ct);
     }
 }

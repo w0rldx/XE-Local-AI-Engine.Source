@@ -25,12 +25,12 @@ public sealed partial class McpAgentRunStore
                                   + McpAgentRunPayloadProtector.FixedRecordOverheadBytes);
         const long tombstoneBytes = TombstoneReservationBytesV1;
 
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
-        var existing = await ReadRunAsync(connection, transaction, request.RequestId, includePayload: true, cancellationToken).ConfigureAwait(false);
+        var existing = await ReadRunAsync(connection, transaction, request.RequestId, includePayload: true, cancellationToken);
         if (existing is not null)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             if (!CryptographicOperations.FixedTimeEquals(fingerprint, existing.RequestFingerprint))
             {
                 return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.RequestIdConflict, ToRecord(existing));
@@ -40,11 +40,11 @@ public sealed partial class McpAgentRunStore
                 ToRecord(existing));
         }
 
-        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
         var capacityKind = GetCapacityKind(ledger, reservation, tombstoneBytes);
         if (capacityKind != McpAgentRunCapacityKind.None)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.CapacityExceeded, Run: null, CapacityKind: capacityKind);
         }
 
@@ -84,7 +84,7 @@ public sealed partial class McpAgentRunStore
             Add(command, "$reservation", reservation);
             Add(command, "$tombstoneBytes", tombstoneBytes);
             Add(command, "$createdAtUtc", request.CreatedAtUtc);
-            _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await UpdateLedgerAsync(connection,
@@ -98,8 +98,8 @@ public sealed partial class McpAgentRunStore
                 TombstoneLogicalBytes = ledger.TombstoneLogicalBytes + tombstoneBytes,
                 UpdatedAtUtc = request.CreatedAtUtc
             },
-            cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new McpAgentRunAdmissionResult(McpAgentRunAdmissionKind.Accepted,
             new McpAgentRunRecord(request.RequestId,
@@ -132,8 +132,8 @@ public sealed partial class McpAgentRunStore
 
     public async Task<McpAgentRunRecord?> GetAsync(Guid requestId, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        var row = await ReadRunAsync(connection, transaction: null, requestId, includePayload: true, cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var row = await ReadRunAsync(connection, transaction: null, requestId, includePayload: true, cancellationToken);
         return row is null ? null : ToRecord(row);
     }
 
@@ -146,7 +146,7 @@ public sealed partial class McpAgentRunStore
             throw new ArgumentOutOfRangeException(nameof(limit), "The list limit must be between 1 and 50.");
         }
 
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         var sql = MetadataSelectColumns + (status is null ? string.Empty : " WHERE status = $status") + " ORDER BY created_at_utc DESC LIMIT $limit;";
         await using var command = CreateCommand(connection, transaction: null, sql);
         if (status is not null)
@@ -156,8 +156,8 @@ public sealed partial class McpAgentRunStore
 
         Add(command, "$limit", limit);
         var rows = new List<McpAgentRunRecord>(limit);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             rows.Add(ToRecord(ReadRow(reader, includePayload: false)));
         }
@@ -170,25 +170,25 @@ public sealed partial class McpAgentRunStore
         long claimedAtUtc,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
-        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
-        var row = await ReadRunAsync(connection, transaction, requestId, includePayload: true, cancellationToken).ConfigureAwait(false);
+        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
+        var row = await ReadRunAsync(connection, transaction, requestId, includePayload: true, cancellationToken);
         if (row is null)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new McpAgentRunClaimResult(McpAgentRunClaimKind.NotFound, Run: null);
         }
 
         if (row.Version != expectedVersion)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new McpAgentRunClaimResult(McpAgentRunClaimKind.VersionConflict, ToRecord(row));
         }
 
         if (row.Status != McpAgentRunStatus.Queued || row.StopReason != McpAgentRunStopReason.None)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new McpAgentRunClaimResult(McpAgentRunClaimKind.NotQueued, ToRecord(row));
         }
 
@@ -205,7 +205,7 @@ public sealed partial class McpAgentRunStore
         Add(command, "$expectedVersion", expectedVersion);
         Add(command, "$queued", (int)McpAgentRunStatus.Queued);
         Add(command, "$none", (int)McpAgentRunStopReason.None);
-        var changed = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var changed = await command.ExecuteNonQueryAsync(cancellationToken);
         if (changed != 1)
         {
             throw new InvalidOperationException("The serialized MCP run claim unexpectedly lost its compare-and-swap.");
@@ -219,8 +219,8 @@ public sealed partial class McpAgentRunStore
                 RunningRunCount = ledger.RunningRunCount + 1,
                 UpdatedAtUtc = claimedAtUtc
             },
-            cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new McpAgentRunClaimResult(McpAgentRunClaimKind.Claimed,
             ToRecord(row with
             {
@@ -242,31 +242,31 @@ public sealed partial class McpAgentRunStore
             throw new ArgumentOutOfRangeException(nameof(reason));
         }
 
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
-        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
-        var row = await ReadRunAsync(connection, transaction, requestId, includePayload: true, cancellationToken).ConfigureAwait(false);
+        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
+        var row = await ReadRunAsync(connection, transaction, requestId, includePayload: true, cancellationToken);
         if (row is null)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new McpAgentRunStopResult(McpAgentRunStopKind.NotFound, Run: null);
         }
 
         if (IsTerminal(row.Status))
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyTerminal, ToRecord(row));
         }
 
         if (row.StopReason != McpAgentRunStopReason.None)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new McpAgentRunStopResult(McpAgentRunStopKind.AlreadyRequested, ToRecord(row));
         }
 
         if (row.Version != expectedVersion)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new McpAgentRunStopResult(McpAgentRunStopKind.VersionConflict, ToRecord(row));
         }
 
@@ -294,7 +294,7 @@ public sealed partial class McpAgentRunStore
             Add(command, "$requestId", requestId.ToString("D", CultureInfo.InvariantCulture));
             Add(command, "$expectedVersion", expectedVersion);
             Add(command, "$none", (int)McpAgentRunStopReason.None);
-            if (await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
             {
                 throw new InvalidOperationException("The serialized MCP stop request unexpectedly lost its compare-and-swap.");
             }
@@ -311,10 +311,10 @@ public sealed partial class McpAgentRunStore
                     ActivePayloadBytes = ledger.ActivePayloadBytes + activePayloadBytes - row.ActivePayloadBytes,
                     UpdatedAtUtc = requestedAtUtc
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return new McpAgentRunStopResult(McpAgentRunStopKind.Requested,
             ToRecord(row with
             {
@@ -334,17 +334,17 @@ public sealed partial class McpAgentRunStore
         ArgumentNullException.ThrowIfNull(finalization);
         ValidateFinalization(finalization);
 
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
-        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
-        var row = await ReadRunAsync(connection, transaction, finalization.RequestId, includePayload: true, cancellationToken).ConfigureAwait(false);
+        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
+        var row = await ReadRunAsync(connection, transaction, finalization.RequestId, includePayload: true, cancellationToken);
         if (row is null
             || row.Status != McpAgentRunStatus.Running
             || row.Version != finalization.ExpectedVersion
             || row.ClaimToken != finalization.ClaimToken
             || row.StopReason != finalization.ExpectedStopReason)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return false;
         }
 
@@ -382,7 +382,7 @@ public sealed partial class McpAgentRunStore
             Add(command, "$running", (int)McpAgentRunStatus.Running);
             Add(command, "$claimToken", finalization.ClaimToken.ToString("D", CultureInfo.InvariantCulture));
             Add(command, "$expectedStopReason", (int)finalization.ExpectedStopReason);
-            if (await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
             {
                 throw new InvalidOperationException("The serialized MCP terminal transition unexpectedly lost its compare-and-swap.");
             }
@@ -397,16 +397,16 @@ public sealed partial class McpAgentRunStore
                 ActivePayloadBytes = checked(ledger.ActivePayloadBytes + actualActiveBytes - row.ActivePayloadBytes),
                 UpdatedAtUtc = finalization.CompletedAtUtc
             },
-            cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
     public async Task<int> ReconcileInterruptedRunsAsync(long completedAtUtc, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
-        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
 
         long releasedBytes;
         await using (var totals = CreateCommand(connection, transaction, """
@@ -418,7 +418,7 @@ public sealed partial class McpAgentRunStore
         {
             Add(totals, "$recordOverhead", McpAgentRunPayloadProtector.FixedRecordOverheadBytes);
             Add(totals, "$running", (int)McpAgentRunStatus.Running);
-            releasedBytes = Convert.ToInt64(await totals.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+            releasedBytes = Convert.ToInt64(await totals.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
         }
 
         if (releasedBytes < 0)
@@ -454,7 +454,7 @@ public sealed partial class McpAgentRunStore
         Add(command, "$payloadExpiresAtUtc", checked(completedAtUtc + PayloadRetentionMilliseconds));
         Add(command, "$recordOverhead", McpAgentRunPayloadProtector.FixedRecordOverheadBytes);
         Add(command, "$running", (int)McpAgentRunStatus.Running);
-        var changed = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var changed = await command.ExecuteNonQueryAsync(cancellationToken);
         if (changed > 0)
         {
             await UpdateLedgerAsync(connection,
@@ -466,18 +466,18 @@ public sealed partial class McpAgentRunStore
                     ActivePayloadBytes = ledger.ActivePayloadBytes - releasedBytes,
                     UpdatedAtUtc = completedAtUtc
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return changed;
     }
 
     public async Task<int> CompactExpiredPayloadsAsync(long expiresBeforeUtc, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
-        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
 
         long released;
         int count;
@@ -493,8 +493,8 @@ public sealed partial class McpAgentRunStore
             Add(totals, "$cancelled", (int)McpAgentRunStatus.Cancelled);
             Add(totals, "$interrupted", (int)McpAgentRunStatus.Interrupted);
             Add(totals, "$cutoff", expiresBeforeUtc);
-            await using var reader = await totals.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            _ = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            await using var reader = await totals.ExecuteReaderAsync(cancellationToken);
+            _ = await reader.ReadAsync(cancellationToken);
             count = checked((int)reader.GetInt64(0));
             released = reader.GetInt64(1);
         }
@@ -532,7 +532,7 @@ public sealed partial class McpAgentRunStore
             Add(compact, "$none", (int)McpAgentRunStopReason.None);
             Add(compact, "$cutoff", expiresBeforeUtc);
             Add(compact, "$compactedAtUtc", expiresBeforeUtc);
-            _ = await compact.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await compact.ExecuteNonQueryAsync(cancellationToken);
 
             await UpdateLedgerAsync(connection,
                 transaction,
@@ -541,39 +541,39 @@ public sealed partial class McpAgentRunStore
                     ActivePayloadBytes = ledger.ActivePayloadBytes - released,
                     UpdatedAtUtc = expiresBeforeUtc
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return count;
     }
 
     public async Task<McpAgentRunLedgerVerification> VerifyLedgerAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
-        var persisted = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
-        var reconstructed = await ReconstructCountersAsync(connection, transaction, persisted.UpdatedAtUtc, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var persisted = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
+        var reconstructed = await ReconstructCountersAsync(connection, transaction, persisted.UpdatedAtUtc, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new McpAgentRunLedgerVerification(CountersEqual(persisted, reconstructed), persisted, reconstructed);
     }
 
     public async Task<McpAgentRunLedgerCounters> RebuildLedgerAsync(long updatedAtUtc, CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
-        var counters = await ReconstructCountersAsync(connection, transaction, updatedAtUtc, cancellationToken).ConfigureAwait(false);
-        await UpsertLedgerAsync(connection, transaction, counters, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var counters = await ReconstructCountersAsync(connection, transaction, updatedAtUtc, cancellationToken);
+        await UpsertLedgerAsync(connection, transaction, counters, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return counters;
     }
 
     public async Task<McpAgentRunLedgerSnapshot> GetLedgerSnapshotAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var counters = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        var counters = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new McpAgentRunLedgerSnapshot(counters.QueuedRunCount, counters.RunningRunCount, counters);
     }
 }

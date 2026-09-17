@@ -58,7 +58,7 @@ public sealed class NodeChatInvocationPump(
                 nextCursor.Content,
                 string.IsNullOrEmpty(nextCursor.Reasoning) ? null : nextCursor.Reasoning,
                 NowUnixMilliseconds()),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         return new NodeChatPumpFlushResult(nextCursor, persisted, contentDelta, reasoningDelta);
     }
@@ -91,7 +91,7 @@ public sealed class NodeChatInvocationPump(
         // Attribute the turn's tokens to the fine-grained provider that served it, resolved from the same model id that
         // rides into terminalize (state.ModelUsed ?? requestedModel). Best-effort: the resolver never throws and is bounded,
         // degrading to 'unknown' on any failure/timeout, so provider attribution can never break or stall terminalization.
-        var provider = await _usageProviderResolver.ResolveAsync(state.ModelUsed ?? requestedModel, CancellationToken.None).ConfigureAwait(false);
+        var provider = await _usageProviderResolver.ResolveAsync(state.ModelUsed ?? requestedModel, CancellationToken.None);
         var envelope = new AgentRunEnvelopeMetadata(state.InvocationId,
             durationMs,
             state.FailureCategory?.ToString(),
@@ -138,7 +138,7 @@ public sealed class NodeChatInvocationPump(
                 // KB sources that grounded this turn; null when the turn used no knowledge base, which
                 // preserves any existing persisted sources on the row.
                 sources),
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         // The transition guard may have rejected this terminalize (the row already reached a different terminal), so the
         // persisted row is the authoritative winning state. The returned status and the single SSE terminal are built from
@@ -180,7 +180,7 @@ public sealed class NodeChatInvocationPump(
                 string.IsNullOrEmpty(cursor.Reasoning) ? null : cursor.Reasoning,
                 interruptedError,
                 Envelope: envelope),
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         // The persisted row is the winning state: the guard may have rejected an Interrupted write against an already
         // terminal row (or a Cancelled write is idempotent over an HTTP-cancelled row). Build the result from it.

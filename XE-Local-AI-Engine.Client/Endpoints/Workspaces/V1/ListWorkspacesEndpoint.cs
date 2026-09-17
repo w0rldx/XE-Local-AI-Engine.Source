@@ -20,7 +20,7 @@ public sealed class ListWorkspacesEndpoint(ISelectedFolderResolver selectedFolde
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var references = await _selectedFolders.ListReferencesAsync(ct).ConfigureAwait(false);
+        var references = await _selectedFolders.ListReferencesAsync(ct);
         await Send.OkAsync(new ListWorkspacesResponse
             {
                 Items =
@@ -32,6 +32,6 @@ public sealed class ListWorkspacesEndpoint(ISelectedFolderResolver selectedFolde
                     })
                 ]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

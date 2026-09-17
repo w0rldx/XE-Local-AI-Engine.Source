@@ -21,19 +21,18 @@ public sealed class SupervisorAdmissionTests
 
         await AssertEx.EventuallyAsync(() => gatedProbe.Waiting == 1,
             TimeSpan.FromSeconds(5),
-            "the spawn should be parked in readiness").ConfigureAwait(false);
+            "the spawn should be parked in readiness");
 
         try
         {
             var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None)
-                                        .WaitAsync(TimeSpan.FromSeconds(2))
-                                        .ConfigureAwait(false);
+                                        .WaitAsync(TimeSpan.FromSeconds(2));
             AssertEx.Null(lease);
         }
         finally
         {
             gatedProbe.Release();
-            await ensure.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await ensure.WaitAsync(TimeSpan.FromSeconds(5));
         }
     }
 
@@ -53,14 +52,14 @@ public sealed class SupervisorAdmissionTests
 
         // Exactly one GPU load reaches readiness (holding the gate); the other is blocked on admission and has NOT launched.
         await AssertEx.EventuallyAsync(() => gatedProbe.Waiting == 1, TimeSpan.FromSeconds(5),
-            "one GPU load should be parked in readiness holding the admission gate").ConfigureAwait(false);
-        await AssertEx.SettleAsync().ConfigureAwait(false);
+            "one GPU load should be parked in readiness holding the admission gate");
+        await AssertEx.SettleAsync();
         AssertEx.Equal(1, launcher.LaunchCount);
 
         // Release the first's readiness → it registers and releases the gate → the second is admitted and launches.
         gatedProbe.Release();
-        await run1.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        await run2.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await run1.WaitAsync(TimeSpan.FromSeconds(5));
+        await run2.WaitAsync(TimeSpan.FromSeconds(5));
         AssertEx.Equal(2, launcher.LaunchCount);
     }
 
@@ -81,11 +80,11 @@ public sealed class SupervisorAdmissionTests
 
         // Both CPU loads launch and park in readiness at once — no admission serialization.
         await AssertEx.EventuallyAsync(() => gatedProbe.Waiting == 2, TimeSpan.FromSeconds(5),
-            "both CPU loads should launch concurrently (no admission gating)").ConfigureAwait(false);
+            "both CPU loads should launch concurrently (no admission gating)");
         AssertEx.Equal(2, launcher.LaunchCount);
 
         gatedProbe.Release();
-        await run1.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        await run2.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await run1.WaitAsync(TimeSpan.FromSeconds(5));
+        await run2.WaitAsync(TimeSpan.FromSeconds(5));
     }
 }

@@ -33,7 +33,7 @@ public sealed class InspectImageRepositoryEndpoint(
         if (string.IsNullOrWhiteSpace(req.RepoId))
         {
             AddError("A repository id is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -41,7 +41,7 @@ public sealed class InspectImageRepositoryEndpoint(
 
         try
         {
-            var detail = await _discovery.InspectRepoAsync(repoId, ct).ConfigureAwait(false);
+            var detail = await _discovery.InspectRepoAsync(repoId, ct);
             await Send.OkAsync(new InspectImageRepositoryResponse
                 {
                     RepoId = detail.RepoId,
@@ -58,7 +58,7 @@ public sealed class InspectImageRepositoryEndpoint(
                         })
                     ]
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -75,7 +75,7 @@ public sealed class InspectImageRepositoryEndpoint(
                     License = null,
                     Files = []
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
     }
 }

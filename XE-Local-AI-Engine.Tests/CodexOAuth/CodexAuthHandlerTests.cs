@@ -348,7 +348,7 @@ public sealed class CodexAuthHandlerTests
             Requests.Add(request);
             Bodies.Add(request.Content is null
                 ? string.Empty
-                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+                : await request.Content.ReadAsStringAsync(cancellationToken));
 
             var status = _statuses.Count > 0 ? _statuses.Dequeue() : HttpStatusCode.InternalServerError;
             return new HttpResponseMessage(status);

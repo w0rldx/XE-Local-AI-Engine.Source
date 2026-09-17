@@ -23,7 +23,7 @@ public sealed class KnowledgeIngestionAdmissionService(
         // success for work that was never queued. A dedupe hit already Indexed (or mid-ingestion) is left alone.
         // Admission is idempotent, so retrying a document already queued is a harmless no-op rather than a duplicate
         // ingestion.
-        var status = await _catalogService.GetStatusAsync(documentId, cancellationToken).ConfigureAwait(false)
+        var status = await _catalogService.GetStatusAsync(documentId, cancellationToken)
                      ?? KnowledgeDocumentStatus.Pending;
 
         if (!wasWritten && !IsRetryableOnReUpload(status))
@@ -31,7 +31,7 @@ public sealed class KnowledgeIngestionAdmissionService(
             return new KnowledgeIngestionAdmissionResult(status, Enqueue: null);
         }
 
-        var admission = await _ingestionDispatcher.EnqueueAsync(documentId, cancellationToken).ConfigureAwait(false);
+        var admission = await _ingestionDispatcher.EnqueueAsync(documentId, cancellationToken);
         return new KnowledgeIngestionAdmissionResult(status, admission);
     }
 

@@ -20,7 +20,7 @@ public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGol
 
     public async Task<IReadOnlyList<HarvestCandidateSource>> ListThumbsUpSourcesAsync(Guid agentDefinitionId, int maxScan, CancellationToken cancellationToken = default)
     {
-        var thumbsUp = await ScanThumbsUpAsync(agentDefinitionId, maxScan, cancellationToken).ConfigureAwait(false);
+        var thumbsUp = await ScanThumbsUpAsync(agentDefinitionId, maxScan, cancellationToken);
 
         var sources = new List<HarvestCandidateSource>(thumbsUp.Count);
         foreach (var row in thumbsUp)
@@ -31,8 +31,7 @@ public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGol
                                            .AsNoTracking()
                                            .Where(message => message.ConversationId == row.ConversationId)
                                            .OrderBy(message => message.Sequence)
-                                           .ToListAsync(cancellationToken)
-                                           .ConfigureAwait(false);
+                                           .ToListAsync(cancellationToken);
 
             var target = messages.FirstOrDefault(message => message.MessageId == row.MessageId);
             if (target is null)
@@ -76,14 +75,14 @@ public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGol
         AddParameter(command, "$rating", NodeMessageFeedbackRating.Up);
         AddParameter(command, "$scan", maxScan);
 
-        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
 
         var rows = new List<ThumbsUpRow>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             var conversationId = Guid.Parse(reader.GetString(1));
-            var titleBytes = await reader.IsDBNullAsync(ordinal: 2, cancellationToken).ConfigureAwait(false)
+            var titleBytes = await reader.IsDBNullAsync(ordinal: 2, cancellationToken)
                 ? null
                 : (byte[])reader.GetValue(2);
             var titleText = _dbContext.DecryptConversationTitle(titleBytes, conversationId);

@@ -37,19 +37,19 @@ public sealed class CancelIntegrationExecutionEndpoint(IntegrationExecutionQuery
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        switch (await _executions.RequestCancelAsync(Route<Guid>("executionId"), ct).ConfigureAwait(false))
+        switch (await _executions.RequestCancelAsync(Route<Guid>("executionId"), ct))
         {
             case IntegrationCancelOutcome.Requested:
                 // 202, not 204: cancellation is REQUESTED here. A running turn stops when its token is observed, and
                 // the coordinator writes the terminal row.
-                await Send.ResultAsync(TypedResults.Accepted((string?)null)).ConfigureAwait(false);
+                await Send.ResultAsync(TypedResults.Accepted((string?)null));
                 return;
             case IntegrationCancelOutcome.AlreadyTerminal:
                 AddError("The execution has already finished.");
-                await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct).ConfigureAwait(false);
+                await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct);
                 return;
             default:
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                await Send.NotFoundAsync(ct);
                 return;
         }
     }

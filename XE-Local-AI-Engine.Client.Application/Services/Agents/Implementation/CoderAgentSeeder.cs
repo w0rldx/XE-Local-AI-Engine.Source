@@ -56,15 +56,14 @@ public sealed class CoderAgentSeeder : IHostedService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
 
-            var seededSlugs = await store.ListSeededSlugsAsync(cancellationToken).ConfigureAwait(false);
+            var seededSlugs = await store.ListSeededSlugsAsync(cancellationToken);
             if (seededSlugs.Contains(AgentDefaults.CoderAgentSeedSlug))
             {
                 // The Coder agent already exists — nothing to seed (idempotent).
                 return;
             }
 
-            var seeded = await store.AddSeededAsync(BuildSeedInput(), AgentDefaults.CoderAgentSeedSlug, cancellationToken)
-                                    .ConfigureAwait(false);
+            var seeded = await store.AddSeededAsync(BuildSeedInput(), AgentDefaults.CoderAgentSeedSlug, cancellationToken);
 
             _logger.LogInformation("Seeded the Coder (read-only) agent definition {AgentDefinitionId} (slug {SeedSlug}).",
                 seeded.Id,

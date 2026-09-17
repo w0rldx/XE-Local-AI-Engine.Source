@@ -13,12 +13,12 @@ public sealed class AddConversationUploadedFilesMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesUploadedFilesBoundToConversations()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("conversation-uploaded-files.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("conversation-uploaded-files.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("conversation_uploaded_files").ConfigureAwait(false),
+        AssertEx.True(await probe.TableExistsAsync("conversation_uploaded_files"),
             "conversation_uploaded_files must exist.");
 
-        var columns = await probe.ColumnsAsync("conversation_uploaded_files").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("conversation_uploaded_files");
         AssertEx.True(columns.IsSupersetOf(new[]
         {
             "file_id",
@@ -33,13 +33,13 @@ public sealed class AddConversationUploadedFilesMigrationTests
             "created_at_utc"
         }), "conversation_uploaded_files must expose the mapped columns.");
 
-        AssertEx.True(await probe.ForeignKeyExistsAsync("conversation_uploaded_files", "conversation_id", "conversations").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("conversation_uploaded_files", "conversation_id", "conversations"),
             "Uploaded files must be foreign-keyed to their conversation.");
 
         AssertEx.True(await probe.IndexExistsAsync("conversation_uploaded_files",
                 "IX_conversation_uploaded_files_conversation_id",
                 unique: false,
-                "conversation_id").ConfigureAwait(false),
+                "conversation_id"),
             "The per-conversation lookup must be indexed.");
     }
 }

@@ -25,7 +25,7 @@ public sealed class GetLocalModelProxyApiKeyEndpoint(ILocalModelProxyApiKeyServi
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var view = await _apiKeyService.GetAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(LocalModelProxyApiKeyMapper.ToStatus(view, HttpContext), ct).ConfigureAwait(false);
+        var view = await _apiKeyService.GetAsync(ct);
+        await Send.OkAsync(LocalModelProxyApiKeyMapper.ToStatus(view, HttpContext), ct);
     }
 }

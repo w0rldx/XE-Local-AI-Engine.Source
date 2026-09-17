@@ -31,8 +31,8 @@ internal sealed class GraphWorkflowDefinitionService(
         {
             // A graph that routes may still have something said about it. Warnings ride out only on this path: they
             // never block, so the save and start paths below discard them rather than pretend to act on them.
-            var graph = await ValidateAndParseAsync(graphJson, cancellationToken).ConfigureAwait(false);
-            return GraphWorkflowValidationResult.ValidWith(await WarningsForRuntimeAsync(graph, cancellationToken).ConfigureAwait(false));
+            var graph = await ValidateAndParseAsync(graphJson, cancellationToken);
+            return GraphWorkflowValidationResult.ValidWith(await WarningsForRuntimeAsync(graph, cancellationToken));
         }
         catch (GraphWorkflowValidationException exception)
         {
@@ -45,10 +45,9 @@ internal sealed class GraphWorkflowDefinitionService(
         string graphJson,
         CancellationToken cancellationToken = default)
     {
-        var nodeCount = (await ValidateAndParseAsync(graphJson, cancellationToken).ConfigureAwait(false)).Nodes.Count;
+        var nodeCount = (await ValidateAndParseAsync(graphJson, cancellationToken)).Nodes.Count;
         return await _store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(), name, graphJson, nodeCount, Description: description),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
     }
 
     public async Task<GraphWorkflowDefinitionSnapshot> UpdateAsync(Guid definitionId,
@@ -60,10 +59,9 @@ internal sealed class GraphWorkflowDefinitionService(
     {
         // A null graph leaves the stored one alone, so the node count must stay null with it: writing a count for a
         // graph nobody sent would denormalize a lie the definition list then reports.
-        int? nodeCount = graphJson is null ? null : (await ValidateAndParseAsync(graphJson, cancellationToken).ConfigureAwait(false)).Nodes.Count;
+        int? nodeCount = graphJson is null ? null : (await ValidateAndParseAsync(graphJson, cancellationToken)).Nodes.Count;
         return await _store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, expectedVersion, name, description, graphJson, nodeCount),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
     }
 
     public Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListAsync(CancellationToken cancellationToken = default) =>
@@ -94,7 +92,7 @@ internal sealed class GraphWorkflowDefinitionService(
         }
 
         var graph = GraphWorkflowGraphContract.ValidateAndParse(graphJson, _options.Value.MaxNodesPerDefinition);
-        var toolErrors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken).ConfigureAwait(false);
+        var toolErrors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, cancellationToken);
         return toolErrors.Count == 0
             ? graph
             : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(toolErrors));
@@ -126,7 +124,7 @@ internal sealed class GraphWorkflowDefinitionService(
                 continue;
             }
 
-            if (await ServedByLlamaServerAsync(model, cancellationToken).ConfigureAwait(false))
+            if (await ServedByLlamaServerAsync(model, cancellationToken))
             {
                 suppressed.Add(warning);
             }
@@ -147,7 +145,7 @@ internal sealed class GraphWorkflowDefinitionService(
     {
         try
         {
-            var provider = await _providers.ResolveProviderNameForModelAsync(model, cancellationToken).ConfigureAwait(false);
+            var provider = await _providers.ResolveProviderNameForModelAsync(model, cancellationToken);
             return string.Equals(provider, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

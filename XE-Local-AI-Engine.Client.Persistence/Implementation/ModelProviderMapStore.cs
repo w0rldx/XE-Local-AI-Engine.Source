@@ -17,7 +17,7 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
 
     public async Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
     {
-        return (await ReadAsync(modelName, cancellationToken).ConfigureAwait(false))?.ProviderName;
+        return (await ReadAsync(modelName, cancellationToken))?.ProviderName;
     }
 
     public async Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
@@ -25,8 +25,7 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
         var entities = await _dbContext.ModelProviderMaps
                                        .AsNoTracking()
                                        .OrderBy(mapping => mapping.ModelName)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -40,8 +39,7 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
         var revision = CreateRevision();
 
         var entity = await _dbContext.ModelProviderMaps
-                                     .FirstOrDefaultAsync(mapping => mapping.ModelName == modelName, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(mapping => mapping.ModelName == modelName, cancellationToken);
 
         if (entity is null)
         {
@@ -62,7 +60,7 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
             entity.Revision = revision;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -73,8 +71,7 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
 
         var entity = await _dbContext.ModelProviderMaps
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(mapping => mapping.ModelName == modelName, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(mapping => mapping.ModelName == modelName, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -98,7 +95,7 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
         _ = _dbContext.ModelProviderMaps.Add(entity);
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
             return ToRecord(entity);
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqliteException { SqliteExtendedErrorCode: 1555 or 2067 })
@@ -125,8 +122,7 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
                                                                       .SetProperty(mapping => mapping.ProviderName, providerName)
                                                                       .SetProperty(mapping => mapping.UpdatedAtUtc, updatedAtUtc)
                                                                       .SetProperty(mapping => mapping.Revision, revision),
-                                           cancellationToken)
-                                       .ConfigureAwait(false);
+                                           cancellationToken);
 
         DetachTracked(modelName);
 
@@ -146,8 +142,7 @@ internal sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimePro
                                        .Where(mapping => mapping.ModelName == modelName
                                                          && mapping.ProviderName == expectedProviderName
                                                          && mapping.Revision == expectedRevision)
-                                       .ExecuteDeleteAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ExecuteDeleteAsync(cancellationToken);
         DetachTracked(modelName);
         return affected == 1;
     }

@@ -81,7 +81,7 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
         var outcome = await _gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
         {
             Code = composed.Program
-        }, requireResourceLimits: true, cancellationToken).ConfigureAwait(false);
+        }, requireResourceLimits: true, cancellationToken);
         if (outcome.Result is not { } result)
         {
             throw Unavailable(criterion, outcome.RefusalCode ?? "unknown", outcome.RefusalMessage ?? "The compute sandbox refused the execution.");

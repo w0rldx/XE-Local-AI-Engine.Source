@@ -21,7 +21,7 @@ public sealed class CustomToolServiceTests
             service.CreateAsync(ValidHttpFetch() with
             {
                 Acknowledged = false
-            })).ConfigureAwait(false);
+            }));
     }
 
     [Test]
@@ -39,7 +39,7 @@ public sealed class CustomToolServiceTests
         };
 
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
-            service.CreateAsync(definition)).ConfigureAwait(false);
+            service.CreateAsync(definition));
     }
 
     [Test]
@@ -57,7 +57,7 @@ public sealed class CustomToolServiceTests
             service.CreateAsync(ValidHttpFetch() with
             {
                 Name = "weather"
-            })).ConfigureAwait(false);
+            }));
     }
 
     [Test]
@@ -75,7 +75,7 @@ public sealed class CustomToolServiceTests
         };
 
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
-            service.CreateAsync(definition)).ConfigureAwait(false);
+            service.CreateAsync(definition));
     }
 
     [Test]
@@ -106,7 +106,7 @@ public sealed class CustomToolServiceTests
         };
 
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
-            service.CreateAsync(definition)).ConfigureAwait(false);
+            service.CreateAsync(definition));
     }
 
     [Test]
@@ -128,7 +128,7 @@ public sealed class CustomToolServiceTests
         };
 
         await AssertEx.ThrowsAsync<CustomToolValidationException>(() =>
-            service.CreateAsync(definition)).ConfigureAwait(false);
+            service.CreateAsync(definition));
     }
 
     [Test]
@@ -161,7 +161,7 @@ public sealed class CustomToolServiceTests
             }
         };
 
-        var view = await service.CreateAsync(definition).ConfigureAwait(false);
+        var view = await service.CreateAsync(definition);
 
         var secret = view.Http!.Headers.Single(header => header.Name == "Authorization");
         var plain = view.Http.Headers.Single(header => header.Name == "Accept");
@@ -209,10 +209,10 @@ public sealed class CustomToolServiceTests
     {
         var service = BuildService(out var store, out _);
 
-        var view = await service.CreateAsync(ValidHttpFetch()).ConfigureAwait(false);
+        var view = await service.CreateAsync(ValidHttpFetch());
 
         AssertEx.Equal("custom__weather", view.Name);
-        await store.Received(1).CreateAsync(Arg.Is<CustomToolInput>(input => input.Name == "custom__weather"), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).CreateAsync(Arg.Is<CustomToolInput>(input => input.Name == "custom__weather"), Arg.Any<CancellationToken>());
     }
 
     [Test]

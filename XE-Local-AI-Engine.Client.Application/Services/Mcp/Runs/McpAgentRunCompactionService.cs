@@ -25,7 +25,7 @@ internal sealed class McpAgentRunCompactionService(
         {
             try
             {
-                await CompactAsync(stoppingToken).ConfigureAwait(false);
+                await CompactAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -39,7 +39,7 @@ internal sealed class McpAgentRunCompactionService(
 
             try
             {
-                if (!await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+                if (!await timer.WaitForNextTickAsync(stoppingToken))
                 {
                     return;
                 }
@@ -55,11 +55,10 @@ internal sealed class McpAgentRunCompactionService(
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IMcpAgentRunStore>();
-        var count = await store.CompactExpiredPayloadsAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken)
-                               .ConfigureAwait(false);
+        var count = await store.CompactExpiredPayloadsAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
         if (count > 0)
         {
-            await _metrics.RefreshAsync(store, CancellationToken.None).ConfigureAwait(false);
+            await _metrics.RefreshAsync(store, CancellationToken.None);
             _metrics.RecordLifecycle("payload_compacted");
             _logger.LogInformation("Compacted expired payloads for {Count} durable MCP agent run(s).", count);
         }

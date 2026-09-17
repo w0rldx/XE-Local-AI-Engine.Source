@@ -27,7 +27,7 @@ internal sealed class DefaultModelSelectionPolicy(
         }
 
         if (policy == LocalModelSelectionPolicy.InstalledLocalOnly
-            && !await ggufModelStore.ExistsAsync(canonicalName, cancellationToken).ConfigureAwait(false))
+            && !await ggufModelStore.ExistsAsync(canonicalName, cancellationToken))
         {
             return new(LocalModelAdministrationFailureCodes.ModelNotInstalled, "The requested local model is not installed.");
         }
@@ -39,8 +39,8 @@ internal sealed class DefaultModelSelectionPolicy(
         string? selectedModelName,
         CancellationToken cancellationToken)
     {
-        if (await cloudModelResolver.IsCloudModelAsync(previousModelName, cancellationToken).ConfigureAwait(false)
-            || await cloudModelResolver.IsCloudModelAsync(selectedModelName, cancellationToken).ConfigureAwait(false))
+        if (await cloudModelResolver.IsCloudModelAsync(previousModelName, cancellationToken)
+            || await cloudModelResolver.IsCloudModelAsync(selectedModelName, cancellationToken))
         {
             activeCloudChatClientFactory.InvalidateSelectionCache();
         }

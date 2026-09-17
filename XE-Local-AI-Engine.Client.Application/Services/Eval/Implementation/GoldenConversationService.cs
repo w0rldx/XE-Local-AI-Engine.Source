@@ -28,7 +28,7 @@ internal sealed class GoldenConversationService(
 
     public async Task<GoldenConversationRecord> CreateAsync(GoldenConversationCreateInput input, CancellationToken cancellationToken = default)
     {
-        await ValidateAsync(input, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, cancellationToken);
 
         // A manual create never produces harvested provenance: pin Source=Manual regardless of the input so the manual
         // path always stamps Manual (the harvested staging path is the only producer of Harvested rows).
@@ -39,12 +39,12 @@ internal sealed class GoldenConversationService(
             input.Rubric,
             input.Enabled);
 
-        return await _store.AddAsync(storeInput, cancellationToken).ConfigureAwait(false);
+        return await _store.AddAsync(storeInput, cancellationToken);
     }
 
     public async Task<GoldenConversationRecord> CreateHarvestedAsync(GoldenConversationCreateInput input, CancellationToken cancellationToken = default)
     {
-        await ValidateAsync(input, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, cancellationToken);
 
         // Provenance is required for a harvested candidate (dedup + review trace back to the thumbs-up message).
         if (input.SourceMessageId is null || input.SourceConversationId is null)
@@ -64,7 +64,7 @@ internal sealed class GoldenConversationService(
             input.SourceMessageId,
             input.SourceConversationId);
 
-        return await _store.AddAsync(storeInput, cancellationToken).ConfigureAwait(false);
+        return await _store.AddAsync(storeInput, cancellationToken);
     }
 
     public Task<IReadOnlyList<GoldenConversationRecord>> ListByAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
@@ -77,7 +77,7 @@ internal sealed class GoldenConversationService(
         // Ownership + staging guard: only promote a harvested, currently-disabled case that belongs to the route agent,
         // so one agent's route cannot approve another agent's case (IDOR), and a manual or already-active case is never
         // flipped here. Any miss returns null so the endpoint maps it to 404.
-        var existing = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var existing = await _store.GetByIdAsync(id, cancellationToken);
         if (existing is null
             || existing.AgentDefinitionId != agentDefinitionId
             || existing.Source != GoldenConversationSource.Harvested
@@ -86,20 +86,20 @@ internal sealed class GoldenConversationService(
             return null;
         }
 
-        return await _store.SetEnabledAsync(id, enabled: true, cancellationToken).ConfigureAwait(false);
+        return await _store.SetEnabledAsync(id, enabled: true, cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
         // Ownership guard: only delete the case when it belongs to the route agent, so one agent's golden route cannot
         // delete another agent's case (IDOR).
-        var existing = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var existing = await _store.GetByIdAsync(id, cancellationToken);
         if (existing is null || existing.AgentDefinitionId != agentDefinitionId)
         {
             return false;
         }
 
-        return await _store.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+        return await _store.DeleteAsync(id, cancellationToken);
     }
 
     // Shared boundary validation for both create paths (DRY — keeps manual and harvested creates identical): non-blank
@@ -148,7 +148,7 @@ internal sealed class GoldenConversationService(
             throw new PlaybookActionValidationException($"Rubric must be {MaxRubricLength} characters or fewer.");
         }
 
-        var owningAgent = await _agentDefinitionStore.GetByIdAsync(input.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var owningAgent = await _agentDefinitionStore.GetByIdAsync(input.AgentDefinitionId, cancellationToken);
         if (owningAgent is null)
         {
             throw new PlaybookActionValidationException($"Agent definition '{input.AgentDefinitionId}' does not exist.");

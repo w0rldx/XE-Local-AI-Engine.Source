@@ -18,7 +18,7 @@ public sealed class GetNodeSettingsEndpoint(INodeSettingsAdministrationService a
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var settings = await _administrationService.GetTrustedSettingsAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(settings.ToResponse(), ct).ConfigureAwait(false);
+        var settings = await _administrationService.GetTrustedSettingsAsync(ct);
+        await Send.OkAsync(settings.ToResponse(), ct);
     }
 }

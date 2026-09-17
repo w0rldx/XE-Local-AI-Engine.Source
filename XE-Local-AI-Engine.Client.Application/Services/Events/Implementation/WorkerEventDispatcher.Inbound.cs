@@ -47,7 +47,7 @@ public sealed partial class WorkerEventDispatcher
                 _logger.LogWarning("Active node key retired/expired for message {MessageId}. KeyId={KeyId}", package.MessageId, resolution.KeyIdUsed ?? resolution.RequestedKeyId);
                 await EmitInvocationKeyMismatchAsync(package.MessageId,
                     RetiredKeyReason,
-                    resolution.KeyIdUsed ?? resolution.RequestedKeyId).ConfigureAwait(false);
+                    resolution.KeyIdUsed ?? resolution.RequestedKeyId);
                 return;
             }
 
@@ -66,19 +66,19 @@ public sealed partial class WorkerEventDispatcher
             _logger.LogWarning(exception, "AAD mismatch during decrypt for message {MessageId}.", package.MessageId);
             await EmitInvocationKeyMismatchAsync(package.MessageId,
                 AadMismatchReason,
-                resolution.KeyIdUsed ?? resolution.RequestedKeyId).ConfigureAwait(false);
+                resolution.KeyIdUsed ?? resolution.RequestedKeyId);
             return;
         }
         catch (InvalidOperationException exception) when (EncryptedPackageFailureClassifier.IsConfigHashMismatch(exception))
         {
             _logger.LogWarning(exception, "Config hash mismatch for message {MessageId}.", package.MessageId);
-            await EmitEncryptedFailureAsync(package, "runtime-package-config-hash-mismatch", FailureCategory.HashMismatch).ConfigureAwait(false);
+            await EmitEncryptedFailureAsync(package, "runtime-package-config-hash-mismatch", FailureCategory.HashMismatch);
             return;
         }
         catch (InvalidOperationException exception) when (EncryptedPackageFailureClassifier.IsHistoryHashMismatch(exception))
         {
             _logger.LogWarning(exception, "History hash mismatch for message {MessageId}.", package.MessageId);
-            await EmitEncryptedFailureAsync(package, "runtime-package-history-hash-mismatch", FailureCategory.HashMismatch).ConfigureAwait(false);
+            await EmitEncryptedFailureAsync(package, "runtime-package-history-hash-mismatch", FailureCategory.HashMismatch);
             return;
         }
         catch (InvalidOperationException exception)
@@ -90,7 +90,7 @@ public sealed partial class WorkerEventDispatcher
                 MessageId = package.MessageId,
                 Error = "runtime-package-assemble-failed",
                 FailureCategory = nameof(FailureCategory.AgentRuntime)
-            }, CancellationToken.None).ConfigureAwait(false);
+            }, CancellationToken.None);
             return;
         }
         catch (Exception exception)
@@ -104,7 +104,7 @@ public sealed partial class WorkerEventDispatcher
 
         try
         {
-            await _remoteInvocationQueue.WaitAsync(_shutdownCts.Token).ConfigureAwait(false);
+            await _remoteInvocationQueue.WaitAsync(_shutdownCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -114,7 +114,7 @@ public sealed partial class WorkerEventDispatcher
 
         try
         {
-            await RunQueuedInvocationAsync(context, runtimePackage).ConfigureAwait(false);
+            await RunQueuedInvocationAsync(context, runtimePackage);
         }
         finally
         {
@@ -149,7 +149,7 @@ public sealed partial class WorkerEventDispatcher
         // remote dispatch paths hold, instead of throwing when busy. The slot is held until the returned lease
         // is disposed (when the local run terminates), so local and platform invocations stay mutually
         // exclusive. Cancelling the local turn while it is still queued aborts the wait here.
-        await _remoteInvocationQueue.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _remoteInvocationQueue.WaitAsync(cancellationToken);
 
         InvocationState snapshot;
 

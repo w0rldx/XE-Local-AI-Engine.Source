@@ -33,8 +33,8 @@ public sealed class ExternalProviderEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, ConnectionsRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var connections = Deserialize<ExternalProviderConnectionsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -58,7 +58,7 @@ public sealed class ExternalProviderEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ConnectionsRoute}/not-configured");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -91,7 +91,7 @@ public sealed class ExternalProviderEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await administrationService.Received(1).SaveConnectionAsync(Arg.Is<ExternalProviderConnectionSaveRequest>(saved =>
@@ -117,8 +117,8 @@ public sealed class ExternalProviderEndpointTests
 
         using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
         request.Content = JsonContent.Create(ValidSaveRequest());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.True(body.Contains(StoreMessage, StringComparison.Ordinal));
@@ -138,8 +138,8 @@ public sealed class ExternalProviderEndpointTests
         {
             ExpectedRevision = "rev-0"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var current = Deserialize<ExternalProviderConnectionsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -163,7 +163,7 @@ public sealed class ExternalProviderEndpointTests
         {
             Locality = "somewhere"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await administrationService.DidNotReceiveWithAnyArgs()
@@ -183,8 +183,8 @@ public sealed class ExternalProviderEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Delete, $"{ConnectionRoute}?expectedRevision=rev-1");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var connections = await ReadJsonAsync<ExternalProviderConnectionsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var connections = await ReadJsonAsync<ExternalProviderConnectionsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("rev-2", connections.Revision);
@@ -202,8 +202,8 @@ public sealed class ExternalProviderEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Delete, $"{ConnectionRoute}?expectedRevision=rev-0");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var current = await ReadJsonAsync<ExternalProviderConnectionsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var current = await ReadJsonAsync<ExternalProviderConnectionsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("rev-1", current.Revision);
@@ -280,7 +280,7 @@ public sealed class ExternalProviderEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 }

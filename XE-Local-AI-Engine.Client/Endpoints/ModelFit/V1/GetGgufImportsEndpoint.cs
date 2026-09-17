@@ -21,6 +21,6 @@ public sealed class GetGgufImportsEndpoint(IGgufImportTransactionCoordinator coo
         await Send.OkAsync(new ListGgufImportsResponse
         {
             Items = _coordinator.ListStatuses().Select(GgufImportEndpointSupport.Map).ToArray()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

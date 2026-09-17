@@ -34,12 +34,12 @@ public sealed class ContainerBridgeTokenMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
         AssertEx.False(nextCalled, $"A request with {description} must never reach anything behind the token gate.");
         AssertEx.Equal("Bearer", context.Response.Headers[HeaderNames.WWWAuthenticate].ToString());
-        await verifier.DidNotReceiveWithAnyArgs().VerifyAsync(default!).ConfigureAwait(false);
+        await verifier.DidNotReceiveWithAnyArgs().VerifyAsync(default!);
     }
 
     [Test]
@@ -56,7 +56,7 @@ public sealed class ContainerBridgeTokenMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
         AssertEx.False(nextCalled, "A token that did not verify must never reach anything behind the gate.");
@@ -79,8 +79,8 @@ public sealed class ContainerBridgeTokenMiddlewareTests
         wrong.Response.Body = new MemoryStream();
 
         var middleware = CreateMiddleware(verifier);
-        await middleware.InvokeAsync(missing, static _ => Task.CompletedTask).ConfigureAwait(false);
-        await middleware.InvokeAsync(wrong, static _ => Task.CompletedTask).ConfigureAwait(false);
+        await middleware.InvokeAsync(missing, static _ => Task.CompletedTask);
+        await middleware.InvokeAsync(wrong, static _ => Task.CompletedTask);
 
         AssertEx.Equal(missing.Response.StatusCode, wrong.Response.StatusCode);
         AssertEx.Equal(Encoding.UTF8.GetString(((MemoryStream)missing.Response.Body).ToArray()),
@@ -100,7 +100,7 @@ public sealed class ContainerBridgeTokenMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(nextCalled, "A verified token must reach the routes behind the gate.");
         AssertEx.Equal(instanceId, AssertEx.NotNull(context.Features.Get<ContainerBridgeCaller>()).InstanceId,
@@ -115,7 +115,7 @@ public sealed class ContainerBridgeTokenMiddlewareTests
         _ = verifier.VerifyAsync(ValidToken, Arg.Any<CancellationToken>()).Returns(new ContainerBridgeCaller(Guid.NewGuid()));
         var context = CreateContext("bEaReR " + ValidToken);
 
-        await CreateMiddleware(verifier).InvokeAsync(context, static _ => Task.CompletedTask).ConfigureAwait(false);
+        await CreateMiddleware(verifier).InvokeAsync(context, static _ => Task.CompletedTask);
 
         AssertEx.NotNull(context.Features.Get<ContainerBridgeCaller>());
     }

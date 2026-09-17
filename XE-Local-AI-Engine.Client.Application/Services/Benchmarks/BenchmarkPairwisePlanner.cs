@@ -114,13 +114,13 @@ public sealed class BenchmarkPairwisePlanner(
 
     public async Task<int> EnsurePairsAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        var policy = await ReadPairwisePolicyAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var policy = await ReadPairwisePolicyAsync(projectId, cancellationToken);
         if (policy is null)
         {
             return 0;
         }
 
-        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
         if (cohort.PolicyRevisionId is null)
         {
             return 0;
@@ -138,7 +138,7 @@ public sealed class BenchmarkPairwisePlanner(
         BenchmarkJudgeRuntimeResolution resolution;
         try
         {
-            resolution = await _judgeRuntimeResolver.ResolveAsync(policy, cancellationToken).ConfigureAwait(false);
+            resolution = await _judgeRuntimeResolver.ResolveAsync(policy, cancellationToken);
         }
         catch (Exception exception) when (exception is BenchmarkEligibilityException
                                               or BenchmarkUnsupportedKvCacheTypeException
@@ -156,8 +156,7 @@ public sealed class BenchmarkPairwisePlanner(
                                       plan.Slots,
                                       new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
                                       resolution.Intent,
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
         if (created > 0)
         {
             _queueSignal.Wake();
@@ -168,17 +167,17 @@ public sealed class BenchmarkPairwisePlanner(
 
     public async Task ReconcilePairwiseAsync(CancellationToken cancellationToken)
     {
-        var projectIds = await _store.ListJudgedProjectIdsAsync(cancellationToken).ConfigureAwait(false);
+        var projectIds = await _store.ListJudgedProjectIdsAsync(cancellationToken);
         foreach (var projectId in projectIds)
         {
             try
             {
-                _ = await EnsurePairsAsync(projectId, cancellationToken).ConfigureAwait(false);
+                _ = await EnsurePairsAsync(projectId, cancellationToken);
 
                 // A cohort whose comparisons all terminalized while the fit was being published — or before the
                 // process died — has verdicts and no active fit. The fit is a pure function of stored verdicts, so
                 // re-triggering it here is the whole of that recovery.
-                _ = await _fitter.TryPublishAsync(projectId, cancellationToken).ConfigureAwait(false);
+                _ = await _fitter.TryPublishAsync(projectId, cancellationToken);
             }
             catch (Exception exception) when (exception is BenchmarkStoreException or BenchmarkExecutionException)
             {
@@ -189,11 +188,11 @@ public sealed class BenchmarkPairwisePlanner(
 
     public async Task<BenchmarkPairwiseEstimate> EstimateAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
         var plan = Plan(cohort.Candidates, BenchmarkPairwisePolicy.MaximumRuns);
         var paired = plan.PairedRunIds.Count;
         var calls = paired * (paired - 1);
-        var median = await _store.GetMedianJudgeDurationSecondsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var median = await _store.GetMedianJudgeDurationSecondsAsync(projectId, cancellationToken);
         return new BenchmarkPairwiseEstimate(cohort.Candidates.Count,
             paired,
             plan.CappedRunIds.Count,
@@ -205,7 +204,7 @@ public sealed class BenchmarkPairwisePlanner(
     /// <summary>The project's current judge policy when it judges pairwise, otherwise <see langword="null" />.</summary>
     private async Task<BenchmarkJudgePolicyV1?> ReadPairwisePolicyAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        var revision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var revision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
         if (revision?.PolicyJson is not { } policyJson)
         {
             return null;

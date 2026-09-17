@@ -30,7 +30,7 @@ public sealed class SchedulerHubTests
         };
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -54,14 +54,13 @@ public sealed class SchedulerHubTests
         _ = connection.On<SchedulerDefinitionHubEvent>(SchedulerHubEvents.JobDefinitionChanged,
             evt => received.TrySetResult(evt));
 
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         // Publish through the host's hub-backed publisher (supersedes the no-op default in the Client host).
         var publisher = factory.Services.GetRequiredService<ISchedulerEventPublisher>();
-        await publisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, "created", OccurredAtUtc: 123L))
-                       .ConfigureAwait(false);
+        await publisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, "created", OccurredAtUtc: 123L));
 
-        var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+        var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(scheduledJobId, evt.ScheduledJobId);
         AssertEx.Equal("created", evt.Action);

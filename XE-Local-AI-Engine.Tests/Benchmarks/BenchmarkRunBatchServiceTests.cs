@@ -21,7 +21,7 @@ public sealed class BenchmarkRunBatchServiceTests
               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("VersionConflict"));
         var service = new BenchmarkRunBatchService(freeze, TimeProvider.System);
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => service.StartAsync(Batch("model-a", "model-b"))).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => service.StartAsync(Batch("model-a", "model-b")));
 
         _ = freeze.DidNotReceive().StartAsync(Arg.Is<BenchmarkRunStartRequest>(request => request.PrimaryModelName == "model-b"),
             Arg.Any<BenchmarkFreezeScope?>(),
@@ -37,7 +37,7 @@ public sealed class BenchmarkRunBatchServiceTests
               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("VersionConflict"));
         var service = new BenchmarkRunBatchService(freeze, TimeProvider.System);
 
-        var result = await service.StartAsync(Batch("model-a", "model-b", "model-c")).ConfigureAwait(false);
+        var result = await service.StartAsync(Batch("model-a", "model-b", "model-c"));
 
         AssertEx.Equal(expected: 5L, result.ProjectVersion);
         AssertEx.Equal(expected: 1, result.Started.Count);
@@ -70,7 +70,7 @@ public sealed class BenchmarkRunBatchServiceTests
             BenchmarkRepeatMode.Throughput,
             null);
 
-        var result = await service.StartAsync(request).ConfigureAwait(false);
+        var result = await service.StartAsync(request);
 
         AssertEx.Equal(expected: 5L, result.ProjectVersion);
         AssertEx.Equal(expected: 2, result.Rejected.Count);

@@ -29,7 +29,7 @@ public sealed partial class Program
         await using var scope = services.CreateAsyncScope();
         var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
 
-        var result = await authService.ResetAdminPasswordAsync(newPassword, CancellationToken.None).ConfigureAwait(false);
+        var result = await authService.ResetAdminPasswordAsync(newPassword, CancellationToken.None);
         if (!result.Succeeded)
         {
             Log.Error("Admin password reset failed: {Errors}", string.Join(" ", result.Errors));
@@ -56,12 +56,12 @@ public sealed partial class Program
             Email = command.Email,
             Password = command.Password
         };
-        var validation = await new NodeSetupRequestValidator().ValidateAsync(request, CancellationToken.None).ConfigureAwait(false);
+        var validation = await new NodeSetupRequestValidator().ValidateAsync(request, CancellationToken.None);
         if (!validation.IsValid)
         {
             foreach (var failure in validation.Errors)
             {
-                await standardError.WriteLineAsync(failure.ErrorMessage).ConfigureAwait(false);
+                await standardError.WriteLineAsync(failure.ErrorMessage);
             }
 
             return 3;
@@ -72,20 +72,20 @@ public sealed partial class Program
         NodeSetupResult result;
         try
         {
-            result = await authService.SetupAsync(command.Email, command.Password, CancellationToken.None).ConfigureAwait(false);
+            result = await authService.SetupAsync(command.Email, command.Password, CancellationToken.None);
         }
         catch (NodeSettingsUnreadableException exception)
         {
             // The HTTP setup endpoint gets this mapped to a 400 by DomainValidationExceptionHandler; the CLI has no such
             // mapper, so without this catch a corrupt node-settings.json would take --setup out through the top-level
             // fatal handler instead of the documented exit code 5.
-            await standardError.WriteLineAsync(exception.Message).ConfigureAwait(false);
+            await standardError.WriteLineAsync(exception.Message);
             return 5;
         }
 
         if (result.AlreadyInitialized)
         {
-            await standardOutput.WriteLineAsync("XE_SETUP=already-configured").ConfigureAwait(false);
+            await standardOutput.WriteLineAsync("XE_SETUP=already-configured");
             return 0;
         }
 
@@ -93,14 +93,14 @@ public sealed partial class Program
         {
             foreach (var error in result.Errors)
             {
-                await standardError.WriteLineAsync(error).ConfigureAwait(false);
+                await standardError.WriteLineAsync(error);
             }
 
             return 5;
         }
 
-        await standardOutput.WriteLineAsync("XE_SETUP=created").ConfigureAwait(false);
-        await standardOutput.WriteLineAsync($"XE_ADMIN_EMAIL={command.Email}").ConfigureAwait(false);
+        await standardOutput.WriteLineAsync("XE_SETUP=created");
+        await standardOutput.WriteLineAsync($"XE_ADMIN_EMAIL={command.Email}");
         return 0;
     }
 
@@ -115,39 +115,33 @@ public sealed partial class Program
 
         await using var serviceScope = services.CreateAsyncScope();
         var authService = serviceScope.ServiceProvider.GetRequiredService<INodeAuthService>();
-        var status = await authService.GetStatusAsync(new ClaimsPrincipal(), CancellationToken.None).ConfigureAwait(false);
+        var status = await authService.GetStatusAsync(new ClaimsPrincipal(), CancellationToken.None);
         if (status.SetupRequired)
         {
-            await standardError.WriteLineAsync("An administrator account must be configured before an MCP key can be generated.")
-                               .ConfigureAwait(false);
+            await standardError.WriteLineAsync("An administrator account must be configured before an MCP key can be generated.");
             return 5;
         }
 
-        await standardError.WriteLineAsync("warning: this invalidates any previously configured MCP client's key.")
-                           .ConfigureAwait(false);
+        await standardError.WriteLineAsync("warning: this invalidates any previously configured MCP client's key.");
         var apiKeyService = serviceScope.ServiceProvider.GetRequiredService<IMcpServerApiKeyService>();
-        var generated = await apiKeyService.GenerateAsync(scope, CancellationToken.None).ConfigureAwait(false);
-        await standardOutput.WriteLineAsync($"XE_MCP_KEY={generated.Key}").ConfigureAwait(false);
+        var generated = await apiKeyService.GenerateAsync(scope, CancellationToken.None);
+        await standardOutput.WriteLineAsync($"XE_MCP_KEY={generated.Key}");
         return 0;
     }
 
     private static async Task WriteHelpAsync(TextWriter standardOutput)
     {
         ArgumentNullException.ThrowIfNull(standardOutput);
-        await standardOutput.WriteLineAsync("XE Local AI Engine").ConfigureAwait(false);
-        await standardOutput.WriteLineAsync("Serve: --desktop | --mcp-only [--no-browser] [--port <1-65535>]").ConfigureAwait(false);
+        await standardOutput.WriteLineAsync("XE Local AI Engine");
+        await standardOutput.WriteLineAsync("Serve: --desktop | --mcp-only [--no-browser] [--port <1-65535>]");
         await standardOutput
-              .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help")
-              .ConfigureAwait(false);
-        await standardOutput.WriteLineAsync("Maintenance: --reset-admin-password <password> | --knowledge-downgrade-preflight | --knowledge-downgrade-export")
-                            .ConfigureAwait(false);
+              .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
+        await standardOutput.WriteLineAsync("Maintenance: --reset-admin-password <password> | --knowledge-downgrade-preflight | --knowledge-downgrade-export");
         await standardOutput
               .WriteLineAsync(
-                  "Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.")
-              .ConfigureAwait(false);
-        await standardOutput.WriteLineAsync("Data: XE_DATA_DIR must be an absolute path; status inspection never creates it.").ConfigureAwait(false);
-        await standardOutput.WriteLineAsync("Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable.")
-                            .ConfigureAwait(false);
+                  "Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.");
+        await standardOutput.WriteLineAsync("Data: XE_DATA_DIR must be an absolute path; status inspection never creates it.");
+        await standardOutput.WriteLineAsync("Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable.");
     }
 
     private static async Task<int> StatusCommandAsync(string[] args,
@@ -160,18 +154,18 @@ public sealed partial class Program
         ArgumentNullException.ThrowIfNull(standardError);
         if (!DesktopBootstrap.TryResolveDataDirectoryPath(out var dataDirectory, out var dataDirectoryError))
         {
-            await standardError.WriteLineAsync(dataDirectoryError).ConfigureAwait(false);
+            await standardError.WriteLineAsync(dataDirectoryError);
             return await WriteStatusAsync(args,
                 new EngineStatus(false, null, null, null, string.Empty, null, ResolveInstallKind(isManagedInstall)),
-                standardOutput).ConfigureAwait(false);
+                standardOutput);
         }
 
         // CancellationToken.None throughout this command: status runs pre-DI, with no host and no token to inherit,
         // and every remote call below is already bounded by the 2 s client timeout before the process exits.
-        var evidence = await DesktopPortStore.ReadReadyEvidenceAsync(dataDirectory, CancellationToken.None).ConfigureAwait(false);
+        var evidence = await DesktopPortStore.ReadReadyEvidenceAsync(dataDirectory, CancellationToken.None);
         if (evidence.State == ReadyEvidenceState.Invalid)
         {
-            await standardError.WriteLineAsync("The readiness file is invalid or unreadable.").ConfigureAwait(false);
+            await standardError.WriteLineAsync("The readiness file is invalid or unreadable.");
         }
 
         var ready = evidence.Info;
@@ -189,19 +183,18 @@ public sealed partial class Program
                 using var fallbackClient = injectedClient is null ? new HttpClient() : null;
                 var client = injectedClient ?? fallbackClient!;
                 client.Timeout = TimeSpan.FromSeconds(2);
-                using var readyResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/health/ready"), CancellationToken.None).ConfigureAwait(false);
+                using var readyResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/health/ready"), CancellationToken.None);
                 running = readyResponse.IsSuccessStatusCode;
                 if (running)
                 {
-                    using var authResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/api/local/v1/auth/status"), CancellationToken.None)
-                                                         .ConfigureAwait(false);
+                    using var authResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/api/local/v1/auth/status"), CancellationToken.None);
                     if (!authResponse.IsSuccessStatusCode)
                     {
                         running = false;
                     }
                     else
                     {
-                        var authStatus = await authResponse.Content.ReadFromJsonAsync<NodeAuthStatusResponse>(CancellationToken.None).ConfigureAwait(false);
+                        var authStatus = await authResponse.Content.ReadFromJsonAsync<NodeAuthStatusResponse>(CancellationToken.None);
                         if (authStatus is null)
                         {
                             running = false;
@@ -227,7 +220,7 @@ public sealed partial class Program
             running ? setupRequired : null,
             ResolveInstallKind(isManagedInstall));
 
-        return await WriteStatusAsync(args, status, standardOutput).ConfigureAwait(false);
+        return await WriteStatusAsync(args, status, standardOutput);
     }
 
     private static string ResolveInstallKind(bool isManagedInstall) =>
@@ -237,23 +230,23 @@ public sealed partial class Program
     {
         if (DesktopLaunch.HasJsonFlag(args))
         {
-            await standardOutput.WriteLineAsync(JsonSerializer.Serialize(status, JsonSerializerOptions.Web)).ConfigureAwait(false);
+            await standardOutput.WriteLineAsync(JsonSerializer.Serialize(status, JsonSerializerOptions.Web));
         }
         else
         {
-            await standardOutput.WriteLineAsync($"RUNNING={(status.Running ? "true" : "false")}").ConfigureAwait(false);
-            await standardOutput.WriteLineAsync($"VERSION={status.Version ?? string.Empty}").ConfigureAwait(false);
-            await standardOutput.WriteLineAsync($"URL={status.Url ?? string.Empty}").ConfigureAwait(false);
-            await standardOutput.WriteLineAsync($"MCP_URL={status.McpUrl ?? string.Empty}").ConfigureAwait(false);
-            await standardOutput.WriteLineAsync($"DATA_DIR={status.DataDir}").ConfigureAwait(false);
+            await standardOutput.WriteLineAsync($"RUNNING={(status.Running ? "true" : "false")}");
+            await standardOutput.WriteLineAsync($"VERSION={status.Version ?? string.Empty}");
+            await standardOutput.WriteLineAsync($"URL={status.Url ?? string.Empty}");
+            await standardOutput.WriteLineAsync($"MCP_URL={status.McpUrl ?? string.Empty}");
+            await standardOutput.WriteLineAsync($"DATA_DIR={status.DataDir}");
             var setupRequiredValue = string.Empty;
             if (status.SetupRequired is { } required)
             {
                 setupRequiredValue = required ? "true" : "false";
             }
 
-            await standardOutput.WriteLineAsync($"SETUP_REQUIRED={setupRequiredValue}").ConfigureAwait(false);
-            await standardOutput.WriteLineAsync($"INSTALL_KIND={status.InstallKind}").ConfigureAwait(false);
+            await standardOutput.WriteLineAsync($"SETUP_REQUIRED={setupRequiredValue}");
+            await standardOutput.WriteLineAsync($"INSTALL_KIND={status.InstallKind}");
         }
 
         return status.Running ? 0 : 1;
@@ -320,7 +313,7 @@ public sealed partial class Program
 
             if (command == KnowledgeDowngradeCommand.Export)
             {
-                var export = await safetyService.ExportAsync(CancellationToken.None).ConfigureAwait(false);
+                var export = await safetyService.ExportAsync(CancellationToken.None);
                 preflight = export.Preflight;
                 Log.Information("Knowledge downgrade backup exported to {ArtifactPath} ({ArtifactBytes} bytes, SHA-256 {ArtifactSha256}).",
                     export.ArtifactPath,
@@ -329,7 +322,7 @@ public sealed partial class Program
             }
             else
             {
-                preflight = await safetyService.PreflightAsync(CancellationToken.None).ConfigureAwait(false);
+                preflight = await safetyService.PreflightAsync(CancellationToken.None);
             }
 
             Log.Information("Knowledge downgrade preflight: migrationApplied={MigrationApplied}, compatible={Compatible}, "

@@ -111,7 +111,7 @@ public sealed class McpAgentRunMetricsTests
 
         foreach (var snapshot in snapshots)
         {
-            await metrics.RefreshAsync(store, CancellationToken.None).ConfigureAwait(false);
+            await metrics.RefreshAsync(store, CancellationToken.None);
             capture.Observe();
             AssertLatestGauge(capture, "mcp_agent_run_queue_depth", snapshot.QueueDepth);
             AssertLatestGauge(capture, "mcp_agent_run_running", snapshot.RunningCount);
@@ -145,7 +145,7 @@ public sealed class McpAgentRunMetricsTests
             if (Interlocked.Increment(ref callCount) == 1)
             {
                 firstReadStarted.TrySetResult();
-                await releaseFirstRead.Task.ConfigureAwait(false);
+                await releaseFirstRead.Task;
                 return older;
             }
 
@@ -154,12 +154,12 @@ public sealed class McpAgentRunMetricsTests
         });
 
         var firstRefresh = metrics.RefreshAsync(store, CancellationToken.None);
-        await firstReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await firstReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         var secondRefresh = metrics.RefreshAsync(store, CancellationToken.None);
         var secondReadOverlappedFirst = secondReadStarted.Task.IsCompleted;
         releaseFirstRead.TrySetResult();
-        await Task.WhenAll(firstRefresh, secondRefresh).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await Task.WhenAll(firstRefresh, secondRefresh).WaitAsync(TimeSpan.FromSeconds(5));
 
         AssertEx.False(secondReadOverlappedFirst, "The second committed-state read must wait until the first read and publication complete.");
         AssertEx.True(secondReadStarted.Task.IsCompleted);

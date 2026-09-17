@@ -93,7 +93,7 @@ internal sealed class HeadlessToolExecutor(
             return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Failed, null, "The generated call names no tool.");
         }
 
-        var offered = await _offerProvider.GetOfferedToolsAsync(teacherModelName, isCloudModel: false, cancellationToken).ConfigureAwait(false);
+        var offered = await _offerProvider.GetOfferedToolsAsync(teacherModelName, isCloudModel: false, cancellationToken);
         var offer = offered.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));
         if (offer is null)
         {
@@ -109,10 +109,10 @@ internal sealed class HeadlessToolExecutor(
         var requiresApproval = _approvalPolicy.RequiresApproval(offer.Name, offer.Category, offer.RequiresApproval);
         if (offer.Category == ToolCategory.ReadLocal && !requiresApproval)
         {
-            return await ExecuteRealAsync(offer.Name, argumentsJson, argumentsElement, cancellationToken).ConfigureAwait(false);
+            return await ExecuteRealAsync(offer.Name, argumentsJson, argumentsElement, cancellationToken);
         }
 
-        return await RespondFromMockAsync(offer.Name, argumentsElement, requiresApproval, cancellationToken).ConfigureAwait(false);
+        return await RespondFromMockAsync(offer.Name, argumentsElement, requiresApproval, cancellationToken);
     }
 
     /// <summary>
@@ -131,17 +131,16 @@ internal sealed class HeadlessToolExecutor(
         var outcome = await _toolInvocation.InvokeAsync(toolName,
                                                argumentsJson,
                                                new ToolInvocationContext(Guid.Empty, Guid.Empty, GenerationNodeKey, UnboundedBudget),
-                                               cancellationToken)
-                                           .ConfigureAwait(false);
+                                               cancellationToken);
 
         switch (outcome.Kind)
         {
             case ToolInvocationOutcomeKind.Executed:
                 return new HeadlessToolOutcome(HeadlessToolOutcomeKind.Executed, outcome.Result, "read-local");
             case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "approval-gated", StringComparison.Ordinal):
-                return await RespondFromMockAsync(toolName, argumentsElement, requiresApproval: true, cancellationToken).ConfigureAwait(false);
+                return await RespondFromMockAsync(toolName, argumentsElement, requiresApproval: true, cancellationToken);
             case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "not-read-local", StringComparison.Ordinal):
-                return await RespondFromMockAsync(toolName, argumentsElement, requiresApproval: false, cancellationToken).ConfigureAwait(false);
+                return await RespondFromMockAsync(toolName, argumentsElement, requiresApproval: false, cancellationToken);
             // The seam answers this one with a structural token rather than a sentence, and a per-sample reason is
             // written into ValidationJson for a human to read. The other refusals already carry prose.
             case ToolInvocationOutcomeKind.NotInvocable when string.Equals(outcome.Reason, "no-executable", StringComparison.Ordinal):
@@ -160,7 +159,7 @@ internal sealed class HeadlessToolExecutor(
         CancellationToken cancellationToken)
     {
         var reason = requiresApproval ? "approval-gated" : "not-read-local";
-        var mocks = await _store.ListUsableMocksAsync(toolName, cancellationToken).ConfigureAwait(false);
+        var mocks = await _store.ListUsableMocksAsync(toolName, cancellationToken);
         foreach (var mock in mocks)
         {
             if (!_mockVerifier.TryParse(mock.MockJson.Span, out var body, out _) || body is null)

@@ -26,7 +26,7 @@ public sealed class ExternalAppFeedEndpointTests
     {
         await using var factory = Factory(Substitute.For<IExternalAppService>());
 
-        using var response = await ExternalAppEndpointPayloads.SendAnonymousAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAnonymousAsync(factory, method, route);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require a token.");
     }
@@ -38,7 +38,7 @@ public sealed class ExternalAppFeedEndpointTests
     {
         await using var factory = Factory(Substitute.For<IExternalAppService>());
 
-        using var response = await ExternalAppEndpointPayloads.SendAsNonOperatorAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAsNonOperatorAsync(factory, method, route);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode, $"{method} {route} is operator-only.");
     }
@@ -57,9 +57,8 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=4&limit=2")
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=4&limit=2");
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var items = document.RootElement.GetProperty("items");
@@ -71,8 +70,7 @@ public sealed class ExternalAppFeedEndpointTests
         AssertEx.False(document.RootElement.GetProperty("hasMore").GetBoolean());
 
         await apps.Received(1)
-                  .ListEventsAsync(ExternalAppEndpointPayloads.InstanceId, 4L, Arg.Any<int>(), Arg.Any<CancellationToken>())
-                  .ConfigureAwait(false);
+                  .ListEventsAsync(ExternalAppEndpointPayloads.InstanceId, 4L, Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -89,9 +87,8 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?limit=2")
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?limit=2");
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(2, document.RootElement.GetProperty("items").GetArrayLength(), "the extra row is the probe, not a page member.");
@@ -99,8 +96,7 @@ public sealed class ExternalAppFeedEndpointTests
         AssertEx.Equal(2, document.RootElement.GetProperty("highestSequence").GetInt64());
 
         await apps.Received(1)
-                  .ListEventsAsync(Arg.Any<Guid>(), Arg.Any<long>(), 3, Arg.Any<CancellationToken>())
-                  .ConfigureAwait(false);
+                  .ListEventsAsync(Arg.Any<Guid>(), Arg.Any<long>(), 3, Arg.Any<CancellationToken>());
     }
 
     /// <summary>The second page starts strictly after the first page's last sequence: no overlap and no gap.</summary>
@@ -114,17 +110,15 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var first = await ExternalAppEndpointPayloads
-                                .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=0&limit=2")
-                                .ConfigureAwait(false);
-        using var firstBody = await ExternalAppEndpointPayloads.ReadJsonAsync(first).ConfigureAwait(false);
+                                .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=0&limit=2");
+        using var firstBody = await ExternalAppEndpointPayloads.ReadJsonAsync(first);
         var watermark = firstBody.RootElement.GetProperty("highestSequence").GetInt64();
 
         using var second = await ExternalAppEndpointPayloads
                                  .SendAsOperatorAsync(factory,
                                      "GET",
-                                     $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence={watermark}&limit=2")
-                                 .ConfigureAwait(false);
-        using var secondBody = await ExternalAppEndpointPayloads.ReadJsonAsync(second).ConfigureAwait(false);
+                                     $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence={watermark}&limit=2");
+        using var secondBody = await ExternalAppEndpointPayloads.ReadJsonAsync(second);
 
         AssertEx.Equal(2L, watermark);
         var items = secondBody.RootElement.GetProperty("items");
@@ -145,9 +139,8 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=9")
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceEvents}?afterSequence=9");
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(0, document.RootElement.GetProperty("items").GetArrayLength());
@@ -166,15 +159,13 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents + query)
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents + query);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, member, StringComparison.Ordinal, "the 400 names the wire member.");
         await apps.DidNotReceive()
-                  .ListEventsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-                  .ConfigureAwait(false);
+                  .ListEventsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>An unknown instance is a 404, never an empty page a caller would render as "nothing has happened yet".</summary>
@@ -188,8 +179,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents)
-                                   .ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -208,9 +198,8 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents)
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceEvents);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(body.Contains("a-real-password", StringComparison.Ordinal), "an event body is content-free by contract.");
@@ -235,21 +224,18 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web&tail={tail}")
-                                   .ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web&tail={tail}");
 
         AssertEx.Equal(expected, response.StatusCode);
         if (expected == HttpStatusCode.OK)
         {
             await apps.Received(1)
-                      .ReadLogsAsync(ExternalAppEndpointPayloads.InstanceId, "web", tail, Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+                      .ReadLogsAsync(ExternalAppEndpointPayloads.InstanceId, "web", tail, Arg.Any<CancellationToken>());
         }
         else
         {
             await apps.DidNotReceive()
-                      .ReadLogsAsync(Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+                      .ReadLogsAsync(Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
         }
     }
 
@@ -264,9 +250,8 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=worker")
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=worker");
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("worker", document.RootElement.GetProperty("service").GetString());
@@ -289,9 +274,8 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceLogs)
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceLogs);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("web", document.RootElement.GetProperty("service").GetString(), "the first service publishing a port is the default.");
@@ -315,9 +299,8 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web")
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         AssertEx.Equal(resolution.Message,
@@ -333,7 +316,7 @@ public sealed class ExternalAppFeedEndpointTests
     [Test]
     public async Task Logs_WhenTheRuntimeWasRefusedForASecretInItsEndpoint_TheProblemBodyCarriesNeitherHalfOfIt()
     {
-        var resolution = await DisclosingEndpointRefusal.ResolveAsync().ConfigureAwait(false);
+        var resolution = await DisclosingEndpointRefusal.ResolveAsync();
         var apps = Substitute.For<IExternalAppService>();
         apps.ReadLogsAsync(Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns<ContainerLogSnapshot>(_ => throw new ContainerRuntimeUnavailableException(resolution));
@@ -341,9 +324,8 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web")
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         AssertEx.False(body.Contains(DisclosingEndpointRefusal.QuerySentinel, StringComparison.Ordinal),
@@ -364,8 +346,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=ghost")
-                                   .ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=ghost");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -380,8 +361,7 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceLogs)
-                                   .ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceLogs);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -399,10 +379,9 @@ public sealed class ExternalAppFeedEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web")
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", $"{ExternalAppEndpointPayloads.InstanceLogs}?service=web");
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(document.RootElement.TryGetProperty("variables", out _), "a log read carries no instance variables.");

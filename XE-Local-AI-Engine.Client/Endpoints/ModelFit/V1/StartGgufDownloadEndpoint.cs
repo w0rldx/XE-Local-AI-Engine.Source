@@ -34,7 +34,7 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
         if (string.IsNullOrWhiteSpace(req.RepoId))
         {
             AddError("A repository id is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -46,7 +46,7 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
             Revision = string.IsNullOrWhiteSpace(req.Revision) ? null : req.Revision.Trim()
         };
 
-        var ticket = await _downloadCoordinator.StartAsync(request, ct).ConfigureAwait(false);
+        var ticket = await _downloadCoordinator.StartAsync(request, ct);
 
         await Send.OkAsync(new StartGgufDownloadResponse
             {
@@ -55,6 +55,6 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
                 OperationId = ticket.OperationId,
                 OperationKind = ticket.OperationKind
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

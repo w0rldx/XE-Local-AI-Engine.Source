@@ -41,9 +41,9 @@ public sealed class SaveExternalProviderConnectionEndpoint(IExternalProviderAdmi
         // The store owns every storable-shape rule, so its ExternalProviderValidationException message IS the
         // operator-facing explanation, and the global DomainValidationExceptionHandler surfaces it verbatim as the
         // 400. That keeps one statement of each bound instead of a second, drifting copy in a validator.
-        var result = await _administrationService.SaveConnectionAsync(req.ToSaveRequest(), ct).ConfigureAwait(false);
+        var result = await _administrationService.SaveConnectionAsync(req.ToSaveRequest(), ct);
 
-        await SendWriteResultAsync(result, ct).ConfigureAwait(false);
+        await SendWriteResultAsync(result, ct);
     }
 
     private Task SendWriteResultAsync(ExternalProviderWriteResult result, CancellationToken ct)

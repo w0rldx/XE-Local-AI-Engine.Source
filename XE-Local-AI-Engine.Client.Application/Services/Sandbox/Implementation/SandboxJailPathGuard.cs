@@ -246,7 +246,7 @@ internal static class SandboxJailPathGuard
         var read = 0;
         while (read < buffer.Length)
         {
-            var chunk = await RandomAccess.ReadAsync(handle, buffer.AsMemory(read), read, cancellationToken).ConfigureAwait(false);
+            var chunk = await RandomAccess.ReadAsync(handle, buffer.AsMemory(read), read, cancellationToken);
             if (chunk == 0)
             {
                 return buffer[..read];
@@ -256,7 +256,7 @@ internal static class SandboxJailPathGuard
         }
 
         Memory<byte> probe = new byte[1];
-        if (await RandomAccess.ReadAsync(handle, probe, length, cancellationToken).ConfigureAwait(false) > 0)
+        if (await RandomAccess.ReadAsync(handle, probe, length, cancellationToken) > 0)
         {
             throw new InvalidDataException("The sandbox file grew while it was read under the requested bound.");
         }
@@ -277,7 +277,7 @@ internal static class SandboxJailPathGuard
         {
             // Non-Linux fallback: the per-component symlink check already ran; a final-component existing symlink would
             // have been rejected there. Plain write.
-            await File.WriteAllBytesAsync(jailPath, content, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(jailPath, content, cancellationToken);
             return;
         }
 
@@ -292,6 +292,6 @@ internal static class SandboxJailPathGuard
         }
 
         using var handle = new SafeFileHandle(fileDescriptor, ownsHandle: true);
-        await RandomAccess.WriteAsync(handle, content, fileOffset: 0, cancellationToken).ConfigureAwait(false);
+        await RandomAccess.WriteAsync(handle, content, fileOffset: 0, cancellationToken);
     }
 }

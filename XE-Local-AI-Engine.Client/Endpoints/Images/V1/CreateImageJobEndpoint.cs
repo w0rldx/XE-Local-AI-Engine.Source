@@ -35,14 +35,14 @@ public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator, Ima
         if (string.IsNullOrWhiteSpace(req.ModelName))
         {
             AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(req.Prompt))
         {
             AddError("A prompt is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -50,30 +50,29 @@ public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator, Ima
         if (!SeedValue.TryParse(req.Seed, out _, out var seedError))
         {
             AddError(seedError!);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         Guid jobId;
         try
         {
-            jobId = await _coordinator.EnqueueAsync(req.ToInput(), ct).ConfigureAwait(false);
+            jobId = await _coordinator.EnqueueAsync(req.ToInput(), ct);
         }
         catch (ImageRuntimeBusyException exception)
         {
-            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(exception.Message, _imageRuntime.GetActivitySnapshot()))
-                      .ConfigureAwait(false);
+            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(exception.Message, _imageRuntime.GetActivitySnapshot()));
             return;
         }
 
-        var view = await _coordinator.GetAsync(jobId, ct).ConfigureAwait(false);
+        var view = await _coordinator.GetAsync(jobId, ct);
         if (view is null)
         {
             // The coordinator just persisted the job; a null view here means an unexpected read miss.
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(view.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(view.ToResponse(), ct);
     }
 }

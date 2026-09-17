@@ -40,7 +40,7 @@ public sealed class ImageModelSetDownloadTests
         var store = Store(http, models.Path, registry);
         var progress = new RecordingProgress();
 
-        _ = await store.EnsureModelAsync(SizedRequest(), progress, CancellationToken.None).ConfigureAwait(false);
+        _ = await store.EnsureModelAsync(SizedRequest(), progress, CancellationToken.None);
 
         var reports = progress.Reports;
         AssertEx.NotEmpty(reports, "A two-part download must report progress.");
@@ -88,7 +88,7 @@ public sealed class ImageModelSetDownloadTests
         var progress = new RecordingProgress();
 
         var request = Request(Part(FirstFile, sizeBytes: 10), Part(SecondFile, sizeBytes: null));
-        _ = await store.EnsureModelAsync(request, progress, CancellationToken.None).ConfigureAwait(false);
+        _ = await store.EnsureModelAsync(request, progress, CancellationToken.None);
 
         AssertEx.NotEmpty(progress.Reports, "A two-part download must report progress.");
         AssertEx.False(progress.Reports.Any(report => report.TotalBytes == 16L),
@@ -108,9 +108,9 @@ public sealed class ImageModelSetDownloadTests
         var store = Store(http, models.Path, registry);
 
         // Exactly what a run that failed on its last part leaves behind: part 1 final (not .part), no registry entry.
-        await SeedPartAsync(models.Path, FirstFile, FirstBytes).ConfigureAwait(false);
+        await SeedPartAsync(models.Path, FirstFile, FirstBytes);
 
-        var handle = await store.EnsureModelAsync(SizedRequest(), progress: null, CancellationToken.None).ConfigureAwait(false);
+        var handle = await store.EnsureModelAsync(SizedRequest(), progress: null, CancellationToken.None);
 
         AssertEx.Equal(expected: 1, handler.CallCount, "The completed part must be reused; only the missing part may be fetched.");
         AssertEx.Equal(expected: 2, handle.Parts.Count);
@@ -130,9 +130,9 @@ public sealed class ImageModelSetDownloadTests
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
         var store = Store(http, models.Path, registry);
 
-        await SeedPartAsync(models.Path, FirstFile, Encoding.ASCII.GetBytes("truncated")).ConfigureAwait(false);
+        await SeedPartAsync(models.Path, FirstFile, Encoding.ASCII.GetBytes("truncated"));
 
-        var handle = await store.EnsureModelAsync(SizedRequest(), progress: null, CancellationToken.None).ConfigureAwait(false);
+        var handle = await store.EnsureModelAsync(SizedRequest(), progress: null, CancellationToken.None);
 
         AssertEx.Equal(expected: 2, handler.CallCount, "A size mismatch must force a re-download, never a silent reuse.");
         AssertEx.Equal(expected: 10L, handle.Parts.Single(part => part.FileName == FirstFile).SizeBytes);
@@ -149,10 +149,10 @@ public sealed class ImageModelSetDownloadTests
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
         var store = Store(http, models.Path, registry);
 
-        await SeedPartAsync(models.Path, FirstFile, FirstBytes).ConfigureAwait(false);
+        await SeedPartAsync(models.Path, FirstFile, FirstBytes);
 
         var request = Request(Part(FirstFile, sizeBytes: null), Part(SecondFile, sizeBytes: 6));
-        _ = await store.EnsureModelAsync(request, progress: null, CancellationToken.None).ConfigureAwait(false);
+        _ = await store.EnsureModelAsync(request, progress: null, CancellationToken.None);
 
         AssertEx.Equal(expected: 2, handler.CallCount, "An undeclared size leaves nothing to verify against, so the part must be re-fetched.");
     }
@@ -166,7 +166,7 @@ public sealed class ImageModelSetDownloadTests
         using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
         var store = Store(http, models.Path, registry);
 
-        var handle = await store.EnsureModelAsync(SizedRequest(), progress: null, CancellationToken.None).ConfigureAwait(false);
+        var handle = await store.EnsureModelAsync(SizedRequest(), progress: null, CancellationToken.None);
 
         AssertEx.Equal(expected: 2, handler.CallCount, "With nothing on disk every part must be fetched.");
         AssertEx.Equal(expected: 2, handle.Parts.Count);
@@ -208,7 +208,7 @@ public sealed class ImageModelSetDownloadTests
                 RepoId = otherRepo
             });
 
-        var handle = await store.EnsureModelAsync(request, progress: null, CancellationToken.None).ConfigureAwait(false);
+        var handle = await store.EnsureModelAsync(request, progress: null, CancellationToken.None);
 
         AssertEx.Equal(expected: 2, handle.Parts.Count);
         var diffusionUrl = requestedUrls.Single(url => url.Contains(FirstFile, StringComparison.Ordinal));
@@ -248,7 +248,7 @@ public sealed class ImageModelSetDownloadTests
     {
         var directory = Path.Combine(modelsDirectory, HuggingFaceImageModelStore.SafeModelDirectorySegment(ModelName));
         _ = Directory.CreateDirectory(directory);
-        await File.WriteAllBytesAsync(Path.Combine(directory, fileName), content).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(Path.Combine(directory, fileName), content);
     }
 
     private static ImageModelRequest SizedRequest()

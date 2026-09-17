@@ -20,8 +20,7 @@ public sealed class IntegrationApiKeyEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await IntegrationEndpointPayloads.SendAnonymousAsync(client, HttpMethod.Get, IntegrationEndpointPayloads.KeysRoute)
-                                                              .ConfigureAwait(false);
+        using var response = await IntegrationEndpointPayloads.SendAnonymousAsync(client, HttpMethod.Get, IntegrationEndpointPayloads.KeysRoute);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -35,7 +34,7 @@ public sealed class IntegrationApiKeyEndpointTests
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.KeysRoute,
-            IntegrationEndpointPayloads.KeyBody("viewer-probe")).ConfigureAwait(false);
+            IntegrationEndpointPayloads.KeyBody("viewer-probe"));
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -49,7 +48,7 @@ public sealed class IntegrationApiKeyEndpointTests
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.KeysRoute,
-            IntegrationEndpointPayloads.KeyBody(label: "")).ConfigureAwait(false);
+            IntegrationEndpointPayloads.KeyBody(label: ""));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -65,7 +64,7 @@ public sealed class IntegrationApiKeyEndpointTests
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.KeysRoute,
-            IntegrationEndpointPayloads.KeyBody("empty-allowlist", allowedTriggerIds: [])).ConfigureAwait(false);
+            IntegrationEndpointPayloads.KeyBody("empty-allowlist", allowedTriggerIds: []));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -79,21 +78,20 @@ public sealed class IntegrationApiKeyEndpointTests
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.KeysRoute,
-            IntegrationEndpointPayloads.KeyBody("show-once-probe")).ConfigureAwait(false);
+            IntegrationEndpointPayloads.KeyBody("show-once-probe"));
 
         AssertEx.Equal(HttpStatusCode.OK, generated.StatusCode);
-        var body = AssertEx.NotNull(await generated.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        var body = AssertEx.NotNull(await generated.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json));
         AssertEx.True(body.Key.StartsWith("xeint_", StringComparison.Ordinal));
         AssertEx.True(body.Key.StartsWith(body.View.KeyPrefix, StringComparison.Ordinal));
         AssertEx.NotEqual(Guid.Empty, body.View.PrincipalId);
         AssertEx.Null(body.View.AllowedTriggerIds, "An omitted allowlist means every trigger.");
 
-        using var list = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, IntegrationEndpointPayloads.KeysRoute)
-                                                          .ConfigureAwait(false);
-        var listedJson = await list.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var list = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, IntegrationEndpointPayloads.KeysRoute);
+        var listedJson = await list.Content.ReadAsStringAsync();
         AssertEx.False(listedJson.Contains(body.Key, StringComparison.Ordinal), "The plaintext must never appear on a read surface.");
 
-        var listed = AssertEx.NotNull(await list.Content.ReadFromJsonAsync<IntegrationApiKeyListBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        var listed = AssertEx.NotNull(await list.Content.ReadFromJsonAsync<IntegrationApiKeyListBody>(IntegrationEndpointPayloads.Json));
         AssertEx.Contains(listed.Items, item => item.Id == body.View.Id && item.RevokedAtUtc is null);
     }
 
@@ -105,17 +103,17 @@ public sealed class IntegrationApiKeyEndpointTests
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.KeysRoute,
-            IntegrationEndpointPayloads.KeyBody("rotation-probe")).ConfigureAwait(false);
-        var original = AssertEx.NotNull(await first.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+            IntegrationEndpointPayloads.KeyBody("rotation-probe"));
+        var original = AssertEx.NotNull(await first.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json));
 
         using var second = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.KeysRoute,
-            IntegrationEndpointPayloads.KeyBody("rotation-probe-v2", principalId: original.View.PrincipalId)).ConfigureAwait(false);
+            IntegrationEndpointPayloads.KeyBody("rotation-probe-v2", principalId: original.View.PrincipalId));
 
         AssertEx.Equal(HttpStatusCode.OK, second.StatusCode);
-        var rotated = AssertEx.NotNull(await second.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        var rotated = AssertEx.NotNull(await second.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json));
         AssertEx.Equal(original.View.PrincipalId, rotated.View.PrincipalId);
         AssertEx.NotEqual(original.View.Id, rotated.View.Id);
         AssertEx.NotEqual(original.View.KeyPrefix, rotated.View.KeyPrefix);
@@ -125,16 +123,16 @@ public sealed class IntegrationApiKeyEndpointTests
     public async Task Generate_WithAnAllowlist_RoundTripsIt()
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "allowlist-probe-agent").ConfigureAwait(false);
-        var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "allowlist-probe", agentId).ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "allowlist-probe-agent");
+        var trigger = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "allowlist-probe", agentId);
 
         using var generated = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.KeysRoute,
-            IntegrationEndpointPayloads.KeyBody("narrow-probe", [trigger.Id])).ConfigureAwait(false);
+            IntegrationEndpointPayloads.KeyBody("narrow-probe", [trigger.Id]));
 
-        var body = AssertEx.NotNull(await generated.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        var body = AssertEx.NotNull(await generated.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json));
         AssertEx.True(AssertEx.NotNull(body.View.AllowedTriggerIds).SequenceEqual(new[]
         {
             trigger.Id
@@ -149,18 +147,17 @@ public sealed class IntegrationApiKeyEndpointTests
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.KeysRoute,
-            IntegrationEndpointPayloads.KeyBody("revoke-probe")).ConfigureAwait(false);
-        var body = AssertEx.NotNull(await generated.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+            IntegrationEndpointPayloads.KeyBody("revoke-probe"));
+        var body = AssertEx.NotNull(await generated.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(IntegrationEndpointPayloads.Json));
 
         using var revoked = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Delete,
-            $"{IntegrationEndpointPayloads.KeysRoute}/{body.View.Id}").ConfigureAwait(false);
+            $"{IntegrationEndpointPayloads.KeysRoute}/{body.View.Id}");
         AssertEx.Equal(HttpStatusCode.NoContent, revoked.StatusCode);
 
-        using var list = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, IntegrationEndpointPayloads.KeysRoute)
-                                                          .ConfigureAwait(false);
-        var listed = AssertEx.NotNull(await list.Content.ReadFromJsonAsync<IntegrationApiKeyListBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        using var list = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, IntegrationEndpointPayloads.KeysRoute);
+        var listed = AssertEx.NotNull(await list.Content.ReadFromJsonAsync<IntegrationApiKeyListBody>(IntegrationEndpointPayloads.Json));
         AssertEx.Contains(listed.Items,
             item => item.Id == body.View.Id && item.RevokedAtUtc is not null,
             "Revocation is soft: the row survives so execution and audit history keep a credential to name.");
@@ -168,7 +165,7 @@ public sealed class IntegrationApiKeyEndpointTests
         using var unknown = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Delete,
-            $"{IntegrationEndpointPayloads.KeysRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{IntegrationEndpointPayloads.KeysRoute}/{Guid.NewGuid()}");
         AssertEx.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
     }
 
@@ -179,7 +176,7 @@ public sealed class IntegrationApiKeyEndpointTests
 
         using var response = await IntegrationEndpointPayloads.SendAnonymousAsync(client,
             HttpMethod.Delete,
-            $"{IntegrationEndpointPayloads.KeysRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{IntegrationEndpointPayloads.KeysRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

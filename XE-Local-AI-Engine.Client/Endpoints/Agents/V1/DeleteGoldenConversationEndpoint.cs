@@ -23,13 +23,13 @@ public sealed class DeleteGoldenConversationEndpoint(IGoldenConversationService 
 
     public override async Task HandleAsync(DeleteGoldenConversationRequest req, CancellationToken ct)
     {
-        var deleted = await _goldenConversationService.DeleteAsync(req.AgentDefinitionId, req.GoldenConversationId, ct).ConfigureAwait(false);
+        var deleted = await _goldenConversationService.DeleteAsync(req.AgentDefinitionId, req.GoldenConversationId, ct);
         if (!deleted)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

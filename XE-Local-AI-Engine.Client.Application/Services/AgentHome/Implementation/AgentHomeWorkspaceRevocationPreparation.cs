@@ -30,7 +30,7 @@ internal sealed class AgentHomeWorkspaceRevocationPreparation : IWorkspaceRevoca
     public async Task<IWorkspaceRevocationSession> PrepareAsync(ResolvedSelectedFolder folder, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(folder);
-        var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+        var identity = await _identityProvider.GetAsync(cancellationToken);
         var key = new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId);
         var lease = _leaseManager.TryAcquireForRecovery(key);
         if (lease is null)
@@ -49,7 +49,7 @@ internal sealed class AgentHomeWorkspaceRevocationPreparation : IWorkspaceRevoca
 
         try
         {
-            await _isolation.RecoverExistingAsync(attachKey, key, cancellationToken).ConfigureAwait(false);
+            await _isolation.RecoverExistingAsync(attachKey, key, cancellationToken);
             return new WorkspaceRevocationSession(lease);
         }
         catch

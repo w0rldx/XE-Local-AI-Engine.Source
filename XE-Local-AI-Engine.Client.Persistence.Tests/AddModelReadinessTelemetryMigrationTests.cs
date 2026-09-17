@@ -38,27 +38,27 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-readiness-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreReadinessMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreReadinessMigrationId);
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             // The precondition the rest of this test rests on: neither table had the column before the migration ran,
             // so its presence below is this migration's doing and not the previous one's.
-            AssertEx.False((await GetColumnNamesAsync(connection, envelopeTable: true).ConfigureAwait(false)).Contains(ReadinessColumn),
+            AssertEx.False((await GetColumnNamesAsync(connection, envelopeTable: true)).Contains(ReadinessColumn),
                 "agent_execution_logs must not carry the readiness column before this migration.");
-            AssertEx.False((await GetColumnNamesAsync(connection, envelopeTable: false).ConfigureAwait(false)).Contains(ReadinessColumn),
+            AssertEx.False((await GetColumnNamesAsync(connection, envelopeTable: false)).Contains(ReadinessColumn),
                 "dev_workflow_node_runs must not carry the readiness column before this migration.");
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var upgraded = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.True((await GetColumnNamesAsync(upgraded, envelopeTable: true).ConfigureAwait(false)).Contains(ReadinessColumn),
+        await using var upgraded = await OpenConnectionAsync(databasePath);
+        AssertEx.True((await GetColumnNamesAsync(upgraded, envelopeTable: true)).Contains(ReadinessColumn),
             "agent_execution_logs should expose the readiness column after the migration.");
-        AssertEx.True((await GetColumnNamesAsync(upgraded, envelopeTable: false).ConfigureAwait(false)).Contains(ReadinessColumn),
+        AssertEx.True((await GetColumnNamesAsync(upgraded, envelopeTable: false)).Contains(ReadinessColumn),
             "dev_workflow_node_runs should expose the readiness column after the migration.");
     }
 
@@ -67,12 +67,12 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-readiness-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.True((await GetColumnNamesAsync(connection, envelopeTable: true).ConfigureAwait(false)).Contains(ReadinessColumn),
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.True((await GetColumnNamesAsync(connection, envelopeTable: true)).Contains(ReadinessColumn),
             "A fresh migrate-to-head should expose the readiness column on agent_execution_logs.");
-        AssertEx.True((await GetColumnNamesAsync(connection, envelopeTable: false).ConfigureAwait(false)).Contains(ReadinessColumn),
+        AssertEx.True((await GetColumnNamesAsync(connection, envelopeTable: false)).Contains(ReadinessColumn),
             "A fresh migrate-to-head should expose the readiness column on dev_workflow_node_runs.");
     }
 
@@ -81,16 +81,16 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-readiness-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreReadinessMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreReadinessMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var envelopeColumns = await GetColumnNamesAsync(connection, envelopeTable: true).ConfigureAwait(false);
-        var nodeRunColumns = await GetColumnNamesAsync(connection, envelopeTable: false).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var envelopeColumns = await GetColumnNamesAsync(connection, envelopeTable: true);
+        var nodeRunColumns = await GetColumnNamesAsync(connection, envelopeTable: false);
 
         AssertEx.False(envelopeColumns.Contains(ReadinessColumn), "Rolling back one migration should drop the readiness column from agent_execution_logs.");
         AssertEx.False(nodeRunColumns.Contains(ReadinessColumn), "Rolling back one migration should drop the readiness column from dev_workflow_node_runs.");
@@ -121,7 +121,7 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -140,8 +140,8 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
         }
 
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             columns.Add(reader.GetString(reader.GetOrdinal("name")));
         }

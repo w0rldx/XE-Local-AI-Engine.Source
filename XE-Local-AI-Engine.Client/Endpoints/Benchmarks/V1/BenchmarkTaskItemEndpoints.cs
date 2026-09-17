@@ -30,10 +30,10 @@ public sealed class ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService ite
         // Get-or-create, not a plain list: a project created before task items existed has none, and materializing
         // item 0 needs the node encryption key that a migration does not have. Every project created since gets its
         // items with itself, so this is a read for all of them.
-        var taskItems = await _items.GetOrCreateItemsAsync(req.ProjectId, ct).ConfigureAwait(false);
-        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)
+        var taskItems = await _items.GetOrCreateItemsAsync(req.ProjectId, ct);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
-        await Send.OkAsync(taskItems.ToResponse(project), ct).ConfigureAwait(false);
+        await Send.OkAsync(taskItems.ToResponse(project), ct);
     }
 }
 
@@ -53,8 +53,8 @@ public sealed class CreateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService it
 
     public override async Task HandleAsync(CreateBenchmarkTaskItemRequest req, CancellationToken ct)
     {
-        var item = await _items.CreateAsync(req.ProjectId, req.ExpectedProjectVersion, req.ToDraft(), ct).ConfigureAwait(false);
-        await Send.OkAsync(item.ToResponse(), ct).ConfigureAwait(false);
+        var item = await _items.CreateAsync(req.ProjectId, req.ExpectedProjectVersion, req.ToDraft(), ct);
+        await Send.OkAsync(item.ToResponse(), ct);
     }
 }
 
@@ -74,8 +74,8 @@ public sealed class UpdateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService it
 
     public override async Task HandleAsync(UpdateBenchmarkTaskItemRequest req, CancellationToken ct)
     {
-        var item = await _items.UpdateAsync(req.ProjectId, req.ItemId, req.ExpectedVersion, req.ToDraft(), ct).ConfigureAwait(false);
-        await Send.OkAsync(item.ToResponse(), ct).ConfigureAwait(false);
+        var item = await _items.UpdateAsync(req.ProjectId, req.ItemId, req.ExpectedVersion, req.ToDraft(), ct);
+        await Send.OkAsync(item.ToResponse(), ct);
     }
 }
 
@@ -95,8 +95,8 @@ public sealed class DeleteBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService it
 
     public override async Task HandleAsync(DeleteBenchmarkTaskItemRequest req, CancellationToken ct)
     {
-        await _items.DeleteAsync(req.ProjectId, req.ItemId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _items.DeleteAsync(req.ProjectId, req.ItemId, req.ExpectedVersion, ct);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -121,9 +121,9 @@ public sealed class ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService 
 
     public override async Task HandleAsync(ReorderBenchmarkTaskItemsRequest req, CancellationToken ct)
     {
-        var reordered = await _items.ReorderAsync(req.ProjectId, req.ItemIds, ct).ConfigureAwait(false);
-        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)
+        var reordered = await _items.ReorderAsync(req.ProjectId, req.ItemIds, ct);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
-        await Send.OkAsync(reordered.ToResponse(project), ct).ConfigureAwait(false);
+        await Send.OkAsync(reordered.ToResponse(project), ct);
     }
 }

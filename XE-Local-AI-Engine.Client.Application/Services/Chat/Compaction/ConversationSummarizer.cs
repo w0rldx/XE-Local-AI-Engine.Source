@@ -93,7 +93,7 @@ internal sealed class ConversationSummarizer(
         // Route the model to the runtime that serves it (persisted map, else the configured default provider). Node-local
         // only — never the cloud singleton. THIS resolution is the privacy invariant: conversation content only ever
         // reaches a provider.CreateChatClient(...) client.
-        var provider = await _providerResolver.ResolveProviderForModelAsync(input.ModelName, cancellationToken).ConfigureAwait(false);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(input.ModelName, cancellationToken);
         var selection = new LocalModelSelection
         {
             ModelName = input.ModelName,
@@ -128,7 +128,7 @@ internal sealed class ConversationSummarizer(
 
                 if (batch.Count > 0)
                 {
-                    running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken).ConfigureAwait(false);
+                    running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken);
                     if (running is null)
                     {
                         return null;
@@ -150,7 +150,7 @@ internal sealed class ConversationSummarizer(
 
                 // A fragment was necessary, so flush it before considering the rest. The returned synopsis becomes
                 // the prior summary of the next request and is included in that request's budget calculation.
-                running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken).ConfigureAwait(false);
+                running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken);
                 if (running is null)
                 {
                     return null;
@@ -162,7 +162,7 @@ internal sealed class ConversationSummarizer(
 
         if (batch.Count > 0)
         {
-            running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken).ConfigureAwait(false);
+            running = await FoldAsync(chatClient, running, batch, input.SupportsThinking, cancellationToken);
         }
 
         return string.IsNullOrWhiteSpace(running) ? null : running;
@@ -213,7 +213,7 @@ internal sealed class ConversationSummarizer(
             };
         }
 
-        var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken).ConfigureAwait(false);
+        var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
         var text = response.Text?.Trim();
         if (string.IsNullOrWhiteSpace(text))
         {

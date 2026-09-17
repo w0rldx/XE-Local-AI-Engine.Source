@@ -37,36 +37,32 @@ public sealed class StartWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrati
         // conflict shape as every other refusal instead of an exception mapped to a 500.
         if (!OperatingSystem.IsLinux())
         {
-            await BlockAsync("not-linux", "In-app source builds are available on Linux only.").ConfigureAwait(false);
+            await BlockAsync("not-linux", "In-app source builds are available on Linux only.");
             return;
         }
 
         try
         {
-            var result = await _whisperRuntime.StartAsync(request.ToContract(), ct).ConfigureAwait(false);
+            var result = await _whisperRuntime.StartAsync(request.ToContract(), ct);
             switch (result.Outcome)
             {
                 case WhisperCppSourceBuildStartOutcome.AlreadyRunning:
-                    await BlockAsync("already-building", "A whisper.cpp source build is already in progress.", result.Activity)
-                        .ConfigureAwait(false);
+                    await BlockAsync("already-building", "A whisper.cpp source build is already in progress.", result.Activity);
                     return;
                 case WhisperCppSourceBuildStartOutcome.InsufficientDisk:
                     await BlockAsync("prerequisites",
                             "There is not enough free disk space to build the transcription runtime.",
-                            result.Activity)
-                        .ConfigureAwait(false);
+                            result.Activity);
                     return;
                 case WhisperCppSourceBuildStartOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
                             "One or more build prerequisites are missing; resolve the checklist before building.",
-                            result.Activity)
-                        .ConfigureAwait(false);
+                            result.Activity);
                     return;
                 case WhisperCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
                             "Wait for active transcriptions and transcription-runtime processes to finish before starting the build.",
-                            result.Activity)
-                        .ConfigureAwait(false);
+                            result.Activity);
                     return;
                 case WhisperCppSourceBuildStartOutcome.Started:
                     break;
@@ -78,12 +74,12 @@ public sealed class StartWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrati
             {
                 Started = true,
                 Status = _whisperRuntime.GetStatus().ToResponse()
-            }, ct).ConfigureAwait(false);
+            }, ct);
         }
         catch (WhisperRuntimeException exception)
         {
             // The message is contractually sanitized, so it is safe to surface and is the one that says what is wrong.
-            await BlockAsync("source-build-error", exception.Message).ConfigureAwait(false);
+            await BlockAsync("source-build-error", exception.Message);
         }
     }
 

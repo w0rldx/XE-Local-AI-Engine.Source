@@ -40,17 +40,17 @@ public sealed class DevelopmentMigrationTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var databasePath = Path.Combine(_root, "development.sqlite");
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreDevelopmentMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreDevelopmentMigrationId);
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
         await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
         {
-            await connection.OpenAsync().ConfigureAwait(false);
-            AssertEx.True((await NamesAsync(connection, "table", "development_%").ConfigureAwait(false)).SetEquals([
+            await connection.OpenAsync();
+            AssertEx.True((await NamesAsync(connection, "table", "development_%")).SetEquals([
                 "development_artifacts",
                 "development_attempts",
                 "development_events",
@@ -62,21 +62,21 @@ public sealed class DevelopmentMigrationTests : IDisposable
                 "development_templates",
                 "development_template_materializations"
             ]));
-            var indexes = await NamesAsync(connection, "index", "ux_development_%").ConfigureAwait(false);
+            var indexes = await NamesAsync(connection, "index", "ux_development_%");
             AssertEx.True(indexes.Contains("ux_development_attempts_one_active_per_task"));
             AssertEx.True(indexes.Contains("ux_development_events_project_sequence"));
             AssertEx.True(indexes.Contains("ux_development_events_operation_phase"));
-            var attemptIndexes = await NamesAsync(connection, "index", "ix_development_attempts_%").ConfigureAwait(false);
+            var attemptIndexes = await NamesAsync(connection, "index", "ix_development_attempts_%");
             AssertEx.True(attemptIndexes.Contains("ix_development_attempts_task_started_at"));
 
-            var selectedFolderColumn = AssertEx.NotNull(await ReadSelectedFolderColumnAsync(connection).ConfigureAwait(false));
+            var selectedFolderColumn = AssertEx.NotNull(await ReadSelectedFolderColumnAsync(connection));
             AssertEx.Equal("TEXT", selectedFolderColumn.Type);
             AssertEx.True(selectedFolderColumn.IsNullable);
 
-            var developmentProjectIndexes = await ReadDevelopmentProjectIndexNamesAsync(connection).ConfigureAwait(false);
+            var developmentProjectIndexes = await ReadDevelopmentProjectIndexNamesAsync(connection);
             AssertEx.True(developmentProjectIndexes.Contains("ix_development_projects_selected_folder_id"));
 
-            var selectedFolderForeignKey = AssertEx.NotNull(await ReadSelectedFolderForeignKeyAsync(connection).ConfigureAwait(false));
+            var selectedFolderForeignKey = AssertEx.NotNull(await ReadSelectedFolderForeignKeyAsync(connection));
             AssertEx.Equal("selected_folders", selectedFolderForeignKey.TargetTable);
             AssertEx.Equal("selected_folder_id", selectedFolderForeignKey.SourceColumn);
             AssertEx.Equal("id", selectedFolderForeignKey.TargetColumn);
@@ -85,12 +85,12 @@ public sealed class DevelopmentMigrationTests : IDisposable
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreDevelopmentMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreDevelopmentMigrationId);
         }
 
         await using var rolledBack = new SqliteConnection($"Data Source={databasePath}");
-        await rolledBack.OpenAsync().ConfigureAwait(false);
-        AssertEx.Empty(await NamesAsync(rolledBack, "table", "development_%").ConfigureAwait(false));
+        await rolledBack.OpenAsync();
+        AssertEx.Empty(await NamesAsync(rolledBack, "table", "development_%"));
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var databasePath = Path.Combine(_root, "development-command-profile.sqlite");
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
@@ -112,40 +112,40 @@ public sealed class DevelopmentMigrationTests : IDisposable
 
         await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
 
-            var profileColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_projects", "command_profile_json").ConfigureAwait(false));
+            var profileColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_projects", "command_profile_json"));
             AssertEx.Equal("TEXT", profileColumn.Type);
             AssertEx.True(profileColumn.IsNullable);
 
-            var digestColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_artifacts", "command_profile_digest").ConfigureAwait(false));
+            var digestColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_artifacts", "command_profile_digest"));
             AssertEx.Equal("TEXT", digestColumn.Type);
             AssertEx.True(digestColumn.IsNullable);
 
-            await SeedDevelopmentRowsAsync(connection, projectId, taskId, artifactId).ConfigureAwait(false);
+            await SeedDevelopmentRowsAsync(connection, projectId, taskId, artifactId);
         }
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreCommandProfileMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreCommandProfileMigrationId);
         }
 
         await using var rolledBack = new SqliteConnection($"Data Source={databasePath}");
-        await rolledBack.OpenAsync().ConfigureAwait(false);
+        await rolledBack.OpenAsync();
 
-        AssertEx.True((await NamesAsync(rolledBack, "table", "development_%").ConfigureAwait(false)).SetEquals(DevelopmentTables),
+        AssertEx.True((await NamesAsync(rolledBack, "table", "development_%")).SetEquals(DevelopmentTables),
             "Rolling back the command-profile migration must not drop or recreate any Development table.");
-        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_projects", "command_profile_json").ConfigureAwait(false));
-        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_artifacts", "command_profile_digest").ConfigureAwait(false));
+        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_projects", "command_profile_json"));
+        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_artifacts", "command_profile_digest"));
 
-        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ProjectCountSql, projectId).ConfigureAwait(false));
-        AssertEx.Equal(1L, await ScalarAsync(rolledBack, TaskCountSql, taskId).ConfigureAwait(false));
-        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ArtifactCountSql, artifactId).ConfigureAwait(false));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ProjectCountSql, projectId));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, TaskCountSql, taskId));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ArtifactCountSql, artifactId));
 
         // command_profile_version is the artifact PROTOCOL version and a different column from the digest that was
         // just dropped; the rollback must leave it and its value untouched.
-        AssertEx.Equal("development-workspace-v1", await ScalarAsync(rolledBack, ArtifactProfileVersionSql, artifactId).ConfigureAwait(false));
-        AssertEx.Equal("origin/main", await ScalarAsync(rolledBack, ProjectBaseBranchSql, projectId).ConfigureAwait(false));
+        AssertEx.Equal("development-workspace-v1", await ScalarAsync(rolledBack, ArtifactProfileVersionSql, artifactId));
+        AssertEx.Equal("origin/main", await ScalarAsync(rolledBack, ProjectBaseBranchSql, projectId));
     }
 
     /// <summary>
@@ -161,7 +161,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var databasePath = Path.Combine(_root, "development-attempt-command-profile.sqlite");
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
@@ -170,42 +170,42 @@ public sealed class DevelopmentMigrationTests : IDisposable
 
         await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
 
-            var attemptProfileColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_attempts", "command_profile_json").ConfigureAwait(false));
+            var attemptProfileColumn = AssertEx.NotNull(await ReadColumnAsync(connection, "development_attempts", "command_profile_json"));
             AssertEx.Equal("TEXT", attemptProfileColumn.Type);
             AssertEx.True(attemptProfileColumn.IsNullable);
 
-            await SeedDevelopmentRowsAsync(connection, projectId, taskId, artifactId).ConfigureAwait(false);
-            await SeedDevelopmentAttemptAsync(connection, attemptId, taskId).ConfigureAwait(false);
+            await SeedDevelopmentRowsAsync(connection, projectId, taskId, artifactId);
+            await SeedDevelopmentAttemptAsync(connection, attemptId, taskId);
         }
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreAttemptProfileMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreAttemptProfileMigrationId);
         }
 
         await using var rolledBack = new SqliteConnection($"Data Source={databasePath}");
-        await rolledBack.OpenAsync().ConfigureAwait(false);
+        await rolledBack.OpenAsync();
 
-        AssertEx.True((await NamesAsync(rolledBack, "table", "development_%").ConfigureAwait(false)).SetEquals(DevelopmentTables),
+        AssertEx.True((await NamesAsync(rolledBack, "table", "development_%")).SetEquals(DevelopmentTables),
             "Rolling back the attempt-profile migration must not drop or recreate any Development table.");
-        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_attempts", "command_profile_json").ConfigureAwait(false));
+        AssertEx.Null(await ReadColumnAsync(rolledBack, "development_attempts", "command_profile_json"));
 
-        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ProjectCountSql, projectId).ConfigureAwait(false));
-        AssertEx.Equal(1L, await ScalarAsync(rolledBack, TaskCountSql, taskId).ConfigureAwait(false));
-        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ArtifactCountSql, artifactId).ConfigureAwait(false));
-        AssertEx.Equal(1L, await ScalarAsync(rolledBack, AttemptCountSql, attemptId).ConfigureAwait(false));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ProjectCountSql, projectId));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, TaskCountSql, taskId));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, ArtifactCountSql, artifactId));
+        AssertEx.Equal(1L, await ScalarAsync(rolledBack, AttemptCountSql, attemptId));
 
         // The attempt row must survive with its other columns readable, and the filtered unique index that constrains
         // active attempts must still be there — a Down that rebuilt the table would silently lose it.
-        AssertEx.Equal("Succeeded", await ScalarAsync(rolledBack, AttemptStatusSql, attemptId).ConfigureAwait(false));
-        AssertEx.True((await NamesAsync(rolledBack, "index", "ux_development_attempts_%").ConfigureAwait(false))
+        AssertEx.Equal("Succeeded", await ScalarAsync(rolledBack, AttemptStatusSql, attemptId));
+        AssertEx.True((await NamesAsync(rolledBack, "index", "ux_development_attempts_%"))
             .Contains("ux_development_attempts_one_active_per_task"));
 
         // The PRECEDING migration's project-level column is a different column and must be left alone by this Down.
-        AssertEx.NotNull(await ReadColumnAsync(rolledBack, "development_projects", "command_profile_json").ConfigureAwait(false));
-        AssertEx.Equal("origin/main", await ScalarAsync(rolledBack, ProjectBaseBranchSql, projectId).ConfigureAwait(false));
+        AssertEx.NotNull(await ReadColumnAsync(rolledBack, "development_projects", "command_profile_json"));
+        AssertEx.Equal("origin/main", await ScalarAsync(rolledBack, ProjectBaseBranchSql, projectId));
     }
 
     private const string ProjectCountSql = "SELECT COUNT(*) FROM development_projects WHERE id = $id;";
@@ -230,7 +230,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
         command.Parameters.AddWithValue("$attemptId", attemptId.ToString());
         command.Parameters.AddWithValue("$taskId", taskId.ToString());
         command.Parameters.AddWithValue("$operationId", Guid.NewGuid().ToString());
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task SeedDevelopmentRowsAsync(SqliteConnection connection, Guid projectId, Guid taskId, Guid artifactId)
@@ -262,7 +262,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
         command.Parameters.AddWithValue("$projectId", projectId.ToString());
         command.Parameters.AddWithValue("$taskId", taskId.ToString());
         command.Parameters.AddWithValue("$artifactId", artifactId.ToString());
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<object?> ScalarAsync(SqliteConnection connection, string sql, Guid id)
@@ -272,7 +272,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
         command.CommandText = sql;
 #pragma warning restore CA2100
         command.Parameters.AddWithValue("$id", id.ToString());
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is DBNull ? null : value;
     }
 
@@ -283,8 +283,8 @@ public sealed class DevelopmentMigrationTests : IDisposable
         command.Parameters.AddWithValue("$type", type);
         command.Parameters.AddWithValue("$pattern", pattern);
         var names = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             names.Add(reader.GetString(0));
         }
@@ -306,8 +306,8 @@ public sealed class DevelopmentMigrationTests : IDisposable
             """;
         command.Parameters.AddWithValue("$table", table);
         command.Parameters.AddWithValue("$column", column);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        if (!await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
         {
             return null;
         }
@@ -320,8 +320,8 @@ public sealed class DevelopmentMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA index_list('development_projects');";
         var names = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             names.Add(reader.GetString(1));
         }
@@ -338,8 +338,8 @@ public sealed class DevelopmentMigrationTests : IDisposable
             FROM pragma_foreign_key_list('development_projects')
             WHERE "from" = 'selected_folder_id';
             """;
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        if (!await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
         {
             return null;
         }

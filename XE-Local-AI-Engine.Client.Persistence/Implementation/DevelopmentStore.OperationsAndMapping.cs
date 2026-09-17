@@ -37,36 +37,36 @@ public sealed partial class DevelopmentStore
         DbUpdateException? lost = null;
         for (var attempt = 1; attempt <= MaxOperationAttempts; attempt++)
         {
-            var existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken).ConfigureAwait(false);
+            var existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken);
             if (existing is not null)
             {
                 return existing;
             }
 
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-            existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken).ConfigureAwait(false);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken);
             if (existing is not null)
             {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken);
                 return existing;
             }
 
             try
             {
-                var result = await mutation().ConfigureAwait(false);
-                await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                var result = await mutation();
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
                 return result;
             }
             catch (DbUpdateException exception)
             {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                await transaction.RollbackAsync(CancellationToken.None);
 
                 // Cleared before anything is re-read, and before the mutation is composed again: every one of them
                 // loads what it needs INSIDE itself, so a second pass reads the state the winner left rather than the
                 // state this one lost against.
                 _dbContext.ChangeTracker.Clear();
-                existing = await FindOperationCoreAsync(projectId, operationId, phase, CancellationToken.None).ConfigureAwait(false);
+                existing = await FindOperationCoreAsync(projectId, operationId, phase, CancellationToken.None);
                 if (existing is not null)
                 {
                     return existing;
@@ -88,8 +88,7 @@ public sealed partial class DevelopmentStore
                                                .SingleOrDefaultAsync(entity => entity.ProjectId == projectId
                                                                                && entity.OperationId == operationId
                                                                                && entity.OperationPhase == phase,
-                                                   cancellationToken)
-                                               .ConfigureAwait(false);
+                                                   cancellationToken);
         return developmentEvent?.ResultMetadataJson is not { } payload
             ? null
             : JsonSerializer.Deserialize<DevelopmentOperationResult>(payload, JsonOptions);
@@ -109,8 +108,7 @@ public sealed partial class DevelopmentStore
         CancellationToken cancellationToken)
     {
         var sequence = (await _dbContext.DevelopmentEvents.Where(entity => entity.ProjectId == projectId)
-                                        .MaxAsync(entity => (long?)entity.Sequence, cancellationToken)
-                                        .ConfigureAwait(false) ?? 0) + 1;
+                                        .MaxAsync(entity => (long?)entity.Sequence, cancellationToken) ?? 0) + 1;
         var result = new DevelopmentOperationResult(projectId,
             taskId,
             attemptId,
@@ -151,7 +149,6 @@ public sealed partial class DevelopmentStore
                                .Where(entity => entity.Id == taskId)
                                .Select(entity => (Guid?)entity.ProjectId)
                                .SingleOrDefaultAsync(cancellationToken)
-                               .ConfigureAwait(false)
                ?? throw new DevelopmentNotFoundException($"Development task '{taskId}' was not found.");
     }
 
@@ -160,15 +157,13 @@ public sealed partial class DevelopmentStore
         var taskId = await _dbContext.DevelopmentAttempts.AsNoTracking()
                                      .Where(entity => entity.Id == attemptId)
                                      .Select(entity => entity.TaskId)
-                                     .SingleAsync(cancellationToken)
-                                     .ConfigureAwait(false);
-        return new AttemptOwnership(await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false), taskId);
+                                     .SingleAsync(cancellationToken);
+        return new AttemptOwnership(await ProjectIdForTaskAsync(taskId, cancellationToken), taskId);
     }
 
     private async Task<DevelopmentTask> LoadApplyTaskAsync(DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken)
     {
         return await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == subject.TaskId && entity.ProjectId == subject.ProjectId, cancellationToken)
-                               .ConfigureAwait(false)
                ?? throw new DevelopmentNotFoundException($"Development task '{subject.TaskId}' was not found.");
     }
 

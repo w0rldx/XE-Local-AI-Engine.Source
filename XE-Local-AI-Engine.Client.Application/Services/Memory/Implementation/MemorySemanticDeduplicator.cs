@@ -86,7 +86,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
 
         try
         {
-            return await FindSemanticDuplicatesCoreAsync(existing, candidates, cancellationToken).ConfigureAwait(false);
+            return await FindSemanticDuplicatesCoreAsync(existing, candidates, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -112,7 +112,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         // a transient outage can never silently swallow legitimate new candidates — exactly the KB corpus-reset guard.
         var providerName = _options.SemanticDedupEmbeddingProviderName;
         var provider = _providerResolver.ResolveProvider(providerName);
-        var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+        var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
         if (!resolution.IsConfident)
         {
             _logger.LogDebug("Semantic memory dedup skipped: no confident node-local embedding model; lexical-only for this run.");
@@ -139,7 +139,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         // memory); the remaining misses plus every candidate go out as ONE batch, so a run still costs a single
         // embedding round-trip. Candidates are always re-embedded (they have no stable identity yet) and never cached.
         var candidateVectors = new ReadOnlyMemory<float>[candidates.Count];
-        var existingVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingExistingAsync, cancellationToken).ConfigureAwait(false);
+        var existingVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingExistingAsync, cancellationToken);
 
         if (existingVectors is null)
         {
@@ -165,7 +165,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
                 batchTexts.Add(candidate.Behavior);
             }
 
-            var generated = await generator.GenerateAsync(batchTexts, options: null, token).ConfigureAwait(false);
+            var generated = await generator.GenerateAsync(batchTexts, options: null, token);
 
             // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would
             // make the positional indexing throw; signal a degrade instead so the run never drops candidates on a

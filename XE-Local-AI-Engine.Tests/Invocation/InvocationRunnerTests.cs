@@ -1747,8 +1747,7 @@ public sealed class InvocationRunnerTests
                                "session-scope auto-approve",
                                Arg.Any<string>(),
                                Arg.Any<long>(),
-                               Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                               Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1852,8 +1851,7 @@ public sealed class InvocationRunnerTests
                                "approve",
                                Arg.Any<string>(),
                                Arg.Any<long>(),
-                               Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                               Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -2036,7 +2034,7 @@ public sealed class InvocationRunnerTests
 
         AssertEx.Equal(expected: 2, segment, "the turn must continue threadlessly rather than fail for an unattended run");
         AssertEx.Equal(expected: 0, sender.SentEncryptedFailures.Count, "an unanswered question must never fail the turn, unlike an unattended approval");
-        await dispatcher.DidNotReceive().ReportUserQuestionAsync(Arg.Any<UserQuestionLifecyclePayload>()).ConfigureAwait(false);
+        await dispatcher.DidNotReceive().ReportUserQuestionAsync(Arg.Any<UserQuestionLifecyclePayload>());
         AssertEx.True(elapsed.Elapsed < TimeSpan.FromSeconds(30),
             $"the unattended run must skip the park, not wait out the 5-minute question cap; took {elapsed.Elapsed}");
 
@@ -3865,7 +3863,7 @@ public sealed class InvocationRunnerTests
             toolRelevanceRead: async cancellationToken =>
             {
                 gateReached.TrySetResult();
-                return await hold.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                return await hold.Task.WaitAsync(cancellationToken);
             });
 
         var runTask = RunAsync(runner, package);
@@ -5008,7 +5006,7 @@ public sealed class InvocationRunnerTests
     {
         pinsAtSend?.Add(ExternalProviderBindingPinScope.Current);
         using var client = new ExternalOpenAiChatClient(registry, modelId, recorder.CreateHandler);
-        var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, cancellationToken).ConfigureAwait(false);
+        var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, cancellationToken);
         yield return new AgentResponseUpdate(ChatRole.Assistant, response.Text);
     }
 

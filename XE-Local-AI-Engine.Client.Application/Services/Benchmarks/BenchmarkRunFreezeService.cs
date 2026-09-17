@@ -124,8 +124,8 @@ public sealed class BenchmarkRunFreezeService(
         // A scope of our own when the caller passed none, so the freeze and the commit of one launch stay inside one
         // scope exactly as they always did. A caller-supplied scope outlives this call and is NOT disposed here.
         await using var ownedScope = scope is null ? new BenchmarkFreezeScope() : null;
-        var plan = await FreezeAsync(request, scope ?? ownedScope!, cancellationToken).ConfigureAwait(false);
-        return (await CommitAsync([plan], cancellationToken).ConfigureAwait(false))[0];
+        var plan = await FreezeAsync(request, scope ?? ownedScope!, cancellationToken);
+        return (await CommitAsync([plan], cancellationToken))[0];
     }
 
     public async Task<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>> CommitAsync(IReadOnlyList<BenchmarkFrozenRunPlan> plans,
@@ -157,7 +157,7 @@ public sealed class BenchmarkRunFreezeService(
             throw new BenchmarkValidationException($"This request would start {commands.Length} runs across {plans.Count} models. The maximum is {MaxRunsPerRequest}.");
         }
 
-        var runs = await _benchmarkStore.StartRunsAsync(commands, first.ExpectedProjectVersion, cancellationToken).ConfigureAwait(false);
+        var runs = await _benchmarkStore.StartRunsAsync(commands, first.ExpectedProjectVersion, cancellationToken);
         _queueSignal?.Wake();
 
         // Split back per plan. StartRunsAsync returns the runs in the order the commands were given, so each plan's
@@ -199,7 +199,7 @@ public sealed class BenchmarkRunFreezeService(
             throw new BenchmarkValidationException("The requested KV-cache type is not supported.");
         }
 
-        var project = await _benchmarkStore.GetProjectAsync(request.ProjectId, cancellationToken).ConfigureAwait(false)
+        var project = await _benchmarkStore.GetProjectAsync(request.ProjectId, cancellationToken)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
         if (project.Version != request.ExpectedProjectVersion)
         {
@@ -215,26 +215,26 @@ public sealed class BenchmarkRunFreezeService(
         await using var ownedScope = scope is null ? new BenchmarkFreezeScope() : null;
         var freezeScope = scope ?? ownedScope!;
         var trimmedPrimary = primaryModelName.Trim();
-        var primary = (await freezeScope.AcquireAsync(trimmedPrimary, AcquireVerifiedAsync, cancellationToken).ConfigureAwait(false)).Snapshot;
+        var primary = (await freezeScope.AcquireAsync(trimmedPrimary, AcquireVerifiedAsync, cancellationToken)).Snapshot;
         BenchmarkModelEligibility.Validate(primary, "primary");
 
         // The judge is no longer part of the freeze: its runtime is resolved per attempt, against the policy
         // revision that attempt is judged under, so a judge change never re-freezes a run.
-        var definition = await _agentDefinitions.GetByIdAsync(project.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await _agentDefinitions.GetByIdAsync(project.AgentDefinitionId, cancellationToken);
         if (definition is null || definition.Kind != AgentDefinitionKind.Single)
         {
             throw new BenchmarkEligibilityException("The selected Single agent definition no longer exists.");
         }
 
-        var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken).ConfigureAwait(false)
+        var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken)
                            ?? throw new BenchmarkEligibilityException("The selected primary model capabilities are unavailable.");
 
         // What a freeze fans out over. A project created before task suites has no item rows until something
         // materializes item 0 from its core task; that lazy backfill is the only remaining reason a freeze writes.
-        var items = await _benchmarkStore.ListTaskItemsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+        var items = await _benchmarkStore.ListTaskItemsAsync(project.Id, cancellationToken);
         if (items.Count == 0)
         {
-            items = await _benchmarkStore.GetOrCreateItemsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+            items = await _benchmarkStore.GetOrCreateItemsAsync(project.Id, cancellationToken);
         }
 
         // A generator is never a run target; the cases it expanded into are.
@@ -271,10 +271,9 @@ public sealed class BenchmarkRunFreezeService(
         // straddle a runtime swap and freeze two different answers into one batch, and the variant is taken from
         // the same inspection that produced the capabilities so a second selection cannot disagree with the
         // manifest whose digest we record.
-        var (binaryCapabilities, variant) = await freezeScope.InspectAsync(_launchResolver, cancellationToken).ConfigureAwait(false);
+        var (binaryCapabilities, variant) = await freezeScope.InspectAsync(_launchResolver, cancellationToken);
         var primaryLaunch = await _launchResolver
-                                  .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken);
         // The enforceability answer is frozen off the capabilities read ABOVE, not re-resolved at execution: a
         // model swap or a re-detection between freeze and run must not change what a frozen run replays.
         //
@@ -305,15 +304,13 @@ public sealed class BenchmarkRunFreezeService(
                                                    honorModelProfile: false,
                                                    activeModelIsCloud: false,
                                                    cancellationToken)
-                                               .ConfigureAwait(false)
                            ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
             var eligible = _eligibilityPolicy.Apply(resolved);
             var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
                                                        eligible,
                                                        primaryModelName,
                                                        judgeModelName: null,
-                                                       cancellationToken)
-                                                   .ConfigureAwait(false);
+                                                       cancellationToken);
             frozenItems.Add(new FrozenTaskItem(item,
                 itemCoreTask,
                 eligible,
@@ -423,7 +420,7 @@ public sealed class BenchmarkRunFreezeService(
     {
         try
         {
-            return await _installedModels.AcquireAsync(modelName, cancellationToken).ConfigureAwait(false);
+            return await _installedModels.AcquireAsync(modelName, cancellationToken);
         }
         catch (InstalledGgufSnapshotException exception)
         {
@@ -509,8 +506,7 @@ public sealed class BenchmarkRunFreezeService(
         {
             try
             {
-                var current = await dependencies.CaptureAsync(agentDefinitionId, runtime, primaryModelName, judgeModelName, cancellationToken)
-                                                .ConfigureAwait(false);
+                var current = await dependencies.CaptureAsync(agentDefinitionId, runtime, primaryModelName, judgeModelName, cancellationToken);
                 return current == expected;
             }
             catch (BenchmarkEligibilityException)

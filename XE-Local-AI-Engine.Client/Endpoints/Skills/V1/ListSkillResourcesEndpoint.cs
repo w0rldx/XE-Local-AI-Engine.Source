@@ -23,10 +23,10 @@ public sealed class ListSkillResourcesEndpoint(IAgentSkillService agentSkillServ
 
     public override async Task HandleAsync(ListSkillResourcesRequest req, CancellationToken ct)
     {
-        var record = await _agentSkillService.GetByIdAsync(req.SkillId, ct).ConfigureAwait(false);
+        var record = await _agentSkillService.GetByIdAsync(req.SkillId, ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -34,6 +34,6 @@ public sealed class ListSkillResourcesEndpoint(IAgentSkillService agentSkillServ
             {
                 Items = [.. (record.Resources ?? []).Select(static resource => resource.ToSummary())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

@@ -32,7 +32,7 @@ internal static class GraphWorkflowToolGate
             return [];
         }
 
-        var invocable = await tools.ListInvocableToolsAsync(cancellationToken).ConfigureAwait(false);
+        var invocable = await tools.ListInvocableToolsAsync(cancellationToken);
         var names = new HashSet<string>(invocable.Select(static tool => tool.Name), StringComparer.Ordinal);
         return
         [

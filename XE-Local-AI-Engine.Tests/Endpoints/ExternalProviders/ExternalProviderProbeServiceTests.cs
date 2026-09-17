@@ -34,8 +34,7 @@ public sealed class ExternalProviderProbeServiceTests
                                                      """));
         var service = CreateService(transport);
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null))
-                                  .ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
         AssertEx.Null(result.Error);
@@ -59,8 +58,7 @@ public sealed class ExternalProviderProbeServiceTests
                                                      """));
         var service = CreateService(transport);
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null))
-                                  .ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.Equal("good-model", result.Models.Single().Id);
     }
@@ -71,8 +69,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
         var service = CreateService(transport);
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null))
-                                  .ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
         AssertEx.Empty(result.Models);
@@ -85,8 +82,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => Json("<html>not json</html>"));
         var service = CreateService(transport);
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null))
-                                  .ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
         AssertEx.Empty(result.Models);
@@ -106,8 +102,7 @@ public sealed class ExternalProviderProbeServiceTests
         });
         var service = CreateService(transport);
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null))
-                                  .ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
         AssertEx.Empty(result.Models);
@@ -121,8 +116,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => throw new HttpRequestException("connection refused to http://127.0.0.1:18099"));
         var service = CreateService(transport);
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null))
-                                  .ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.Unreachable, result.Outcome);
         AssertEx.False(AssertEx.NotNull(result.Error).Contains("connection refused", StringComparison.Ordinal));
@@ -134,7 +128,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport);
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "ftp://box/v1", ApiKey: null)).ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "ftp://box/v1", ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.InvalidBaseUrl, result.Outcome);
         AssertEx.Equal(expected: 0, transport.RequestCount);
@@ -146,7 +140,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport, CreateConfig());
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery("not-configured", BaseUrl: null, ApiKey: null)).ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery("not-configured", BaseUrl: null, ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.UnknownConnection, result.Outcome);
         AssertEx.Equal(expected: 0, transport.RequestCount);
@@ -160,7 +154,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport, CreateConfig());
 
-        var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null)).ConfigureAwait(false);
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
         AssertEx.Equal("http://127.0.0.1:18099/v1/models", transport.LastRequestUri?.ToString());
@@ -175,7 +169,7 @@ public sealed class ExternalProviderProbeServiceTests
 
         // Same scheme, host and port: the credential's audience has not moved, so editing only the path must not force
         // the operator to re-type a masked secret.
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://127.0.0.1:18099/openai/v1", ApiKey: null)).ConfigureAwait(false);
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://127.0.0.1:18099/openai/v1", ApiKey: null));
 
         AssertEx.Equal("http://127.0.0.1:18099/openai/v1/models", transport.LastRequestUri?.ToString());
         AssertEx.Equal($"Bearer {StoredKey}", transport.LastAuthorization);
@@ -190,7 +184,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport, CreateConfig());
 
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://attacker.example.com/v1", ApiKey: null)).ConfigureAwait(false);
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://attacker.example.com/v1", ApiKey: null));
 
         AssertEx.Equal("http://attacker.example.com/v1/models", transport.LastRequestUri?.ToString());
         AssertEx.False(transport.LastRequestHadAuthorization);
@@ -204,7 +198,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport, CreateConfig());
 
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://127.0.0.1:19000/v1", "sk-new-endpoint")).ConfigureAwait(false);
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://127.0.0.1:19000/v1", "sk-new-endpoint"));
 
         AssertEx.Equal("Bearer sk-new-endpoint", transport.LastAuthorization);
     }
@@ -217,7 +211,7 @@ public sealed class ExternalProviderProbeServiceTests
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport);
 
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null)).ConfigureAwait(false);
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.False(transport.LastRequestHadAuthorization);
     }

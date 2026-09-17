@@ -233,8 +233,8 @@ internal static class AssertEx
     /// </param>
     public static async Task SettleAsync(int rounds = 16)
     {
-        // Task.Yield() has no ConfigureAwait overload, so neither call carries one: the test host installs no
-        // synchronization context, and a mixed pair would only read as though one of them mattered.
+        // Both continuations resume on the thread pool: the test host installs no synchronization context, so a
+        // round is one hand-back to the pool plus one queue behind everything the yield made runnable.
         for (var round = 0; round < rounds; round++)
         {
             await Task.Yield();
@@ -250,7 +250,7 @@ internal static class AssertEx
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        await SettleAsync().ConfigureAwait(false);
+        await SettleAsync();
 
         if (task.IsCompleted)
         {
@@ -270,7 +270,7 @@ internal static class AssertEx
 
         try
         {
-            await task.WaitAsync(timeout).ConfigureAwait(false);
+            await task.WaitAsync(timeout);
         }
         catch (TimeoutException)
         {
@@ -292,7 +292,7 @@ internal static class AssertEx
                 return;
             }
 
-            await Task.Delay(pollInterval).ConfigureAwait(false);
+            await Task.Delay(pollInterval);
         }
 
         if (!condition())

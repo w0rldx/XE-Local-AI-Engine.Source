@@ -129,7 +129,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
 
         // 1. Load the saved agent. A missing (or since-deleted) definition fails with a sanitized reason — there is no
         //    "disabled" flag on an AgentDefinition, so "missing" is the only unavailable state.
-        var definition = await agentDefinitionStore.GetByIdAsync(parameters.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await agentDefinitionStore.GetByIdAsync(parameters.AgentDefinitionId, cancellationToken);
         if (definition is null)
         {
             throw new ScheduledJobExecutionException("The scheduled agent could not be found. It may have been deleted.");
@@ -140,8 +140,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         //    pin — or the local default — is the authoritative model the turn binds via ChatOptions.ModelId. A null
         //    effective model (no pin AND no installed local chat model) fails clearly rather than silently falling back
         //    to a dead provider.
-        var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-        var localDefaultModel = await localDefaultResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken).ConfigureAwait(false);
+        var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken);
+        var localDefaultModel = await localDefaultResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
         var pinnedModel = string.IsNullOrWhiteSpace(definition.ModelProfile) ? null : definition.ModelProfile;
         var effectiveModel = pinnedModel ?? localDefaultModel;
         if (string.IsNullOrWhiteSpace(effectiveModel))
@@ -152,7 +152,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         // 3. LOCALITY GATE (security invariant): classify the effective model and reject a cloud/remote model UP FRONT —
         //    before capacity or any invocation — so unattended scheduled work stays node-local-only. This is the SAME
         //    effective-model classification the chat locality gate uses (IModelCapabilityResolver).
-        var capabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
+        var capabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
         if (effectiveModelIsCloud)
         {
@@ -165,7 +165,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         //    reason constant; a local Allow carries a footprint reservation that MUST be disposed on completion (a leaked
         //    reservation wrongly rejects later spawns); QueueSameModel means the model is already resident, so the run
         //    reuses it with no second load (null reservation). GPU load serialization is inherited from the supervisor.
-        var decision = await capacityService.DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken).ConfigureAwait(false);
+        var decision = await capacityService.DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
         if (decision.Verdict == CapacityVerdict.RejectInsufficient)
         {
             throw new ScheduledJobExecutionException(decision.Reason);
@@ -184,8 +184,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                                                             supportsTools,
                                                             honorModelProfile: true,
                                                             effectiveModelIsCloud,
-                                                            cancellationToken)
-                                                        .ConfigureAwait(false);
+                                                            cancellationToken);
             if (resolved is null)
             {
                 // The definition existed at step 1 but was deleted before the resolve completed (rare race).
@@ -202,7 +201,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
 
             // 6. Run headless through the shared invocation runner, serialized against in-flight chat/platform turns via
             //    the shared invocation slot, capturing a content-safe terminal summary.
-            await RunAndSummarizeAsync(eventDispatcher, invocationRunner, package, context, effectiveModel, cancellationToken).ConfigureAwait(false);
+            await RunAndSummarizeAsync(eventDispatcher, invocationRunner, package, context, effectiveModel, cancellationToken);
         }
         finally
         {
@@ -318,17 +317,17 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
 
         // Acquire the shared invocation slot before running. Cancelling while still queued behind another invocation
         // aborts the wait here (OperationCanceledException propagates to the dispatcher as Cancelled/TimedOut).
-        var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken).ConfigureAwait(false);
+        var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         try
         {
             using var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
-            await invocationRunner.RunAsync(executionContext, cancellationToken).ConfigureAwait(false);
+            await invocationRunner.RunAsync(executionContext, cancellationToken);
         }
         finally
         {
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
         }
 
         // The runner reports Cancelled to the dispatcher and returns normally on cancellation rather than rethrowing, so
@@ -346,7 +345,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 // would mis-record as a max-runtime TimedOut).
                 throw new ScheduledJobExecutionException("The scheduled agent run was interrupted before it completed.");
             default:
-                await ReportRunSummaryAsync(context, effectiveModel, terminalState.Value, cancellationToken).ConfigureAwait(false);
+                await ReportRunSummaryAsync(context, effectiveModel, terminalState.Value, cancellationToken);
                 break;
         }
     }

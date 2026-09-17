@@ -31,10 +31,10 @@ public sealed class GetAppUpdateStatusEndpoint(IAppUpdateState updateState, IApp
         // The service owns both the stale check and serialization so concurrent endpoint requests cannot start duplicate
         // anonymous GitHub calls after observing the same cached snapshot.
         var snapshot = req.Refresh ?? false
-            ? await _updateService.RefreshIfStaleAsync(MinRefreshInterval, ct).ConfigureAwait(false)
+            ? await _updateService.RefreshIfStaleAsync(MinRefreshInterval, ct)
             : _updateState.Current;
 
-        await Send.OkAsync(ToResponse(snapshot), ct).ConfigureAwait(false);
+        await Send.OkAsync(ToResponse(snapshot), ct);
     }
 
     private static AppUpdateStatusResponse ToResponse(AppUpdateSnapshot snapshot)

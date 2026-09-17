@@ -51,25 +51,25 @@ internal sealed class BenchmarkExportQuery(
 
     public async Task<BenchmarkJsonExportQueryResult?> GetJsonAsync(Guid projectId, CancellationToken ct)
     {
-        var project = await _store.GetProjectAsync(projectId, ct).ConfigureAwait(false);
+        var project = await _store.GetProjectAsync(projectId, ct);
         if (project is null)
         {
             return null;
         }
 
-        var page = await _store.ListAllRunsAsync(projectId, ct).ConfigureAwait(false);
+        var page = await _store.ListAllRunsAsync(projectId, ct);
         var firstOfMeasuredGroups = FirstOfMeasuredGroups(page.Items);
         var runs = new List<BenchmarkExportRunQueryItem>(page.Items.Count);
         var facts = new Dictionary<Guid, BenchmarkExportRunFacts>(firstOfMeasuredGroups.Count);
         foreach (var summary in page.Items)
         {
-            var full = await _store.GetRunAsync(summary.Id, ct).ConfigureAwait(false);
+            var full = await _store.GetRunAsync(summary.Id, ct);
             if (full is null)
             {
                 continue;
             }
 
-            runs.Add(new BenchmarkExportRunQueryItem(summary, full, await ReadVerdictAsync(full, ct).ConfigureAwait(false)));
+            runs.Add(new BenchmarkExportRunQueryItem(summary, full, await ReadVerdictAsync(full, ct)));
             if (firstOfMeasuredGroups.Contains(full.Id))
             {
                 facts[full.Id] = _factsResolver.ResolveRun(full);
@@ -80,26 +80,26 @@ internal sealed class BenchmarkExportQuery(
             page.Items,
             runs,
             page.RankCohort,
-            await _store.GetCurrentJudgePolicyRevisionAsync(projectId, ct).ConfigureAwait(false),
-            await _store.GetActivePairwiseFitAsync(projectId, ct).ConfigureAwait(false),
+            await _store.GetCurrentJudgePolicyRevisionAsync(projectId, ct),
+            await _store.GetActivePairwiseFitAsync(projectId, ct),
             _factsResolver.ResolveProject(project),
             facts,
-            await _store.ListTaskItemsAsync(projectId, ct).ConfigureAwait(false),
-            await _store.ListCellsAsync(projectId, ct).ConfigureAwait(false));
+            await _store.ListTaskItemsAsync(projectId, ct),
+            await _store.ListCellsAsync(projectId, ct));
     }
 
     public async Task<BenchmarkCsvExportQueryResult?> GetCsvAsync(Guid projectId, CancellationToken ct)
     {
-        var project = await _store.GetProjectAsync(projectId, ct).ConfigureAwait(false);
+        var project = await _store.GetProjectAsync(projectId, ct);
         if (project is null)
         {
             return null;
         }
 
-        var page = await _store.ListAllRunsAsync(projectId, ct).ConfigureAwait(false);
+        var page = await _store.ListAllRunsAsync(projectId, ct);
         return new BenchmarkCsvExportQueryResult(project,
             page.Items,
-            await _store.GetActivePairwiseFitAsync(projectId, ct).ConfigureAwait(false),
+            await _store.GetActivePairwiseFitAsync(projectId, ct),
             _factsResolver.ResolveProject(project));
     }
 
@@ -119,7 +119,7 @@ internal sealed class BenchmarkExportQuery(
             return null;
         }
 
-        var attempt = await _store.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
+        var attempt = await _store.GetJudgeAttemptAsync(attemptId, ct);
         return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
     }
 }

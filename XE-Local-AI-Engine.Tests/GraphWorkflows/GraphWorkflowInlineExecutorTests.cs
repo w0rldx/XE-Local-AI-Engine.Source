@@ -22,12 +22,12 @@ public sealed class GraphWorkflowInlineExecutorTests
     public async Task Start_WrapsTheRunInputInTheCommonEnvelope()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":1}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":1}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal("""{"status":"succeeded","attempt":1,"branch":null,"output":{"input":{"seed":1}}}""",
-            (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).OutputJson);
+            (await harness.ReadNodeRunAsync(runId, "start")).OutputJson);
     }
 
     /// <summary>
@@ -39,12 +39,12 @@ public sealed class GraphWorkflowInlineExecutorTests
     public async Task ParallelAndCondition_PassTheirPredecessorsOutputThroughVerbatim()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":2}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":2}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal("""{"status":"succeeded","attempt":1,"branch":null,"output":{"input":{"seed":2}}}""",
-            (await harness.ReadNodeRunAsync(runId, "middle").ConfigureAwait(false)).OutputJson,
+            (await harness.ReadNodeRunAsync(runId, "middle")).OutputJson,
             "the pass-through carries the predecessor's payload, not an empty object.");
     }
 
@@ -56,12 +56,12 @@ public sealed class GraphWorkflowInlineExecutorTests
     public async Task AConditionsOwnDocument_CarriesThePayloadItsOutEdgeRoutesOn()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineBranch, """{"requiresReview":true}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineBranch, """{"requiresReview":true}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal("""{"status":"succeeded","attempt":1,"branch":"yes","output":{"input":{"requiresReview":true}}}""",
-            (await harness.ReadNodeRunAsync(runId, "check").ConfigureAwait(false)).OutputJson);
+            (await harness.ReadNodeRunAsync(runId, "check")).OutputJson);
     }
 
     /// <summary>
@@ -72,14 +72,14 @@ public sealed class GraphWorkflowInlineExecutorTests
     public async Task Join_EmitsThePerSourceMapOverItsSatisfiedEdges()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll, """{"seed":3}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll, """{"seed":3}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal("""
                        {"status":"succeeded","attempt":1,"branch":null,"output":{"fast":{"status":"succeeded","attempt":1,"branch":null,"output":{"input":{"seed":3}}},"slower":{"status":"succeeded","attempt":1,"branch":null,"output":{"input":{"seed":3}}}}}
                        """,
-            (await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false)).OutputJson);
+            (await harness.ReadNodeRunAsync(runId, "merge")).OutputJson);
     }
 
     /// <summary>
@@ -90,12 +90,12 @@ public sealed class GraphWorkflowInlineExecutorTests
     public async Task End_ResolvesItsResultPathAgainstItsInputDocument()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":4}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":4}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal("""{"status":"succeeded","attempt":1,"branch":null,"output":{"outcome":"completed","result":{"input":{"seed":4}}}}""",
-            (await harness.ReadNodeRunAsync(runId, "done").ConfigureAwait(false)).OutputJson);
+            (await harness.ReadNodeRunAsync(runId, "done")).OutputJson);
     }
 
     /// <summary>
@@ -106,11 +106,11 @@ public sealed class GraphWorkflowInlineExecutorTests
     public async Task End_WithNoResultPath_CarriesItsWholeInputDocument()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll, """{"seed":5}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll, """{"seed":5}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var document = (await harness.ReadNodeRunAsync(runId, "done").ConfigureAwait(false)).OutputJson;
+        var document = (await harness.ReadNodeRunAsync(runId, "done")).OutputJson;
         AssertEx.Contains(document, "\"result\":{\"run\":{\"input\":{\"seed\":5}}", message: "the whole input document, run input and all.");
         AssertEx.Contains(document, "\"upstream\":{\"merge\"");
     }
@@ -124,17 +124,17 @@ public sealed class GraphWorkflowInlineExecutorTests
     {
         // A private host: the cap is host-level configuration, and its floor is 1 KiB.
         await using var harness = new GraphWorkflowHarness(("GraphWorkflows:MaxOutputJsonBytes", "1024"));
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll, $$"""{"blob":"{{new string('a', count: 420)}}"}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll, $$"""{"blob":"{{new string('a', count: 420)}}"}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded,
-            (await harness.ReadNodeRunAsync(runId, "fast").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "fast")).Status,
             "one document of that size fits, so the hops before the join are unaffected.");
 
-        var merge = await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false);
+        var merge = await harness.ReadNodeRunAsync(runId, "merge");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, merge.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.OutputTooLarge, merge.FailureClass);
-        AssertEx.Equal(GraphWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId)).Status);
     }
 }

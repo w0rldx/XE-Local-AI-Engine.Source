@@ -67,12 +67,12 @@ public sealed class OpenApiDocumentTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         AssertEx.True(paths.TryGetProperty("/api/local/v1/diagnostics/validation-probe", out _),
@@ -84,7 +84,7 @@ public sealed class OpenApiDocumentTests
     [Test]
     public async Task LocalOpenApiDocument_HasNoDuplicateOperationIds()
     {
-        var operationIds = await GetOperationIdsAsync().ConfigureAwait(false);
+        var operationIds = await GetOperationIdsAsync();
 
         AssertEx.True(operationIds.Count > 0, "Expected the OpenAPI document to expose at least one operation.");
 
@@ -101,7 +101,7 @@ public sealed class OpenApiDocumentTests
     [Test]
     public async Task LocalOpenApiDocument_AllOperationsHaveCleanCamelCaseNames()
     {
-        var operationIds = await GetOperationIdsAsync().ConfigureAwait(false);
+        var operationIds = await GetOperationIdsAsync();
 
         AssertEx.True(operationIds.Count > 0, "Expected the OpenAPI document to expose at least one operation.");
 
@@ -121,11 +121,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         foreach (var path in new[]
@@ -169,11 +169,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         const string acquisitionPath = "/api/local/v1/model-fit/llamacpp/acquisition";
@@ -204,11 +204,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         foreach (var path in new[]
@@ -261,11 +261,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         // The four session paths carry six operations. They are declared on every node, feature switch or not, so the
@@ -358,11 +358,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         foreach (var path in new[]
@@ -438,11 +438,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         AssertWorkSessionPaths(paths);
@@ -475,17 +475,17 @@ public sealed class OpenApiDocumentTests
         };
 
         using var client = disabledFactory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
 
         AssertWorkSessionPaths(document.RootElement.GetProperty("paths"));
 
         // Proof the overlay actually took: the same client gets the disabled node's 404 from the request-path
         // middleware. Without this the test would pass identically on a factory whose configuration never applied.
-        using var probe = await client.GetAsync("/api/local/v1/work-sessions").ConfigureAwait(false);
+        using var probe = await client.GetAsync("/api/local/v1/work-sessions");
         AssertEx.Equal(HttpStatusCode.NotFound, probe.StatusCode, "A disabled node must refuse the route the document still describes.");
     }
 
@@ -506,17 +506,17 @@ public sealed class OpenApiDocumentTests
         };
 
         using var client = disabledFactory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
 
         AssertExternalAppPaths(document.RootElement.GetProperty("paths"));
 
         // Proof the overlay actually took: the same client gets the disabled node's 404 from the request-path
         // middleware. Without this the test would pass identically on a factory whose configuration never applied.
-        using var probe = await client.GetAsync("/api/local/v1/external-apps/catalog").ConfigureAwait(false);
+        using var probe = await client.GetAsync("/api/local/v1/external-apps/catalog");
         AssertEx.Equal(HttpStatusCode.NotFound, probe.StatusCode, "A disabled node must refuse the route the document still describes.");
     }
 
@@ -531,11 +531,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         var uninstall = paths.GetProperty("/api/local/v1/external-apps/instances/{instanceId}").GetProperty("delete");
@@ -571,11 +571,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
 
         AssertRequired(schemas, "UpdateGraphWorkflowDefinitionRequest", required: ["version"], optional: ["name"]);
@@ -603,11 +603,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var paths = document.RootElement.GetProperty("paths");
 
         // Create-run reaches VersionConflict, DatasetNotReady and BaseArtifactNotReady inside the store's create
@@ -641,11 +641,11 @@ public sealed class OpenApiDocumentTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var save = document.RootElement.GetProperty("paths").GetProperty("/api/local/v1/node-settings").GetProperty("put");
 
         var declared = save.GetProperty("responses").EnumerateObject().Select(static status => status.Name).Order(StringComparer.Ordinal).ToArray();
@@ -762,11 +762,11 @@ public sealed class OpenApiDocumentTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
 
         var operationIds = new List<string>();
         foreach (var pathItem in document.RootElement.GetProperty("paths").EnumerateObject())

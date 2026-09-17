@@ -43,8 +43,8 @@ public sealed class CreateTranscriptionSessionEndpoint(ITranscriptionService ses
                     ChannelAttribution = req.ChannelAttribution
                 }
             },
-            ct).ConfigureAwait(false);
+            ct);
 
-        await Send.OkAsync(session.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(session.ToResponse(), ct);
     }
 }

@@ -28,8 +28,8 @@ public sealed class GetModelCatalogInfoEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var snapshot = await _catalogProvider.GetCatalogAsync(ct).ConfigureAwait(false);
+        var snapshot = await _catalogProvider.GetCatalogAsync(ct);
         var refreshSourceConfigured = !string.IsNullOrWhiteSpace(_options.Value.RefreshUrl);
-        await Send.OkAsync(snapshot.ToResponse(refreshSourceConfigured), ct).ConfigureAwait(false);
+        await Send.OkAsync(snapshot.ToResponse(refreshSourceConfigured), ct);
     }
 }

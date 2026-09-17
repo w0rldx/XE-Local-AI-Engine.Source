@@ -36,7 +36,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -49,7 +49,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(Guid.NewGuid()));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -60,15 +60,15 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Monitor Agent").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Monitor Agent");
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(agentId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -93,15 +93,15 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
         };
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Embedding Monitor Agent").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Embedding Monitor Agent");
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Route(agentId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var retrieval = document.RootElement.GetProperty("retrieval");
 
@@ -122,7 +122,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 }

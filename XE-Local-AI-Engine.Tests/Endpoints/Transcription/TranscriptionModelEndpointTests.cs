@@ -67,7 +67,7 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = "not-a-model"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Null(coordinator.LastStartedModelId, "An unknown id must never reach the coordinator.");
@@ -84,7 +84,7 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = "   "
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Null(coordinator.LastStartedModelId);
@@ -104,10 +104,10 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = "base"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal("base", body.GetProperty("modelId").GetString());
         AssertEx.True(body.GetProperty("accepted").GetBoolean());
         AssertEx.Equal("running", body.GetProperty("status").GetProperty("phase").GetString());
@@ -128,10 +128,10 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = "base"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.True(body.GetProperty("alreadyInFlight").GetBoolean());
     }
 
@@ -150,10 +150,10 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = "base"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.False(body.GetProperty("accepted").GetBoolean(), "Nothing was in flight, so nothing may be claimed to have stopped.");
     }
 
@@ -171,7 +171,7 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = "base"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("base", AssertEx.NotNull(coordinator.LastCancelledModelId));
@@ -188,10 +188,10 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = "small"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal("small", body.GetProperty("selectedModelId").GetString());
         AssertEx.Equal("small", AssertEx.NotNull(service.LastSelectedModelId));
     }
@@ -208,10 +208,10 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = (string?)null
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal(JsonValueKind.Null, body.GetProperty("selectedModelId").ValueKind);
         AssertEx.True(service.SelectCalled, "Clearing the override must still reach the service.");
         AssertEx.Null(service.LastSelectedModelId);
@@ -228,7 +228,7 @@ public sealed class TranscriptionModelEndpointTests
         {
             modelId = "not-a-model"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.False(service.SelectCalled, "An unknown id must be rejected before the service is touched.");
@@ -247,12 +247,12 @@ public sealed class TranscriptionModelEndpointTests
         using var client = factory.CreateClient();
 
         using var forbidden = Request(method, route, factory.AddNonOperatorBearerToken);
-        using var forbiddenResponse = await client.SendAsync(forbidden).ConfigureAwait(false);
+        using var forbiddenResponse = await client.SendAsync(forbidden);
         AssertEx.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode,
             $"'{route}' must refuse an authenticated non-operator.");
 
         using var allowed = Request(method, route, factory.AddNodeBearerToken);
-        using var allowedResponse = await client.SendAsync(allowed).ConfigureAwait(false);
+        using var allowedResponse = await client.SendAsync(allowed);
         AssertEx.NotEqual(HttpStatusCode.Forbidden, allowedResponse.StatusCode,
             $"'{route}' must admit an operator.");
     }
@@ -278,9 +278,9 @@ public sealed class TranscriptionModelEndpointTests
     private static async Task<JsonElement> GetJsonAsync(TestServerWebAppFactory factory, HttpClient client, string route)
     {
         using var request = Authorized(factory, HttpMethod.Get, route, body: null);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, $"'{route}' must answer 200 for an operator.");
-        return await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
     }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string route, object? body)

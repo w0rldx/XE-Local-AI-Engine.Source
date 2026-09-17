@@ -77,8 +77,7 @@ internal sealed class WorkSessionWriteDeclarationGuard
     public async Task<string?> InspectAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken)
     {
         var activeModel = string.IsNullOrWhiteSpace(pinnedModelOverride)
-            ? await _localDefaultModel.ResolveAsync((await _nodeSettings.LoadAsync(cancellationToken).ConfigureAwait(false)).DefaultModelName, cancellationToken)
-                                      .ConfigureAwait(false)
+            ? await _localDefaultModel.ResolveAsync((await _nodeSettings.LoadAsync(cancellationToken)).DefaultModelName, cancellationToken)
             : pinnedModelOverride;
 
         // supportsTools: true is passed deliberately rather than probed. The question is what this binding COULD be
@@ -89,15 +88,14 @@ internal sealed class WorkSessionWriteDeclarationGuard
                                           supportsTools: true,
                                           honorModelProfile: string.IsNullOrWhiteSpace(pinnedModelOverride),
                                           activeModelIsCloud: false,
-                                          cancellationToken)
-                                      .ConfigureAwait(false);
+                                          cancellationToken);
         // A binding that resolves to nothing is not a case with no answer: the turn keeps the DEFAULT PERSONA, which
         // takes the whole capability-gated offer, so the honest question is what THAT offer carries. Judging the
         // fallback rather than assuming the worst is what keeps the rule quiet on a node whose fallback is offered
         // nothing that writes, and blocking on one whose fallback is offered everything — which is the real bypass:
         // delete the definition mid-session and a rule that only ever judged resolved bindings would go silent.
         var projection = resolved?.AllowedTools
-                         ?? await _offer.GetOfferedToolsAsync(activeModel, isCloudModel: false, cancellationToken).ConfigureAwait(false);
+                         ?? await _offer.GetOfferedToolsAsync(activeModel, isCloudModel: false, cancellationToken);
         return Refuse(projection, bindingResolved: resolved is not null);
     }
 

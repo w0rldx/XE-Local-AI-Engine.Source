@@ -55,21 +55,21 @@ public sealed class DevWorkflowDeadlineTests
         var clock = new ManualTimeProvider();
         await using var harness = new DevWorkflowHarness(services => services.AddSingleton<TimeProvider>(clock));
         var held = harness.Tools.Hold("validate");
-        var runId = await harness.StartRunAsync(ImpatientToolGraph, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ImpatientToolGraph, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await held.Started.ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await held.Started;
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
 
         clock.Advance(PastTheDeadline);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
 
-        var expired = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var expired = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(expected: 2, expired.Attempt, "a timeout is retryable, and this node had an attempt left.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, expired.Status, "the same tick that ended the first attempt admits the second: it waits on no clock.");
         AssertEx.Equal(expected: 2, harness.Tools.Ran.Count, "and the lane really did start the second attempt's commands.");
 
-        var scheduled = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Last(static entry => entry.EventType == "node.retry.scheduled");
+        var scheduled = (await harness.ReadEventsAsync(runId)).Last(static entry => entry.EventType == "node.retry.scheduled");
         AssertEx.Equal("timeout", scheduled.Outcome, "the log says the clock ended it, which the row no longer can once it is re-attempted.");
         AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson), "\"failureClass\":\"Timeout\"");
         AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson), "5 seconds", message: "the reason names the budget it went past.");
@@ -78,8 +78,8 @@ public sealed class DevWorkflowDeadlineTests
         // the registry rather than merely cancelled: an entry left behind refuses the fresh pass its place, and the next
         // poll then finds nothing driving the row and settles it as an interrupted host instead.
         held.Release();
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
-        var settled = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
+        var settled = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, settled.Status, AssertEx.NotNull(settled.TerminalReason ?? settled.OutputJson));
         AssertEx.Equal("validate, validate", string.Join(", ", harness.Tools.Ran));
     }
@@ -93,16 +93,16 @@ public sealed class DevWorkflowDeadlineTests
     {
         var clock = new ManualTimeProvider();
         await using var harness = new DevWorkflowHarness(services => services.AddSingleton<TimeProvider>(clock));
-        var runId = await harness.StartRunAsync(ImpatientAgentGraph).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ImpatientAgentGraph);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
 
         clock.Advance(PastTheDeadline);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Contains(harness.Agent.Calls, call => call == ("cancel", sessionId), "the session is stopped, not abandoned to run on under a settled row.");
 
-        var expired = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var expired = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, expired.Status, "the node allowed one attempt, so a timeout has nowhere left to go but a human.");
         AssertEx.Equal(DevWorkflowFailureClasses.Timeout, expired.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(expired.TerminalReason), "5 seconds");
@@ -119,31 +119,31 @@ public sealed class DevWorkflowDeadlineTests
     {
         var clock = new ManualTimeProvider();
         await using var harness = new DevWorkflowHarness(services => services.AddSingleton<TimeProvider>(clock));
-        var runId = await harness.StartRunAsync(ImpatientAgentGraph).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ImpatientAgentGraph);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId)).Status);
 
-        var parked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var parked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Null(parked.StartedAtUtc, "the parked row carries no start instant, which is exactly what leaves it no deadline to expire.");
 
         // The outage: far longer than the node's five seconds, and longer than the grace on top of them.
         clock.Advance(PastTheDeadline);
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Running).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Running);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var resumed = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var resumed = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, resumed.Status, "the resumed node run is working, not instantly out of time.");
         AssertEx.Equal(expected: 1, resumed.Attempt, "and it is the same attempt: a pause costs no attempt.");
         AssertEx.Equal(sessionId, resumed.WorkSessionId);
         AssertEx.True(resumed.StartedAtUtc > parked.CreatedAtUtc, "the resume re-based the deadline by stamping a fresh start instant.");
 
         // One more tick at the same instant: the re-based deadline has not passed, so nothing ends the node run.
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceAsync(runId);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research")).Status);
     }
 
     /// <summary>
@@ -157,20 +157,20 @@ public sealed class DevWorkflowDeadlineTests
         var clock = new ManualTimeProvider();
         await using var harness = new DevWorkflowHarness(services => services.AddSingleton<TimeProvider>(clock));
         var held = harness.Tools.Hold("validate");
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await held.Started.ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await held.Started;
 
         clock.Advance(TimeSpan.FromDays(1));
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
 
-        var running = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var running = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, running.Status);
         AssertEx.True(harness.ToolLane.IsInFlight(running.Id), "the pass is still the lane's, because nothing on this node run was ever due.");
 
         held.Release();
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        await harness.AdvanceThroughToolLaneAsync(runId);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
     }
 }

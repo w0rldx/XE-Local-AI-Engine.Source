@@ -30,7 +30,7 @@ public sealed class EngineCommandDispatchTests
             var result = await Program.CreateAppAsync(["--status", "--json", "--mcp-only"], new ProgramAppCustomization
             {
                 StandardOutput = output
-            }).ConfigureAwait(false);
+            });
 
             AssertEx.Null(result.App);
             AssertEx.Equal(expected: 1, result.ExitCode);
@@ -57,7 +57,7 @@ public sealed class EngineCommandDispatchTests
         {
             Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, dataDirectory);
 
-            var result = await Program.CreateAppAsync(["--setup"], new ProgramAppCustomization()).ConfigureAwait(false);
+            var result = await Program.CreateAppAsync(["--setup"], new ProgramAppCustomization());
 
             AssertEx.Null(result.App);
             AssertEx.Equal(expected: 2, result.ExitCode);
@@ -77,7 +77,7 @@ public sealed class EngineCommandDispatchTests
         var result = await Program.CreateAppAsync(["--help", "--desktop"], new ProgramAppCustomization
         {
             StandardOutput = output
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Null(result.App);
         AssertEx.Equal(expected: 0, result.ExitCode);
@@ -97,7 +97,7 @@ public sealed class EngineCommandDispatchTests
         {
             StandardError = error,
             BeforeOneShotCommand = static () => throw new InvalidOperationException("secret-value")
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Null(result.App);
         AssertEx.Equal(expected: 1, result.ExitCode);
@@ -111,7 +111,7 @@ public sealed class EngineCommandDispatchTests
     {
         var dataDirectory = Path.Combine(Path.GetTempPath(), "xe-status-invalid", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dataDirectory);
-        await File.WriteAllTextAsync(Path.Combine(dataDirectory, DesktopPortStore.ReadyFileName), "{not-json").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(dataDirectory, DesktopPortStore.ReadyFileName), "{not-json");
         var original = Environment.GetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable);
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -122,7 +122,7 @@ public sealed class EngineCommandDispatchTests
             {
                 StandardOutput = output,
                 StandardError = error
-            }).ConfigureAwait(false);
+            });
 
             AssertEx.Equal(expected: 1, result.ExitCode);
             AssertEx.Contains(error.ToString(), "readiness file is invalid");
@@ -154,7 +154,7 @@ public sealed class EngineCommandDispatchTests
             {
                 StandardOutput = output,
                 StatusHttpClientFactory = static () => new HttpClient(new StatusProbeHandler())
-            }).ConfigureAwait(false);
+            });
 
             AssertEx.Equal(expected: 1, result.ExitCode);
             using var document = JsonDocument.Parse(output.ToString());
@@ -178,11 +178,11 @@ public sealed class EngineCommandDispatchTests
         {
             Environment.SetEnvironmentVariable(DesktopLaunch.AdminEmailEnvironmentVariable, "fallback@example.test");
             Environment.SetEnvironmentVariable(DesktopLaunch.AdminPasswordEnvironmentVariable, "secret-value");
-            var malformed = await Program.CreateAppAsync(["--setup", "--admin-email="], new ProgramAppCustomization()).ConfigureAwait(false);
+            var malformed = await Program.CreateAppAsync(["--setup", "--admin-email="], new ProgramAppCustomization());
             AssertEx.Equal(expected: 2, malformed.ExitCode);
 
             Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, "relative/path");
-            var captured = await Program.CreateAppAsync(["--setup"], new ProgramAppCustomization()).ConfigureAwait(false);
+            var captured = await Program.CreateAppAsync(["--setup"], new ProgramAppCustomization());
             AssertEx.Equal(expected: 1, captured.ExitCode);
             AssertEx.Null(Environment.GetEnvironmentVariable(DesktopLaunch.AdminPasswordEnvironmentVariable));
         }

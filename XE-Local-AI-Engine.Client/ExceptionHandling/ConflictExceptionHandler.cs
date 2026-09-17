@@ -105,7 +105,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
 
         // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with
         // application/json when it is not, which silently demoted this problem+json body.
-        await httpContext.Response.WriteAsJsonAsync(problemDetails, options: null, ProblemContentType, cancellationToken).ConfigureAwait(false);
+        await httpContext.Response.WriteAsJsonAsync(problemDetails, options: null, ProblemContentType, cancellationToken);
 
         return true;
     }

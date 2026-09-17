@@ -69,10 +69,10 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         ArgumentNullException.ThrowIfNull(attachKey);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken);
         try
         {
-            return await InitializeCoreAsync(attachKey, cancellationToken).ConfigureAwait(false);
+            return await InitializeCoreAsync(attachKey, cancellationToken);
         }
         finally
         {
@@ -90,14 +90,14 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         var agentHomeRoot = ResolveAgentHomeRoot();
         Directory.CreateDirectory(agentHomeRoot);
 
-        var existing = await TryReadManifestAsync(agentHomeRoot, cancellationToken).ConfigureAwait(false);
+        var existing = await TryReadManifestAsync(agentHomeRoot, cancellationToken);
         var createdAt = existing?.CreatedAt;
 
         if (existing is not null)
         {
             if (!string.Equals(existing.OwnerUserId, attachKey.OwnerUserId, StringComparison.Ordinal))
             {
-                await RecoverFromOwnerMismatchAsync(existing, agentHomeRoot, cancellationToken).ConfigureAwait(false);
+                await RecoverFromOwnerMismatchAsync(existing, agentHomeRoot, cancellationToken);
                 createdAt = null;
             }
             else if (existing.Version != AgentHomeManifest.CurrentVersion)
@@ -122,7 +122,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
             }
         }
 
-        return await MaterializeAsync(agentHomeRoot, attachKey, createdAt, cancellationToken).ConfigureAwait(false);
+        return await MaterializeAsync(agentHomeRoot, attachKey, createdAt, cancellationToken);
     }
 
     private async Task<AgentHomeLayout> MaterializeAsync(string agentHomeRoot,
@@ -131,23 +131,23 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(agentHomeRoot);
-        await WriteLockFileAsync(agentHomeRoot, cancellationToken).ConfigureAwait(false);
+        await WriteLockFileAsync(agentHomeRoot, cancellationToken);
 
         var now = _timeProvider.GetUtcNow();
         var effectiveCreatedAt = createdAt ?? now;
 
         var initializing = BuildManifest(attachKey, AgentHomeStatus.Initializing, effectiveCreatedAt, now);
-        await WriteManifestAtomicAsync(agentHomeRoot, initializing, cancellationToken).ConfigureAwait(false);
+        await WriteManifestAtomicAsync(agentHomeRoot, initializing, cancellationToken);
 
         EnsureDirectories(agentHomeRoot);
-        await EnsureBaselineFilesAsync(agentHomeRoot, cancellationToken).ConfigureAwait(false);
+        await EnsureBaselineFilesAsync(agentHomeRoot, cancellationToken);
 
         var ready = initializing with
         {
             Status = AgentHomeStatus.Ready,
             UpdatedAt = _timeProvider.GetUtcNow()
         };
-        await WriteManifestAtomicAsync(agentHomeRoot, ready, cancellationToken).ConfigureAwait(false);
+        await WriteManifestAtomicAsync(agentHomeRoot, ready, cancellationToken);
 
         RemoveLockFile(agentHomeRoot);
 
@@ -173,8 +173,8 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
 
         try
         {
-            var handle = await _sandboxProvider.ConnectAsync(priorKey, cancellationToken).ConfigureAwait(false);
-            await _sandboxProvider.KillAsync(handle, cancellationToken).ConfigureAwait(false);
+            var handle = await _sandboxProvider.ConnectAsync(priorKey, cancellationToken);
+            await _sandboxProvider.KillAsync(handle, cancellationToken);
             _logger.LogInformation("Killed prior-owner AgentHome sandbox on owner change for node {NodeId}.", existing.NodeId);
         }
         catch (SandboxHandleInvalidException)
@@ -228,7 +228,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         try
         {
             await using var stream = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<AgentHomeManifest>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            return await JsonSerializer.DeserializeAsync<AgentHomeManifest>(stream, SerializerOptions, cancellationToken);
         }
         catch (JsonException exception)
         {
@@ -247,7 +247,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         var path = Path.Combine(agentHomeRoot, ManifestFileName);
         var temporaryPath = path + ".tmp";
         var json = JsonSerializer.Serialize(manifest, SerializerOptions);
-        await File.WriteAllTextAsync(temporaryPath, json, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(temporaryPath, json, cancellationToken);
         File.Move(temporaryPath, path, overwrite: true);
     }
 
@@ -275,7 +275,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
                 Directory.CreateDirectory(directory);
             }
 
-            await File.WriteAllTextAsync(fullPath, file.Content, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(fullPath, file.Content, cancellationToken);
         }
     }
 
@@ -386,7 +386,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         try
         {
             var path = Path.Combine(agentHomeRoot, LockFileName);
-            await File.WriteAllTextAsync(path, _timeProvider.GetUtcNow().ToString("O", CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(path, _timeProvider.GetUtcNow().ToString("O", CultureInfo.InvariantCulture), cancellationToken);
         }
         catch (IOException exception)
         {

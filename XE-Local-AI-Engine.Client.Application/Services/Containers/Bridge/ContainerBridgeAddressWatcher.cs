@@ -74,7 +74,7 @@ public sealed class ContainerBridgeAddressWatcher : IHostedService, IDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _stopping.CancelAsync().ConfigureAwait(false);
+        await _stopping.CancelAsync();
 
         if (_loop is not { } loop)
         {
@@ -83,7 +83,7 @@ public sealed class ContainerBridgeAddressWatcher : IHostedService, IDisposable
 
         try
         {
-            await loop.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await loop.WaitAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -147,7 +147,7 @@ public sealed class ContainerBridgeAddressWatcher : IHostedService, IDisposable
     {
         using var timer = new PeriodicTimer(RefreshInterval, _timeProvider);
 
-        while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+        while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             try
             {

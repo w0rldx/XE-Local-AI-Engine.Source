@@ -45,21 +45,21 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         var documentB = Guid.NewGuid();
         var chunkA = Guid.NewGuid();
         var chunkB = Guid.NewGuid();
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentA, CollectionA).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentB, CollectionB).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, content: "shared lexical needle").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentB, chunkB, chunkIndex: 0, content: "shared lexical needle").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentA, CollectionA);
+        await SeedDocumentAsync(databasePath, documentB, CollectionB);
+        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, content: "shared lexical needle");
+        await SeedChunkAsync(databasePath, documentB, chunkB, chunkIndex: 0, content: "shared lexical needle");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var search = new FtsSearch(context);
 
-        var scoped = await search.SearchAsync("needle", limit: 10, documentId: null, CollectionA, CancellationToken.None).ConfigureAwait(false);
+        var scoped = await search.SearchAsync("needle", limit: 10, documentId: null, CollectionA, CancellationToken.None);
         AssertEx.Equal(expected: 1, scoped.Count);
         AssertEx.Equal(chunkA, scoped[0].ChunkId);
         AssertEx.Equal(documentA, scoped[0].DocumentId);
 
-        var escapedDocumentFilter = await search.SearchAsync("needle", limit: 10, documentB, CollectionA, CancellationToken.None).ConfigureAwait(false);
+        var escapedDocumentFilter = await search.SearchAsync("needle", limit: 10, documentB, CollectionA, CancellationToken.None);
         AssertEx.Empty(escapedDocumentFilter,
             "A document id from another collection must not bypass the collection predicate in the lexical arm.");
     }
@@ -72,13 +72,13 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         var documentB = Guid.NewGuid();
         var chunkA = Guid.NewGuid();
         var chunkB = Guid.NewGuid();
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentA, CollectionA).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentB, CollectionB).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, content: "alpha").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentB, chunkB, chunkIndex: 0, content: "beta").ConfigureAwait(false);
-        await SeedVectorAsync(databasePath, documentA, chunkA, [1f, 0f, 0f, 0f]).ConfigureAwait(false);
-        await SeedVectorAsync(databasePath, documentB, chunkB, [1f, 0f, 0f, 0f]).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentA, CollectionA);
+        await SeedDocumentAsync(databasePath, documentB, CollectionB);
+        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, content: "alpha");
+        await SeedChunkAsync(databasePath, documentB, chunkB, chunkIndex: 0, content: "beta");
+        await SeedVectorAsync(databasePath, documentA, chunkA, [1f, 0f, 0f, 0f]);
+        await SeedVectorAsync(databasePath, documentB, chunkB, [1f, 0f, 0f, 0f]);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var search = new ManagedCosineVectorSearch(context, new KnowledgeVectorNormalizationState());
@@ -97,7 +97,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
             limit: 10,
             documentId: null,
             CollectionA,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
         AssertEx.Equal(expected: 1, scoped.Count);
         AssertEx.Equal(chunkA, scoped[0].ChunkId);
         AssertEx.Equal(documentA, scoped[0].DocumentId);
@@ -109,7 +109,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
             limit: 10,
             documentB,
             CollectionA,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
         AssertEx.Empty(escapedDocumentFilter,
             "A document id from another collection must not bypass the collection predicate in the dense arm.");
     }
@@ -123,18 +123,17 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         var pathChunk = Guid.NewGuid();
         var headingChunk = Guid.NewGuid();
         var bodyChunk = Guid.NewGuid();
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, document, CollectionA).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, document, CollectionA);
 
-        await SeedChunkAsync(databasePath, document, symbolChunk, 0, "ordinary body", symbol: "ExactNeedle").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, document, pathChunk, 1, "ordinary body", sourcePath: "src/ExactNeedle.cs").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, document, headingChunk, 2, "ordinary body", headingPath: "ExactNeedle").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, document, bodyChunk, 3, "ExactNeedle").ConfigureAwait(false);
+        await SeedChunkAsync(databasePath, document, symbolChunk, 0, "ordinary body", symbol: "ExactNeedle");
+        await SeedChunkAsync(databasePath, document, pathChunk, 1, "ordinary body", sourcePath: "src/ExactNeedle.cs");
+        await SeedChunkAsync(databasePath, document, headingChunk, 2, "ordinary body", headingPath: "ExactNeedle");
+        await SeedChunkAsync(databasePath, document, bodyChunk, 3, "ExactNeedle");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var hits = await new FtsSearch(context)
-                         .SearchAsync("ExactNeedle", limit: 10, documentId: null, CollectionA, CancellationToken.None)
-                         .ConfigureAwait(false);
+                         .SearchAsync("ExactNeedle", limit: 10, documentId: null, CollectionA, CancellationToken.None);
 
         AssertEx.Equal(expected: 4, hits.Count);
         AssertEx.Equal(symbolChunk, hits[0].ChunkId, "Symbol matches carry the largest configured BM25 weight.");
@@ -155,9 +154,9 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         var documentB = Guid.NewGuid();
         var chunkA = Guid.NewGuid();
         var chunkB = Guid.NewGuid();
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentA, CollectionA).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentB, CollectionB).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentA, CollectionA);
+        await SeedDocumentAsync(databasePath, documentB, CollectionB);
         await SeedChunkAsync(databasePath,
             documentA,
             chunkA,
@@ -170,13 +169,12 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
             symbol: "WidgetService.ExecuteAsync",
             pageNumber: 7,
             startOffset: 120,
-            endOffset: 341).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentB, chunkB, chunkIndex: 0, content: "provenance needle").ConfigureAwait(false);
+            endOffset: 341);
+        await SeedChunkAsync(databasePath, documentB, chunkB, chunkIndex: 0, content: "provenance needle");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateLexicalSearchService(context);
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("needle", Limit: 10, CollectionId: "project-a"), CancellationToken.None)
-                                  .ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("needle", Limit: 10, CollectionId: "project-a"), CancellationToken.None);
 
         AssertEx.Equal(expected: 1, result.Results.Count);
         var hit = result.Results[0];
@@ -221,7 +219,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private async Task SeedDocumentAsync(string databasePath, Guid documentId, string collectionId)
@@ -232,7 +230,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
             encryptedName = context.EncryptKnowledgeFileName("document.txt", documentId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -249,7 +247,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         command.Parameters.AddWithValue("$model", EmbeddingModel);
         command.Parameters.AddWithValue("$identity", VectorIdentity);
         command.Parameters.AddWithValue("$collection", collectionId);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task SeedChunkAsync(string databasePath,
@@ -266,7 +264,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         int startOffset = 0,
         int endOffset = 0)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -291,12 +289,12 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         command.Parameters.AddWithValue("$end_offset", endOffset);
         command.Parameters.AddWithValue("$content_hash", "chunk-" + chunkId.ToString("N"));
         command.Parameters.AddWithValue("$embedding_input_hash", "embedding-" + chunkId.ToString("N"));
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task SeedVectorAsync(string databasePath, Guid documentId, Guid chunkId, float[] vector)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -309,13 +307,13 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         command.Parameters.AddWithValue("$embedding", MemoryMarshal.AsBytes<float>(vector).ToArray());
         command.Parameters.AddWithValue("$model", EmbeddingModel);
         command.Parameters.AddWithValue("$identity", VectorIdentity);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 

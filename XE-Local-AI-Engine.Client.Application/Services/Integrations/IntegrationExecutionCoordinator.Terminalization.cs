@@ -24,7 +24,7 @@ internal sealed partial class IntegrationExecutionCoordinator
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
-            var row = await store.GetByIdAsync(executionId, CancellationToken.None).ConfigureAwait(false);
+            var row = await store.GetByIdAsync(executionId, CancellationToken.None);
             if (row is null || !NonTerminalStatuses.Contains(row.Status))
             {
                 return;
@@ -34,8 +34,7 @@ internal sealed partial class IntegrationExecutionCoordinator
             await TerminalizeFromFaultAsync(context,
                     IntegrationExecutionStatus.Failed,
                     IntegrationFailureCategories.InternalFailure,
-                    "The execution could not be dispatched.")
-                .ConfigureAwait(false);
+                    "The execution could not be dispatched.");
         }
         catch (Exception exception)
         {
@@ -62,7 +61,7 @@ internal sealed partial class IntegrationExecutionCoordinator
     {
         try
         {
-            var row = await context.Store.GetByIdAsync(context.ExecutionId, CancellationToken.None).ConfigureAwait(false);
+            var row = await context.Store.GetByIdAsync(context.ExecutionId, CancellationToken.None);
             if (row is null || !NonTerminalStatuses.Contains(row.Status))
             {
                 return;
@@ -79,7 +78,7 @@ internal sealed partial class IntegrationExecutionCoordinator
             // The re-read is this path's own first look at the row, so it honours a marker the caller's outcome
             // predates before it ever attempts a CAS.
             var (marked, markedCategory, markedSummary) = HonourStopMarker(row, status, failureCategory, failureSummary);
-            _ = await TerminalizeAsync(context, NonTerminalStatuses, marked, markedCategory, markedSummary).ConfigureAwait(false);
+            _ = await TerminalizeAsync(context, NonTerminalStatuses, marked, markedCategory, markedSummary);
         }
         catch (Exception exception)
         {
@@ -118,12 +117,12 @@ internal sealed partial class IntegrationExecutionCoordinator
 
         for (var attempt = 1; attempt <= MaxTerminalAttempts; attempt++)
         {
-            if (await TryTerminalizeOnceAsync(context, expectedStatuses, outcome.Status, outcome.FailureCategory, outcome.FailureSummary).ConfigureAwait(false))
+            if (await TryTerminalizeOnceAsync(context, expectedStatuses, outcome.Status, outcome.FailureCategory, outcome.FailureSummary))
             {
                 return true;
             }
 
-            var fresh = await context.Store.GetByIdAsync(context.ExecutionId, CancellationToken.None).ConfigureAwait(false);
+            var fresh = await context.Store.GetByIdAsync(context.ExecutionId, CancellationToken.None);
             if (fresh is null || !expectedStatuses.Contains(fresh.Status) || fresh.Version == context.Version)
             {
                 // Gone, already terminal, or a loss no reload explains: retrying the same version would only lose the
@@ -201,8 +200,7 @@ internal sealed partial class IntegrationExecutionCoordinator
                                            failureSummary,
                                            payload?.GetRawText(),
                                            BuildAudit(context, status, endedAtUtc)),
-                                       CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                       CancellationToken.None);
             if (!won)
             {
                 return false;

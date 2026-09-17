@@ -22,9 +22,9 @@ public sealed class NodeLoginLockoutIntegrationTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
-        using var response = await LoginAsync(client, WrongPassword).ConfigureAwait(false);
+        using var response = await LoginAsync(client, WrongPassword);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -37,14 +37,14 @@ public sealed class NodeLoginLockoutIntegrationTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
-        using var response = await LoginAsync(client, WrongPassword).ConfigureAwait(false);
+        using var response = await LoginAsync(client, WrongPassword);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertEx.False(response.Headers.Contains("Retry-After"), "A pre-threshold failure must not carry Retry-After.");
 
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync();
         AssertEx.False(body.Contains("locked-out", StringComparison.Ordinal),
             $"A pre-threshold failure must not name a lockout. Body: '{body}'.");
     }
@@ -55,20 +55,20 @@ public sealed class NodeLoginLockoutIntegrationTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
         for (var attempt = 0; attempt < LockoutThreshold; attempt++)
         {
-            using var failedResponse = await LoginAsync(client, WrongPassword).ConfigureAwait(false);
+            using var failedResponse = await LoginAsync(client, WrongPassword);
             AssertEx.Equal(HttpStatusCode.Unauthorized, failedResponse.StatusCode);
         }
 
-        using var lockedOutResponse = await LoginAsync(client, Password).ConfigureAwait(false);
+        using var lockedOutResponse = await LoginAsync(client, Password);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, lockedOutResponse.StatusCode);
 
         // The whole point of the coded body: the correct password is being refused, and only `code` explains why.
-        var payload = AssertEx.NotNull(await lockedOutResponse.Content.ReadFromJsonAsync<LockedOutBody>().ConfigureAwait(false));
+        var payload = AssertEx.NotNull(await lockedOutResponse.Content.ReadFromJsonAsync<LockedOutBody>());
         AssertEx.Equal("locked-out", payload.Code);
         AssertEx.NotEmpty(payload.Message);
         AssertEx.True(payload.RetryAfterSeconds is > 0 and <= LockoutSeconds,
@@ -85,15 +85,15 @@ public sealed class NodeLoginLockoutIntegrationTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
         for (var attempt = 0; attempt < LockoutThreshold - 1; attempt++)
         {
-            using var failedResponse = await LoginAsync(client, WrongPassword).ConfigureAwait(false);
+            using var failedResponse = await LoginAsync(client, WrongPassword);
             AssertEx.Equal(HttpStatusCode.Unauthorized, failedResponse.StatusCode);
         }
 
-        using var successResponse = await LoginAsync(client, Password).ConfigureAwait(false);
+        using var successResponse = await LoginAsync(client, Password);
 
         AssertEx.Equal(HttpStatusCode.OK, successResponse.StatusCode);
     }
@@ -105,7 +105,7 @@ public sealed class NodeLoginLockoutIntegrationTests
             {
                 email = Email,
                 password = Password
-            }).ConfigureAwait(false);
+            });
 
         AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
     }

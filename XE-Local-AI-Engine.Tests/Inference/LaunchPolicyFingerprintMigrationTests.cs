@@ -36,27 +36,27 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
         var previousMigration = migrations[migrationIndex - 1];
         var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
 
-        await migrator.MigrateAsync(previousMigration).ConfigureAwait(false);
+        await migrator.MigrateAsync(previousMigration);
         var profileId = Guid.NewGuid();
         var benchmarkId = Guid.NewGuid();
-        await InsertLegacyProfileAsync(dbContext, profileId, benchmarkId).ConfigureAwait(false);
+        await InsertLegacyProfileAsync(dbContext, profileId, benchmarkId);
 
-        await migrator.MigrateAsync(migration).ConfigureAwait(false);
+        await migrator.MigrateAsync(migration);
 
         var (status, benchmarkSnapshotId, fingerprintVersion, fingerprint) =
-            await ReadProfileStateAsync(dbContext, profileId).ConfigureAwait(false);
+            await ReadProfileStateAsync(dbContext, profileId);
         AssertEx.Equal(expected: 2, status);
         AssertEx.Null(benchmarkSnapshotId);
         AssertEx.Null(fingerprintVersion);
         AssertEx.Null(fingerprint);
-        var migratedColumns = await ReadInferenceProfileColumnNamesAsync(dbContext).ConfigureAwait(false);
+        var migratedColumns = await ReadInferenceProfileColumnNamesAsync(dbContext);
         AssertEx.False(migratedColumns.Contains("free_vram_at_freeze_bytes", StringComparer.Ordinal));
         AssertEx.True(migratedColumns.Contains("global_free_vram_at_freeze_bytes", StringComparer.Ordinal));
         AssertEx.True(migratedColumns.Contains("process_budget_vram_at_freeze_bytes", StringComparer.Ordinal));
 
-        await migrator.MigrateAsync(previousMigration).ConfigureAwait(false);
+        await migrator.MigrateAsync(previousMigration);
 
-        var columns = await ReadInferenceProfileColumnNamesAsync(dbContext).ConfigureAwait(false);
+        var columns = await ReadInferenceProfileColumnNamesAsync(dbContext);
         AssertEx.False(columns.Contains("launch_policy_fingerprint_version", StringComparer.Ordinal));
         AssertEx.False(columns.Contains("launch_policy_fingerprint", StringComparer.Ordinal));
         AssertEx.True(columns.Contains("status", StringComparer.Ordinal));
@@ -76,7 +76,7 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
         Guid profileId,
         Guid benchmarkId)
     {
-        var connection = await GetOpenConnectionAsync(dbContext).ConfigureAwait(false);
+        var connection = await GetOpenConnectionAsync(dbContext);
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               INSERT INTO inference_profiles (
@@ -92,7 +92,7 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
                               """;
         AddParameter(command, "$id", profileId.ToString());
         AddParameter(command, "$benchmark_id", benchmarkId.ToString());
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<(
@@ -102,7 +102,7 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
         string? Fingerprint)> ReadProfileStateAsync(NodeChatDbContext dbContext,
         Guid profileId)
     {
-        var connection = await GetOpenConnectionAsync(dbContext).ConfigureAwait(false);
+        var connection = await GetOpenConnectionAsync(dbContext);
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               SELECT status, benchmark_snapshot_id, launch_policy_fingerprint_version,
@@ -111,30 +111,30 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
                               WHERE id = $id;
                               """;
         AddParameter(command, "$id", profileId.ToString());
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        AssertEx.True(await reader.ReadAsync().ConfigureAwait(false));
-        return (await reader.GetFieldValueAsync<int>(0).ConfigureAwait(false),
-            await reader.IsDBNullAsync(1).ConfigureAwait(false)
+        await using var reader = await command.ExecuteReaderAsync();
+        AssertEx.True(await reader.ReadAsync());
+        return (await reader.GetFieldValueAsync<int>(0),
+            await reader.IsDBNullAsync(1)
                 ? null
-                : await reader.GetFieldValueAsync<string>(1).ConfigureAwait(false),
-            await reader.IsDBNullAsync(2).ConfigureAwait(false)
+                : await reader.GetFieldValueAsync<string>(1),
+            await reader.IsDBNullAsync(2)
                 ? null
-                : await reader.GetFieldValueAsync<int>(2).ConfigureAwait(false),
-            await reader.IsDBNullAsync(3).ConfigureAwait(false)
+                : await reader.GetFieldValueAsync<int>(2),
+            await reader.IsDBNullAsync(3)
                 ? null
-                : await reader.GetFieldValueAsync<string>(3).ConfigureAwait(false));
+                : await reader.GetFieldValueAsync<string>(3));
     }
 
     private static async Task<IReadOnlySet<string>> ReadInferenceProfileColumnNamesAsync(NodeChatDbContext dbContext)
     {
-        var connection = await GetOpenConnectionAsync(dbContext).ConfigureAwait(false);
+        var connection = await GetOpenConnectionAsync(dbContext);
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA table_info('inference_profiles');";
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        while (await reader.ReadAsync())
         {
-            columns.Add(await reader.GetFieldValueAsync<string>(1).ConfigureAwait(false));
+            columns.Add(await reader.GetFieldValueAsync<string>(1));
         }
 
         return columns;
@@ -145,7 +145,7 @@ public sealed class LaunchPolicyFingerprintMigrationTests : IDisposable
         var connection = dbContext.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         return connection;

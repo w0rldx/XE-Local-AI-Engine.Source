@@ -20,13 +20,13 @@ public sealed class GetIntegrationTriggerEndpoint(IIntegrationTriggerService tri
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var trigger = await _triggerService.GetAsync(Route<Guid>("triggerId"), ct).ConfigureAwait(false);
+        var trigger = await _triggerService.GetAsync(Route<Guid>("triggerId"), ct);
         if (trigger is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(IntegrationMapper.ToView(trigger), ct).ConfigureAwait(false);
+        await Send.OkAsync(IntegrationMapper.ToView(trigger), ct);
     }
 }

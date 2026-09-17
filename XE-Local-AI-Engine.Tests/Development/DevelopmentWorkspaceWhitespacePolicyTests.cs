@@ -150,15 +150,15 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     public async Task ApplyAsync_OnACrlfRepository_LetsTheGatesFirstCommandPass()
     {
         // The repository stores CRLF and the added line matches it — correct work, nothing to report.
-        var repository = await CreateRepositoryAsync("crlf", "alpha\r\nbeta\r\ngamma\r\n", "delta\r\n").ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync("crlf", "alpha\r\nbeta\r\ngamma\r\n", "delta\r\n");
 
-        var before = await DiffCheckAsync(repository).ConfigureAwait(false);
+        var before = await DiffCheckAsync(repository);
         AssertEx.NotEqual(0, before.ExitCode, "this test is vacuous unless the unfixed behaviour still fails");
         AssertEx.Contains(before.StandardOutput, "trailing whitespace");
 
-        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(NewGit(), repository, CancellationToken.None).ConfigureAwait(false);
+        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(NewGit(), repository, CancellationToken.None);
 
-        var after = await DiffCheckAsync(repository).ConfigureAwait(false);
+        var after = await DiffCheckAsync(repository);
         AssertEx.Equal(0, after.ExitCode, "a CRLF repository's own line endings are not a whitespace error: " + after.StandardOutput);
     }
 
@@ -171,14 +171,14 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     {
         // The repository stores LF and the added line carries a CR — a real defect, and the whole reason this policy
         // is per path instead of a repository-wide core.whitespace setting.
-        var repository = await CreateRepositoryAsync("lf", "alpha\nbeta\ngamma\n", "delta\r\n").ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync("lf", "alpha\nbeta\ngamma\n", "delta\r\n");
 
-        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(NewGit(), repository, CancellationToken.None).ConfigureAwait(false);
+        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(NewGit(), repository, CancellationToken.None);
 
         AssertEx.False(File.Exists(Path.Combine(repository, ".git", "info", "attributes")),
             "an LF repository must be granted no policy at all");
 
-        var after = await DiffCheckAsync(repository).ConfigureAwait(false);
+        var after = await DiffCheckAsync(repository);
         AssertEx.NotEqual(0, after.ExitCode, "an introduced CR on an LF repository must still fail the check");
         AssertEx.Contains(after.StandardOutput, "trailing whitespace");
     }
@@ -190,12 +190,12 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     [Test]
     public async Task ApplyAsync_ReplacesAStalePolicyRatherThanLeavingItInPlace()
     {
-        var repository = await CreateRepositoryAsync("lf", "alpha\nbeta\ngamma\n", "delta\n").ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync("lf", "alpha\nbeta\ngamma\n", "delta\n");
         var info = Path.Combine(repository, ".git", "info");
         _ = Directory.CreateDirectory(info);
-        await File.WriteAllTextAsync(Path.Combine(info, "attributes"), "* whitespace=cr-at-eol\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(info, "attributes"), "* whitespace=cr-at-eol\n");
 
-        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(NewGit(), repository, CancellationToken.None).ConfigureAwait(false);
+        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(NewGit(), repository, CancellationToken.None);
 
         AssertEx.False(File.Exists(Path.Combine(info, "attributes")),
             "a policy the current index does not justify must be removed, not preserved");
@@ -225,19 +225,19 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     {
         var repository = Path.Combine(_root, name + "-" + Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(repository);
-        await RunGitAsync(repository, "init", "--initial-branch=main", ".").ConfigureAwait(false);
+        await RunGitAsync(repository, "init", "--initial-branch=main", ".");
 
         // Pinned so the host's own autocrlf/eol settings cannot decide what this repository stores.
-        await RunGitAsync(repository, "config", "core.autocrlf", "false").ConfigureAwait(false);
-        await RunGitAsync(repository, "config", "user.email", "whitespace-policy@example.invalid").ConfigureAwait(false);
-        await RunGitAsync(repository, "config", "user.name", "Whitespace Policy Test").ConfigureAwait(false);
+        await RunGitAsync(repository, "config", "core.autocrlf", "false");
+        await RunGitAsync(repository, "config", "user.email", "whitespace-policy@example.invalid");
+        await RunGitAsync(repository, "config", "user.name", "Whitespace Policy Test");
 
         var file = Path.Combine(repository, "a.txt");
-        await File.WriteAllTextAsync(file, content).ConfigureAwait(false);
-        await RunGitAsync(repository, "add", "a.txt").ConfigureAwait(false);
-        await RunGitAsync(repository, "commit", "-m", "base").ConfigureAwait(false);
+        await File.WriteAllTextAsync(file, content);
+        await RunGitAsync(repository, "add", "a.txt");
+        await RunGitAsync(repository, "commit", "-m", "base");
 
-        await File.WriteAllTextAsync(file, content + addedLine).ConfigureAwait(false);
+        await File.WriteAllTextAsync(file, content + addedLine);
         return repository;
     }
 
@@ -245,8 +245,7 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     {
         return await NewGit().RunAsync(repository,
                                  AgentHomeGit.Arguments("diff", "--check", "HEAD", "--", "."),
-                                 CancellationToken.None)
-                             .ConfigureAwait(false);
+                                 CancellationToken.None);
     }
 
     private static async Task RunGitAsync(string workingDirectory, params string[] arguments)
@@ -269,9 +268,9 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
         }
 
         _ = process.Start();
-        var standardError = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
-        _ = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        var standardError = await process.StandardError.ReadToEndAsync();
+        _ = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
         AssertEx.Equal(0, process.ExitCode, $"git {string.Join(' ', arguments)} failed: {standardError}");
     }
 }

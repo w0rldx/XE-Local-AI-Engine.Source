@@ -58,7 +58,7 @@ public sealed class WindowsProcessLoopbackTests
                       .WithBufferLength(100);
 
         var recorder = await builder.BuildAsync();
-        await using (recorder.ConfigureAwait(false))
+        await using (recorder)
         {
             AssertEx.NotNull(recorder.WaveFormat,
                 "The process-loopback device reports a capture format; the converter is constructed from it.");

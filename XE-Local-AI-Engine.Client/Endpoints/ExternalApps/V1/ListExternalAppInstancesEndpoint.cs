@@ -23,7 +23,7 @@ public sealed class ListExternalAppInstancesEndpoint(IExternalAppService apps) :
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var instances = await _apps.ListDetailsAsync(ct).ConfigureAwait(false);
+        var instances = await _apps.ListDetailsAsync(ct);
 
         var items = new List<ExternalAppInstanceView>(instances.Count);
         foreach (var instance in instances)
@@ -31,6 +31,6 @@ public sealed class ListExternalAppInstancesEndpoint(IExternalAppService apps) :
             items.Add(ExternalAppMapper.ToView(instance));
         }
 
-        await Send.OkAsync(new ListExternalAppInstancesResponse(items), ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListExternalAppInstancesResponse(items), ct);
     }
 }

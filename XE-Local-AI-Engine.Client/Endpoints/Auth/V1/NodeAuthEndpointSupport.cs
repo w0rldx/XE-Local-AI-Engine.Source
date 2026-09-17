@@ -33,11 +33,11 @@ internal static class NodeAuthEndpointSupport
                 {
                     Message = "Too many failed sign-in attempts. This account is temporarily locked.",
                     RetryAfterSeconds = retryAfterSeconds
-                }, statusCode: StatusCodes.Status401Unauthorized)).ConfigureAwait(false);
+                }, statusCode: StatusCodes.Status401Unauthorized));
                 return;
             }
 
-            await send.UnauthorizedAsync(cancellationToken).ConfigureAwait(false);
+            await send.UnauthorizedAsync(cancellationToken);
             return;
         }
 
@@ -45,7 +45,7 @@ internal static class NodeAuthEndpointSupport
         {
             AccessToken = result.AccessToken!,
             ExpiresAtUtc = result.AccessTokenExpiresAtUtc!.Value
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
     }
 
     private static bool TryWriteRefreshCookie(HttpResponse response, NodeAuthTokenResult result)

@@ -36,8 +36,8 @@ public sealed class GetRunningLocalModelsEndpoint(
 
         try
         {
-            var running = await _catalogService.ListRunningOllamaModelsAsync(ct).ConfigureAwait(false);
-            await Send.OkAsync(LocalModelsMapper.ToRunningResponse(running, ollamaConfigured), ct).ConfigureAwait(false);
+            var running = await _catalogService.ListRunningOllamaModelsAsync(ct);
+            await Send.OkAsync(LocalModelsMapper.ToRunningResponse(running, ollamaConfigured), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -57,8 +57,7 @@ public sealed class GetRunningLocalModelsEndpoint(
                 _logger.LogWarning(exception, "Running model list could not be loaded.");
             }
 
-            await Send.OkAsync(LocalModelsMapper.ToUnavailableRunningResponse("Local model provider is unavailable.", ollamaConfigured), ct)
-                      .ConfigureAwait(false);
+            await Send.OkAsync(LocalModelsMapper.ToUnavailableRunningResponse("Local model provider is unavailable.", ollamaConfigured), ct);
         }
     }
 }

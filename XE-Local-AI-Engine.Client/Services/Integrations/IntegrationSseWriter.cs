@@ -83,7 +83,7 @@ internal sealed class IntegrationSseWriter : IDisposable
         // connection until one of the sixty-four ahead of it finishes.
         // TimeSpan.Zero, and CancellationToken.None on purpose: this is a try-acquire, not a wait, so there is nothing
         // for the caller's token to cancel.
-        if (!await _openStreams.WaitAsync(TimeSpan.Zero, CancellationToken.None).ConfigureAwait(false))
+        if (!await _openStreams.WaitAsync(TimeSpan.Zero, CancellationToken.None))
         {
             return IntegrationSseWriteOutcome.Busy;
         }
@@ -106,7 +106,7 @@ internal sealed class IntegrationSseWriter : IDisposable
                 return IntegrationSseWriteOutcome.Gone;
             }
 
-            await StreamAsync(context, executionId, sinceSequence, cancellationToken).ConfigureAwait(false);
+            await StreamAsync(context, executionId, sinceSequence, cancellationToken);
             return IntegrationSseWriteOutcome.Streamed;
         }
         finally
@@ -128,7 +128,7 @@ internal sealed class IntegrationSseWriter : IDisposable
     {
         // One formatter call per event, because the BCL formatter owns the loop and cannot emit the ": keepalive"
         // comment the contract requires. It still owns framing, data: escaping and the per-event flush.
-        await Task.CompletedTask.ConfigureAwait(false);
+        await Task.CompletedTask;
         yield return new SseItem<IntegrationStreamEvent>(streamEvent, streamEvent.Type)
         {
             EventId = streamEvent.Sequence.ToString(CultureInfo.InvariantCulture)
@@ -145,7 +145,7 @@ internal sealed class IntegrationSseWriter : IDisposable
 
         // Commit the headers before the first event, so a caller sees the 200 immediately rather than at the first
         // frame — which on a cold model load can be minutes away.
-        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken);
 
         // The reader gets OUR token, linked to the caller's. A write failure that is not an abort — a dead peer
         // surfacing as IOException — leaves the caller's token uncancelled, and the outstanding move would then park
@@ -165,22 +165,22 @@ internal sealed class IntegrationSseWriter : IDisposable
 
                 using var keepaliveCancellation = CancellationTokenSource.CreateLinkedTokenSource(readToken);
                 var keepalive = Task.Delay(TimeSpan.FromSeconds(KeepaliveSeconds), _timeProvider, keepaliveCancellation.Token);
-                if (await Task.WhenAny(pending, keepalive).ConfigureAwait(false) != pending)
+                if (await Task.WhenAny(pending, keepalive) != pending)
                 {
                     // A comment, not an event: an EventSource ignores it in silence, where an `event: keepalive` frame
                     // would reach every listener and change the external contract.
-                    await context.Response.Body.WriteAsync(KeepaliveFrame, cancellationToken).ConfigureAwait(false);
-                    await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    await context.Response.Body.WriteAsync(KeepaliveFrame, cancellationToken);
+                    await context.Response.Body.FlushAsync(cancellationToken);
                     continue;
                 }
 
-                await keepaliveCancellation.CancelAsync().ConfigureAwait(false);
-                if (!await pending.ConfigureAwait(false))
+                await keepaliveCancellation.CancelAsync();
+                if (!await pending)
                 {
                     return;
                 }
 
-                await SseFormatter.WriteAsync(OneAsync(source.Current), context.Response.Body, WriteJson, cancellationToken).ConfigureAwait(false);
+                await SseFormatter.WriteAsync(OneAsync(source.Current), context.Response.Body, WriteJson, cancellationToken);
                 pending = null;
             }
         }
@@ -205,10 +205,10 @@ internal sealed class IntegrationSseWriter : IDisposable
             // Cancelling our own token ends the reader's wait, so the drain is bounded by us and not by the peer.
             if (pending is { IsCompleted: false })
             {
-                await readCancellation.CancelAsync().ConfigureAwait(false);
+                await readCancellation.CancelAsync();
                 try
                 {
-                    _ = await pending.ConfigureAwait(false);
+                    _ = await pending;
                 }
                 catch (Exception exception)
                 {
@@ -217,7 +217,7 @@ internal sealed class IntegrationSseWriter : IDisposable
                 }
             }
 
-            await source.DisposeAsync().ConfigureAwait(false);
+            await source.DisposeAsync();
         }
     }
 }

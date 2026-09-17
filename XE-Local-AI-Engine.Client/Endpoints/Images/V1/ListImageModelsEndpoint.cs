@@ -23,12 +23,12 @@ public sealed class ListImageModelsEndpoint(IImageModelRegistry registry)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var models = await _registry.ListAsync(ct).ConfigureAwait(false);
+        var models = await _registry.ListAsync(ct);
 
         await Send.OkAsync(new ListImageModelsResponse
             {
                 Items = [.. models.Select(static m => m.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

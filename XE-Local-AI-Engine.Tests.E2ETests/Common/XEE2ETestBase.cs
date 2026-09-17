@@ -90,7 +90,7 @@ public abstract class XEE2ETestBase : PageTest
             Snapshots = true,
             Sources = true,
             Title = $"{GetType().Name}.{context.Metadata.TestName}"
-        }).ConfigureAwait(false);
+        });
         _tracingStarted = true;
     }
 
@@ -130,13 +130,13 @@ public abstract class XEE2ETestBase : PageTest
             await Context.Tracing.StopAsync(new TracingStopOptions
             {
                 Path = tracePath
-            }).ConfigureAwait(false);
+            });
             _tracingStarted = false;
 
             return;
         }
 
-        await Context.Tracing.StopAsync(new TracingStopOptions()).ConfigureAwait(false);
+        await Context.Tracing.StopAsync(new TracingStopOptions());
         _tracingStarted = false;
     }
 

@@ -91,7 +91,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         // Resolve the tool-capable allow-list once per resolve from the accessor (stored AgentHome:ToolCapableModels >
         // appsettings seed > default). OrchestrationResolver is scoped (per turn), so this one cached read picks up an
         // operator edit on the next turn without a restart.
-        var toolCapableModels = await BuildToolCapableSetAsync(cancellationToken).ConfigureAwait(false);
+        var toolCapableModels = await BuildToolCapableSetAsync(cancellationToken);
 
         // The whole orchestration is gated on the orchestrator's effective model being tool-capable (handoff routing
         // is multi-hop function calling). An incapable model degrades the entire turn to single-agent — the UI warned
@@ -103,7 +103,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             return OrchestrationResolution.Degraded(OrchestrationDegradationReason.ModelNotToolCapable, "the model for this turn cannot call tools");
         }
 
-        var participants = await LoadCapableParticipantsAsync(orchestrator, topology, activeModelId, retrievalQuery, toolCapableModels, cancellationToken).ConfigureAwait(false);
+        var participants = await LoadCapableParticipantsAsync(orchestrator, topology, activeModelId, retrievalQuery, toolCapableModels, cancellationToken);
         if (!participants.TryGetValue(topology.TriageAgentDefinitionId, out var triage))
         {
             _logger.LogWarning("Orchestrator {AgentDefinitionId} triage participant {TriageId} is missing, deleted, or not tool-capable; degrading to single-agent.",
@@ -137,7 +137,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         var specParticipants = new List<OrchestrationSpecParticipant>(participants.Count);
         foreach (var participant in participants.Values)
         {
-            specParticipants.Add(await ToSpecParticipantAsync(participant, activeModelId, cancellationToken).ConfigureAwait(false));
+            specParticipants.Add(await ToSpecParticipantAsync(participant, activeModelId, cancellationToken));
         }
 
         specParticipants.Sort(static (left, right) => string.CompareOrdinal(left.Key, right.Key));
@@ -188,7 +188,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
         foreach (var participantId in topology.ParticipantAgentDefinitionIds.Distinct())
         {
-            var participant = await _store.GetByIdAsync(participantId, cancellationToken).ConfigureAwait(false);
+            var participant = await _store.GetByIdAsync(participantId, cancellationToken);
             if (participant is null)
             {
                 _logger.LogWarning("Orchestrator {AgentDefinitionId} references participant {ParticipantId} that no longer exists; dropping it.",
@@ -210,14 +210,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
             // Resolve the participant's prompt here (in the async load) so ToSpecParticipant stays synchronous: fold in
             // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
-            var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, cancellationToken).ConfigureAwait(false);
+            var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, cancellationToken);
 
             // Resolve THIS participant's thinking capability AND provider locality from its OWN effective model (not the
             // turn model's), so a participant pinned to a non-thinking model never has a reasoning level sent to the
             // think wire, and a participant pinned to a CLOUD model has the knowledge tools gated off its offer even when
             // the turn's active model is local. Tools' tool-capability is gated separately by the ToolCapableModels
             // allow-list above; this call supplies the thinking bit and the cloud-locality bit from one lookup.
-            var participantCapabilities = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken).ConfigureAwait(false);
+            var participantCapabilities = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken);
             var (supportsThinking, _, participantIsCloud) = participantCapabilities;
             capable[participant.Id] = new ResolvedParticipant(participant,
                 resolvedInstructions,
@@ -239,7 +239,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     /// </summary>
     private async Task<string> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery, CancellationToken cancellationToken)
     {
-        var personaPrompt = await ComposeParticipantPersonaAsync(participant, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        var personaPrompt = await ComposeParticipantPersonaAsync(participant, retrievalQuery, cancellationToken);
         return participant.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
@@ -252,7 +252,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             return participant.Instructions;
         }
 
-        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken).ConfigureAwait(false);
+        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken);
         // The SAME relevance-retrieval decision as the single-agent path (PlaybookRetrievalSelector), applied per
         // participant: below the threshold or with a blank query the full static prepend is kept byte-identical.
         var selected = await PlaybookRetrievalSelector.SelectAsync(_retrievalRanker,
@@ -263,7 +263,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             cancellationToken,
             _retrievalOptions.MaxInjectedMemoryTokens,
             _retrievalOptions.MaxInjectedFailureMemoryTokens,
-            _logger).ConfigureAwait(false);
+            _logger);
         return PlaybookPromptComposer.Compose(participant.Instructions, selected);
     }
 
@@ -319,7 +319,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ReasoningBudgetEnforceable = participant.ReasoningBudgetEnforceable,
             // Gate on the participant's OWN effective-model locality (resolved during the async load), not the turn's
             // active model — so a cloud-pinned participant is withheld the knowledge tools even on a local-active turn.
-            Tools = await ProjectAllowedToolsAsync(definition, activeModelId, participant.IsCloud, cancellationToken).ConfigureAwait(false)
+            Tools = await ProjectAllowedToolsAsync(definition, activeModelId, participant.IsCloud, cancellationToken)
         };
     }
 
@@ -333,7 +333,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? activeModelId, bool effectiveModelIsCloud, CancellationToken cancellationToken)
     {
         var effectiveModel = definition.ModelProfile ?? activeModelId;
-        var offered = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModel, effectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
+        var offered = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModel, effectiveModelIsCloud, cancellationToken);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered
@@ -369,7 +369,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
     private async Task<IReadOnlySet<string>> BuildToolCapableSetAsync(CancellationToken cancellationToken)
     {
-        var toolCapableModels = await _runtimeSettings.GetToolCapableModelsAsync(cancellationToken).ConfigureAwait(false);
+        var toolCapableModels = await _runtimeSettings.GetToolCapableModelsAsync(cancellationToken);
         return new HashSet<string>(toolCapableModels, StringComparer.Ordinal);
     }
 

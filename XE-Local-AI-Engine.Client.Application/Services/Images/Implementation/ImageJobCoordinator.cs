@@ -117,7 +117,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             // The lease is acquired before the queued-row commit and held through the terminal transition. Enqueue and
             // runtime mutation therefore share one atomic admission point rather than a racy check-then-persist window.
-            await CreateQueuedAsync(jobId, input, createdAt, cancellationToken).ConfigureAwait(false);
+            await CreateQueuedAsync(jobId, input, createdAt, cancellationToken);
             _runtimeActivityLeases[jobId] = runtimeActivityLease;
         }
         catch
@@ -161,7 +161,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         try
         {
-            await cts.CancelAsync().ConfigureAwait(false);
+            await cts.CancelAsync();
         }
         catch (ObjectDisposedException)
         {
@@ -170,8 +170,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         }
 
         // Record the request time best-effort; the run task drives the actual terminal transition.
-        await RunStoreAsync(store => store.MarkCancellationRequestedAsync(jobId, NowUnixMs(), cancellationToken), jobId, "record cancellation request")
-            .ConfigureAwait(false);
+        await RunStoreAsync(store => store.MarkCancellationRequestedAsync(jobId, NowUnixMs(), cancellationToken), jobId, "record cancellation request");
         return true;
     }
 
@@ -179,14 +178,14 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
-        return await store.GetAsync(jobId, cancellationToken).ConfigureAwait(false);
+        return await store.GetAsync(jobId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ImageJobView>> ListAsync(CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
-        return await store.ListAsync(cancellationToken).ConfigureAwait(false);
+        return await store.ListAsync(cancellationToken);
     }
 
     public IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId)
@@ -213,7 +212,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             // Explicitly not propagating: this is the shutdown drain itself, so cancelling it is exactly what must
             // not happen — the per-job tokens in _inFlight were already signalled by CancelAllInFlight above.
-            await Task.WhenAll(_runTasks.Values.ToArray()).WaitAsync(ShutdownDrainTimeout, CancellationToken.None).ConfigureAwait(false);
+            await Task.WhenAll(_runTasks.Values.ToArray()).WaitAsync(ShutdownDrainTimeout, CancellationToken.None);
         }
         catch (TimeoutException)
         {
@@ -270,12 +269,12 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             // Serialize: wait for the single generation slot. A cancel while still queued throws here — the job is
             // dropped to Cancelled WITHOUT ever calling the runtime.
-            await _generationSlot.WaitAsync(token).ConfigureAwait(false);
+            await _generationSlot.WaitAsync(token);
             acquired = true;
         }
         catch (OperationCanceledException)
         {
-            await RunStoreAsync(store => store.MarkCancelledAsync(jobId, NowUnixMs(), CancellationToken.None), jobId, "mark cancelled").ConfigureAwait(false);
+            await RunStoreAsync(store => store.MarkCancelledAsync(jobId, NowUnixMs(), CancellationToken.None), jobId, "mark cancelled");
             PushStatus(jobId, ImageJobStatus.Cancelled, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
             _logger.LogInformation("Operator cancelled queued image job {JobId} before generation started.", jobId);
             Cleanup(jobId);
@@ -302,14 +301,13 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             if (gpuAdmission is null)
             {
                 const string trainingBusy = "A training run is using the GPU. Try again once it finishes.";
-                await RunStoreAsync(store => store.MarkFailedAsync(jobId, trainingBusy, NowUnixMs(), CancellationToken.None), jobId, "mark failed")
-                    .ConfigureAwait(false);
+                await RunStoreAsync(store => store.MarkFailedAsync(jobId, trainingBusy, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
                 PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, trainingBusy, ImageJobProgressDetail.None, isMilestone: true);
                 return;
             }
 
             var startedAt = NowUnixMs();
-            await RunStoreAsync(store => store.MarkGeneratingAsync(jobId, startedAt, CancellationToken.None), jobId, "mark generating").ConfigureAwait(false);
+            await RunStoreAsync(store => store.MarkGeneratingAsync(jobId, startedAt, CancellationToken.None), jobId, "mark generating");
             PushStatus(jobId, ImageJobStatus.Generating, queuePosition: null, elapsedMs: 0, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
 
             // Deliberately NOT Progress<T>. With no SynchronizationContext, Progress<T> queues each callback to the
@@ -318,7 +316,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             // would then accept a stale step as the newest and the bar would walk backwards. Reporting synchronously
             // on the runtime's own reporting thread keeps the order the runtime established.
             var progress = new SynchronousProgress(update => OnRuntimeProgress(jobId, update));
-            var result = await _runtime.GenerateAsync(request, progress, token).ConfigureAwait(false);
+            var result = await _runtime.GenerateAsync(request, progress, token);
 
             // Persist the image encrypted-at-rest BEFORE marking the job succeeded.
             var imageId = Guid.NewGuid();
@@ -330,21 +328,19 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                                      Width = result.Width,
                                      Height = result.Height
                                  },
-                                 CancellationToken.None)
-                             .ConfigureAwait(false);
+                                 CancellationToken.None);
 
             var durationMs = (long)result.Duration.TotalMilliseconds;
             // The runtime reports the dimensions of the PNG it actually produced (rounded up to a multiple of 64), which
             // is what the job row must record — the requested size is not what the operator can see.
             await RunStoreAsync(store => store.MarkSucceededAsync(jobId, imageId, NowUnixMs(), durationMs, result.Width, result.Height, result.Seed, CancellationToken.None),
                     jobId,
-                    "mark succeeded")
-                .ConfigureAwait(false);
+                    "mark succeeded");
             PushStatus(jobId, ImageJobStatus.Succeeded, queuePosition: null, elapsedMs: durationMs, imageId: imageId, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
         }
         catch (OperationCanceledException)
         {
-            await RunStoreAsync(store => store.MarkCancelledAsync(jobId, NowUnixMs(), CancellationToken.None), jobId, "mark cancelled").ConfigureAwait(false);
+            await RunStoreAsync(store => store.MarkCancelledAsync(jobId, NowUnixMs(), CancellationToken.None), jobId, "mark cancelled");
             PushStatus(jobId, ImageJobStatus.Cancelled, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
             _logger.LogInformation("Operator cancelled image job {JobId} during generation.", jobId);
         }
@@ -352,7 +348,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             // Sanitized: never surface the raw message (it may carry internal/model detail) and never log the prompt.
             const string sanitizedError = "Image generation failed.";
-            await RunStoreAsync(store => store.MarkFailedAsync(jobId, sanitizedError, NowUnixMs(), CancellationToken.None), jobId, "mark failed").ConfigureAwait(false);
+            await RunStoreAsync(store => store.MarkFailedAsync(jobId, sanitizedError, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
             PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: sanitizedError, ImageJobProgressDetail.None, isMilestone: true);
             _logger.LogWarning(exception, "Image job {JobId} failed during generation.", jobId);
         }
@@ -438,8 +434,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                        Sampler = input.Sampler ?? string.Empty,
                        CfgScale = input.CfgScale,
                        CreatedAtUtc = createdAtUtc
-                   }, cancellationToken)
-                   .ConfigureAwait(false);
+                   }, cancellationToken);
     }
 
     // Runs a persistence action in a fresh scope, swallowing failures with a warning so a detached run task never faults
@@ -450,7 +445,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
-            await action(store).ConfigureAwait(false);
+            await action(store);
         }
         catch (Exception exception)
         {
@@ -538,7 +533,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         try
         {
             // Explicitly not propagating: this is a fire-and-forget status push with no caller left to cancel it.
-            await _eventPublisher.PublishStatusAsync(payload, CancellationToken.None).ConfigureAwait(false);
+            await _eventPublisher.PublishStatusAsync(payload, CancellationToken.None);
         }
         catch (Exception exception)
         {

@@ -35,8 +35,8 @@ public sealed partial class BenchmarkStore
         BenchmarkComparisonSuccessCommand? success,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var work = await _dbContext.BenchmarkWorkItems.SingleOrDefaultAsync(entity => entity.QueueSequence == queueSequence, cancellationToken).ConfigureAwait(false)
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var work = await _dbContext.BenchmarkWorkItems.SingleOrDefaultAsync(entity => entity.QueueSequence == queueSequence, cancellationToken)
                    ?? throw new BenchmarkNotFoundException("Benchmark work item was not found.");
         if (work.Kind != BenchmarkWorkKind.Comparison)
         {
@@ -46,7 +46,7 @@ public sealed partial class BenchmarkStore
         EnsureVersion(work.Version, expectedWorkVersion);
         var now = Now();
         TerminalizeWork(work, workStatus, errorMessage, now);
-        var comparison = await TerminalizeComparisonAsync(work.ComparisonId, comparisonStatus, errorMessage, now, cancellationToken).ConfigureAwait(false);
+        var comparison = await TerminalizeComparisonAsync(work.ComparisonId, comparisonStatus, errorMessage, now, cancellationToken);
         if (comparison is not null && success is not null)
         {
             comparison.Verdict = success.Verdict;
@@ -59,13 +59,12 @@ public sealed partial class BenchmarkStore
             // an unclaimed reference key refuses every fit over the cohort as execution-identity-incomplete.
             if (comparison.JudgeExecutionKey is { Length: > 0 } executionKey)
             {
-                _ = await TryPromoteReferenceExecutionKeyAsync(comparison.PolicyRevisionId, comparison.CohortGeneration, executionKey, cancellationToken)
-                    .ConfigureAwait(false);
+                _ = await TryPromoteReferenceExecutionKeyAsync(comparison.PolicyRevisionId, comparison.CohortGeneration, executionKey, cancellationToken);
             }
         }
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<BenchmarkPairwiseCohortState> GetPairwiseCohortAsync(Guid projectId, CancellationToken cancellationToken = default)
@@ -78,7 +77,6 @@ public sealed partial class BenchmarkStore
                                           entity.CurrentJudgePolicyRevisionId
                                       })
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
-                                      .ConfigureAwait(false)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
         if (project.CurrentJudgePolicyRevisionId is not { } revisionId)
         {
@@ -93,8 +91,7 @@ public sealed partial class BenchmarkStore
                                            entity.ComparisonSetVersion,
                                            entity.ReferenceExecutionKey
                                        })
-                                       .SingleAsync(entity => entity.Id == revisionId, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleAsync(entity => entity.Id == revisionId, cancellationToken);
 
         // Flat columns only: eligibility is decided from the stop reason through the SHARED predicates, which are C#
         // and are therefore applied after the read rather than translated into a second, drifting copy of the rule.
@@ -110,8 +107,7 @@ public sealed partial class BenchmarkStore
                                        entity.Id,
                                        entity.PrimaryStopReason
                                    })
-                                   .ToArrayAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToArrayAsync(cancellationToken);
         var candidates = runs.Where(static run => !BenchmarkPrimaryStopReasons.IsTruncated(run.PrimaryStopReason)
                                                   && !BenchmarkPrimaryStopReasons.IsIncomplete(run.PrimaryStopReason))
                              .Select(static run => new BenchmarkPairwiseCandidate(run.Id, TaskCaseId: null, TaskInputHash: string.Empty))
@@ -120,8 +116,7 @@ public sealed partial class BenchmarkStore
                                                              .Where(entity => entity.PolicyRevisionId == revisionId
                                                                               && entity.CohortGeneration == revision.CohortGeneration)
                                                              .OrderBy(entity => entity.Sequence))
-                                .ToArrayAsync(cancellationToken)
-                                .ConfigureAwait(false);
+                                .ToArrayAsync(cancellationToken);
         return new BenchmarkPairwiseCohortState(revision.Id,
             revision.CohortGeneration,
             revision.ComparisonSetVersion,
@@ -143,14 +138,14 @@ public sealed partial class BenchmarkStore
             return 0;
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         if (project.CurrentJudgePolicyRevisionId is not { } revisionId)
         {
             return 0;
         }
 
-        var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken).ConfigureAwait(false);
+        var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken);
         var existing = await _dbContext.BenchmarkComparisons.AsNoTracking()
                                        .Where(entity => entity.PolicyRevisionId == revisionId && entity.CohortGeneration == revision.CohortGeneration)
                                        .Select(entity => new
@@ -162,8 +157,7 @@ public sealed partial class BenchmarkStore
                                            entity.Sequence,
                                            entity.AttemptSequence
                                        })
-                                       .ToArrayAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToArrayAsync(cancellationToken);
 
         // A slot is taken while it holds a live-or-succeeded comparison. A terminal FAILED one leaves it free, which
         // is the whole reason the live-slot uniqueness index is filtered on status: a cancelled comparison must be
@@ -242,7 +236,7 @@ public sealed partial class BenchmarkStore
         revision.ComparisonSetVersion = checked(revision.ComparisonSetVersion + 1);
         try
         {
-            await SaveAsync(cancellationToken).ConfigureAwait(false);
+            await SaveAsync(cancellationToken);
         }
         catch (BenchmarkConflictException conflict) when (string.Equals(conflict.Code, "DuplicateWork", StringComparison.Ordinal))
         {
@@ -252,15 +246,14 @@ public sealed partial class BenchmarkStore
             return 0;
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return created;
     }
 
     public async Task<BenchmarkComparisonRecord?> GetComparisonAsync(Guid comparisonId, CancellationToken cancellationToken = default)
     {
         var comparison = await _dbContext.BenchmarkComparisons.AsNoTracking()
-                                         .SingleOrDefaultAsync(entity => entity.Id == comparisonId, cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .SingleOrDefaultAsync(entity => entity.Id == comparisonId, cancellationToken);
         return comparison is null ? null : ToRecord(comparison, CopyOptional(comparison.JudgeRuntimeJson));
     }
 
@@ -272,10 +265,9 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var work = await _dbContext.BenchmarkWorkItems.AsNoTracking()
-                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken);
         if (work is null
             || work.Kind != BenchmarkWorkKind.Comparison
             || work.ComparisonId != comparisonId
@@ -285,7 +277,7 @@ public sealed partial class BenchmarkStore
             return false;
         }
 
-        var comparison = await RequireComparisonAsync(comparisonId, cancellationToken).ConfigureAwait(false);
+        var comparison = await RequireComparisonAsync(comparisonId, cancellationToken);
         if (comparison.LaunchReceiptJson is not null || comparison.EnvironmentFactsJson is not null)
         {
             return false;
@@ -306,21 +298,20 @@ public sealed partial class BenchmarkStore
         // Same posture as the judge attempt: NULL stays NULL. An execution this node cannot fully describe never
         // joins a cohort, and a fit over one mismatched comparison is refused whole rather than quietly trimmed.
         comparison.JudgeExecutionKey = judgeExecutionKey;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
     public async Task<bool> PublishPairwiseFitAsync(BenchmarkPairwiseFitCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var scope = await _dbContext.BenchmarkPairwiseFits
                                     .Where(entity => entity.PolicyRevisionId == command.PolicyRevisionId
                                                      && entity.CohortGeneration == command.CohortGeneration
                                                      && entity.IsActive)
-                                    .ToListAsync(cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ToListAsync(cancellationToken);
         foreach (var previous in scope.Where(entity => entity.TaskCaseId == command.TaskCaseId))
         {
             previous.IsActive = false;
@@ -347,7 +338,7 @@ public sealed partial class BenchmarkStore
         });
         try
         {
-            await SaveAsync(cancellationToken).ConfigureAwait(false);
+            await SaveAsync(cancellationToken);
         }
         catch (BenchmarkConflictException conflict) when (string.Equals(conflict.Code, "DuplicateWork", StringComparison.Ordinal))
         {
@@ -357,7 +348,7 @@ public sealed partial class BenchmarkStore
             return false;
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
@@ -366,8 +357,7 @@ public sealed partial class BenchmarkStore
         var revisionId = await _dbContext.BenchmarkProjects.AsNoTracking()
                                          .Where(entity => entity.Id == projectId)
                                          .Select(entity => entity.CurrentJudgePolicyRevisionId)
-                                         .SingleOrDefaultAsync(cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .SingleOrDefaultAsync(cancellationToken);
         if (revisionId is not { } currentRevisionId)
         {
             return null;
@@ -376,9 +366,8 @@ public sealed partial class BenchmarkStore
         var generation = await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking()
                                          .Where(entity => entity.Id == currentRevisionId)
                                          .Select(entity => entity.CohortGeneration)
-                                         .SingleAsync(cancellationToken)
-                                         .ConfigureAwait(false);
-        return await ActiveFitAsync(currentRevisionId, generation, cancellationToken).ConfigureAwait(false);
+                                         .SingleAsync(cancellationToken);
+        return await ActiveFitAsync(currentRevisionId, generation, cancellationToken);
     }
 
     /// <summary>
@@ -389,8 +378,7 @@ public sealed partial class BenchmarkStore
     {
         var fits = await _dbContext.BenchmarkPairwiseFits.AsNoTracking()
                                    .Where(entity => entity.PolicyRevisionId == revisionId && entity.CohortGeneration == generation && entity.IsActive)
-                                   .ToArrayAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToArrayAsync(cancellationToken);
         var fit = Array.Find(fits, static entity => entity.TaskCaseId is null);
         return fit is null
             ? null
@@ -417,8 +405,7 @@ public sealed partial class BenchmarkStore
                       && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
                       && attempt.StartedAtUtc != null
                       && attempt.CompletedAtUtc != null
-                select attempt.CompletedAtUtc!.Value - attempt.StartedAtUtc!.Value).ToArrayAsync(cancellationToken)
-                                                                                   .ConfigureAwait(false);
+                select attempt.CompletedAtUtc!.Value - attempt.StartedAtUtc!.Value).ToArrayAsync(cancellationToken);
         if (durations.Length == 0)
         {
             return null;
@@ -434,8 +421,7 @@ public sealed partial class BenchmarkStore
         await _dbContext.BenchmarkProjects.AsNoTracking()
                         .Where(entity => entity.CurrentJudgePolicyRevisionId != null)
                         .Select(entity => entity.Id)
-                        .ToArrayAsync(cancellationToken)
-                        .ConfigureAwait(false);
+                        .ToArrayAsync(cancellationToken);
 
     /// <summary>
     ///     Comparison rows WITHOUT the encrypted judge runtime: a verdict matrix must not decrypt one payload per row.

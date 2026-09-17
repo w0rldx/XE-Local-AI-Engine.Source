@@ -43,7 +43,7 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         };
 
         _ = _dbContext.TrainingDatasetDefinitions.Add(entity);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         return ToRecord(entity);
     }
 
@@ -55,8 +55,8 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         ArgumentNullException.ThrowIfNull(input);
         EnsureName(input.Name);
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var entity = await RequireDefinitionAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var entity = await RequireDefinitionAsync(definitionId, cancellationToken);
         EnsureVersion(entity.Version, expectedVersion);
 
         entity.Name = input.Name.Trim();
@@ -66,16 +66,15 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         entity.DefinitionVersion++;
         entity.Version++;
         entity.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(entity);
     }
 
     public async Task<TrainingDefinitionRecord?> GetDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.TrainingDatasetDefinitions.AsNoTracking()
-                                     .FirstOrDefaultAsync(item => item.Id == definitionId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(item => item.Id == definitionId, cancellationToken);
         return entity is null ? null : ToRecord(entity);
     }
 
@@ -83,24 +82,23 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
     {
         var entities = await _dbContext.TrainingDatasetDefinitions.AsNoTracking()
                                        .OrderBy(item => item.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return entities.Select(ToRecord).ToArray();
     }
 
     public async Task DeleteDefinitionAsync(Guid definitionId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var entity = await RequireDefinitionAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var entity = await RequireDefinitionAsync(definitionId, cancellationToken);
         EnsureVersion(entity.Version, expectedVersion);
-        if (await _dbContext.TrainingDatasets.AnyAsync(item => item.DefinitionId == definitionId, cancellationToken).ConfigureAwait(false))
+        if (await _dbContext.TrainingDatasets.AnyAsync(item => item.DefinitionId == definitionId, cancellationToken))
         {
             throw new TrainingConflictException("DefinitionReferenced");
         }
 
         _ = _dbContext.TrainingDatasetDefinitions.Remove(entity);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<TrainingDatasetRecord> CreateDatasetAndEnqueueAsync(TrainingDatasetEnqueueCommand command, CancellationToken cancellationToken = default)
@@ -108,8 +106,8 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         ArgumentNullException.ThrowIfNull(command);
         EnsureName(command.Name);
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var definition = await RequireDefinitionAsync(command.DefinitionId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var definition = await RequireDefinitionAsync(command.DefinitionId, cancellationToken);
         EnsureVersion(definition.Version, command.ExpectedDefinitionVersion);
 
         var now = Now();
@@ -139,24 +137,22 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             EnqueuedAtUtc = now
         });
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(dataset, DatasetGenerationWorkStatus.Queued, workErrorMessage: null);
     }
 
     public async Task<TrainingDatasetRecord?> GetDatasetAsync(Guid datasetId, CancellationToken cancellationToken = default)
     {
         var dataset = await _dbContext.TrainingDatasets.AsNoTracking()
-                                      .FirstOrDefaultAsync(item => item.Id == datasetId, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .FirstOrDefaultAsync(item => item.Id == datasetId, cancellationToken);
         if (dataset is null)
         {
             return null;
         }
 
         var work = await _dbContext.DatasetGenerationWorkItems.AsNoTracking()
-                                   .FirstOrDefaultAsync(item => item.DatasetId == datasetId, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .FirstOrDefaultAsync(item => item.DatasetId == datasetId, cancellationToken);
         return ToRecord(dataset, work?.Status, work?.ErrorMessage);
     }
 
@@ -164,11 +160,9 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
     {
         var datasets = await _dbContext.TrainingDatasets.AsNoTracking()
                                        .OrderByDescending(item => item.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         var work = await _dbContext.DatasetGenerationWorkItems.AsNoTracking()
-                                   .ToDictionaryAsync(item => item.DatasetId, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToDictionaryAsync(item => item.DatasetId, cancellationToken);
         return datasets.Select(dataset => ToRecord(dataset,
                            work.TryGetValue(dataset.Id, out var item) ? item.Status : null,
                            work.TryGetValue(dataset.Id, out var found) ? found.ErrorMessage : null))
@@ -177,14 +171,13 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
 
     public async Task DeleteDatasetAsync(Guid datasetId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var dataset = await RequireDatasetAsync(datasetId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var dataset = await RequireDatasetAsync(datasetId, tracking: true, cancellationToken);
         EnsureVersion(dataset.Version, expectedVersion);
         if (await _dbContext.DatasetGenerationWorkItems
                             .AnyAsync(item => item.DatasetId == datasetId
                                               && (item.Status == DatasetGenerationWorkStatus.Queued || item.Status == DatasetGenerationWorkStatus.Running),
-                                cancellationToken)
-                            .ConfigureAwait(false))
+                                cancellationToken))
         {
             throw new TrainingConflictException("GenerationActive");
         }
@@ -192,27 +185,27 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         // A run froze its own copy of this dataset, but its FreezeJson still names the dataset it came from. Deleting
         // the dataset out from under a run would leave that lineage pointing at nothing, so it is refused for as long
         // as any run — including a finished one — references it.
-        if (await _dbContext.TrainingRuns.AnyAsync(item => item.DatasetId == datasetId, cancellationToken).ConfigureAwait(false))
+        if (await _dbContext.TrainingRuns.AnyAsync(item => item.DatasetId == datasetId, cancellationToken))
         {
             throw new TrainingConflictException("DatasetReferenced");
         }
 
         // Explicit ordered deletes: the node connection never sets PRAGMA foreign_keys=ON, so the declared cascade on
         // training_dataset_samples never fires. Children first, then the work item, then the dataset itself.
-        _ = await _dbContext.TrainingDatasetSamples.Where(item => item.DatasetId == datasetId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        _ = await _dbContext.DatasetGenerationWorkItems.Where(item => item.DatasetId == datasetId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.TrainingDatasetSamples.Where(item => item.DatasetId == datasetId).ExecuteDeleteAsync(cancellationToken);
+        _ = await _dbContext.DatasetGenerationWorkItems.Where(item => item.DatasetId == datasetId).ExecuteDeleteAsync(cancellationToken);
         // ExecuteDelete bypasses the tracker; clearing it stops EF reading the removed children as a severed required
         // association when the parent row is deleted (the benchmark run-delete precedent).
         _dbContext.ChangeTracker.Clear();
-        _ = await _dbContext.TrainingDatasets.Where(item => item.Id == datasetId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.TrainingDatasets.Where(item => item.Id == datasetId).ExecuteDeleteAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<DatasetGenerationClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {
         while (true)
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
             var candidate = await _dbContext.DatasetGenerationWorkItems.AsNoTracking()
                                             .Where(item => item.Status == DatasetGenerationWorkStatus.Queued)
                                             .OrderBy(item => item.QueueSequence)
@@ -221,8 +214,7 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
                                                 item.QueueSequence,
                                                 item.Version
                                             })
-                                            .FirstOrDefaultAsync(cancellationToken)
-                                            .ConfigureAwait(false);
+                                            .FirstOrDefaultAsync(cancellationToken);
             if (candidate is null)
             {
                 return null;
@@ -238,8 +230,7 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
                                                                          .SetProperty(item => item.Status, DatasetGenerationWorkStatus.Running)
                                                                          .SetProperty(item => item.StartedAtUtc, now)
                                                                          .SetProperty(item => item.Version, nextVersion),
-                                              cancellationToken)
-                                          .ConfigureAwait(false);
+                                              cancellationToken);
             if (claimed == 0)
             {
                 // Another consumer won the compare-and-swap; retry against the next queued row.
@@ -248,10 +239,9 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
 
             _dbContext.ChangeTracker.Clear();
             var work = await _dbContext.DatasetGenerationWorkItems.AsNoTracking()
-                                       .SingleAsync(item => item.QueueSequence == candidate.QueueSequence, cancellationToken)
-                                       .ConfigureAwait(false);
-            var dataset = await RequireDatasetAsync(work.DatasetId, tracking: false, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                                       .SingleAsync(item => item.QueueSequence == candidate.QueueSequence, cancellationToken);
+            var dataset = await RequireDatasetAsync(work.DatasetId, tracking: false, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return new DatasetGenerationClaimedWork(work.QueueSequence,
                 work.DatasetId,
                 work.Version,
@@ -261,17 +251,16 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
 
     public async Task<IReadOnlyList<Guid>> RecoverOnStartupAsync(CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var interrupted = await _dbContext.DatasetGenerationWorkItems
                                           .Where(item => item.Status == DatasetGenerationWorkStatus.Running)
-                                          .ToListAsync(cancellationToken)
-                                          .ConfigureAwait(false);
+                                          .ToListAsync(cancellationToken);
         var now = Now();
         var recovered = new List<Guid>(interrupted.Count);
         foreach (var work in interrupted)
         {
             TerminalizeWork(work, DatasetGenerationWorkStatus.Failed, "Dataset generation was interrupted by a host restart.", now);
-            var dataset = await RequireDatasetAsync(work.DatasetId, tracking: true, cancellationToken).ConfigureAwait(false);
+            var dataset = await RequireDatasetAsync(work.DatasetId, tracking: true, cancellationToken);
             if (dataset.Status == TrainingDatasetStatus.Generating)
             {
                 dataset.Status = TrainingDatasetStatus.Failed;
@@ -282,8 +271,8 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             recovered.Add(work.DatasetId);
         }
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return recovered;
     }
 
@@ -297,9 +286,9 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             throw new TrainingValidationException("Dataset generation can only be completed into a terminal status.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var dataset = await RequireDatasetAsync(datasetId, tracking: true, cancellationToken).ConfigureAwait(false);
-        var work = await RequireWorkAsync(datasetId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var dataset = await RequireDatasetAsync(datasetId, tracking: true, cancellationToken);
+        var work = await RequireWorkAsync(datasetId, cancellationToken);
         var now = Now();
         if (IsTerminal(work.Status))
         {
@@ -311,13 +300,13 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         dataset.Status = status == DatasetGenerationWorkStatus.Succeeded ? TrainingDatasetStatus.Ready : TrainingDatasetStatus.Failed;
         if (status == DatasetGenerationWorkStatus.Succeeded)
         {
-            dataset.ContentFingerprint = await ComputeFingerprintAsync(datasetId, cancellationToken).ConfigureAwait(false);
+            dataset.ContentFingerprint = await ComputeFingerprintAsync(datasetId, cancellationToken);
         }
 
         dataset.Version++;
         dataset.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(dataset, work.Status, work.ErrorMessage);
     }
 
@@ -329,26 +318,24 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             throw new TrainingValidationException("A training sample requires a source hash.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var dataset = await RequireDatasetAsync(input.DatasetId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var dataset = await RequireDatasetAsync(input.DatasetId, tracking: true, cancellationToken);
         var now = Now();
         if (await _dbContext.TrainingDatasetSamples
-                            .AnyAsync(item => item.DatasetId == input.DatasetId && item.SourceHash == input.SourceHash, cancellationToken)
-                            .ConfigureAwait(false))
+                            .AnyAsync(item => item.DatasetId == input.DatasetId && item.SourceHash == input.SourceHash, cancellationToken))
         {
             dataset.DuplicateSampleCount++;
             dataset.Version++;
             dataset.UpdatedAtUtc = now;
-            await SaveAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await SaveAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return new TrainingSampleAppendResult(Sample: null, Duplicate: true);
         }
 
         var nextSequence = await _dbContext.TrainingDatasetSamples
                                            .Where(item => item.DatasetId == input.DatasetId)
                                            .Select(item => (int?)item.Sequence)
-                                           .MaxAsync(cancellationToken)
-                                           .ConfigureAwait(false) ?? -1;
+                                           .MaxAsync(cancellationToken) ?? -1;
         var sample = new TrainingDatasetSample
         {
             Id = Guid.NewGuid(),
@@ -381,18 +368,18 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         dataset.Revision++;
         dataset.Version++;
         dataset.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new TrainingSampleAppendResult(ToRecord(sample), Duplicate: false);
     }
 
     public async Task RecordRejectedSampleAsync(Guid datasetId, CancellationToken cancellationToken = default)
     {
-        var dataset = await RequireDatasetAsync(datasetId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var dataset = await RequireDatasetAsync(datasetId, tracking: true, cancellationToken);
         dataset.RejectedSampleCount++;
         dataset.Version++;
         dataset.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
     }
 
     public async Task<TrainingSamplePage> ListSamplesAsync(TrainingSampleQuery query, CancellationToken cancellationToken = default)
@@ -419,12 +406,11 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             filtered = filtered.Where(item => item.Kind == query.Kind);
         }
 
-        var total = await filtered.CountAsync(cancellationToken).ConfigureAwait(false);
+        var total = await filtered.CountAsync(cancellationToken);
         var items = await filtered.OrderBy(item => item.Sequence)
                                   .Skip((query.Page - 1) * query.PageSize)
                                   .Take(query.PageSize)
-                                  .ToListAsync(cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .ToListAsync(cancellationToken);
         return new TrainingSamplePage(items.Select(ToRecord).ToArray(), total);
     }
 
@@ -433,8 +419,7 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         var items = await _dbContext.TrainingDatasetSamples.AsNoTracking()
                                     .Where(item => item.DatasetId == datasetId)
                                     .OrderBy(item => item.Sequence)
-                                    .ToListAsync(cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ToListAsync(cancellationToken);
         return items.Select(ToRecord).ToArray();
     }
 
@@ -446,12 +431,11 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             throw new TrainingValidationException("A relabel review requires the target label.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var sample = await _dbContext.TrainingDatasetSamples
                                      .FirstOrDefaultAsync(item => item.Id == command.SampleId, cancellationToken)
-                                     .ConfigureAwait(false)
                      ?? throw new TrainingNotFoundException("The training sample was not found.");
-        var dataset = await RequireDatasetAsync(sample.DatasetId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var dataset = await RequireDatasetAsync(sample.DatasetId, tracking: true, cancellationToken);
         if (dataset.Status == TrainingDatasetStatus.Generating)
         {
             throw new TrainingConflictException("GenerationActive");
@@ -480,10 +464,10 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         dataset.Revision++;
         dataset.Version++;
         dataset.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        dataset.ContentFingerprint = await ComputeFingerprintAsync(dataset.Id, cancellationToken).ConfigureAwait(false);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        dataset.ContentFingerprint = await ComputeFingerprintAsync(dataset.Id, cancellationToken);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(sample);
     }
 
@@ -506,7 +490,7 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
             UpdatedAtUtc = now
         };
         _ = _dbContext.ToolMockDefinitions.Add(entity);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         return ToRecord(entity);
     }
 
@@ -515,8 +499,8 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         ArgumentNullException.ThrowIfNull(input);
         EnsureName(input.ToolName);
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var entity = await RequireMockAsync(mockId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var entity = await RequireMockAsync(mockId, cancellationToken);
         EnsureVersion(entity.Version, expectedVersion);
         entity.ToolName = input.ToolName.Trim();
         entity.MockJson = input.MockJson.ToArray();
@@ -526,16 +510,15 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         entity.VerificationJson = null;
         entity.Version++;
         entity.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(entity);
     }
 
     public async Task<ToolMockRecord?> GetMockAsync(Guid mockId, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.ToolMockDefinitions.AsNoTracking()
-                                     .FirstOrDefaultAsync(item => item.Id == mockId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(item => item.Id == mockId, cancellationToken);
         return entity is null ? null : ToRecord(entity);
     }
 
@@ -544,8 +527,7 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         var entities = await _dbContext.ToolMockDefinitions.AsNoTracking()
                                        .OrderBy(item => item.ToolName)
                                        .ThenBy(item => item.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return entities.Select(ToRecord).ToArray();
     }
 
@@ -557,17 +539,16 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
                                                       && item.Enabled
                                                       && item.VerificationState == ToolMockVerificationState.Verified)
                                        .OrderBy(item => item.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return entities.Select(ToRecord).ToArray();
     }
 
     public async Task DeleteMockAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        var entity = await RequireMockAsync(mockId, cancellationToken).ConfigureAwait(false);
+        var entity = await RequireMockAsync(mockId, cancellationToken);
         EnsureVersion(entity.Version, expectedVersion);
         _ = _dbContext.ToolMockDefinitions.Remove(entity);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
     }
 
     public async Task<ToolMockRecord> SetMockVerificationAsync(Guid mockId,
@@ -576,8 +557,8 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         ReadOnlyMemory<byte> verificationJson,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var entity = await RequireMockAsync(mockId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var entity = await RequireMockAsync(mockId, cancellationToken);
         EnsureVersion(entity.Version, expectedVersion);
         entity.VerificationState = state;
         entity.VerificationJson = verificationJson.ToArray();
@@ -590,8 +571,8 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
 
         entity.Version++;
         entity.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(entity);
     }
 
@@ -605,8 +586,7 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         var samples = await _dbContext.TrainingDatasetSamples.AsNoTracking()
                                       .Where(item => item.DatasetId == datasetId)
                                       .OrderBy(item => item.Sequence)
-                                      .ToListAsync(cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .ToListAsync(cancellationToken);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var sample in samples)
         {
@@ -656,22 +636,22 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
         status is DatasetGenerationWorkStatus.Succeeded or DatasetGenerationWorkStatus.Failed or DatasetGenerationWorkStatus.Cancelled;
 
     private async Task<TrainingDatasetDefinition> RequireDefinitionAsync(Guid definitionId, CancellationToken cancellationToken) =>
-        await _dbContext.TrainingDatasetDefinitions.FirstOrDefaultAsync(item => item.Id == definitionId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.TrainingDatasetDefinitions.FirstOrDefaultAsync(item => item.Id == definitionId, cancellationToken)
         ?? throw new TrainingNotFoundException("The training dataset definition was not found.");
 
     private async Task<TrainingDataset> RequireDatasetAsync(Guid datasetId, bool tracking, CancellationToken cancellationToken)
     {
         var query = tracking ? _dbContext.TrainingDatasets : _dbContext.TrainingDatasets.AsNoTracking();
-        return await query.FirstOrDefaultAsync(item => item.Id == datasetId, cancellationToken).ConfigureAwait(false)
+        return await query.FirstOrDefaultAsync(item => item.Id == datasetId, cancellationToken)
                ?? throw new TrainingNotFoundException("The training dataset was not found.");
     }
 
     private async Task<DatasetGenerationWorkItem> RequireWorkAsync(Guid datasetId, CancellationToken cancellationToken) =>
-        await _dbContext.DatasetGenerationWorkItems.FirstOrDefaultAsync(item => item.DatasetId == datasetId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.DatasetGenerationWorkItems.FirstOrDefaultAsync(item => item.DatasetId == datasetId, cancellationToken)
         ?? throw new TrainingNotFoundException("The dataset generation work item was not found.");
 
     private async Task<ToolMockDefinition> RequireMockAsync(Guid mockId, CancellationToken cancellationToken) =>
-        await _dbContext.ToolMockDefinitions.FirstOrDefaultAsync(item => item.Id == mockId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.ToolMockDefinitions.FirstOrDefaultAsync(item => item.Id == mockId, cancellationToken)
         ?? throw new TrainingNotFoundException("The tool mock was not found.");
 
     private static void EnsureVersion(long actual, long expected)
@@ -694,7 +674,7 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
     {
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {

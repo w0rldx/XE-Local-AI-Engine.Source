@@ -21,8 +21,8 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
         await RecordAsync(nameof(SendPurgeConversationAsync), new
         {
             conversationId
-        }, cancellationToken).ConfigureAwait(false);
-        await _inner.SendPurgeConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
+        await _inner.SendPurgeConversationAsync(conversationId, cancellationToken);
     }
 
     public async Task SendInvocationKeyMismatchAsync(Guid messageId, string reason, string nodeKeyIdUsed, CancellationToken cancellationToken = default)
@@ -32,8 +32,8 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
             messageId,
             reason,
             nodeKeyIdUsed
-        }, cancellationToken).ConfigureAwait(false);
-        await _inner.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
+        await _inner.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed, cancellationToken);
     }
 
     public async Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default)
@@ -41,29 +41,29 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
         await RecordAsync(nameof(SendInvocationAcceptedAsync), new
         {
             invocationId
-        }, cancellationToken).ConfigureAwait(false);
-        await _inner.SendInvocationAcceptedAsync(invocationId, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
+        await _inner.SendInvocationAcceptedAsync(invocationId, cancellationToken);
     }
 
     public async Task SendEncryptedChunkAsync(EncryptedChunkEnvelopeV1 payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        await RecordAsync(nameof(SendEncryptedChunkAsync), payload, cancellationToken).ConfigureAwait(false);
-        await _inner.SendEncryptedChunkAsync(payload, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendEncryptedChunkAsync), payload, cancellationToken);
+        await _inner.SendEncryptedChunkAsync(payload, cancellationToken);
     }
 
     public async Task SendEncryptedCompletedAsync(EncryptedCompletedEnvelopeV1 payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        await RecordAsync(nameof(SendEncryptedCompletedAsync), payload, cancellationToken).ConfigureAwait(false);
-        await _inner.SendEncryptedCompletedAsync(payload, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendEncryptedCompletedAsync), payload, cancellationToken);
+        await _inner.SendEncryptedCompletedAsync(payload, cancellationToken);
     }
 
     public async Task SendEncryptedFailedAsync(EncryptedFailedEnvelopeV1 payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        await RecordAsync(nameof(SendEncryptedFailedAsync), payload, cancellationToken).ConfigureAwait(false);
-        await _inner.SendEncryptedFailedAsync(payload, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendEncryptedFailedAsync), payload, cancellationToken);
+        await _inner.SendEncryptedFailedAsync(payload, cancellationToken);
     }
 
     public async Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
@@ -74,8 +74,8 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
             token,
             isComplete,
             sourceSequence
-        }, cancellationToken).ConfigureAwait(false);
-        await _inner.SendTokenStreamChunkAsync(invocationId, token, isComplete, sourceSequence, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
+        await _inner.SendTokenStreamChunkAsync(invocationId, token, isComplete, sourceSequence, cancellationToken);
     }
 
     public async Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
@@ -86,36 +86,36 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
             token,
             isComplete,
             sourceSequence
-        }, cancellationToken).ConfigureAwait(false);
-        await _inner.SendReasoningStreamChunkAsync(invocationId, token, isComplete, sourceSequence, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
+        await _inner.SendReasoningStreamChunkAsync(invocationId, token, isComplete, sourceSequence, cancellationToken);
     }
 
     public async Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        await RecordAsync(nameof(SendToolCallRequestAsync), payload, cancellationToken).ConfigureAwait(false);
-        await _inner.SendToolCallRequestAsync(payload, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendToolCallRequestAsync), payload, cancellationToken);
+        await _inner.SendToolCallRequestAsync(payload, cancellationToken);
     }
 
     public async Task SendApprovalRequestAsync(ApprovalRequestPayload payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        await RecordAsync(nameof(SendApprovalRequestAsync), payload, cancellationToken).ConfigureAwait(false);
-        await _inner.SendApprovalRequestAsync(payload, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendApprovalRequestAsync), payload, cancellationToken);
+        await _inner.SendApprovalRequestAsync(payload, cancellationToken);
     }
 
     public async Task SendInvocationCompletedAsync(InvocationCompletedPayload payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        await RecordAsync(nameof(SendInvocationCompletedAsync), payload, cancellationToken).ConfigureAwait(false);
-        await _inner.SendInvocationCompletedAsync(payload, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendInvocationCompletedAsync), payload, cancellationToken);
+        await _inner.SendInvocationCompletedAsync(payload, cancellationToken);
     }
 
     public async Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        await RecordAsync(nameof(SendInvocationFailedAsync), payload, cancellationToken).ConfigureAwait(false);
-        await _inner.SendInvocationFailedAsync(payload, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendInvocationFailedAsync), payload, cancellationToken);
+        await _inner.SendInvocationFailedAsync(payload, cancellationToken);
     }
 
     private Task RecordAsync(string method, object? payload, CancellationToken cancellationToken)

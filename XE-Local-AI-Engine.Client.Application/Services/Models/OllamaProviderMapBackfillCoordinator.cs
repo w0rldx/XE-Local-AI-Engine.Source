@@ -19,7 +19,7 @@ public sealed class OllamaProviderMapBackfillCoordinator(
 
     public async Task<int> BackfillAsync(CancellationToken cancellationToken = default)
     {
-        var installedModelNames = await ListInstalledNamesAsync(cancellationToken).ConfigureAwait(false);
+        var installedModelNames = await ListInstalledNamesAsync(cancellationToken);
         var mapped = 0;
         foreach (var modelName in installedModelNames)
         {
@@ -27,15 +27,15 @@ public sealed class OllamaProviderMapBackfillCoordinator(
             {
                 await using var lease = await _leaseCoordinator.AcquireMapMutationAsync(modelName,
                     ModelProviderMapMutationKind.Backfill,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
 
-                var currentInventory = await ListInstalledNamesAsync(cancellationToken).ConfigureAwait(false);
+                var currentInventory = await ListInstalledNamesAsync(cancellationToken);
                 if (!currentInventory.Contains(modelName, StringComparer.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
-                var existing = await _mapStore.ReadWithRevisionAsync(lease, modelName, cancellationToken).ConfigureAwait(false);
+                var existing = await _mapStore.ReadWithRevisionAsync(lease, modelName, cancellationToken);
                 if (existing is not null)
                 {
                     continue;
@@ -45,7 +45,7 @@ public sealed class OllamaProviderMapBackfillCoordinator(
                     modelName,
                     OllamaLocalModelProvider.OllamaProviderName,
                     expectedRevision: null,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
                 if (result is ProviderMapMutationResult.Mutated)
                 {
                     mapped++;
@@ -71,7 +71,7 @@ public sealed class OllamaProviderMapBackfillCoordinator(
 
     private async Task<IReadOnlyList<string>> ListInstalledNamesAsync(CancellationToken cancellationToken)
     {
-        var installed = await _ollamaModelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await _ollamaModelService.ListLocalModelsAsync(cancellationToken);
         return installed.Select(static model => model.Name)
                         .Where(static name => !string.IsNullOrWhiteSpace(name))
                         .Distinct(StringComparer.OrdinalIgnoreCase)

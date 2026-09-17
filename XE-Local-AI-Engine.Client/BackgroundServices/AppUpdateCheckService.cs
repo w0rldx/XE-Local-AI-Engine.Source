@@ -59,19 +59,19 @@ public sealed class AppUpdateCheckService : BackgroundService
         {
             if (_startupDelay > TimeSpan.Zero)
             {
-                await Task.Delay(_startupDelay, stoppingToken).ConfigureAwait(false);
+                await Task.Delay(_startupDelay, stoppingToken);
             }
 
             // The gate goes AFTER the startup delay so a node parked on an undecided profile is not also holding the
             // delay open, and BEFORE the one-shot check so CheckOnceAsync stays the pure check.
-            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken).ConfigureAwait(false);
-            if (!await _nodeRuntimeSettings.GetAutoCheckApplicationUpdatesAsync(stoppingToken).ConfigureAwait(false))
+            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken);
+            if (!await _nodeRuntimeSettings.GetAutoCheckApplicationUpdatesAsync(stoppingToken))
             {
                 _logger.LogDebug("The automatic application-update check is disabled by the node's external-access settings.");
                 return;
             }
 
-            await CheckOnceAsync(stoppingToken).ConfigureAwait(false);
+            await CheckOnceAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -84,8 +84,7 @@ public sealed class AppUpdateCheckService : BackgroundService
     {
         try
         {
-            await _appUpdateService.RefreshIfStaleAsync(DefaultMinimumCheckInterval, cancellationToken)
-                                   .ConfigureAwait(false);
+            await _appUpdateService.RefreshIfStaleAsync(DefaultMinimumCheckInterval, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

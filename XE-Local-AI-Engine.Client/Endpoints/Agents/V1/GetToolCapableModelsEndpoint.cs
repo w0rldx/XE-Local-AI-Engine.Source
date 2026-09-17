@@ -27,11 +27,11 @@ public sealed class GetToolCapableModelsEndpoint(INodeRuntimeSettings runtimeSet
         // Configuration list binding appends rather than replaces, so an env/appsettings entry that repeats a default
         // model id (the default is ["qwen3:8b"]) yields a duplicate in the bound list. Distinct it at the source so the
         // response is a clean set; the offer provider already dedupes via an Ordinal HashSet on the same setting.
-        var toolCapableModels = await _runtimeSettings.GetToolCapableModelsAsync(ct).ConfigureAwait(false);
+        var toolCapableModels = await _runtimeSettings.GetToolCapableModelsAsync(ct);
         await Send.OkAsync(new ToolCapableModelsResponse
             {
                 Models = [.. toolCapableModels.Distinct(StringComparer.Ordinal)]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

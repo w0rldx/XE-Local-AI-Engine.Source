@@ -19,11 +19,11 @@ public sealed class ListSkillsEndpoint(IAgentSkillService agentSkillService)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var records = await _agentSkillService.ListAsync(ct).ConfigureAwait(false);
+        var records = await _agentSkillService.ListAsync(ct);
         await Send.OkAsync(new ListSkillsResponse
             {
                 Items = [.. records.Select(static record => record.ToSummary())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

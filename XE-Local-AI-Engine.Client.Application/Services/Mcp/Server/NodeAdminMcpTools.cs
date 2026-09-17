@@ -79,7 +79,7 @@ public sealed partial class NodeAdminMcpTools(
 
             keyPrefix = inboundContext.KeyPrefix!;
             outcome = "faulted";
-            var result = await invoke().ConfigureAwait(false);
+            var result = await invoke();
             outcome = isRejected?.Invoke(result) == true ? "rejected" : "success";
             return result;
         }
@@ -240,8 +240,8 @@ public sealed partial class NodeAdminMcpTools(
         try
         {
             var record = id is null
-                ? await _agentDefinitionService.CreateAsync(input, cancellationToken).ConfigureAwait(false)
-                : await _agentDefinitionService.UpdateAsync(id.Value, input, cancellationToken).ConfigureAwait(false);
+                ? await _agentDefinitionService.CreateAsync(input, cancellationToken)
+                : await _agentDefinitionService.UpdateAsync(id.Value, input, cancellationToken);
             if (record is null)
             {
                 return AgentNotFound();

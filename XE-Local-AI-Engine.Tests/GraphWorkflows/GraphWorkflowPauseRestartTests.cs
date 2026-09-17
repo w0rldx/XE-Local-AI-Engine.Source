@@ -34,21 +34,21 @@ public sealed class GraphWorkflowPauseRestartTests
     public async Task ARunParkedOnAPause_SurvivesARestartAndStillRoutesItsAnswer()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
 
-        await RestartAsync(harness).ConfigureAwait(false);
+        await RestartAsync(harness);
 
-        var survived = await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false);
+        var survived = await harness.ReadNodeRunAsync(runId, "review");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval, survived.Status, "a durable human wait is not what a restart invalidates.");
         AssertEx.Equal<GraphWorkflowDecisionKind?>(GraphWorkflowDecisionKind.Approve, survived.PendingDecisionKind, "and it still says what it is waiting for.");
         AssertEx.Equal(expected: 1, survived.Attempt, "waiting is not an attempt a restart spends.");
-        AssertEx.Equal(GraphWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId)).Status);
 
-        _ = await harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(GraphWorkflowRunStatus.Completed,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "the answer given after the restart routes exactly as one given before it would have.");
     }
 
@@ -61,24 +61,23 @@ public sealed class GraphWorkflowPauseRestartTests
     public async Task CancellingARunThatIsWaiting_CancelsThePauseAndRefusesALaterAnswer()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.CancelAsync(runId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).Status);
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "review")).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
 
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() => harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() => harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve));
     }
 
     private static async Task<Guid> ParkedRunAsync(GraphWorkflowHarness harness)
     {
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval,
-            (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "review")).Status,
             "the run was expected to park on its pause.");
         return runId;
     }
@@ -89,8 +88,7 @@ public sealed class GraphWorkflowPauseRestartTests
         await new GraphWorkflowStartupReconciler(harness.Services.GetRequiredService<IServiceScopeFactory>(),
                   Options.Create(harness.CurrentOptions()),
                   harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
 
         _ = harness.CreateReplacementDispatcher();
     }

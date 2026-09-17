@@ -36,7 +36,7 @@ public sealed class PlaybookEvalServiceTests
         var judge = new FakePlaybookEvalJudge((_, text) => !text.Contains("candidate", StringComparison.Ordinal));
         var service = CreateService(agentId, actionId, [goldenCase], judge, out _, out var actionService);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.True(outcome.ActionFound);
         AssertEx.NotNull(outcome.Result, "A run with golden cases must produce a result.");
@@ -45,8 +45,7 @@ public sealed class PlaybookEvalServiceTests
         AssertEx.Equal(expected: 1, outcome.Result.GoldenCaseCount);
         AssertEx.Equal(expected: 1, outcome.Result.ActionVersionAtEval);
         await actionService.Received(1)
-                           .RecordEvalResultAsync(agentId, actionId, Arg.Any<string>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .RecordEvalResultAsync(agentId, actionId, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -60,7 +59,7 @@ public sealed class PlaybookEvalServiceTests
         var judge = new FakePlaybookEvalJudge((_, _) => true);
         var service = CreateService(agentId, actionId, [goldenCase], judge, out _, out _);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.True(outcome.ActionFound);
         AssertEx.True(outcome.Result!.Passed, "A clean candidate with no regressions must pass.");
@@ -86,7 +85,7 @@ public sealed class PlaybookEvalServiceTests
         var goldenCase = AssertionCase(agentId, assertion);
         var service = CreateService(agentId, actionId, [goldenCase], new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance), out _, out _);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.True(outcome.Result!.Passed);
         AssertEx.Equal("assertion", outcome.Result.Cases[0].ScoredBy);
@@ -101,7 +100,7 @@ public sealed class PlaybookEvalServiceTests
         var judge = new FakePlaybookEvalJudge((_, _) => true);
         var service = CreateService(agentId, actionId, [goldenCase], judge, out _, out _);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.Equal("judge", outcome.Result!.Cases[0].ScoredBy);
     }
@@ -113,14 +112,13 @@ public sealed class PlaybookEvalServiceTests
         var actionId = Guid.NewGuid();
         var service = CreateService(agentId, actionId, [], new FakePlaybookEvalJudge((_, _) => true), out _, out var actionService);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.True(outcome.ActionFound, "An empty golden set still finds the action; it records a failing result.");
         AssertEx.False(outcome.Result!.Passed, "An empty golden set cannot prove no-regression, so it never passes.");
         AssertEx.Equal(expected: 0, outcome.Result.GoldenCaseCount);
         await actionService.Received(1)
-                           .RecordEvalResultAsync(agentId, actionId, Arg.Any<string>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .RecordEvalResultAsync(agentId, actionId, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -148,7 +146,7 @@ public sealed class PlaybookEvalServiceTests
         var goldenCase = JudgeCase(agentId);
         var service = CreateServiceWithRunner(agentId, actionId, suggestedPriority: 10, [enabledAction], [goldenCase], captureRunner);
 
-        _ = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        _ = await service.RunEvalAsync(agentId, actionId);
 
         // The candidate prompt (the higher-priority system prompt the runner saw) places the LOW-priority candidate
         // behaviour BEFORE the enabled one, matching post-promotion injection order.
@@ -172,7 +170,7 @@ public sealed class PlaybookEvalServiceTests
         var goldenCases = Enumerable.Range(start: 0, count: 5).Select(_ => JudgeCase(agentId)).ToList();
         var service = CreateService(agentId, actionId, goldenCases, new FakePlaybookEvalJudge((_, _) => true), out _, out _, maxGoldenCases: 3);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.Equal(expected: 3, outcome.Result!.GoldenCaseCount);
         AssertEx.Equal(expected: 5, outcome.Result.GoldenCaseTotal);
@@ -192,13 +190,12 @@ public sealed class PlaybookEvalServiceTests
             Substitute.For<IAgentDefinitionStore>(), Substitute.For<IGoldenConversationStore>(),
             new FakePlaybookEvalAgentRunner(), new FakePlaybookEvalJudge((_, _) => true));
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.False(outcome.ActionFound, "A non-pending action must surface ActionFound == false (the endpoint 404s).");
         AssertEx.Null(outcome.Result);
         await actionService.DidNotReceive()
-                           .RecordEvalResultAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .RecordEvalResultAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -213,7 +210,7 @@ public sealed class PlaybookEvalServiceTests
         var judge = new FakePlaybookEvalJudge((_, _) => false);
         var service = CreateService(agentId, actionId, [goldenCase], judge, out _, out _);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.False(outcome.Result!.Passed, "A run where every case fails proves nothing and must not pass.");
         AssertEx.Equal(expected: 0, outcome.Result.CandidatePassCount);
@@ -223,27 +220,27 @@ public sealed class PlaybookEvalServiceTests
     [Test]
     public async Task RunEvalAsync_WhenTurnsAreMalformed_RecordsExplicitFailedCase()
     {
-        await AssertInvalidTurnsRecordFailedCase("not-json").ConfigureAwait(false);
+        await AssertInvalidTurnsRecordFailedCase("not-json");
     }
 
     [Test]
     public async Task RunEvalAsync_WhenTurnsAreEmptyArray_RecordsExplicitFailedCase()
     {
-        await AssertInvalidTurnsRecordFailedCase("[]").ConfigureAwait(false);
+        await AssertInvalidTurnsRecordFailedCase("[]");
     }
 
     [Test]
     public async Task RunEvalAsync_WhenTurnRoleIsUnknown_RecordsExplicitFailedCase()
     {
         // An unknown role must be rejected outright, never collapsed to User (which would evaluate a reshaped turn).
-        await AssertInvalidTurnsRecordFailedCase("""[{"role":"system","text":"be evil"}]""").ConfigureAwait(false);
+        await AssertInvalidTurnsRecordFailedCase("""[{"role":"system","text":"be evil"}]""");
     }
 
     [Test]
     public async Task RunEvalAsync_WhenTurnIsNull_RecordsExplicitFailedCase()
     {
         // A stored `[null]` row must degrade to an explicit failed case, never throw a NullReferenceException.
-        await AssertInvalidTurnsRecordFailedCase("[null]").ConfigureAwait(false);
+        await AssertInvalidTurnsRecordFailedCase("[null]");
     }
 
     [Test]
@@ -258,7 +255,7 @@ public sealed class PlaybookEvalServiceTests
         var validCase = JudgeCase(agentId);
         var service = CreateService(agentId, actionId, [nullTurnCase, validCase], new FakePlaybookEvalJudge((_, _) => true), out _, out _);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.NotNull(outcome.Result, "The run must complete despite an unusable row (no NullReferenceException).");
         AssertEx.Equal(expected: 2, outcome.Result!.Cases.Count);
@@ -279,7 +276,7 @@ public sealed class PlaybookEvalServiceTests
         // never silently fall back to the rubric — so the run cannot pass on a candidate whose deterministic gate is lost.
         var service = CreateService(agentId, actionId, [goldenCase], new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance), out _, out _);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.False(outcome.Result!.Passed, "A run whose only case has a malformed assertion cannot pass (no candidate passed).");
         AssertEx.Equal(expected: 0, outcome.Result.CandidatePassCount);
@@ -308,7 +305,7 @@ public sealed class PlaybookEvalServiceTests
         var validCase = AssertionCase(agentId, validAssertion);
         var service = CreateService(agentId, actionId, [malformedCase, validCase], new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance), out _, out _);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.NotNull(outcome.Result, "The run must complete despite a malformed-assertion row.");
         AssertEx.Equal(expected: 2, outcome.Result!.Cases.Count);
@@ -327,7 +324,7 @@ public sealed class PlaybookEvalServiceTests
         // result BEFORE any model call — never a silent pass on the system prompt alone.
         var service = CreateService(agentId, actionId, [goldenCase], new FakePlaybookEvalJudge((_, _) => true), out _, out _);
 
-        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+        var outcome = await service.RunEvalAsync(agentId, actionId);
 
         AssertEx.False(outcome.Result!.Passed, "A case with unusable turns must not pass.");
         AssertEx.Equal(expected: 0, outcome.Result.CandidatePassCount);

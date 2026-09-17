@@ -75,7 +75,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     public async Task AddNodeScheduler_WhenEnabled_ISchedulerFactoryResolvesAndSchedulerStartsClean()
     {
         var dbPath = GetDatabasePath("scheduler-reg-factory.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
 
@@ -84,20 +84,20 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
 
         // GetScheduler triggers the Quartz ADO store to connect and validate the QRTZ_ schema.
         // PerformSchemaValidation=true means any missing table surfaces here as an exception.
-        var scheduler = await (factory ?? throw new InvalidOperationException("factory must not be null.")).GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await (factory ?? throw new InvalidOperationException("factory must not be null.")).GetScheduler(CancellationToken.None);
         AssertEx.NotNull(scheduler, "IScheduler must be obtainable from the factory.");
 
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None);
         AssertEx.True(scheduler.IsStarted, "Scheduler must report IsStarted after Start().");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task AddNodeScheduler_WhenEnabled_ApplicationServicesResolve()
     {
         var dbPath = GetDatabasePath("scheduler-reg-services.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
 
@@ -118,7 +118,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     public async Task AddNodeScheduler_JobAndTrigger_SurviveSchedulerRestart()
     {
         var dbPath = GetDatabasePath("scheduler-persist-restart.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         var jobKey = new JobKey("persist-test", SchedulerJobKeys.Group);
         var jobId = Guid.NewGuid();
@@ -126,8 +126,8 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         await using (var provider1 = BuildEnabledProvider(dbPath))
         {
             var factory1 = provider1.GetRequiredService<ISchedulerFactory>();
-            var sched1 = await factory1.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-            await sched1.Start(CancellationToken.None).ConfigureAwait(false);
+            var sched1 = await factory1.GetScheduler(CancellationToken.None);
+            await sched1.Start(CancellationToken.None);
 
             var job = JobBuilder.Create<NoOpTestJob>()
                                 .WithIdentity(jobKey)
@@ -142,26 +142,26 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
                                         .StartAt(DateTimeOffset.UtcNow.AddYears(10))
                                         .Build();
 
-            await sched1.ScheduleJob(job, trigger, CancellationToken.None).ConfigureAwait(false);
-            await sched1.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+            await sched1.ScheduleJob(job, trigger, CancellationToken.None);
+            await sched1.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
         }
 
         await using (var provider2 = BuildEnabledProvider(dbPath))
         {
             var factory2 = provider2.GetRequiredService<ISchedulerFactory>();
-            var sched2 = await factory2.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-            await sched2.Start(CancellationToken.None).ConfigureAwait(false);
+            var sched2 = await factory2.GetScheduler(CancellationToken.None);
+            await sched2.Start(CancellationToken.None);
 
-            var jobDetail = await sched2.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false);
+            var jobDetail = await sched2.GetJobDetail(jobKey, CancellationToken.None);
             AssertEx.NotNull(jobDetail, "Job must persist across scheduler restart.");
             AssertEx.Equal(jobId.ToString(),
                 jobDetail!.JobDataMap.GetString(SchedulerJobKeys.ScheduledJobIdKey),
                 "JobDataMap scheduledJobId must survive restart.");
 
-            var triggers = await sched2.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
+            var triggers = await sched2.GetTriggersOfJob(jobKey, CancellationToken.None);
             AssertEx.True(triggers.Count > 0, "At least one trigger must persist across restart.");
 
-            await sched2.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+            await sched2.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
         }
     }
 
@@ -199,7 +199,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string dbPath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(dbPath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(dbPath);
     }
 
     private static IConfiguration BuildConfig(bool enabled, string connectionString)

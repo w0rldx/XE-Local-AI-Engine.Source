@@ -16,19 +16,18 @@ public sealed class DropCanvasWorkflowsMigrationTests
     [Test]
     public async Task Migrate_ToPriorMigration_StillHasCanvasWorkflows()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-workflows-before.sqlite", PriorMigrationId)
-                                                          .ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-workflows-before.sqlite", PriorMigrationId);
 
-        AssertEx.True(await probe.TableExistsAsync("canvas_workflows").ConfigureAwait(false),
+        AssertEx.True(await probe.TableExistsAsync("canvas_workflows"),
             "The table must still exist one migration before the drop, or this test is not measuring the drop.");
     }
 
     [Test]
     public async Task Migrate_ToLatest_DropsCanvasWorkflows()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-workflows-after.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-workflows-after.sqlite");
 
-        AssertEx.False(await probe.TableExistsAsync("canvas_workflows").ConfigureAwait(false),
+        AssertEx.False(await probe.TableExistsAsync("canvas_workflows"),
             "canvas_workflows must be gone; Open Canvas is removed and its rows live on as Graph Workflow definitions.");
     }
 }

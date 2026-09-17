@@ -65,11 +65,11 @@ public sealed class LocalRuntimeWarmer(
         {
             stream.ProviderTag = "remote";
             stream.ModelReadyTimestamp = turnStartedTimestamp;
-            var declaredContextTokens = await ResolveDeclaredExternalContextAsync(resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
+            var declaredContextTokens = await ResolveDeclaredExternalContextAsync(resolvedModel, invocationId, cancellationToken);
             return new LocalRuntimePreparationResult(declaredContextTokens, ExternalProviderConstants.ProviderName, WarmFailure: null);
         }
 
-        var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
+        var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken);
         if (provider is null)
         {
             // No local cold-load for this turn (cloud, Ollama, or an unresolved provider): the TTFT baseline is turn
@@ -87,15 +87,15 @@ public sealed class LocalRuntimeWarmer(
             new KeyValuePair<string, object?>("provider", "local"));
 
         // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
-        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime).ConfigureAwait(false);
-        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel).ConfigureAwait(false);
+        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime);
+        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel);
         _logger.LogInformation("Warming local model for invocation {InvocationId} before streaming (readiness decoupled from the stream-idle watchdog).", invocationId);
 
         using var readinessActivity = NodeActivitySource.Source.StartActivity("chat.invocation.model_readiness");
         var startedUtc = _timeProvider.GetUtcNow();
         try
         {
-            await provider.WarmModelAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
+            await provider.WarmModelAsync(resolvedModel, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -127,12 +127,12 @@ public sealed class LocalRuntimeWarmer(
         _logger.LogInformation("Local model ready for invocation {InvocationId} after {ElapsedMs:F0} ms; arming the stream-idle watchdog for generation.", invocationId, durationMs);
 
         // Phase: generating (the model is ready; streaming begins under the stream-idle watchdog).
-        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.Generating).ConfigureAwait(false);
+        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.Generating);
 
         // With the model now ready, read the effective per-slot context window it actually loaded so the turn's
         // budgeters + the num_ctx side channel size against the REAL window (llama.cpp's -c) rather than the app default.
         // Best-effort — a null here just keeps the configured default. A cancellation propagates (the turn is terminating).
-        var effectiveContextTokens = await ResolveEffectiveContextTokensAsync(provider, resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
+        var effectiveContextTokens = await ResolveEffectiveContextTokensAsync(provider, resolvedModel, invocationId, cancellationToken);
         return new LocalRuntimePreparationResult(effectiveContextTokens, provider.ProviderName, WarmFailure: null);
     }
 
@@ -164,7 +164,7 @@ public sealed class LocalRuntimeWarmer(
 
         try
         {
-            var runtimeInfo = await provider.GetRuntimeInfoAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
+            var runtimeInfo = await provider.GetRuntimeInfoAsync(resolvedModel, cancellationToken);
             return runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null;
         }
         catch (OperationCanceledException)
@@ -187,7 +187,7 @@ public sealed class LocalRuntimeWarmer(
     {
         try
         {
-            var registration = await _modelTrustResolver.TryResolveExternalAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
+            var registration = await _modelTrustResolver.TryResolveExternalAsync(resolvedModel, cancellationToken);
             return registration?.Model.ContextLength is > 0 ? registration.Model.ContextLength : null;
         }
         catch (OperationCanceledException)
@@ -227,7 +227,7 @@ public sealed class LocalRuntimeWarmer(
 
         try
         {
-            var provider = await _providerResolver.ResolveProviderForModelAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
+            var provider = await _providerResolver.ResolveProviderForModelAsync(resolvedModel, cancellationToken);
             return provider is not null && string.Equals(provider.ProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
                 ? provider
                 : null;

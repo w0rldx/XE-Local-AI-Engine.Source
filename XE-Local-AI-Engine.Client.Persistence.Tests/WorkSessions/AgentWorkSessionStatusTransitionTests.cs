@@ -46,14 +46,14 @@ public sealed class AgentWorkSessionStatusTransitionTests
     public async Task EveryDeclaredTransition_IsAccepted()
     {
         using var fixture = new WorkSessionTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = WorkSessionTestFixture.StoreFor(context);
 
         foreach (var (from, to) in LegalTransitions)
         {
             var sessionId = Guid.NewGuid();
-            var version = await ArrangeAsync(store, context, sessionId, from).ConfigureAwait(false);
-            var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, version, to)).ConfigureAwait(false);
+            var version = await ArrangeAsync(store, context, sessionId, from);
+            var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, version, to));
             AssertEx.Equal(to, moved.Status, $"{from} -> {to} must be accepted.");
         }
     }
@@ -62,17 +62,16 @@ public sealed class AgentWorkSessionStatusTransitionTests
     public async Task IllegalTransitions_AreRefused()
     {
         using var fixture = new WorkSessionTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = WorkSessionTestFixture.StoreFor(context);
 
         foreach (var (from, to) in IllegalTransitions)
         {
             var sessionId = Guid.NewGuid();
-            var version = await ArrangeAsync(store, context, sessionId, from).ConfigureAwait(false);
+            var version = await ArrangeAsync(store, context, sessionId, from);
             _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
                                       store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, version, to)),
-                                  $"{from} -> {to} must be refused.")
-                              .ConfigureAwait(false);
+                                  $"{from} -> {to} must be refused.");
         }
     }
 
@@ -80,33 +79,31 @@ public sealed class AgentWorkSessionStatusTransitionTests
     public async Task Interrupted_IsNotWritableByALiveCaller()
     {
         using var fixture = new WorkSessionTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = WorkSessionTestFixture.StoreFor(context);
         var sessionId = Guid.NewGuid();
-        var version = await ArrangeAsync(store, context, sessionId, AgentWorkSessionStatus.Running).ConfigureAwait(false);
+        var version = await ArrangeAsync(store, context, sessionId, AgentWorkSessionStatus.Running);
 
         // Only the startup reconcile records a host that died; a live caller asserting it would be a lie.
         _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
-                              store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, version, AgentWorkSessionStatus.Interrupted)))
-                          .ConfigureAwait(false);
+                              store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, version, AgentWorkSessionStatus.Interrupted)));
     }
 
     [Test]
     public async Task ParkedSession_DemotesToPausedWithNoOperatorInvolvement()
     {
         using var fixture = new WorkSessionTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = WorkSessionTestFixture.StoreFor(context);
         var sessionId = Guid.NewGuid();
-        var version = await ArrangeAsync(store, context, sessionId, AgentWorkSessionStatus.WaitingForApproval).ConfigureAwait(false);
+        var version = await ArrangeAsync(store, context, sessionId, AgentWorkSessionStatus.WaitingForApproval);
 
         // Park expiry is a supervisor action, not a human one: an unattended parked session must be able to release the
         // node's single invocation slot on its own.
         var paused = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId,
                                     version,
                                     AgentWorkSessionStatus.Paused,
-                                    SanitizedReason: "The approval went unanswered past the configured budget."))
-                                .ConfigureAwait(false);
+                                    SanitizedReason: "The approval went unanswered past the configured budget."));
         AssertEx.Equal(AgentWorkSessionStatus.Paused, paused.Status);
     }
 
@@ -114,23 +111,22 @@ public sealed class AgentWorkSessionStatusTransitionTests
     public async Task StaleVersion_FailsAContentWriteButNotASentinelStatusWrite()
     {
         using var fixture = new WorkSessionTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = WorkSessionTestFixture.StoreFor(context);
         var sessionId = Guid.NewGuid();
 
-        var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
+        var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
         var stale = created.Version;
-        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, stale, "MovesTheVersionOn")).ConfigureAwait(false);
+        _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, stale, "MovesTheVersionOn"));
 
         _ = await AssertEx.ThrowsAsync<WorkSessionConcurrencyException>(() => store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
             Guid.NewGuid(),
             stale,
             Guid.NewGuid(),
             AgentWorkSessionFindingKind.Finding,
-            "Lost update."))).ConfigureAwait(false);
+            "Lost update.")));
 
-        var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, AgentWorkSessionStatus.Running))
-                               .ConfigureAwait(false);
+        var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, AgentWorkSessionStatus.Running));
         AssertEx.Equal(AgentWorkSessionStatus.Running, moved.Status);
     }
 
@@ -138,24 +134,21 @@ public sealed class AgentWorkSessionStatusTransitionTests
     public async Task TerminalTransition_ClearsTheCurrentTask()
     {
         using var fixture = new WorkSessionTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = WorkSessionTestFixture.StoreFor(context);
         var sessionId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
 
-        var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
+        var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
         var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
                                      created.Version,
                                      Guid.NewGuid(),
                                      AgentWorkSessionTaskOrigin.Agent,
-                                     [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: "Current")]))
-                                 .ConfigureAwait(false);
-        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, planned.Version, AgentWorkSessionStatus.Running, taskId))
-                                 .ConfigureAwait(false);
+                                     [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: "Current")]));
+        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, planned.Version, AgentWorkSessionStatus.Running, taskId));
         AssertEx.Equal(taskId, running.CurrentTaskId);
 
-        var completed = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, AgentWorkSessionStatus.Completed))
-                                   .ConfigureAwait(false);
+        var completed = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, AgentWorkSessionStatus.Completed));
         AssertEx.Null(completed.CurrentTaskId, "A terminal session must not keep pointing at a current task.");
     }
 
@@ -166,7 +159,7 @@ public sealed class AgentWorkSessionStatusTransitionTests
     /// </summary>
     private static async Task<long> ArrangeAsync(AgentWorkSessionStore store, NodeChatDbContext context, Guid sessionId, AgentWorkSessionStatus status)
     {
-        var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
+        var created = await WorkSessionTestFixture.SeedAsync(store, sessionId);
         if (status == AgentWorkSessionStatus.Draft)
         {
             return created.Version;
@@ -174,18 +167,17 @@ public sealed class AgentWorkSessionStatusTransitionTests
 
         if (status is AgentWorkSessionStatus.Interrupted or AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled)
         {
-            var entity = await context.AgentWorkSessions.SingleAsync(candidate => candidate.Id == sessionId).ConfigureAwait(false);
+            var entity = await context.AgentWorkSessions.SingleAsync(candidate => candidate.Id == sessionId);
             entity.Status = status;
             entity.Version++;
-            _ = await context.SaveChangesAsync().ConfigureAwait(false);
+            _ = await context.SaveChangesAsync();
             context.ChangeTracker.Clear();
             return entity.Version;
         }
 
-        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, created.Version, AgentWorkSessionStatus.Running))
-                                 .ConfigureAwait(false);
+        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, created.Version, AgentWorkSessionStatus.Running));
         return status == AgentWorkSessionStatus.Running
             ? running.Version
-            : (await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, status)).ConfigureAwait(false)).Version;
+            : (await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, status))).Version;
     }
 }

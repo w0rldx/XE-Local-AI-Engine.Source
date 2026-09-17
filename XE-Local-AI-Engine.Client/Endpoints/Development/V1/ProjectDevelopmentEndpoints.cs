@@ -20,8 +20,8 @@ public sealed class ListDevelopmentProjectsEndpoint(IDevelopmentManagementServic
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var projects = await _service.ListProjectsAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListDevelopmentProjectsResponse(projects.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct).ConfigureAwait(false);
+        var projects = await _service.ListProjectsAsync(ct);
+        await Send.OkAsync(new ListDevelopmentProjectsResponse(projects.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct);
     }
 }
 
@@ -44,7 +44,7 @@ public sealed class CreateDevelopmentProjectEndpoint(IDevelopmentManagementServi
         if (!Enum.TryParse<DevelopmentEgressPolicy>(req.EgressPolicy, ignoreCase: true, out var egressPolicy))
         {
             AddError("The Development egress policy is invalid.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -65,14 +65,13 @@ public sealed class CreateDevelopmentProjectEndpoint(IDevelopmentManagementServi
                                                req.MaxDurationSeconds,
                                                req.CommandProfileId,
                                                req.BuildTarget),
-                                           ct)
-                                       .ConfigureAwait(false);
-            await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
+                                           ct);
+            await Send.OkAsync(result.ToResponse(), ct);
         }
         catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }
@@ -90,6 +89,6 @@ public sealed class GetDevelopmentProjectEndpoint(IDevelopmentManagementService 
 
     public override async Task HandleAsync(DevelopmentProjectRequest req, CancellationToken ct)
     {
-        await Send.OkAsync((await _service.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync((await _service.GetProjectAsync(req.ProjectId, ct)).ToResponse(), ct);
     }
 }

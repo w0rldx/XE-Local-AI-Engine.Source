@@ -41,10 +41,10 @@ public sealed class DevWorkflowRunComposer(
         var nodesByKey = graph.Nodes.ToDictionary(static node => node.NodeKey, StringComparer.Ordinal);
         var keysByNodeRunId = detail.NodeRuns.ToDictionary(static nodeRun => nodeRun.Id, static nodeRun => nodeRun.NodeKey);
         var byKey = detail.NodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
-        var agentsById = await ResolveAgentsAsync(detail.NodeRuns, cancellationToken).ConfigureAwait(false);
-        var staleInputs = await ResolveStaleInputsAsync(run.Id, detail.NodeRuns, cancellationToken).ConfigureAwait(false);
+        var agentsById = await ResolveAgentsAsync(detail.NodeRuns, cancellationToken);
+        var staleInputs = await ResolveStaleInputsAsync(run.Id, detail.NodeRuns, cancellationToken);
 
-        var definitions = await _authoring.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
+        var definitions = await _authoring.ListDefinitionsAsync(includeArchived: true, cancellationToken);
         var definitionName = definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name;
 
         // Read off the wire graph, which already carries the parser's answer per node: one parse for the run, not one
@@ -112,8 +112,8 @@ public sealed class DevWorkflowRunComposer(
 
     public async Task<DevWorkflowNodeRunDetailResponse> ComposeNodeAsync(Guid runId, Guid nodeRunId, CancellationToken cancellationToken)
     {
-        var run = await _queries.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
-        var nodeRun = await _queries.GetNodeRunAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
+        var run = await _queries.GetRunAsync(runId, cancellationToken);
+        var nodeRun = await _queries.GetNodeRunAsync(nodeRunId, cancellationToken);
         if (nodeRun.RunId != runId)
         {
             // Reads as absent rather than as another run's node, so one run's route can never surface another's rows.
@@ -122,25 +122,25 @@ public sealed class DevWorkflowRunComposer(
 
         var graph = DevWorkflowContractMapper.ToWireGraph(run.GraphJson);
         var node = graph.Nodes.FirstOrDefault(entry => string.Equals(entry.NodeKey, nodeRun.NodeKey, StringComparison.Ordinal));
-        var agentsById = await ResolveAgentsAsync([nodeRun], cancellationToken).ConfigureAwait(false);
+        var agentsById = await ResolveAgentsAsync([nodeRun], cancellationToken);
 
-        var artifacts = await _queries.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var artifacts = await _queries.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken);
         var produced = artifacts.Where(artifact => artifact.ProducedByNodeRunId == nodeRunId).OrderBy(static artifact => artifact.Sequence).ToList();
-        var consumed = await _queries.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
-        var decisions = await _queries.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false);
+        var consumed = await _queries.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken);
+        var decisions = await _queries.ListDecisionsAsync(runId, cancellationToken);
 
         // One list, and only when this node actually recorded a resolution: rule sets are a handful of bodyless rows,
         // so listing them beats a lookup per recorded id, and a node with no policy pays nothing at all.
         var ruleSets = nodeRun.PolicyResolutionJson is null
             ? []
-            : await _authoring.ListRuleSetsAsync(cancellationToken).ConfigureAwait(false);
+            : await _authoring.ListRuleSetsAsync(cancellationToken);
 
         // Read from the other family on the loose session id, never stored here: a purged session leaves the node run
         // intact and the drill-down renders "transcript no longer available" instead of a broken link.
         Guid? conversationId = null;
         if (nodeRun is { WorkSessionId: { } sessionId, WorkSessionAvailable: true })
         {
-            conversationId = (await _sessions.GetAsync(sessionId, cancellationToken).ConfigureAwait(false)).ConversationId;
+            conversationId = (await _sessions.GetAsync(sessionId, cancellationToken)).ConversationId;
         }
 
         return new DevWorkflowNodeRunDetailResponse(nodeRun.Id,
@@ -418,7 +418,7 @@ public sealed class DevWorkflowRunComposer(
 
         // ponytail: lists every agent definition to name a handful. Definitions are few and the alternative is one
         // read per node; a name-only projection on the agent store is the upgrade if a repaint ever feels it.
-        var definitions = await _agents.ListAsync(cancellationToken).ConfigureAwait(false);
+        var definitions = await _agents.ListAsync(cancellationToken);
         return definitions.ToDictionary(static definition => definition.Id);
     }
 
@@ -433,7 +433,7 @@ public sealed class DevWorkflowRunComposer(
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         CancellationToken cancellationToken)
     {
-        var artifacts = await _queries.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var artifacts = await _queries.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken);
         var stale = artifacts.Where(static artifact => artifact.IsStale).Select(static artifact => artifact.Id).ToHashSet();
         if (stale.Count == 0)
         {
@@ -445,7 +445,7 @@ public sealed class DevWorkflowRunComposer(
         var affected = new HashSet<Guid>();
         foreach (var nodeRunId in nodeRuns.Select(static nodeRun => nodeRun.Id))
         {
-            var consumed = await _queries.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
+            var consumed = await _queries.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken);
             if (consumed.Any(stale.Contains))
             {
                 _ = affected.Add(nodeRunId);

@@ -22,7 +22,7 @@ internal sealed class McpServerStartupConnector : IHostedService
     {
         try
         {
-            await _connectionManager.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            await _connectionManager.RefreshAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

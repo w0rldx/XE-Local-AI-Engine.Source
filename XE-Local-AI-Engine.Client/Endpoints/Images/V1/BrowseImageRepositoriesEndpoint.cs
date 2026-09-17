@@ -45,12 +45,12 @@ public sealed class BrowseImageRepositoriesEndpoint(
 
         try
         {
-            var repos = await _discovery.SearchAsync(query, ct).ConfigureAwait(false);
+            var repos = await _discovery.SearchAsync(query, ct);
             await Send.OkAsync(new BrowseImageRepositoriesResponse
                 {
                     Items = [.. repos.Select(ToResponse)]
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -66,7 +66,7 @@ public sealed class BrowseImageRepositoriesEndpoint(
                 {
                     Items = []
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
     }
 

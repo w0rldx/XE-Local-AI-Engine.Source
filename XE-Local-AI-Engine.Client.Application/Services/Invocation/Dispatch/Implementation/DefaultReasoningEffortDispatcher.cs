@@ -94,7 +94,7 @@ public sealed class DefaultReasoningEffortDispatcher(
             return Decide(request, tier, tierReason);
         }
 
-        var swap = await ResolveSwapAsync(request, cancellationToken).ConfigureAwait(false);
+        var swap = await ResolveSwapAsync(request, cancellationToken);
         if (swap.FastModel is null)
         {
             return Decide(request, tier, swap.RefusalReason ?? tierReason);
@@ -107,7 +107,7 @@ public sealed class DefaultReasoningEffortDispatcher(
         // later admissions are wrongly rejected.
         try
         {
-            return await DecideSwappedAsync(tier, tierReason, swap, cancellationToken).ConfigureAwait(false);
+            return await DecideSwappedAsync(tier, tierReason, swap, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -137,7 +137,7 @@ public sealed class DefaultReasoningEffortDispatcher(
         CancellationToken cancellationToken)
     {
         var fastModel = swap.FastModel!;
-        var capabilities = await _modelCapabilityResolver.ResolveAsync(fastModel, cancellationToken).ConfigureAwait(false);
+        var capabilities = await _modelCapabilityResolver.ResolveAsync(fastModel, cancellationToken);
 
         return new ReasoningDispatchDecision(tier,
             fastModel,
@@ -170,7 +170,7 @@ public sealed class DefaultReasoningEffortDispatcher(
             // Swap gate 1. The turn's data was admitted upstream against the resolved model's egress posture, and
             // replacing a cloud model would move that data somewhere the gate never authorised. Unresolved trust is
             // treated exactly as cloud, so demanding local is fail-closed by construction.
-            if (!await IsNodeLocalAsync(request.ResolvedModel, cancellationToken).ConfigureAwait(false))
+            if (!await IsNodeLocalAsync(request.ResolvedModel, cancellationToken))
             {
                 return SwapResolution.Refused(ReasoningDispatchReasons.CloudNoSwap);
             }
@@ -216,7 +216,7 @@ public sealed class DefaultReasoningEffortDispatcher(
                 return SwapResolution.Refused(ReasoningDispatchReasons.UnattendedNoSwap);
             }
 
-            var fastModel = await _nodeRuntimeSettings.GetAutoEffortFastModelNameAsync(cancellationToken).ConfigureAwait(false);
+            var fastModel = await _nodeRuntimeSettings.GetAutoEffortFastModelNameAsync(cancellationToken);
 
             // The answer on every node that leaves the setting blank, which is the shipped default.
             if (string.IsNullOrWhiteSpace(fastModel))
@@ -236,13 +236,12 @@ public sealed class DefaultReasoningEffortDispatcher(
             // authorised. An uninstalled fast model degrades here, by name, instead of at warm time under the wrong
             // reason code.
             if (!await NodeLocalModelGate
-                       .IsInstalledNodeLocalLlamaModelAsync(fastModel, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken)
-                       .ConfigureAwait(false))
+                       .IsInstalledNodeLocalLlamaModelAsync(fastModel, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken))
             {
                 return SwapResolution.Refused(ReasoningDispatchReasons.FastModelNotLocal);
             }
 
-            var capacity = await _capacityService.DecideAsync(new CapacityRequest(fastModel, ModelRole.Chat), cancellationToken).ConfigureAwait(false);
+            var capacity = await _capacityService.DecideAsync(new CapacityRequest(fastModel, ModelRole.Chat), cancellationToken);
             return capacity.Verdict switch
             {
                 // A fresh launch was admitted, so no process for the fast key exists to be profiling-owned. The
@@ -289,7 +288,7 @@ public sealed class DefaultReasoningEffortDispatcher(
 
     private async Task<bool> IsNodeLocalAsync(string model, CancellationToken cancellationToken)
     {
-        return await _modelTrustResolver.ResolveAsync(model, cancellationToken).ConfigureAwait(false) == ModelTrustLocality.Local;
+        return await _modelTrustResolver.ResolveAsync(model, cancellationToken) == ModelTrustLocality.Local;
     }
 
     /// <summary>

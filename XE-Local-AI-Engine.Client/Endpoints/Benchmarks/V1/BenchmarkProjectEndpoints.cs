@@ -20,18 +20,18 @@ public sealed class ListBenchmarkProjectsEndpoint(BenchmarkRecordService records
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var projects = await _records.ListProjectsAsync(ct).ConfigureAwait(false);
+        var projects = await _records.ListProjectsAsync(ct);
         var items = new List<BenchmarkProjectSummaryResponse>(projects.Count);
         foreach (var project in projects)
         {
-            var count = await _records.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
+            var count = await _records.CountRunsAsync(project.Id, ct);
             items.Add(project.ToSummary(count));
         }
 
         await Send.OkAsync(new ListBenchmarkProjectsResponse
         {
             Items = items
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -51,13 +51,12 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
 
     public override async Task HandleAsync(BenchmarkProjectMutationRequest req, CancellationToken ct)
     {
-        var project = await _projects.CreateAsync(req.ToDraft(Guid.Empty), ct).ConfigureAwait(false);
+        var project = await _projects.CreateAsync(req.ToDraft(Guid.Empty), ct);
         await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
                       {
                           projectId = project.Id
-                      }, await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct).ConfigureAwait(false),
-                      cancellation: ct)
-                  .ConfigureAwait(false);
+                      }, await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct),
+                      cancellation: ct);
     }
 }
 
@@ -75,15 +74,15 @@ public sealed class GetBenchmarkProjectEndpoint(BenchmarkRecordService records)
 
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
-        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct);
         if (project is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
-        var runCount = await _records.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
-        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        var runCount = await _records.CountRunsAsync(project.Id, ct);
+        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount, ct), ct);
     }
 }
 
@@ -105,8 +104,8 @@ public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
 
     public override async Task HandleAsync(UpdateBenchmarkProjectRequest req, CancellationToken ct)
     {
-        var project = await _projects.UpdateAsync(req.ProjectId, req.ExpectedVersion, req.ToDraft(req.ProjectId), ct).ConfigureAwait(false);
-        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        var project = await _projects.UpdateAsync(req.ProjectId, req.ExpectedVersion, req.ToDraft(req.ProjectId), ct);
+        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct), ct);
     }
 }
 
@@ -125,8 +124,8 @@ public sealed class DeleteBenchmarkProjectEndpoint(BenchmarkRecordService record
 
     public override async Task HandleAsync(DeleteBenchmarkProjectRequest req, CancellationToken ct)
     {
-        await _records.DeleteProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _records.DeleteProjectAsync(req.ProjectId, req.ExpectedVersion, ct);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -160,18 +159,18 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
                 req.Policy.Rubric.ToRubric(),
                 req.Policy.ReferenceAnswer,
                 req.Policy.Mode);
-        var change = await _projects.UpdateJudgePolicyAsync(req.ProjectId, req.ExpectedVersion, draft, req.ConfirmRejudge, ct).ConfigureAwait(false);
-        await Send.OkAsync(await ToResponseAsync(_records, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        var change = await _projects.UpdateJudgePolicyAsync(req.ProjectId, req.ExpectedVersion, draft, req.ConfirmRejudge, ct);
+        await Send.OkAsync(await ToResponseAsync(_records, change, ct), ct);
     }
 
     internal static async Task<BenchmarkJudgeChangeResponse> ToResponseAsync(BenchmarkRecordService records,
         BenchmarkJudgePolicyChange change,
         CancellationToken ct)
     {
-        var runCount = await records.CountRunsAsync(change.Project.Id, ct).ConfigureAwait(false);
+        var runCount = await records.CountRunsAsync(change.Project.Id, ct);
         return new BenchmarkJudgeChangeResponse
         {
-            Project = await BenchmarkProjectDetailProjection.ReadAsync(records, change.Project, runCount, ct).ConfigureAwait(false),
+            Project = await BenchmarkProjectDetailProjection.ReadAsync(records, change.Project, runCount, ct),
             EnqueuedRunIds = change.EnqueuedRunIds,
             CohortGeneration = change.CohortGeneration
         };
@@ -195,8 +194,8 @@ public sealed class RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService pro
 
     public override async Task HandleAsync(RejudgeBenchmarkProjectRequest req, CancellationToken ct)
     {
-        var change = await _projects.RejudgeProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.OkAsync(await UpdateBenchmarkJudgePolicyEndpoint.ToResponseAsync(_records, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        var change = await _projects.RejudgeProjectAsync(req.ProjectId, req.ExpectedVersion, ct);
+        await Send.OkAsync(await UpdateBenchmarkJudgePolicyEndpoint.ToResponseAsync(_records, change, ct), ct);
     }
 }
 
@@ -238,8 +237,8 @@ internal static class BenchmarkProjectDetailProjection
         // write, and exactly one endpoint may perform it — the items GET. Every other project read stays a read, so a
         // page refresh cannot race two item-0 rows into existence.
         return project.ToDetail(runCount,
-            await BenchmarkJudgePolicyProjection.ReadAsync(records, project.Id, ct).ConfigureAwait(false),
-            await records.ListTaskItemsAsync(project.Id, ct).ConfigureAwait(false));
+            await BenchmarkJudgePolicyProjection.ReadAsync(records, project.Id, ct),
+            await records.ListTaskItemsAsync(project.Id, ct));
     }
 }
 
@@ -248,7 +247,7 @@ internal static class BenchmarkJudgePolicyProjection
 {
     public static async Task<BenchmarkJudgePolicyResponse> ReadAsync(BenchmarkRecordService records, Guid projectId, CancellationToken ct)
     {
-        var revision = await records.GetCurrentJudgePolicyRevisionAsync(projectId, ct).ConfigureAwait(false);
+        var revision = await records.GetCurrentJudgePolicyRevisionAsync(projectId, ct);
         var policy = revision?.PolicyJson is { } payload && !payload.IsEmpty
             ? BenchmarkJudgeSerialization.DeserializePolicy(payload.Span)
             : null;

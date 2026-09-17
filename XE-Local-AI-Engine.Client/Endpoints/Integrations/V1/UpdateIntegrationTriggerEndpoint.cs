@@ -36,15 +36,14 @@ public sealed class UpdateIntegrationTriggerEndpoint(IIntegrationTriggerService 
                                                   req.TargetAgentDefinitionId,
                                                   req.SessionPolicy,
                                                   acceptedInputKinds),
-                                              ct)
-                                          .ConfigureAwait(false);
+                                              ct);
 
         if (result.Outcome != IntegrationTriggerOutcome.Saved)
         {
-            await IntegrationTriggerResponses.SendFailureAsync(this, Send, result, ct).ConfigureAwait(false);
+            await IntegrationTriggerResponses.SendFailureAsync(this, Send, result, ct);
             return;
         }
 
-        await Send.OkAsync(IntegrationMapper.ToView(result.Trigger!), ct).ConfigureAwait(false);
+        await Send.OkAsync(IntegrationMapper.ToView(result.Trigger!), ct);
     }
 }

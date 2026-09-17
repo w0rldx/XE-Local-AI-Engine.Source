@@ -43,30 +43,30 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "linear-start-agent-end";
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(Graph(instructions, agentConfig: null, SingleAttempt), """{"seed":3}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(Graph(instructions, agentConfig: null, SingleAttempt), """{"seed":3}""");
 
-        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(runId).ConfigureAwait(false), "the first tick only moves the run out of Pending.");
-        AssertEx.Equal(GraphWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(runId), "the first tick only moves the run out of Pending.");
+        AssertEx.Equal(GraphWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "start")).Status);
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceAsync(runId);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "start")).Status);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending,
-            (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "analyze")).Status,
             "the successor waits for the tick after the one that succeeded its predecessor.");
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Queued,
-            (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "analyze")).Status,
             "an Agent node is admitted to a QUEUE, not to a slot: the dispatch tick never writes Running.");
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "done").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "done")).Status);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false)).Status);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await AdvanceUntilTerminalAsync(harness, runId)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "done").ConfigureAwait(false)).Status);
-        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), "node.queued, node.started, node.completed");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "done")).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId), "node.queued, node.started, node.completed");
     }
 
     /// <summary>
@@ -82,15 +82,14 @@ public sealed class GraphWorkflowAgentExecutorTests
 
         // A BOUND agent, because the offer under test is a bound definition's: an unbound node takes the default
         // persona's own catalog offer, which is the node's tool state rather than anything a test scripts.
-        var agentDefinitionId = await SeedAgentAsync(harness, "graph-local-unattended").ConfigureAwait(false);
+        var agentDefinitionId = await SeedAgentAsync(harness, "graph-local-unattended");
         var runId = await StartToTheAgentAsync(harness,
                 Graph(instructions,
                     $$"""
                       , "agentDefinitionId": "{{agentDefinitionId}}"
-                      """))
-            .ConfigureAwait(false);
+                      """));
 
-        _ = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
 
         var package = harness.Invocations.PackageFor(instructions);
         AssertEx.True(package.IsUnattended, "a graph workflow run is unattended by construction.");
@@ -110,9 +109,9 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "effective-model-and-timeout";
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions, nodeExtras: """, "timeoutSeconds": 42""")).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, nodeExtras: """, "timeoutSeconds": 42"""));
 
-        _ = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
 
         var package = harness.Invocations.PackageFor(instructions);
         AssertEx.Equal(GraphWorkflowModels.LocalDefault, package.ModelProfile, "no node model and no agent pin leaves the node's local default.");
@@ -131,9 +130,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         await using var harness = new GraphWorkflowHarness(Host);
         var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
                                                                               , "model": "{{model}}"
-                                                                              """)).ConfigureAwait(false);
+                                                                              """));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass, "a cloud model is a configuration refusal, and a retry answers the same.");
@@ -156,13 +155,13 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string model = "graph-local-override";
         await using var harness = new GraphWorkflowHarness(Host);
 
-        var inheritedRun = await StartToTheAgentAsync(harness, Graph(inherits)).ConfigureAwait(false);
-        _ = await AdvanceUntilTerminalAsync(harness, inheritedRun).ConfigureAwait(false);
+        var inheritedRun = await StartToTheAgentAsync(harness, Graph(inherits));
+        _ = await AdvanceUntilTerminalAsync(harness, inheritedRun);
 
         var overriddenRun = await StartToTheAgentAsync(harness, Graph(overrides, $$"""
                                                                                    , "model": "{{model}}"
-                                                                                   """)).ConfigureAwait(false);
-        _ = await AdvanceUntilTerminalAsync(harness, overriddenRun).ConfigureAwait(false);
+                                                                                   """));
+        _ = await AdvanceUntilTerminalAsync(harness, overriddenRun);
 
         AssertEx.True(Runtimes(harness).CallFor(GraphWorkflowModels.LocalDefault).HonorModelProfile,
             "a node that names no model leaves the agent's own pin in charge.");
@@ -180,13 +179,13 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string instructions = "override-a-cloud-pin";
         const string model = "graph-local-over-a-pin";
         await using var harness = new GraphWorkflowHarness(Host);
-        var agentDefinitionId = await SeedAgentAsync(harness, "graph-cloud-pinned-agent").ConfigureAwait(false);
+        var agentDefinitionId = await SeedAgentAsync(harness, "graph-cloud-pinned-agent");
         var graph = Graph(instructions, $$"""
                                           , "model": "{{model}}", "agentDefinitionId": "{{agentDefinitionId}}"
                                           """);
 
-        var runId = await StartToTheAgentAsync(harness, graph).ConfigureAwait(false);
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, graph);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, "the node's own local model is what the locality gate judged.");
         AssertEx.Equal(model, harness.Invocations.PackageFor(instructions).ModelProfile, "never the resolved pin — always the effective model.");
@@ -205,9 +204,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         await using var harness = new GraphWorkflowHarness(Host);
         var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
                                                                               , "model": "{{model}}"
-                                                                              """)).ConfigureAwait(false);
+                                                                              """));
 
-        _ = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
 
         var package = harness.Invocations.PackageFor(instructions);
         AssertEx.Equal(expected, package.SupportsThinking);
@@ -232,10 +231,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         var runId = await StartToTheAgentAsync(harness,
                 Graph(instructions, $$"""
                                       , "model": "{{model}}"
-                                      """))
-            .ConfigureAwait(false);
+                                      """));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status);
         var output = Output(analyze);
@@ -254,9 +252,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string instructions = "schema-parses";
         await using var harness = new GraphWorkflowHarness(Host);
         harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(Text: """{"requiresReview":true}"""));
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions, Schema)).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, Schema));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status);
         AssertEx.True(Output(analyze).GetProperty("json").GetProperty("requiresReview").GetBoolean());
@@ -277,15 +275,15 @@ public sealed class GraphWorkflowAgentExecutorTests
         // Two attempts, because retryability is the assertion. The failing write's own class never stands still long
         // enough to read — the retry stage runs in the SAME tick that settles it — so the node.retried event, which
         // carries the failure it is re-attempting, is where that class survives.
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions, Schema, """, "maxAttempts": 2""")).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, Schema, """, "maxAttempts": 2"""));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.AttemptsExhausted, analyze.FailureClass, "the second attempt is the one that used up the node's budget.");
         AssertEx.Contains(analyze.Error, "length", message: "and the reason names the finish reason, because a truncated answer still Completed.");
 
-        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId).ConfigureAwait(false))
+        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId))
             .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
             "an unparseable answer is retryable, so the run tried again.");
         AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.NodeFailed), message: "the class it re-attempted is the retryable one, never ValidationFailed.");
@@ -305,9 +303,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         // work-node default — and the retry stage would then run this failure twice more.
         var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
                                                                               , "model": "{{model}}"
-                                                                              """, SingleAttempt)).ConfigureAwait(false);
+                                                                              """, SingleAttempt));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.False(analyze.Error?.Contains("10.0.0.7", StringComparison.Ordinal) == true, "a row's reason is read by an operator, not by a diagnostician.");
@@ -330,13 +328,13 @@ public sealed class GraphWorkflowAgentExecutorTests
         // Two attempts, because the class is the assertion. The failing write's own class never stands still long
         // enough to read — the retry stage runs in the SAME tick that settles it — so the node.retried event, which
         // carries the failure it is re-attempting, is where that class survives.
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions, agentConfig: null, """, "maxAttempts": 2""")).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, agentConfig: null, """, "maxAttempts": 2"""));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Contains(analyze.Error, "out of time");
-        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId).ConfigureAwait(false))
+        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId))
             .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
             "a timeout is retryable, so the run tried again.");
         AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.Timeout), message: "the watchdog's category is what the class is read from.");
@@ -360,17 +358,16 @@ public sealed class GraphWorkflowAgentExecutorTests
         var runId = await StartToTheAgentAsync(harness,
                 Graph(instructions, $$"""
                                       , "model": "{{model}}"
-                                      """))
-            .ConfigureAwait(false);
+                                      """));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, analyze.Status, "the turn was cancelled, so the row is — and nothing classifies a cancellation.");
         AssertEx.Equal(GraphWorkflowFailureClass.Cancelled, analyze.FailureClass);
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), GraphWorkflowEventTypes.NodeCancelled);
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId), GraphWorkflowEventTypes.NodeCancelled);
         AssertEx.Equal(GraphWorkflowRunStatus.Cancelled,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "and the run recomputes a cancellation rather than the failure a mapped-to-Failed row would have forced.");
         AssertEx.ContainsSingle(Capacity(harness).ReservationsFor(model), static reservation => reservation.Disposed, "a cancelled turn releases its footprint.");
     }
@@ -396,14 +393,13 @@ public sealed class GraphWorkflowAgentExecutorTests
                     $$"""
                       , "model": "{{model}}"
                       """,
-                    """, "maxAttempts": 2"""))
-            .ConfigureAwait(false);
+                    """, "maxAttempts": 2"""));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Equal(FakeGraphWorkflowCapacity.RejectionReason, analyze.Error, "a capacity refusal is already operator-facing, so the row repeats it verbatim.");
-        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId).ConfigureAwait(false))
+        var retried = AssertEx.NotNull((await harness.ReadEventsAsync(runId))
             .FirstOrDefault(static entry => entry.EventType == GraphWorkflowEventTypes.NodeRetried),
             "a node that was merely refused for room is retryable, so the run tried again.");
         AssertEx.Contains(retried.DetailJson, nameof(GraphWorkflowFailureClass.NodeFailed));
@@ -427,10 +423,9 @@ public sealed class GraphWorkflowAgentExecutorTests
                     $$"""
                       , "agentDefinitionId": "{{Guid.NewGuid()}}"
                       """,
-                    SingleAttempt))
-            .ConfigureAwait(false);
+                    SingleAttempt));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass, "a deleted agent answers the same on every attempt, so nothing retries it.");
@@ -449,9 +444,9 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "no-agent-bound-at-all";
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions, agentConfig: null, SingleAttempt)).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, agentConfig: null, SingleAttempt));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, "a node naming no agent has nothing missing, so nothing refuses it.");
         var package = harness.Invocations.PackageFor(instructions);
@@ -474,14 +469,13 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string instructions = "inherit-the-agents-pin";
         const string pin = "graph-local-agent-pin";
         await using var harness = new GraphWorkflowHarness(Host);
-        var agentDefinitionId = await SeedAgentAsync(harness, pin).ConfigureAwait(false);
+        var agentDefinitionId = await SeedAgentAsync(harness, pin);
         var runId = await StartToTheAgentAsync(harness,
                 Graph(instructions, $$"""
                                       , "agentDefinitionId": "{{agentDefinitionId}}"
-                                      """))
-            .ConfigureAwait(false);
+                                      """));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status);
         AssertEx.Equal(pin, harness.Invocations.PackageFor(instructions).ModelProfile, "the agent's pin outranks the node's local default.");
@@ -497,9 +491,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string instructions = "silent-turn";
         await using var harness = new GraphWorkflowHarness(Host);
         harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Silent));
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions)).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Contains(analyze.Error, "no result");
@@ -518,9 +512,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Throws));
         var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
                                                                               , "model": "{{model}}"
-                                                                              """, SingleAttempt)).ConfigureAwait(false);
+                                                                              """, SingleAttempt));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.False(analyze.Error?.Contains("could not reach its provider", StringComparison.Ordinal) == true, "the exception's own words never reach the row.");
@@ -541,10 +535,9 @@ public sealed class GraphWorkflowAgentExecutorTests
                 Graph(instructions, $$"""
                                       , "includeUpstreamOutputs": {{include}}
                                       """),
-                """{"topic":"the overnight logs"}""")
-            .ConfigureAwait(false);
+                """{"topic":"the overnight logs"}""");
 
-        _ = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
 
         var prompt = Prompt(harness.Invocations.PackageFor(instructions));
         AssertEx.Equal(expected, prompt.Contains("the overnight logs", StringComparison.Ordinal), "the run input travels through the Start node's output document.");
@@ -563,9 +556,9 @@ public sealed class GraphWorkflowAgentExecutorTests
         // A private host: the budget itself is the thing under test, and it is host-level configuration. 1024 is its
         // floor, so the run input is sized just under it and the upstream document that WRAPS it just over.
         await using var harness = GraphWorkflowHarness.PrivateAgentHost(("GraphWorkflows:MaxRunInputBytes", "1024"));
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions), $$"""{"topic":"{{new string('a', count: 1000)}}"}""").ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions), $$"""{"topic":"{{new string('a', count: 1000)}}"}""");
 
-        _ = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
 
         var prompt = Prompt(harness.Invocations.PackageFor(instructions));
         AssertEx.Contains(prompt, "truncated,");
@@ -589,28 +582,27 @@ public sealed class GraphWorkflowAgentExecutorTests
         var runId = await StartToTheAgentAsync(harness,
                 Graph(instructions, $$"""
                                       , "model": "{{model}}"
-                                      """))
-            .ConfigureAwait(false);
+                                      """));
 
-        var queued = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+        var queued = await harness.ReadNodeRunAsync(runId, "analyze");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Queued, queued.Status, "the dispatch tick never writes Running: the turn holds no node-wide slot yet.");
         AssertEx.Equal("awaiting-agent-slot", queued.Error);
 
-        await harness.Invocations.WhenRunningAsync(instructions).WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.Invocations.WhenRunningAsync(instructions).WaitAsync(TestBudgets.Contended);
+        _ = await harness.AdvanceAsync(runId);
 
-        var running = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+        var running = await harness.ReadNodeRunAsync(runId, "analyze");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, running.Status, "the lease landed, so the row may honestly say so.");
         AssertEx.True(running.InvocationId.HasValue, "the row carries the correlation id of a turn nothing else survives.");
         var invocationId = running.InvocationId!.Value;
         AssertEx.Equal(invocationId, harness.Invocations.PackageFor(instructions).InvocationId, "the id was minted before the turn, so both sides agree on it.");
 
         var executor = Executor(harness);
-        AssertEx.True(await executor.StopAsync(running.Id).ConfigureAwait(false), "the first ask is the one that actually cancels.");
-        AssertEx.False(await executor.StopAsync(running.Id).ConfigureAwait(false), "and the repeat is not work, which is what keeps a drain from spinning.");
+        AssertEx.True(await executor.StopAsync(running.Id), "the first ask is the one that actually cancels.");
+        AssertEx.False(await executor.StopAsync(running.Id), "and the repeat is not work, which is what keeps a drain from spinning.");
         AssertEx.Equal(expected: 1, harness.Invocations.Cancelled.Count(cancelled => cancelled == invocationId), "the runner is told exactly once.");
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, analyze.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.Cancelled, analyze.FailureClass);
         AssertEx.ContainsSingle(Capacity(harness).ReservationsFor(model), static reservation => reservation.Disposed, "a cancelled turn releases its footprint too.");
@@ -629,23 +621,23 @@ public sealed class GraphWorkflowAgentExecutorTests
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
         harness.Invocations.Script(holder, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Parks));
 
-        var holding = await StartToTheAgentAsync(harness, Graph(holder)).ConfigureAwait(false);
-        await harness.Invocations.WhenRunningAsync(holder).WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        var holding = await StartToTheAgentAsync(harness, Graph(holder));
+        await harness.Invocations.WhenRunningAsync(holder).WaitAsync(TestBudgets.Contended);
 
         // The second turn starts, asks for the one slot the first one holds, and never gets it.
-        var waiting = await StartToTheAgentAsync(harness, Graph(waiter)).ConfigureAwait(false);
-        var parked = await harness.ReadNodeRunAsync(waiting, "analyze").ConfigureAwait(false);
+        var waiting = await StartToTheAgentAsync(harness, Graph(waiter));
+        var parked = await harness.ReadNodeRunAsync(waiting, "analyze");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Queued, parked.Status);
 
-        AssertEx.True(await Executor(harness).StopAsync(parked.Id).ConfigureAwait(false));
+        AssertEx.True(await Executor(harness).StopAsync(parked.Id));
 
-        var analyze = await AdvanceUntilTerminalAsync(harness, waiting).ConfigureAwait(false);
+        var analyze = await AdvanceUntilTerminalAsync(harness, waiting);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, analyze.Status, "a turn that never ran was still cancelled, not failed.");
         AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(waiter, StringComparison.Ordinal)),
             "it never reached the runner at all.");
 
-        _ = await Executor(harness).StopAsync((await harness.ReadNodeRunAsync(holding, "analyze").ConfigureAwait(false)).Id).ConfigureAwait(false);
-        _ = await AdvanceUntilTerminalAsync(harness, holding).ConfigureAwait(false);
+        _ = await Executor(harness).StopAsync((await harness.ReadNodeRunAsync(holding, "analyze")).Id);
+        _ = await AdvanceUntilTerminalAsync(harness, holding);
     }
 
     /// <summary>
@@ -658,10 +650,10 @@ public sealed class GraphWorkflowAgentExecutorTests
         const string instructions = "superseded-entry";
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
         harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Parks));
-        var runId = await StartToTheAgentAsync(harness, Graph(instructions)).ConfigureAwait(false);
-        await harness.Invocations.WhenRunningAsync(instructions).WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions));
+        await harness.Invocations.WhenRunningAsync(instructions).WaitAsync(TestBudgets.Contended);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "analyze");
         var executor = Executor(harness);
         AssertEx.True(executor.IsInFlight(nodeRun.Id));
 
@@ -670,11 +662,10 @@ public sealed class GraphWorkflowAgentExecutorTests
             {
                 Attempt = nodeRun.Attempt + 1
             }
-        ]).ConfigureAwait(false);
+        ]);
 
         AssertEx.False(executor.IsInFlight(nodeRun.Id), "the entry belongs to the attempt before, and is not an answer about this one.");
-        await AssertEx.EventuallyAsync(() => harness.Invocations.Cancelled.Count > 0, TestBudgets.Contended, "a dropped turn is unwound rather than left holding the slot.")
-                      .ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => harness.Invocations.Cancelled.Count > 0, TestBudgets.Contended, "a dropped turn is unwound rather than left holding the slot.");
     }
 
     /// <summary>
@@ -696,17 +687,16 @@ public sealed class GraphWorkflowAgentExecutorTests
             harness.Invocations.Script(branch, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Parks));
         }
 
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentFanOut).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentFanOut);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
 
-        await AssertEx.EventuallyAsync(() => harness.Invocations.ActiveInvocationCount == 1, TestBudgets.Contended, "exactly one turn holds the node's only slot.")
-                      .ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => harness.Invocations.ActiveInvocationCount == 1, TestBudgets.Contended, "exactly one turn holds the node's only slot.");
+        _ = await harness.AdvanceAsync(runId);
 
-        var branches = (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false))
+        var branches = (await harness.ReadNodeRunsAsync(runId))
                        .Where(static nodeRun => nodeRun.Kind == GraphWorkflowNodeKind.Agent)
                        .ToList();
         AssertEx.Equal(expected: 1, branches.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running), "one branch holds the slot.");
@@ -714,7 +704,7 @@ public sealed class GraphWorkflowAgentExecutorTests
 
         foreach (var branch in branches)
         {
-            _ = await Executor(harness).StopAsync(branch.Id).ConfigureAwait(false);
+            _ = await Executor(harness).StopAsync(branch.Id);
         }
     }
 
@@ -745,10 +735,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     /// <summary>Starts a run and ticks it up to and including the tick that dispatches the agent node.</summary>
     private static async Task<Guid> StartToTheAgentAsync(GraphWorkflowHarness harness, string graphJson, string? inputJson = null)
     {
-        var runId = await harness.StartRunAsync(graphJson, inputJson).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(graphJson, inputJson);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
         return runId;
     }
 
@@ -760,13 +750,13 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         for (var tick = 0; tick < maxTicks; tick++)
         {
-            var nodeRun = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+            var nodeRun = await harness.ReadNodeRunAsync(runId, "analyze");
             if (GraphWorkflowStateMachine.IsTerminal(nodeRun.Status))
             {
                 return nodeRun;
             }
 
-            _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+            _ = await harness.AdvanceAsync(runId);
         }
 
         throw new AssertionException($"Run {runId} left its agent node unsettled after {maxTicks} ticks.");
@@ -784,8 +774,7 @@ public sealed class GraphWorkflowAgentExecutorTests
                                         AgentDefinitionKind.Single,
                                         [],
                                         new Dictionary<string, bool>(StringComparer.Ordinal),
-                                        OrchestrationTopologyJson: null))
-                                    .ConfigureAwait(false);
+                                        OrchestrationTopologyJson: null));
         return definition.Id;
     }
 

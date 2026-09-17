@@ -76,7 +76,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         var model = _options.EmbeddingModelName;
         if (string.IsNullOrWhiteSpace(model))
         {
-            return await _lexical.SelectTopKAsync(query, candidates, k, cancellationToken).ConfigureAwait(false);
+            return await _lexical.SelectTopKAsync(query, candidates, k, cancellationToken);
         }
 
         if (k <= 0 || candidates.Count == 0)
@@ -86,7 +86,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 
         try
         {
-            return await RankByEmbeddingAsync(query, candidates, k, model, cancellationToken).ConfigureAwait(false);
+            return await RankByEmbeddingAsync(query, candidates, k, model, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -101,7 +101,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             // OllamaUnavailableException, which the Ollama provider translates its transport failures into),
             // or a misconfigured/unregistered EmbeddingProviderName (InvalidOperationException from the resolver).
             // None of these are a reason to break the send.
-            return await FallBackToLexicalAsync(query, candidates, k, exception, cancellationToken).ConfigureAwait(false);
+            return await FallBackToLexicalAsync(query, candidates, k, exception, cancellationToken);
         }
     }
 
@@ -150,11 +150,11 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         // remaining misses plus the query go out as ONE batch, so a send still costs a single embedding round-trip. The
         // query is always re-embedded and never cached.
         var queryVector = ReadOnlyMemory<float>.Empty;
-        var candidateVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingCandidatesAsync, cancellationToken).ConfigureAwait(false);
+        var candidateVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingCandidatesAsync, cancellationToken);
 
         if (candidateVectors is null)
         {
-            return await FallBackToLexicalAsync(query, candidates, k, exception: null, cancellationToken).ConfigureAwait(false);
+            return await FallBackToLexicalAsync(query, candidates, k, exception: null, cancellationToken);
         }
 
         return candidates
@@ -177,7 +177,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 
             batchTexts.Add(query);
 
-            var generated = await generator.GenerateAsync(batchTexts, options: null, token).ConfigureAwait(false);
+            var generated = await generator.GenerateAsync(batchTexts, options: null, token);
 
             // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would
             // make the positional indexing throw ArgumentOutOfRangeException (outside the narrow catch); signal a degrade

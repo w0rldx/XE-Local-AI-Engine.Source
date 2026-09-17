@@ -25,13 +25,13 @@ public sealed class AgentTemplateImportServiceTests
 
         var slug = catalog.List()[0].Slug;
 
-        var result = await importService.ImportAsync([slug]).ConfigureAwait(false);
+        var result = await importService.ImportAsync([slug]);
 
         AssertEx.Contains(result.Imported, slug);
         AssertEx.Empty(result.SkippedExisting);
         AssertEx.Empty(result.Unknown);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         var created = AssertEx.NotNull(definitions.FirstOrDefault(definition => definition.SeedSlug == slug),
             "The imported slug should have produced a stored definition.");
 
@@ -61,14 +61,14 @@ public sealed class AgentTemplateImportServiceTests
 
         var slug = catalog.List()[0].Slug;
 
-        _ = await importService.ImportAsync([slug]).ConfigureAwait(false);
-        var second = await importService.ImportAsync([slug]).ConfigureAwait(false);
+        _ = await importService.ImportAsync([slug]);
+        var second = await importService.ImportAsync([slug]);
 
         AssertEx.Empty(second.Imported);
         AssertEx.Contains(second.SkippedExisting, slug);
         AssertEx.Empty(second.Unknown);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         var matches = definitions.Count(definition => definition.SeedSlug == slug);
         AssertEx.Equal(expected: 1, matches);
     }
@@ -83,13 +83,13 @@ public sealed class AgentTemplateImportServiceTests
 
         const string UnknownSlug = "not-a-real-slug";
 
-        var result = await importService.ImportAsync([UnknownSlug]).ConfigureAwait(false);
+        var result = await importService.ImportAsync([UnknownSlug]);
 
         AssertEx.Empty(result.Imported);
         AssertEx.Empty(result.SkippedExisting);
         AssertEx.Contains(result.Unknown, UnknownSlug);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         AssertEx.Empty(definitions);
     }
 
@@ -104,12 +104,12 @@ public sealed class AgentTemplateImportServiceTests
 
         var slug = catalog.List()[0].Slug;
 
-        var result = await importService.ImportAsync([slug, slug]).ConfigureAwait(false);
+        var result = await importService.ImportAsync([slug, slug]);
 
         AssertEx.Equal(expected: 1, result.Imported.Count);
         AssertEx.Contains(result.Imported, slug);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == slug));
     }
 }

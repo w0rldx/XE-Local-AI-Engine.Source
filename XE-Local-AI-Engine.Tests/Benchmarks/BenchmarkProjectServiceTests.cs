@@ -743,7 +743,7 @@ public sealed class BenchmarkProjectServiceTests
         /// <summary>Puts a real, deserializable policy revision on the project, the way an activation would have.</summary>
         public async Task SetCurrentPolicyAsync(BenchmarkJudgePolicyDraft draft)
         {
-            var policy = await BuildPolicyAsync(draft).ConfigureAwait(false);
+            var policy = await BuildPolicyAsync(draft);
             _currentRevision = new BenchmarkJudgePolicyRevisionRecord(RevisionId,
                 ProjectId,
                 1,
@@ -756,11 +756,11 @@ public sealed class BenchmarkProjectServiceTests
 
         /// <summary>The hash the service computes for <paramref name="draft" />, built the same way it does.</summary>
         public async Task<string> BuildPolicyHashAsync(BenchmarkJudgePolicyDraft draft) =>
-            BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(await BuildPolicyAsync(draft).ConfigureAwait(false));
+            BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(await BuildPolicyAsync(draft));
 
         private async Task<BenchmarkJudgePolicyV1> BuildPolicyAsync(BenchmarkJudgePolicyDraft draft)
         {
-            await using var lease = await Models.AcquireAsync(draft.ModelName, CancellationToken.None).ConfigureAwait(false);
+            await using var lease = await Models.AcquireAsync(draft.ModelName, CancellationToken.None);
             return new BenchmarkJudgePolicyV1(BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
                 draft.ContextTokens,
                 BenchmarkJudgePolicyVersions.PromptVersion,

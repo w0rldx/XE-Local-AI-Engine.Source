@@ -158,8 +158,7 @@ public sealed class TokenEstimatorCalibrationStoreTests
                                                  estimatedTokens: 10_000,
                                                  observedInputTokens: worker % 2 == 0 ? 12_000 : 9_000);
                                          }
-                                     })))
-                  .ConfigureAwait(false);
+                                     })));
 
         var correction = store.ResolveObservedCorrection(Model);
         AssertEx.True(correction is >= TokenEstimatorCalibrationStore.MinimumObservedCorrection and <= TokenEstimatorCalibrationStore.MaximumObservedCorrection,

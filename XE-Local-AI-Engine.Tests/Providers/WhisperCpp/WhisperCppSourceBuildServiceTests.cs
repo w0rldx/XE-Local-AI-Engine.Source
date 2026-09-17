@@ -456,7 +456,7 @@ public sealed class WhisperCppSourceBuildServiceTests
 
             if (BlockOn is not null && string.Equals(name, BlockOn, StringComparison.Ordinal))
             {
-                await _block.WaitAsync(ct).ConfigureAwait(false);
+                await _block.WaitAsync(ct);
             }
 
             for (var round = 0; round < EmitCount; round++)

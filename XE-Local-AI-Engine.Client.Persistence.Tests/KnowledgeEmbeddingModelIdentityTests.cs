@@ -63,20 +63,20 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var databasePath = GetDatabasePath("ingestion-stamp.sqlite");
         var documentId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId, ConfiguredName, KnowledgeDocumentStatus.Pending).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, ConfiguredName, KnowledgeDocumentStatus.Pending);
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var service = CreateIngestionService(context);
-            await service.RunAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+            await service.RunAsync(documentId, CancellationToken.None);
         }
 
-        var stampedDocumentModel = await ReadDocumentModelAsync(databasePath, documentId).ConfigureAwait(false);
-        var vectorModels = await ReadVectorModelsAsync(databasePath, documentId).ConfigureAwait(false);
-        var documentIdentity = await ReadDocumentVectorIdentityAsync(databasePath, documentId).ConfigureAwait(false);
-        var vectorIdentities = await ReadVectorIdentitiesAsync(databasePath, documentId).ConfigureAwait(false);
+        var stampedDocumentModel = await ReadDocumentModelAsync(databasePath, documentId);
+        var vectorModels = await ReadVectorModelsAsync(databasePath, documentId);
+        var documentIdentity = await ReadDocumentVectorIdentityAsync(databasePath, documentId);
+        var vectorIdentities = await ReadVectorIdentitiesAsync(databasePath, documentId);
 
         AssertEx.Equal(ResolvedGgufName, stampedDocumentModel);
         AssertEx.True(vectorModels.Count > 0, "Ingestion should have written at least one chunk vector.");
@@ -95,19 +95,19 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var staleId = Guid.NewGuid();
         var pendingId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
         // freshId was embedded by the model the resolver picks now (resolved GGUF) → not stale.
         // staleId still carries the old configured name → stale under the new resolved identity.
         // pendingId is not yet indexed and holds only the upload placeholder (configured name) → never stale.
-        await SeedDocumentAsync(databasePath, freshId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, staleId, ConfiguredName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, pendingId, ConfiguredName, KnowledgeDocumentStatus.Pending).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, freshId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await SeedDocumentAsync(databasePath, staleId, ConfiguredName, KnowledgeDocumentStatus.Indexed);
+        await SeedDocumentAsync(databasePath, pendingId, ConfiguredName, KnowledgeDocumentStatus.Pending);
 
         IReadOnlyList<KnowledgeDocumentSummary> documents;
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
-            documents = await CreateCatalogService(context).ListAsync(CancellationToken.None).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
+            documents = await CreateCatalogService(context).ListAsync(CancellationToken.None);
         }
 
         var fresh = documents.Single(document => document.DocumentId == freshId);
@@ -126,23 +126,23 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var staleId = Guid.NewGuid();
         var pendingId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, freshId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, staleId, ConfiguredName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, freshId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await SeedDocumentAsync(databasePath, staleId, ConfiguredName, KnowledgeDocumentStatus.Indexed);
         // Not-yet-indexed doc carrying the upload placeholder — must NOT be reset even though its stored name differs.
-        await SeedDocumentAsync(databasePath, pendingId, ConfiguredName, KnowledgeDocumentStatus.Pending).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, pendingId, ConfiguredName, KnowledgeDocumentStatus.Pending);
 
         IReadOnlyList<Guid> reset;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
-            reset = await CreateCatalogService(context).ResetStaleDocumentsToPendingAsync(CancellationToken.None).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
+            reset = await CreateCatalogService(context).ResetStaleDocumentsToPendingAsync(CancellationToken.None);
         }
 
         AssertEx.Equal(1, reset.Count);
         AssertEx.Equal(staleId, reset[0]);
-        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), await ReadStatusAsync(databasePath, staleId).ConfigureAwait(false));
-        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, freshId).ConfigureAwait(false));
+        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), await ReadStatusAsync(databasePath, staleId));
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, freshId));
     }
 
     [Test]
@@ -151,26 +151,26 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var databasePath = GetDatabasePath("catalog-structure-version-reset.sqlite");
         var legacyId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, legacyId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
-        await SetIndexVersionsAsync(databasePath, legacyId, "legacy", "legacy").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, legacyId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await SetIndexVersionsAsync(databasePath, legacyId, "legacy", "legacy");
 
         IReadOnlyList<Guid> reset;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var options = Options.Create(new KnowledgeBaseOptions());
             var catalog = new KnowledgeDocumentCatalogService(context,
                 CreateOutageProviderResolver(),
                 new EmbeddingModelResolver(options),
                 options,
                 TimeProvider.System);
-            reset = await catalog.ResetStaleDocumentsToPendingAsync(CancellationToken.None).ConfigureAwait(false);
+            reset = await catalog.ResetStaleDocumentsToPendingAsync(CancellationToken.None);
         }
 
         AssertEx.Equal(1, reset.Count);
         AssertEx.Equal(legacyId, reset[0]);
-        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), await ReadStatusAsync(databasePath, legacyId).ConfigureAwait(false));
+        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), await ReadStatusAsync(databasePath, legacyId));
     }
 
     [Test]
@@ -178,16 +178,15 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     {
         var databasePath = GetDatabasePath("catalog-policy-rollback.sqlite");
         var documentId = Guid.NewGuid();
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
 
         IReadOnlyList<KnowledgeDocumentSummary> documents;
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             documents = await CreateCatalogService(context, KnowledgeEmbeddingVectorMode.Native)
-                              .ListAsync(CancellationToken.None)
-                              .ConfigureAwait(false);
+                              .ListAsync(CancellationToken.None);
         }
 
         AssertEx.True(documents.Single().StaleModel,
@@ -212,7 +211,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, vectorSearch);
 
-        _ = await service.SearchAsync(new KnowledgeSearchRequest("a query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        _ = await service.SearchAsync(new KnowledgeSearchRequest("a query", Limit: 5), CancellationToken.None);
 
         AssertEx.Equal(ResolvedGgufName, capturedModel);
         AssertEx.Equal(ResolvedVectorIdentity, capturedIdentity);
@@ -226,9 +225,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var documentId = Guid.NewGuid();
         var chunkId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId, ConfiguredName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkId, "legacy lexical content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, ConfiguredName, KnowledgeDocumentStatus.Indexed);
+        await SeedChunkAsync(databasePath, documentId, chunkId, "legacy lexical content");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context,
@@ -238,7 +237,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                 new FtsSearchHit(chunkId, documentId, Bm25Score: -1.0)
             ]);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("legacy lexical content", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("legacy lexical content", Limit: 5), CancellationToken.None);
 
         AssertEx.Equal(1, result.Results.Count);
         AssertEx.Equal(KnowledgeDocumentStatus.Indexed, result.Results[0].DocumentStatus);
@@ -253,9 +252,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var documentId = Guid.NewGuid();
         var chunkId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkId, "current lexical content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await SeedChunkAsync(databasePath, documentId, chunkId, "current lexical content");
 
         var unavailableProviderResolver = Substitute.For<ILocalModelProviderResolver>();
         unavailableProviderResolver.ResolveProvider(Arg.Any<string>())
@@ -271,7 +270,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             ]);
 
         var result = await service.SearchAsync(new KnowledgeSearchRequest("current lexical content", Limit: 5),
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         AssertEx.Equal(1, result.Results.Count);
         AssertEx.Equal(KnowledgeDocumentStatus.Indexed, result.Results[0].DocumentStatus);
@@ -296,8 +295,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new KnowledgeQueryEmbeddingCache(options, TimeProvider.System),
             options);
 
-        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
-        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None);
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         await vectorSearch.Received(2)
@@ -308,8 +307,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                               Arg.Any<int>(),
                               Arg.Any<Guid?>(),
                               Arg.Any<string>(),
-                              Arg.Any<CancellationToken>())
-                          .ConfigureAwait(false);
+                              Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -330,8 +328,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new KnowledgeQueryEmbeddingCache(options, TimeProvider.System),
             options);
 
-        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
-        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None);
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         await vectorSearch.Received(2)
@@ -342,8 +340,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                               Arg.Any<int>(),
                               Arg.Any<Guid?>(),
                               Arg.Any<string>(),
-                              Arg.Any<CancellationToken>())
-                          .ConfigureAwait(false);
+                              Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -367,8 +364,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, vectorSearch, CreateProviderResolver(provider), cache, options);
 
-        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
-        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None);
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The invalid record must be replaced by the generated vector.");
@@ -397,8 +394,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, vectorSearch, CreateProviderResolver(provider), cache, options);
 
-        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
-        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None);
+        await service.SearchAsync(new KnowledgeSearchRequest(query, Limit: 5), CancellationToken.None);
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The wrong-identity record must be replaced.");
@@ -412,11 +409,11 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var databasePath = GetDatabasePath("catalog-outage.sqlite");
         var indexedId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
         // Stored under the RESOLVED GGUF name (the real, pre-outage identity) — NOT the plain configured name a
         // non-confident resolution would fall back to. If the confidence guard were missing, this row would compare
         // unequal to that fallback and get (wrongly) flagged stale and reset during the outage.
-        await SeedDocumentAsync(databasePath, indexedId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, indexedId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
 
         var options = Options.Create(new KnowledgeBaseOptions());
 
@@ -424,15 +421,15 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         IReadOnlyList<KnowledgeDocumentSummary> documents;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var catalogService = new KnowledgeDocumentCatalogService(context,
                 CreateOutageProviderResolver(),
                 new EmbeddingModelResolver(options),
                 options,
                 TimeProvider.System);
 
-            reset = await catalogService.ResetStaleDocumentsToPendingAsync(CancellationToken.None).ConfigureAwait(false);
-            documents = await catalogService.ListAsync(CancellationToken.None).ConfigureAwait(false);
+            reset = await catalogService.ResetStaleDocumentsToPendingAsync(CancellationToken.None);
+            documents = await catalogService.ListAsync(CancellationToken.None);
         }
 
         AssertEx.Empty(reset, "A non-confident resolution (transient provider outage) must never reset any document, "
@@ -441,7 +438,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var indexed = documents.Single(document => document.DocumentId == indexedId);
         AssertEx.False(indexed.StaleModel,
             "A non-confident resolution must never flag a document stale, even though its stored name differs from the fallback.");
-        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, indexedId).ConfigureAwait(false));
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, indexedId));
     }
 
 
@@ -569,7 +566,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private async Task SeedDocumentAsync(string databasePath, Guid documentId, string embeddingModel, KnowledgeDocumentStatus status)
@@ -581,8 +578,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         }
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await connection.OpenAsync();
+        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -606,38 +603,38 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             status == KnowledgeDocumentStatus.Indexed && string.Equals(embeddingModel, ResolvedGgufName, StringComparison.Ordinal) ? 512 : 0);
         command.Parameters.AddWithValue("$parser", KnowledgeIndexVersions.Parser);
         command.Parameters.AddWithValue("$chunker", KnowledgeIndexVersions.Chunker);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task SetIndexVersionsAsync(string databasePath, Guid documentId, string parserVersion, string chunkerVersion)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             "UPDATE knowledge_documents SET parser_version = $parser, chunker_version = $chunker WHERE document_id = $id;";
         command.Parameters.AddWithValue("$parser", parserVersion);
         command.Parameters.AddWithValue("$chunker", chunkerVersion);
         command.Parameters.AddWithValue("$id", documentId);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<string> ReadDocumentModelAsync(string databasePath, Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT embedding_model FROM knowledge_documents WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
-        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync();
         return (string)result!;
     }
 
     private static async Task SeedChunkAsync(string databasePath, Guid documentId, Guid chunkId, string content)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await connection.OpenAsync();
+        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -647,19 +644,19 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         command.Parameters.AddWithValue("$chunk", chunkId);
         command.Parameters.AddWithValue("$document", documentId);
         command.Parameters.AddWithValue("$content", content);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<IReadOnlyList<string>> ReadVectorModelsAsync(string databasePath, Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT embedding_model FROM knowledge_chunk_vectors WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
         var models = new List<string>();
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             models.Add(reader.GetString(0));
         }
@@ -670,25 +667,25 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     private static async Task<(string Identity, int Dimension)> ReadDocumentVectorIdentityAsync(string databasePath, Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT vector_identity, vector_dim FROM knowledge_documents WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        _ = await reader.ReadAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
+        _ = await reader.ReadAsync();
         return (reader.GetString(0), reader.GetInt32(1));
     }
 
     private static async Task<IReadOnlyList<(string Identity, int Dimension)>> ReadVectorIdentitiesAsync(string databasePath, Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT vector_identity, dim FROM knowledge_chunk_vectors WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
         var identities = new List<(string, int)>();
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             identities.Add((reader.GetString(0), reader.GetInt32(1)));
         }
@@ -699,11 +696,11 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     private static async Task<string> ReadStatusAsync(string databasePath, Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT status FROM knowledge_documents WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
-        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync();
         return (string)result!;
     }
 
@@ -744,12 +741,12 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     {
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

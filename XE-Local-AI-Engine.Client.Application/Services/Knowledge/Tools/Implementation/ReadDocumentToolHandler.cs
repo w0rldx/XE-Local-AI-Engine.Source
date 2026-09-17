@@ -70,7 +70,7 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
-        var detail = await catalog.GetAsync(documentId, collectionId, cancellationToken).ConfigureAwait(false);
+        var detail = await catalog.GetAsync(documentId, collectionId, cancellationToken);
         if (detail is null)
         {
             return JsonSerializer.Serialize(new

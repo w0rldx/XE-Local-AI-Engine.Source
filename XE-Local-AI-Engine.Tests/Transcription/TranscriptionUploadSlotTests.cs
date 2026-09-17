@@ -266,7 +266,7 @@ public sealed class TranscriptionUploadSlotTests
 
             if (_remaining <= 0)
             {
-                await cancellation.CancelAsync().ConfigureAwait(false);
+                await cancellation.CancelAsync();
                 cancellationToken.ThrowIfCancellationRequested();
                 return 0;
             }

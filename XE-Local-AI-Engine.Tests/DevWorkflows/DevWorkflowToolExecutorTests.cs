@@ -44,24 +44,24 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness();
         var held = harness.Tools.Hold("validate");
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await held.Started.ConfigureAwait(false);
-        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Id;
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await held.Started;
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "validate")).Id;
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
-        AssertEx.True(await harness.AdvanceAsync(runId).ConfigureAwait(false) > 0, "the first drain tick asks the pass to stop, and that is a transition.");
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+        AssertEx.True(await harness.AdvanceAsync(runId) > 0, "the first drain tick asks the pass to stop, and that is a transition.");
 
         // What the NEXT tick's drain finds. Race-free by construction: the entry is removed only by a poll, and this
         // test owns every tick — so this is the same question the drain asks, asked without one.
-        AssertEx.False(await harness.ToolLane.StopAsync(nodeRunId).ConfigureAwait(false),
+        AssertEx.False(await harness.ToolLane.StopAsync(nodeRunId),
             "a pass that has already been asked has nothing left to ask of it, so the drain writes nothing and the dispatcher stops re-signalling.");
 
         held.Release();
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "and the run still settles once the pass lands.");
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status, "and the run still settles once the pass lands.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
     }
 
     /// <summary>
@@ -73,22 +73,22 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxParallelToolNodes", "1"));
         var held = harness.Tools.Hold("first");
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TwoParallelTools, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TwoParallelTools, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await held.Started.ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await held.Started;
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "first").ConfigureAwait(false)).Status);
-        var second = await harness.ReadNodeRunAsync(runId, "second").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "first")).Status);
+        var second = await harness.ReadNodeRunAsync(runId, "second");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Queued, second.Status, "the lane has one slot and the first node run is holding it.");
         AssertEx.Equal("awaiting-sandbox-slot", second.QueueReason);
         AssertEx.Equal(expected: 1, harness.Tools.Ran.Count, "a node run without a slot must not have started its commands.");
         AssertEx.Null(second.FailureClass, "a full lane is queueing, not failure.");
 
         held.Release();
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "and the slot the first gave back ran the second.");
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status, "and the slot the first gave back ran the second.");
         AssertEx.Equal("first, second", string.Join(", ", harness.Tools.Ran));
     }
 
@@ -108,12 +108,12 @@ public sealed class DevWorkflowToolExecutorTests
         string[] keys = ["lanea", "laneb", "lanec", "laned"];
         var holds = keys.Select(harness.Tools.Hold).ToList();
         var bothInside = harness.Tools.WaitForConcurrentAsync(count: 2);
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FourParallelTools, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FourParallelTools, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await bothInside.ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await bothInside;
 
-        var admitted = (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Where(nodeRun => keys.Contains(nodeRun.NodeKey, StringComparer.Ordinal)).ToList();
+        var admitted = (await harness.ReadNodeRunsAsync(runId)).Where(nodeRun => keys.Contains(nodeRun.NodeKey, StringComparer.Ordinal)).ToList();
         AssertEx.Equal(expected: 2, admitted.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running), "two slots, four branches asking for them.");
         AssertEx.Equal(expected: 2, harness.Tools.PeakConcurrent, "and both slots really were in use at the same moment, so the cap is a bound rather than an accident of timing.");
 
@@ -125,10 +125,10 @@ public sealed class DevWorkflowToolExecutorTests
         }
 
         // The refusal itself writes NOTHING: the row was queued once, and every tick after that simply asks again.
-        var announced = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var announced = (await harness.ReadEventsAsync(runId)).Count;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(announced,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count,
+            (await harness.ReadEventsAsync(runId)).Count,
             "a re-offered row that is refused a slot must not announce it, or the log fills with one entry per tick per waiting node.");
         AssertEx.Equal(expected: 2, harness.Tools.Ran.Count, "and a node run without a slot must not have started its commands.");
 
@@ -137,9 +137,9 @@ public sealed class DevWorkflowToolExecutorTests
             hold.Release();
         }
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "and the slots the first two gave back ran the other two.");
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status, "and the slots the first two gave back ran the other two.");
         AssertEx.Equal(expected: 4, harness.Tools.Ran.Count);
         AssertEx.Equal(expected: 2, harness.Tools.PeakConcurrent, "the queued pair waited for a slot rather than being handed one alongside the pair already holding them.");
     }
@@ -152,26 +152,26 @@ public sealed class DevWorkflowToolExecutorTests
     public async Task APassingToolNodeSucceedsAndKeepsItsReport()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRun.Status);
         AssertEx.Null(nodeRun.FailureClass);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
 
         var output = AssertEx.NotNull(nodeRun.OutputJson);
         AssertEx.Contains(output, "\"passed\":true");
         AssertEx.Contains(output, "\"status\":\"succeeded\"");
         AssertEx.Contains(output, "\"testsPassed\":12");
 
-        var artifact = (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Single();
+        var artifact = (await harness.ReadArtifactsAsync(runId)).Single();
         AssertEx.Equal(DevWorkflowArtifactKind.ValidationReport, artifact.Kind);
         AssertEx.Equal("validate-validation.json", artifact.Name);
         AssertEx.Equal("application/json", artifact.MediaType);
         AssertEx.Equal("""{"passed":true}""",
-            await harness.ReadArtifactTextAsync(runId, artifact).ConfigureAwait(false),
+            await harness.ReadArtifactTextAsync(runId, artifact),
             "the report the substrate produced is the report the run keeps.");
     }
 
@@ -185,11 +185,11 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, nodeRun.Status, "an exhausted node asks a human rather than failing the run behind its back.");
         AssertEx.Equal(expected: 3, nodeRun.Attempt, "three attempts is what the node allows, and all three were spent.");
         AssertEx.Equal("ToolCommandFailed", nodeRun.FailureClass, "commands that ran and reported failure are the fix loop's fuel, not an error.");
@@ -202,10 +202,10 @@ public sealed class DevWorkflowToolExecutorTests
         AssertEx.Contains(output, "\"failureCode\":\"tests_failed\"");
         AssertEx.Contains(output, "\"testsFailed\":3");
 
-        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId)).Status);
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId)).Status);
 
-        var reports = await harness.ReadArtifactsAsync(runId).ConfigureAwait(false);
+        var reports = await harness.ReadArtifactsAsync(runId);
         AssertEx.Equal(expected: 3, reports.Count, "each attempt keeps its own report; that IS the per-attempt evidence.");
         AssertEx.Equal(expected: 1, reports.Count(static report => report.IsLatest), "all three are versions of one lineage, so exactly one is current.");
     }
@@ -221,22 +221,22 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRun.Status, "the second attempt passed, so the node did.");
         AssertEx.Equal(expected: 2, nodeRun.Attempt);
         AssertEx.Null(nodeRun.FailureClass, "a re-attempt that succeeded must not still report the failure it retried.");
         AssertEx.Equal("validate, validate", string.Join(", ", harness.Tools.Ran), "the commands really did run twice.");
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
 
-        var trail = await harness.ReadEventTrailAsync(runId).ConfigureAwait(false);
+        var trail = await harness.ReadEventTrailAsync(runId);
         AssertEx.Contains(trail, "node.retry.scheduled");
 
         // The two attempts' workspaces, as the lane would ask the provider for them.
-        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var run = await harness.ReadRunAsync(runId);
         var first = nodeRun with
         {
             Attempt = 1
@@ -265,11 +265,11 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, nodeRun.Status);
         AssertEx.Equal(expected: 2, nodeRun.Attempt, "one re-attempt is what the run allowed, and the node's own cap of three never came into it.");
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, nodeRun.FailureClass, "the run ran out of re-attempts, which is a different fact from the verdict.");
@@ -281,8 +281,7 @@ public sealed class DevWorkflowToolExecutorTests
                                         DevWorkflowDecisionKind.Retry,
                                         comment: null,
                                         payloadJson: null,
-                                        "operator")))
-                                    .ConfigureAwait(false);
+                                        "operator")));
         AssertEx.Contains(refused.Message, "as many re-attempts as this run", message: "the automatic retry already spent what the operator is asking for.");
     }
 
@@ -297,23 +296,23 @@ public sealed class DevWorkflowToolExecutorTests
         var clock = new ManualTimeProvider();
         await using var harness = new DevWorkflowHarness(services => services.AddSingleton<TimeProvider>(clock));
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DelayedRetryToolGraph, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DelayedRetryToolGraph, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var waiting = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var waiting = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, waiting.Status, "the re-attempt is scheduled; what it is waiting for is a clock, not a slot.");
         AssertEx.Equal(expected: 2, waiting.Attempt);
         AssertEx.Null(waiting.QueueReason, "no queue reason names a wait on time, and inventing one would put a token in the row nothing can read.");
         AssertEx.Equal(expected: 1, harness.Tools.Ran.Count, "the second attempt has not started, because its delay has not passed.");
 
-        var scheduled = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Last(static entry => entry.EventType == "node.retry.scheduled");
+        var scheduled = (await harness.ReadEventsAsync(runId)).Last(static entry => entry.EventType == "node.retry.scheduled");
         AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson), "\"delayUntil\":", message: "the log says when the re-attempt may go.");
 
         clock.Advance(TimeSpan.FromSeconds(1));
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
         AssertEx.Equal(expected: 2, harness.Tools.Ran.Count, "and once it had, the same node ran again.");
     }
 
@@ -330,17 +329,17 @@ public sealed class DevWorkflowToolExecutorTests
         var clock = new ManualTimeProvider();
         await using var harness = new DevWorkflowHarness(services => services.AddSingleton<TimeProvider>(clock));
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DelayedRetryToolGraph, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DelayedRetryToolGraph, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         var retries = harness.Services.GetRequiredService<DevWorkflowRetryPolicy>();
         AssertEx.Equal(expected: 1, retries.ScheduledRetryCount, "the re-attempt is scheduled and waiting on a clock this test has not moved.");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
         AssertEx.Equal(expected: 0, retries.ScheduledRetryCount, "a run that will never ask again takes what it promised itself with it.");
     }
 
@@ -355,17 +354,17 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Refusing(failureClass, reason));
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, nodeRun.Status);
         AssertEx.Equal(failureClass, nodeRun.FailureClass);
         AssertEx.Equal(reason, nodeRun.TerminalReason);
         AssertEx.Equal(DevWorkflowDecisionKind.Abandon, nodeRun.PendingDecisionKind, "a blocked row names the answer it is waiting for.");
-        AssertEx.Empty(await harness.ReadArtifactsAsync(runId).ConfigureAwait(false));
-        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Empty(await harness.ReadArtifactsAsync(runId));
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId)).Status);
     }
 
     /// <summary>
@@ -379,11 +378,11 @@ public sealed class DevWorkflowToolExecutorTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate",
             FakeDevWorkflowToolCommands.Refusing("Policy", "The workspace carries a committed credential.", ".env", "config/secrets.json"));
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var detected = (await harness.ReadEventsAsync(runId).ConfigureAwait(false))
+        var detected = (await harness.ReadEventsAsync(runId))
             .Single(static entry => entry.EventType == "workspace.secrets.detected");
         AssertEx.Contains(AssertEx.NotNull(detected.DetailJson), ".env");
         AssertEx.Contains(AssertEx.NotNull(detected.DetailJson), "config/secrets.json");
@@ -398,22 +397,22 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness();
         var held = harness.Tools.Hold("validate");
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await held.Started.ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await held.Started;
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, nodeRun.Status, "the cancel reached the commands, and the poll wrote what they came to.");
         AssertEx.Equal("Cancelled", nodeRun.FailureClass);
-        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
 
         // Two run.cancelled entries by design: the first is the operator's intent, the last is the drain settling it.
         // The row the drain was waiting on has to land BETWEEN them.
         AssertEx.Equal("run.created, node.materialized, run.started, node.queued, node.started, run.cancelled, node.cancelled, run.cancelled",
-            await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
+            await harness.ReadEventTrailAsync(runId),
             "the run must not reach its terminal before the row whose lane slot it was holding.");
     }
 
@@ -426,23 +425,23 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness();
         var held = harness.Tools.Hold("validate");
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await held.Started.ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await held.Started;
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "validate")).Status,
             "a pause does not cancel a build; it waits for it.");
-        AssertEx.Equal(DevWorkflowRunStatus.Pausing, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Pausing, (await harness.ReadRunAsync(runId)).Status);
 
         held.Release();
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -464,35 +463,35 @@ public sealed class DevWorkflowToolExecutorTests
                 new BlobStoreThatRefusesItsFirstWrite(ActivatorUtilities.CreateInstance<ManagedDevWorkflowArtifactBlobStore>(provider)));
         });
 
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
         // Two explicit ticks rather than "advance until quiescent": the tick that starts the run and the tick that
         // admits the node. Stopping here is what puts the throw in the settle rather than somewhere a loop swallows it.
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        var dispatched = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        var dispatched = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, dispatched.Status);
-        await harness.ToolLane.WaitForCompletionAsync(dispatched.Id).ConfigureAwait(false);
+        await harness.ToolLane.WaitForCompletionAsync(dispatched.Id);
 
         // The report write refuses once. In production the loop's own guard logs such a throw and re-signals the run.
         // Here the tick is driven directly, so the throw surfaces where that guard would have caught it.
-        _ = await AssertEx.ThrowsAsync<IOException>(() => harness.AdvanceAsync(runId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<IOException>(() => harness.AdvanceAsync(runId));
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "validate")).Status,
             "the row is untouched by a settle that did not commit.");
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRun.Status, "the TRUE outcome, re-derived from the pass the lane still held.");
         AssertEx.Null(nodeRun.FailureClass);
         AssertEx.Equal(expected: 1, harness.Tools.Ran.Count, "and the build was not run a second time to get it.");
 
-        var artifact = (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Single();
+        var artifact = (await harness.ReadArtifactsAsync(runId)).Single();
         AssertEx.Equal("""{"passed":true}""",
-            await harness.ReadArtifactTextAsync(runId, artifact).ConfigureAwait(false),
+            await harness.ReadArtifactTextAsync(runId, artifact),
             "the evidence survived the failed write.");
-        AssertEx.False((await harness.ReadEventTrailAsync(runId).ConfigureAwait(false)).Contains("node.interrupted", StringComparison.Ordinal),
+        AssertEx.False((await harness.ReadEventTrailAsync(runId)).Contains("node.interrupted", StringComparison.Ordinal),
             "nothing may claim the host stopped under a pass that finished.");
     }
 
@@ -509,22 +508,22 @@ public sealed class DevWorkflowToolExecutorTests
     {
         await using var harness = new DevWorkflowHarness();
         var held = harness.Tools.Hold("validate");
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await held.Started.ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await held.Started;
 
         // Stands the row exactly where a failed Queued→Running write leaves it: the slot taken, the registry entry
         // made, the row still Queued. The store does not judge transitions, so it can be put there directly.
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Queued).ConfigureAwait(false);
-        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Id;
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Queued);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "validate")).Id;
         AssertEx.True(harness.ToolLane.IsInFlight(nodeRunId), "the lane is still driving the pass this row belongs to.");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "the drain finished rather than waiting on a row nothing would ever move.");
         AssertEx.False(harness.ToolLane.IsInFlight(nodeRunId), "and the lane slot went back.");
     }
@@ -539,11 +538,11 @@ public sealed class DevWorkflowToolExecutorTests
     {
         // The REAL optional-resolve path: with the seam faked there would be nothing left to resolve optionally.
         await using var harness = DevWorkflowHarness.WithARealSandbox(("Development:Enabled", "false"));
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, nodeRun.Status);
         AssertEx.Equal("Configuration", nodeRun.FailureClass, "no retry turns Development Mode back on.");
         AssertEx.Contains(AssertEx.NotNull(nodeRun.TerminalReason), "Development Mode is switched off on this node");

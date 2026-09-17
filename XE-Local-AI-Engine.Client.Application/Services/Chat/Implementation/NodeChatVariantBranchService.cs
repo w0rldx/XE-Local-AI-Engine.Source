@@ -24,7 +24,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
 
         // Read the source (including its messages) on its own write key, then create the branch under the new
         // conversation's write key. Two serialized scopes avoid a cross-conversation lock-ordering hazard.
-        var source = await _readModel.GetConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
+        var source = await _readModel.GetConversationAsync(request.ConversationId, cancellationToken);
         if (source is null)
         {
             return null;
@@ -67,7 +67,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 // separate INSERT statements, so without this a cancellation/failure mid-loop would autocommit the
                 // conversation row plus a prefix of its messages, leaving a visible half-copied branch. Mirrors
                 // CreateMessageVariantAsync's transactional insert.
-                await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
                 var dbTransaction = transaction.GetDbTransaction();
 
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
@@ -84,8 +84,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 // A branch is always a fresh node-local conversation, even when branched from a remote mirror.
                 AddParameter(conversationCommand, "$origin", NodeChatOriginValues.Local);
                 AddParameter(conversationCommand, "$branch_of_conversation_id", request.ConversationId);
-                await OpenIfNeededAsync(conversationCommand.Connection, token).ConfigureAwait(false);
-                await conversationCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(conversationCommand.Connection, token);
+                await conversationCommand.ExecuteNonQueryAsync(token);
 
                 foreach (var message in copies)
                 {
@@ -122,14 +122,14 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     // Branch copies are a fresh linear thread; provenance is on the conversation, not per message.
                     AddParameter(messageCommand, "$parent_message_id", value: null);
                     AddParameter(messageCommand, "$variant_group_id", value: null);
-                    await OpenIfNeededAsync(messageCommand.Connection, token).ConfigureAwait(false);
-                    await messageCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                    await OpenIfNeededAsync(messageCommand.Connection, token);
+                    await messageCommand.ExecuteNonQueryAsync(token);
                 }
 
-                await transaction.CommitAsync(token).ConfigureAwait(false);
+                await transaction.CommitAsync(token);
                 return new NodeChatBranchResultDto(request.ConversationId, branchedConversationId, copies.Count);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     // Validates the caller-supplied selected-revision map against the source conversation and reduces it to the
@@ -194,7 +194,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
             {
                 // Read the original outside the write transaction (a raw read command cannot run under a Sqlite pending
                 // transaction). The conversation-exclusive lock guarantees the row cannot change before the insert below.
-                var original = await ReadMessageAsync(dbContext, request.ConversationId, request.OriginalMessageId, token).ConfigureAwait(false);
+                var original = await ReadMessageAsync(dbContext, request.ConversationId, request.OriginalMessageId, token);
                 if (original is null)
                 {
                     return null;
@@ -213,9 +213,9 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 while (true)
                 {
                     attempt++;
-                    await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                    await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
                     var dbTransaction = transaction.GetDbTransaction();
-                    var sequence = await NextSequenceAsync(dbContext, request.ConversationId, dbTransaction, token).ConfigureAwait(false);
+                    var sequence = await NextSequenceAsync(dbContext, request.ConversationId, dbTransaction, token);
                     try
                     {
                         if (stampOriginal)
@@ -226,8 +226,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                             AddParameter(stampCommand, "$variant_group_id", variantGroupId);
                             AddParameter(stampCommand, "$conversation_id", request.ConversationId);
                             AddParameter(stampCommand, "$message_id", request.OriginalMessageId);
-                            await OpenIfNeededAsync(stampCommand.Connection, token).ConfigureAwait(false);
-                            await stampCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                            await OpenIfNeededAsync(stampCommand.Connection, token);
+                            await stampCommand.ExecuteNonQueryAsync(token);
                         }
 
                         // The new sibling variant is an assistant placeholder: same parent (the user turn), shared group.
@@ -254,8 +254,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                         // Plaintext per-message agent attribution (regenerate + branch siblings): mirrors the send-placeholder
                         // insert so per-variant feedback aggregates by the resolved agent without decrypting metadata.
                         AddParameter(insertCommand, "$agent_definition_id", request.AgentDefinitionId);
-                        await OpenIfNeededAsync(insertCommand.Connection, token).ConfigureAwait(false);
-                        await insertCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                        await OpenIfNeededAsync(insertCommand.Connection, token);
+                        await insertCommand.ExecuteNonQueryAsync(token);
 
                         // Minting a new sibling shifts the default selected path (newest sibling wins), which invalidates
                         // any compaction synopsis built from the prior selection. Clear it in the same transaction so a
@@ -267,10 +267,10 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                         clearSummaryCommand.CommandText =
                             "UPDATE conversations SET compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL WHERE conversation_id = $conversation_id;";
                         AddParameter(clearSummaryCommand, "$conversation_id", request.ConversationId);
-                        await clearSummaryCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                        await clearSummaryCommand.ExecuteNonQueryAsync(token);
 
-                        await TouchConversationAsync(dbContext, request.ConversationId, request.CreatedAtUtc, token).ConfigureAwait(false);
-                        await transaction.CommitAsync(token).ConfigureAwait(false);
+                        await TouchConversationAsync(dbContext, request.ConversationId, request.CreatedAtUtc, token);
+                        await transaction.CommitAsync(token);
 
                         var variant = new NodeChatPersistedMessageDto(request.NewMessageId,
                             request.ConversationId,
@@ -296,11 +296,11 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     }
                     catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
                     {
-                        await transaction.RollbackAsync(token).ConfigureAwait(false);
+                        await transaction.RollbackAsync(token);
                     }
                 }
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<IReadOnlyList<NodeChatPersistedMessageDto>> ListMessageVariantsAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
@@ -308,7 +308,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
         return await _writer.ExecuteConversationSharedAsync(conversationId,
             async (dbContext, token) =>
             {
-                var messages = await ReadMessagesAsync(dbContext, conversationId, token).ConfigureAwait(false);
+                var messages = await ReadMessagesAsync(dbContext, conversationId, token);
                 var anchor = messages.SingleOrDefault(message => message.MessageId == messageId);
                 if (anchor is null)
                 {
@@ -325,6 +325,6 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                                .OrderBy(message => message.Sequence)
                                .ToArray();
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

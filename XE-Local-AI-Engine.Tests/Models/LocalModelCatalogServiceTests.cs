@@ -38,7 +38,7 @@ public sealed class LocalModelCatalogServiceTests
         harness.WithAzureDeployment("gpt-5");
         harness.WithExternalModel();
 
-        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None).ConfigureAwait(false);
+        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);
         AssertEx.Equal(expected: 1, catalog.InstalledGgufModels.Count);
@@ -59,7 +59,7 @@ public sealed class LocalModelCatalogServiceTests
         harness.ExternalProviderRegistry.ListRegistrationsAsync(Arg.Any<CancellationToken>())
                .Returns<Task<IReadOnlyList<ExternalProviderModelRegistration>>>(_ => throw new IOException("external store unreadable"));
 
-        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None).ConfigureAwait(false);
+        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.Empty(catalog.ExternalModels);
         AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);
@@ -76,7 +76,7 @@ public sealed class LocalModelCatalogServiceTests
         harness.WithInstalledGguf("local/gguf:Q4_K_M");
         harness.WithCodexSession(Now.AddHours(1));
 
-        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None).ConfigureAwait(false);
+        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.Null(catalog.OllamaModels);
         AssertEx.Empty(catalog.Classifications);
@@ -92,7 +92,7 @@ public sealed class LocalModelCatalogServiceTests
         harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new IOException("registry unreadable"));
 
-        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None).ConfigureAwait(false);
+        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.Empty(catalog.InstalledGgufModels);
         AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);
@@ -106,7 +106,7 @@ public sealed class LocalModelCatalogServiceTests
         var harness = new Harness();
         harness.WithCodexSession(Now.AddSeconds(30));
 
-        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None).ConfigureAwait(false);
+        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.False(catalog.HasUsableCodexSession);
     }
@@ -119,7 +119,7 @@ public sealed class LocalModelCatalogServiceTests
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>())
                .Returns<Task<CodexTokens?>>(_ => throw new InvalidOperationException("token store unreadable"));
 
-        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None).ConfigureAwait(false);
+        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.False(catalog.HasUsableCodexSession);
         AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);

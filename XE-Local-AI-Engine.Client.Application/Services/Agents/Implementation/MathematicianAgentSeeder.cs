@@ -95,15 +95,14 @@ public sealed class MathematicianAgentSeeder : IHostedService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
 
-            var seededSlugs = await store.ListSeededSlugsAsync(cancellationToken).ConfigureAwait(false);
+            var seededSlugs = await store.ListSeededSlugsAsync(cancellationToken);
             if (seededSlugs.Contains(AgentDefaults.MathematicianAgentSeedSlug))
             {
                 // The Mathematician already exists — nothing to seed (idempotent).
                 return;
             }
 
-            var seeded = await store.AddSeededAsync(BuildSeedInput(), AgentDefaults.MathematicianAgentSeedSlug, cancellationToken)
-                                    .ConfigureAwait(false);
+            var seeded = await store.AddSeededAsync(BuildSeedInput(), AgentDefaults.MathematicianAgentSeedSlug, cancellationToken);
 
             _logger.LogInformation("Seeded the Mathematician agent definition {AgentDefinitionId} (slug {SeedSlug}).",
                 seeded.Id,

@@ -49,7 +49,7 @@ public sealed class RetentionSweeperService : BackgroundService
             // Inactivity-based conversation deletion stays gated on Enabled, but the orphaned-upload resweep must run
             // regardless: a failed interactive purge can strand an upload directory whose conversation row is already
             // gone, and with retention disabled (the default) nothing else would ever reconcile it.
-            await RunOrphanResweepOnceAsync(stoppingToken).ConfigureAwait(false);
+            await RunOrphanResweepOnceAsync(stoppingToken);
             return;
         }
 
@@ -59,7 +59,7 @@ public sealed class RetentionSweeperService : BackgroundService
 
         // Reconcile any stranded upload directory at startup, before the first timer tick (each subsequent full sweep
         // also runs the orphan resweep).
-        await RunOrphanResweepOnceAsync(stoppingToken).ConfigureAwait(false);
+        await RunOrphanResweepOnceAsync(stoppingToken);
 
         using var timer = new PeriodicTimer(_options.SweepInterval, _timeProvider);
 
@@ -67,7 +67,7 @@ public sealed class RetentionSweeperService : BackgroundService
         {
             try
             {
-                if (!await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+                if (!await timer.WaitForNextTickAsync(stoppingToken))
                 {
                     break;
                 }
@@ -79,7 +79,7 @@ public sealed class RetentionSweeperService : BackgroundService
 
             try
             {
-                await RunSweepOnceAsync(stoppingToken).ConfigureAwait(false);
+                await RunSweepOnceAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -112,18 +112,18 @@ public sealed class RetentionSweeperService : BackgroundService
         // of which run under the same per-conversation lock), so retention can neither delete a conversation touched
         // after selection nor let a concurrent send strand an orphan after a blind delete. Only conversations actually
         // deleted get their on-disk upload blobs torn down.
-        var candidateConversationIds = await retentionStore.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken).ConfigureAwait(false);
+        var candidateConversationIds = await retentionStore.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken);
 
         var deletedConversations = new List<(Guid ConversationId, Guid? WorkSessionId)>(candidateConversationIds.Count);
         foreach (var conversationId in candidateConversationIds)
         {
             // The owned session (1:1, may be none) is resolved BEFORE the purge: its row carries the only
             // conversation → session mapping, and the purge deletes it along with everything else.
-            var workSession = await workSessionStore.FindByConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
+            var workSession = await workSessionStore.FindByConversationAsync(conversationId, cancellationToken);
 
             var deleted = await _writer.ExecuteConversationExclusiveAsync(conversationId,
                 (dbContext, token) => ConversationRetentionPurge.TryPurgeIfExpiredAsync(dbContext, conversationId, cutoffUtc, token),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             if (deleted)
             {
                 deletedConversations.Add((conversationId, workSession?.Id));
@@ -132,7 +132,7 @@ public sealed class RetentionSweeperService : BackgroundService
 
         foreach (var (conversationId, workSessionId) in deletedConversations)
         {
-            await uploadedFileStore.DeleteAllForConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
+            await uploadedFileStore.DeleteAllForConversationAsync(conversationId, cancellationToken);
             if (workSessionId is { } sessionId)
             {
                 // Work-session artifact bytes live on disk under the session id, so the row purge cannot reach them.
@@ -142,7 +142,7 @@ public sealed class RetentionSweeperService : BackgroundService
             }
         }
 
-        var orphanCount = await PurgeOrphanedUploadDirectoriesAsync(scope, uploadedFileStore, cancellationToken).ConfigureAwait(false);
+        var orphanCount = await PurgeOrphanedUploadDirectoriesAsync(scope, uploadedFileStore, cancellationToken);
 
         if (deletedConversations.Count > 0 || orphanCount > 0)
         {
@@ -161,7 +161,7 @@ public sealed class RetentionSweeperService : BackgroundService
         {
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var uploadedFileStore = scope.ServiceProvider.GetRequiredService<IConversationUploadedFileStore>();
-            var orphanCount = await PurgeOrphanedUploadDirectoriesAsync(scope, uploadedFileStore, cancellationToken).ConfigureAwait(false);
+            var orphanCount = await PurgeOrphanedUploadDirectoriesAsync(scope, uploadedFileStore, cancellationToken);
             if (orphanCount > 0)
             {
                 _logger.LogInformation("Retention orphan resweep removed {OrphanCount} orphaned upload director(ies).", orphanCount);
@@ -196,15 +196,14 @@ public sealed class RetentionSweeperService : BackgroundService
             // existence probe stays bounded and avoids materializing every conversation id.
             var conversationExists = await dbContext.Database
                                                     .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE conversation_id = {0}", directoryId)
-                                                    .AnyAsync(cancellationToken)
-                                                    .ConfigureAwait(false);
+                                                    .AnyAsync(cancellationToken);
             if (conversationExists)
             {
                 continue;
             }
 
             // No conversation row owns this directory — a leftover from a purge whose blob teardown did not complete.
-            await uploadedFileStore.DeleteAllForConversationAsync(directoryId, cancellationToken).ConfigureAwait(false);
+            await uploadedFileStore.DeleteAllForConversationAsync(directoryId, cancellationToken);
             orphanCount++;
         }
 

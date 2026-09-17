@@ -78,7 +78,7 @@ public sealed class EvaluationRunExecutor(
     public async Task ExecuteAsync(TrainingWorkClaim claim, CancellationToken stoppingToken)
     {
         ArgumentNullException.ThrowIfNull(claim);
-        var evaluation = await _store.GetAsync(claim.TargetId, stoppingToken).ConfigureAwait(false);
+        var evaluation = await _store.GetAsync(claim.TargetId, stoppingToken);
         if (evaluation is null)
         {
             // The row and its work item are created and deleted in one transaction, so this only happens if the
@@ -93,21 +93,21 @@ public sealed class EvaluationRunExecutor(
         using var registration = _cancellations.Register(evaluation.Id, cancellation);
         try
         {
-            await ScoreAsync(evaluation, cancellation.Token).ConfigureAwait(false);
-            await TerminalizeAsync(evaluation, TrainingWorkStatus.Succeeded, message: null).ConfigureAwait(false);
+            await ScoreAsync(evaluation, cancellation.Token);
+            await TerminalizeAsync(evaluation, TrainingWorkStatus.Succeeded, message: null);
         }
         catch (OperationCanceledException)
         {
-            await TerminalizeAsync(evaluation, TrainingWorkStatus.Cancelled, "The evaluation run was cancelled.").ConfigureAwait(false);
+            await TerminalizeAsync(evaluation, TrainingWorkStatus.Cancelled, "The evaluation run was cancelled.");
         }
         catch (EvaluationRejectedException exception)
         {
-            await TerminalizeAsync(evaluation, TrainingWorkStatus.Failed, exception.Message).ConfigureAwait(false);
+            await TerminalizeAsync(evaluation, TrainingWorkStatus.Failed, exception.Message);
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "The evaluation run {EvaluationId} failed before it could report its own outcome.", evaluation.Id);
-            await TerminalizeAsync(evaluation, TrainingWorkStatus.Failed, "The evaluation run failed.").ConfigureAwait(false);
+            await TerminalizeAsync(evaluation, TrainingWorkStatus.Failed, "The evaluation run failed.");
         }
     }
 
@@ -115,18 +115,18 @@ public sealed class EvaluationRunExecutor(
     {
         var membership = Read<TrainingEvaluationMembershipV1>(evaluation.MembershipJson)
                          ?? throw new EvaluationRejectedException("The evaluation's frozen membership could not be read.");
-        var context = await LoadAsync(evaluation, membership, cancellationToken).ConfigureAwait(false);
+        var context = await LoadAsync(evaluation, membership, cancellationToken);
 
         var running = evaluation.Status == TrainingEvaluationStatus.Running
             ? evaluation
-            : await _store.TransitionAsync(evaluation.Id, evaluation.Version, TrainingEvaluationStatus.Running, cancellationToken).ConfigureAwait(false);
+            : await _store.TransitionAsync(evaluation.Id, evaluation.Version, TrainingEvaluationStatus.Running, cancellationToken);
         Publish(running, TrainingRunEventKind.EvaluationState);
 
         // The resume cursor: whatever a previous attempt already scored is skipped, so re-entering after an
         // interruption continues at the next unscored sample instead of re-running the whole hold-out set.
         var scored = TrainingEvaluationResults.Read(running.ResultsJson).Select(entry => entry.SampleId).ToHashSet();
 
-        await using var target = await ResolveExecutionTargetAsync(running, cancellationToken).ConfigureAwait(false);
+        await using var target = await ResolveExecutionTargetAsync(running, cancellationToken);
         var request = new TransientLlamaServerEvaluationRequest(target.ModelPath,
             target.AdapterPath,
             EvaluationContextTokens,
@@ -141,15 +141,14 @@ public sealed class EvaluationRunExecutor(
                 var validated = ValidateLaunchEvidence(provisional.Model, provisional.Launch, target);
                 await _store.BindExecutionProvenanceAsync(running.Id,
                                 JsonSerializer.SerializeToUtf8Bytes(validated, TrainingJson.Options),
-                                CancellationToken.None)
-                            .ConfigureAwait(false);
+                                CancellationToken.None);
             },
             async (session, token) =>
             {
                 using var client = _chatClientFactory.CreateChatClient(session.BaseAddress, session.ModelId).WithProviderTelemetry();
-                await ScoreWithClientAsync(running, membership, context, scored, client, token).ConfigureAwait(false);
+                await ScoreWithClientAsync(running, membership, context, scored, client, token);
                 return session;
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken);
         _ = ValidateExecutionEvidence(result, target);
     }
 
@@ -160,7 +159,7 @@ public sealed class EvaluationRunExecutor(
         {
             var lease = await AcquireInstalledAsync(evaluation.ModelName,
                 evaluation.ModelContentFingerprint,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             return new EvaluationExecutionTarget(lease.ModelFilePath,
                 AdapterPath: null,
                 ArtifactSha256: null,
@@ -171,7 +170,7 @@ public sealed class EvaluationRunExecutor(
         }
 
         var artifact = evaluation.SourceArtifactId is { } artifactId
-            ? await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+            ? await _runs.GetArtifactAsync(artifactId, cancellationToken)
             : null;
         if (artifact is null || artifact.DiscardedAtUtc is not null
                              || !string.Equals(artifact.Sha256, evaluation.ModelContentFingerprint, StringComparison.OrdinalIgnoreCase)
@@ -185,7 +184,7 @@ public sealed class EvaluationRunExecutor(
 
         await using (var stream = File.OpenRead(artifact.Path))
         {
-            var digest = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+            var digest = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
             if (!string.Equals(digest, artifactSha256, StringComparison.OrdinalIgnoreCase))
             {
                 throw new EvaluationRejectedException("The staged evaluation target changed after evaluation creation.");
@@ -196,11 +195,11 @@ public sealed class EvaluationRunExecutor(
         string? adapterPath;
         if (artifact.Kind == TrainingArtifactKind.AdapterGguf)
         {
-            var run = await _runs.GetAsync(artifact.RunId, cancellationToken).ConfigureAwait(false)
+            var run = await _runs.GetAsync(artifact.RunId, cancellationToken)
                       ?? throw new EvaluationRejectedException("The training run behind the staged artifact no longer exists.");
             var baseName = run.LinkedInstalledModelName
                            ?? throw new EvaluationRejectedException("The staged adapter has no installed base counterpart.");
-            var lease = await AcquireInstalledAsync(baseName, run.LinkedModelContentFingerprint, cancellationToken).ConfigureAwait(false);
+            var lease = await AcquireInstalledAsync(baseName, run.LinkedModelContentFingerprint, cancellationToken);
             modelPath = lease.ModelFilePath;
             adapterPath = artifact.Path;
             return new EvaluationExecutionTarget(modelPath,
@@ -336,7 +335,7 @@ public sealed class EvaluationRunExecutor(
         ITrainingEvaluationInstalledModelLease lease;
         try
         {
-            lease = await _installedModels.AcquireAsync(modelName, cancellationToken).ConfigureAwait(false);
+            lease = await _installedModels.AcquireAsync(modelName, cancellationToken);
         }
         catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException)
         {
@@ -346,7 +345,7 @@ public sealed class EvaluationRunExecutor(
         if (string.IsNullOrWhiteSpace(expectedFingerprint)
             || !string.Equals(lease.ModelContentFingerprint, expectedFingerprint, StringComparison.Ordinal))
         {
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
             throw new EvaluationRejectedException("The exact installed model identity recorded for this evaluation is no longer available.");
         }
 
@@ -381,10 +380,10 @@ public sealed class EvaluationRunExecutor(
                 continue;
             }
 
-            var entry = await ScoreSampleAsync(chatClient, running.ModelName, sampleId, context, cancellationToken).ConfigureAwait(false);
+            var entry = await ScoreSampleAsync(chatClient, running.ModelName, sampleId, context, cancellationToken);
             // Durable per sample rather than per batch: an interruption between two samples must cost at most the one
             // that was in flight.
-            var latest = await _store.AppendResultsAsync(running.Id, [entry], CancellationToken.None).ConfigureAwait(false);
+            var latest = await _store.AppendResultsAsync(running.Id, [entry], CancellationToken.None);
             Publish(latest, TrainingRunEventKind.EvaluationProgress);
         }
     }
@@ -444,7 +443,7 @@ public sealed class EvaluationRunExecutor(
         using var turnCancellation = TrainingAiClientPolicy.CreateTurnCancellation(cancellationToken);
         try
         {
-            response = await chatClient.GetResponseAsync(messages, options, turnCancellation.Token).ConfigureAwait(false);
+            response = await chatClient.GetResponseAsync(messages, options, turnCancellation.Token);
             activity?.SetStatus(ActivityStatusCode.Ok);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -471,7 +470,7 @@ public sealed class EvaluationRunExecutor(
         TrainingEvaluationMembershipV1 membership,
         CancellationToken cancellationToken)
     {
-        var dataset = await _datasets.GetDatasetAsync(evaluation.DatasetId, cancellationToken).ConfigureAwait(false)
+        var dataset = await _datasets.GetDatasetAsync(evaluation.DatasetId, cancellationToken)
                       ?? throw new EvaluationRejectedException("The evaluated dataset no longer exists.");
 
         // The body the dataset PINNED at creation, which is also what generation ran against. Reading the live
@@ -479,7 +478,7 @@ public sealed class EvaluationRunExecutor(
         var definition = DatasetDefinitionService.ReadPinnedBody(dataset)
                          ?? throw new EvaluationRejectedException(DatasetDefinitionService.UnpinnedDatasetReason);
 
-        var run = await _runs.GetAsync(membership.TrainingRunId, cancellationToken).ConfigureAwait(false)
+        var run = await _runs.GetAsync(membership.TrainingRunId, cancellationToken)
                   ?? throw new EvaluationRejectedException("The training run behind the frozen corpus no longer exists.");
         var freeze = Read<TrainingRunFreezeV1>(run.FreezeJson)
                      ?? throw new EvaluationRejectedException("The training run's frozen corpus metadata could not be read.");
@@ -494,7 +493,7 @@ public sealed class EvaluationRunExecutor(
             throw new EvaluationRejectedException("The evaluation membership does not match the training run's frozen corpus version.");
         }
 
-        var plaintext = await _workspace.ReadFrozenDatasetAsync(evaluation.DatasetId, freeze.FreezeId, cancellationToken).ConfigureAwait(false);
+        var plaintext = await _workspace.ReadFrozenDatasetAsync(evaluation.DatasetId, freeze.FreezeId, cancellationToken);
         var digest = Convert.ToHexStringLower(SHA256.HashData(plaintext.Span));
         if (!string.Equals(digest, freeze.FrozenCopySha256, StringComparison.Ordinal))
         {
@@ -528,7 +527,7 @@ public sealed class EvaluationRunExecutor(
 
     private async Task TerminalizeAsync(TrainingEvaluationRecord evaluation, TrainingWorkStatus status, string? message)
     {
-        var completed = await _store.CompleteAsync(evaluation.Id, status, message, CancellationToken.None).ConfigureAwait(false);
+        var completed = await _store.CompleteAsync(evaluation.Id, status, message, CancellationToken.None);
         Publish(completed, TrainingRunEventKind.EvaluationState, message);
     }
 

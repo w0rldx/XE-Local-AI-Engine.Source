@@ -60,7 +60,7 @@ internal static class RuntimeBundleIdentityCalculator
             bundleHash.AppendData(nameLength);
             bundleHash.AppendData(nameBytes);
             bundleHash.AppendData(fileLength);
-            var contentIdentity = await contentIdentityResolver(path, ct).ConfigureAwait(false);
+            var contentIdentity = await contentIdentityResolver(path, ct);
             bundleHash.AppendData(Convert.FromHexString(contentIdentity));
             listing.Add(new RuntimeBundleFileFactsV1(Path.GetFileName(path), file.Length, file.LastWriteTimeUtc.Ticks));
         }
@@ -80,7 +80,7 @@ internal static class RuntimeBundleIdentityCalculator
             throw new FileNotFoundException("The fingerprinted file no longer exists.", filePath);
         }
 
-        var guard = await hashCache.GetGuardSha256Async(file.FullName, ct).ConfigureAwait(false);
+        var guard = await hashCache.GetGuardSha256Async(file.FullName, ct);
         return BuildValidationIdentity(file, guard, authoritySha256: null);
     }
 

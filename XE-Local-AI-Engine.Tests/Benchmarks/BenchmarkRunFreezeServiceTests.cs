@@ -861,8 +861,7 @@ public sealed class BenchmarkRunFreezeServiceTests
         public List<BenchmarkRuntimeSnapshotInput> SnapshotInputs { get; } = [];
 
         public async Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
-            (await _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, kvCacheType))
-                           .ConfigureAwait(false))[0];
+            (await _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, kvCacheType)))[0];
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
             _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount, warmup));

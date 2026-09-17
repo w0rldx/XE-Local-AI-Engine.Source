@@ -24,7 +24,7 @@ public sealed class ModelFootprintProvider(
         HardwareProfile profile,
         CancellationToken ct)
     {
-        return await ResolveFootprintAsync(modelName, role, profile, requiredContextTokens: null, kvCacheType: null, ct).ConfigureAwait(false);
+        return await ResolveFootprintAsync(modelName, role, profile, requiredContextTokens: null, kvCacheType: null, ct);
     }
 
     public async Task<ModelFootprint> ResolveFootprintAsync(string modelName,
@@ -37,9 +37,9 @@ public sealed class ModelFootprintProvider(
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(profile);
 
-        var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
-        var resolved = await _profileResolver.ResolveAsync(modelName, role, variant, ct).ConfigureAwait(false);
-        var allocation = await _allocationResolver.ResolveAsync(modelName, role, variant, resolved, kvCacheType, ct).ConfigureAwait(false);
+        var variant = await _variantSelector.SelectVariantAsync(ct);
+        var resolved = await _profileResolver.ResolveAsync(modelName, role, variant, ct);
+        var allocation = await _allocationResolver.ResolveAsync(modelName, role, variant, resolved, kvCacheType, ct);
         // The free-VRAM reading rides along on the admission purely as a receipt: the capacity gate force-refreshed
         // the profile under its decision gate immediately before this call, so this is "free VRAM as of just before
         // the load" at zero extra cost. Nothing downstream may branch on it — the fit arithmetic stays in the gate.

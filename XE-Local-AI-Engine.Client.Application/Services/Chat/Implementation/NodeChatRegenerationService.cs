@@ -82,7 +82,7 @@ public sealed class NodeChatRegenerationService(
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        var turn = await LoadRegenerationTurnAsync(conversationId, originalMessageId, requestedSelectedPath, cancellationToken).ConfigureAwait(false);
+        var turn = await LoadRegenerationTurnAsync(conversationId, originalMessageId, requestedSelectedPath, cancellationToken);
         var conversation = turn.Conversation;
         var selectedPath = turn.SelectedPath;
         var original = turn.Original;
@@ -95,10 +95,9 @@ public sealed class NodeChatRegenerationService(
         // stamped with the resolved agent's attribution (id + freshly-snapshotted display name). The resolve reads only
         // conversation/original/selectedPath, so the hoist is safe and the emitted SSE order (AssistantPending ->
         // AssistantQueued) is unchanged.
-        var resolution = await ResolveTurnAsync(conversation, original, cancellationToken).ConfigureAwait(false);
+        var resolution = await ResolveTurnAsync(conversation, original, cancellationToken);
 
-        var placeholder = await MintVariantAsync(conversationId, originalMessageId, newMessageId, requestId, startedAtUtc, resolution, reasoningEffort, cancellationToken)
-            .ConfigureAwait(false);
+        var placeholder = await MintVariantAsync(conversationId, originalMessageId, newMessageId, requestId, startedAtUtc, resolution, reasoningEffort, cancellationToken);
         var correlation = new NodeChatMessageCorrelation(conversationId, placeholder.MessageId, requestId);
         var sequence = new NodeChatStreamSequence();
 
@@ -122,11 +121,11 @@ public sealed class NodeChatRegenerationService(
         // Loaded HERE rather than next to the package build below because the same ceiling is stamped on the queued and
         // streaming events: the browser's stream watchdog must know it before the collision-queue wait, which is the
         // first stretch of the turn where nothing at all arrives on the wire.
-        var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken);
 
         // Queued until the collision-queue lease is acquired in RunInvocationAsync; transitions to Streaming only
         // when the invocation actually starts, so a turn waiting behind another invocation reads "queued".
-        var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+        var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken);
         if (!string.Equals(queuedMessage.Status, NodeChatMessageStatusValues.Queued, StringComparison.Ordinal))
         {
             // A cancel raced ahead of run ownership and finalized this variant before it could be queued. Emit the terminal
@@ -201,10 +200,10 @@ public sealed class NodeChatRegenerationService(
             // capability. When offered, the catalog's local tools travel in the runtime package as the offer list; the
             // invocation factory resolves the matching executables from the registry by name. A bound definition narrows
             // that offer to its allowed set (and the resolver already withheld the offer for a non-tools model).
-            var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
+            var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken);
             var offerTools = useLocalTools && enableTools && resolution.SupportsTools;
             var allowedTools = offerTools
-                ? await ResolveAllowedToolsAsync(activeModel, resolution, cancellationToken).ConfigureAwait(false)
+                ? await ResolveAllowedToolsAsync(activeModel, resolution, cancellationToken)
                 : null;
 
             // Parity with the send path: an Orchestrator whose orchestration did not compile reruns as a lone single
@@ -218,8 +217,7 @@ public sealed class NodeChatRegenerationService(
                                          Kind = TurnNoticeKind.OrchestrationDegraded,
                                          Message = orchestrationDegradedMessage,
                                          Detail = resolution.OrchestrationOutcome.Reason.ToString()
-                                     })
-                                     .ConfigureAwait(false);
+                                     });
             }
 
             // Knowledge-base grounding parity with the send path: a regenerated plain-chat turn honors
@@ -228,12 +226,12 @@ public sealed class NodeChatRegenerationService(
             // (offerTools), so inline grounding is plain-chat only — mirroring NodeChatStreamService. The retrieval query
             // is the user turn the regenerate re-answers (same cutoff anchor as the regeneration context).
             var knowledge = useKnowledgeBase && !offerTools
-                ? await GroundOnKnowledgeBaseAsync(conversation, original, resolution, requestId, runCancellation.Token, cancellationToken).ConfigureAwait(false)
+                ? await GroundOnKnowledgeBaseAsync(conversation, original, resolution, requestId, runCancellation.Token, cancellationToken)
                 : null;
 
             var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
                 conversationId,
-                resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(localChatOptions.Value).ConfigureAwait(false),
+                resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(localChatOptions.Value),
                 BuildRegenerationContext(conversation, original, selectedPath, knowledge?.Message),
                 resolution.EffectiveModel,
                 resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
@@ -304,7 +302,7 @@ public sealed class NodeChatRegenerationService(
             // Forward persisted events to the client. The client cancellationToken stops THIS loop only (browser/SignalR
             // disconnect); it does not cancel the run or the pump, which keep going on runCancellation.Token so the
             // runner reaches its real terminal and the pump persists it.
-            await foreach (var streamEvent in eventSink.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var streamEvent in eventSink.ReadAllAsync(cancellationToken))
             {
                 yield return streamEvent;
             }
@@ -322,7 +320,7 @@ public sealed class NodeChatRegenerationService(
             // already tripped runCancellation via the registry.
             if (pumpTask is not null && runTask is not null)
             {
-                await DrainRunAsync(pumpTask, runTask, runCancellation, requestId).ConfigureAwait(false);
+                await DrainRunAsync(pumpTask, runTask, runCancellation, requestId);
             }
         }
     }
@@ -339,17 +337,17 @@ public sealed class NodeChatRegenerationService(
     {
         // Reject regeneration on a remote-origin (view-only) conversation before any persistence. Authoritative
         // guard; throwing here propagates to the hub caller, same as the send path.
-        await mutationGuard.EnsureMutableAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        await mutationGuard.EnsureMutableAsync(conversationId, cancellationToken);
 
         // Persist a request-supplied selection BEFORE reading the conversation. The write also CLEARS the stored
         // compaction synopsis (a synopsis built on the previous path can misrepresent the newly selected branch), so a
         // DTO read first would still carry a synopsis the database no longer has — and BuildRegenerationContext would
         // splice that stale summary in AND drop the verbatim messages it claims to cover.
         var persistedSelectedPath = requestedSelectedPath is not null
-            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId, requestedSelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
+            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId, requestedSelectedPath, NowUnixMilliseconds()), cancellationToken)
             : null;
 
-        var conversation = await persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false)
+        var conversation = await persistence.GetConversationAsync(conversationId, cancellationToken)
                            ?? throw new NodeChatConversationNotFoundException(conversationId);
 
         var original = conversation.Messages.FirstOrDefault(message => message.MessageId == originalMessageId)
@@ -387,7 +385,7 @@ public sealed class NodeChatRegenerationService(
                               // effort wins over the regenerate request's selection (same precedence as the runtime
                               // package built for the rerun). Survives reload off the metadata blob.
                               ReasoningEffort: resolution.Resolved?.ReasoningEffort ?? reasoningEffort),
-                          cancellationToken).ConfigureAwait(false)
+                          cancellationToken)
                       ?? throw new NodeChatMessageNotFoundException(originalMessageId);
 
         return variant.Variant;
@@ -408,7 +406,7 @@ public sealed class NodeChatRegenerationService(
             return resolvedAllowedTools;
         }
 
-        var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(activeModel, resolution.EffectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
+        var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(activeModel, resolution.EffectiveModelIsCloud, cancellationToken);
         return
         [
             .. fallbackOffer.Select(tool => tool with
@@ -444,14 +442,14 @@ public sealed class NodeChatRegenerationService(
             var cloudModelForNotice = resolution.EffectiveModelIsCloud
                 ? resolution.EffectiveModel
                 : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
-            await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
+            await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken);
             return null;
         }
 
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
         return string.IsNullOrWhiteSpace(retrievalQuery)
             ? null
-            : await turnContextBuilder.BuildKnowledgeContextAsync(retrievalQuery, isRegeneratedTurn: true, runCancellationToken).ConfigureAwait(false);
+            : await turnContextBuilder.BuildKnowledgeContextAsync(retrievalQuery, isRegeneratedTurn: true, runCancellationToken);
     }
 
     // Drains the run after the SSE consumer is gone. The pump is observed FIRST: on a persistence fault it faults here,
@@ -461,7 +459,7 @@ public sealed class NodeChatRegenerationService(
     {
         try
         {
-            await pumpTask.ConfigureAwait(false);
+            await pumpTask;
         }
         catch (OperationCanceledException)
         {
@@ -470,12 +468,12 @@ public sealed class NodeChatRegenerationService(
         catch (Exception exception)
         {
             logger.LogError(exception, "Local node chat regeneration pump faulted; cancelling the run. RequestId={RequestId}", requestId);
-            await runCancellation.CancelAsync().ConfigureAwait(false);
+            await runCancellation.CancelAsync();
         }
 
         try
         {
-            await runTask.ConfigureAwait(false);
+            await runTask;
         }
         catch (OperationCanceledException)
         {
@@ -504,9 +502,9 @@ public sealed class NodeChatRegenerationService(
 
         try
         {
-            lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken).ConfigureAwait(false);
+            lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
 
-            var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+            var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken);
             if (!string.Equals(streamingMessage.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))
             {
                 // The variant was finalized (cancelled) before streaming could start. Do not stream into a terminal
@@ -516,8 +514,7 @@ public sealed class NodeChatRegenerationService(
 
             await eventSink.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next(),
                                    invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
 
             // Symmetric with the send path: a regenerate of a "Local runtime default" turn that resolved no installed
             // GGUF chat model fails BEFORE any provider invocation with the dedicated ModelNotInstalled category.
@@ -527,13 +524,13 @@ public sealed class NodeChatRegenerationService(
             }
 
             using var context = InvocationExecutionContext.CreatePlain(package, messageId);
-            await invocationRunner.RunAsync(context, cancellationToken).ConfigureAwait(false);
+            await invocationRunner.RunAsync(context, cancellationToken);
         }
         catch (OperationCanceledException)
         {
             await eventDispatcher.ReportInvocationFailedAsync(requestId,
                 PreRunCancelledMessage,
-                FailureCategory.Cancelled).ConfigureAwait(false);
+                FailureCategory.Cancelled);
         }
         catch (NoChatModelInstalledException exception)
         {
@@ -541,20 +538,20 @@ public sealed class NodeChatRegenerationService(
             logger.LogWarning(exception, "Local node chat regeneration had no installed GGUF chat model for the local default. RequestId={RequestId}", requestId);
             await eventDispatcher.ReportInvocationFailedAsync(requestId,
                 exception.Message,
-                FailureCategory.ModelNotInstalled).ConfigureAwait(false);
+                FailureCategory.ModelNotInstalled);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Local node chat regeneration failed. RequestId={RequestId}", requestId);
             await eventDispatcher.ReportInvocationFailedAsync(requestId,
                 "local-chat-regeneration-failed",
-                FailureCategory.Unexpected).ConfigureAwait(false);
+                FailureCategory.Unexpected);
         }
         finally
         {
             if (lease is not null)
             {
-                await lease.DisposeAsync().ConfigureAwait(false);
+                await lease.DisposeAsync();
             }
 
             stateWriter.TryComplete();
@@ -706,8 +703,8 @@ public sealed class NodeChatRegenerationService(
             throw new ArgumentException("Instructions resource must be provided.", nameof(options));
         }
 
-        var persona = await LoadEmbeddedResourceAsync(options.InstructionsResource).ConfigureAwait(false);
-        var scaffold = await LoadEmbeddedResourceAsync(BaseScaffoldResourceName).ConfigureAwait(false);
+        var persona = await LoadEmbeddedResourceAsync(options.InstructionsResource);
+        var scaffold = await LoadEmbeddedResourceAsync(BaseScaffoldResourceName);
         return string.IsNullOrWhiteSpace(scaffold) ? persona : $"{scaffold.TrimEnd()}\n\n{persona}";
     }
 
@@ -720,7 +717,7 @@ public sealed class NodeChatRegenerationService(
         await using var stream = assembly.GetManifestResourceStream(resourceName)
                                  ?? throw new InvalidOperationException($"Embedded instructions resource '{resourceName}' was not found.");
         using var reader = new StreamReader(stream);
-        return await reader.ReadToEndAsync(CancellationToken.None).ConfigureAwait(false);
+        return await reader.ReadToEndAsync(CancellationToken.None);
     }
 
     /// <summary>
@@ -753,8 +750,8 @@ public sealed class NodeChatRegenerationService(
         }
         else
         {
-            var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-            activeModel = await localDefaultChatModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken).ConfigureAwait(false);
+            var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken);
+            activeModel = await localDefaultChatModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
             requiresInstalledChatModel = activeModel is null;
         }
 
@@ -762,11 +759,11 @@ public sealed class NodeChatRegenerationService(
         // conversation binding, then the seeded Default Assistant (process-memoized id).
         var effectiveAgentId = original.AgentDefinitionId
                                ?? conversation.AgentDefinitionId
-                               ?? await defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken).ConfigureAwait(false);
+                               ?? await defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
 
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
 
-        return await turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery, userPickedConcreteModel, cancellationToken).ConfigureAwait(false);
+        return await turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery, userPickedConcreteModel, cancellationToken);
     }
 
     /// <summary>
@@ -792,8 +789,7 @@ public sealed class NodeChatRegenerationService(
                                  Message =
                                      "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
                                  Detail = effectiveModel
-                             })
-                             .ConfigureAwait(false);
+                             });
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

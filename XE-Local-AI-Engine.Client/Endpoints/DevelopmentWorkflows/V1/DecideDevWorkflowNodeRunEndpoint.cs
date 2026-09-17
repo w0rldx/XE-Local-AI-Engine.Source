@@ -45,14 +45,12 @@ public sealed class DecideDevWorkflowNodeRunEndpoint(IDevWorkflowRunService runs
         // question a review of an AI-driven change actually gets asked.
         var subject = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-        var result = await _runs.DecideAsync(req.RunId, req.NodeRunId, req.OperationId, decision, req.Comment, req.PayloadJson, subject, ct)
-                                .ConfigureAwait(false);
+        var result = await _runs.DecideAsync(req.RunId, req.NodeRunId, req.OperationId, decision, req.Comment, req.PayloadJson, subject, ct);
 
         // The run status may still read Running or WaitingForApproval: what follows a decision is the dispatcher's
         // work, taken out of band on its own clock. Reporting the CURRENT state is the same honesty the 202s encode.
         var nodeRun = result.Detail.NodeRuns.FirstOrDefault(entry => entry.Id == req.NodeRunId)
                       ?? throw new DevWorkflowNotFoundException($"Node run '{req.NodeRunId}' was not found on run '{req.RunId}' after its decision.");
-        await Send.OkAsync(new DevWorkflowDecisionResultResponse(result.Decision.ToResponse(), result.Detail.Run.Status.ToString(), nodeRun.Status.ToString()), ct)
-                  .ConfigureAwait(false);
+        await Send.OkAsync(new DevWorkflowDecisionResultResponse(result.Decision.ToResponse(), result.Detail.Run.Status.ToString(), nodeRun.Status.ToString()), ct);
     }
 }

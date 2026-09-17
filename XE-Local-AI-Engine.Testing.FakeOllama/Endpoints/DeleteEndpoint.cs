@@ -6,13 +6,13 @@ internal static class DeleteEndpoint
 {
     public static async Task<IResult> HandleAsync(HttpContext context, FakeOllamaState state)
     {
-        using var body = await FakeOllamaEndpointMapper.ReadJsonAsync(context).ConfigureAwait(false);
+        using var body = await FakeOllamaEndpointMapper.ReadJsonAsync(context);
         var root = body?.RootElement;
         var model = root is null ? null : FakeOllamaEndpointMapper.GetString(root.Value, "model");
 
         FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, model);
 
-        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
+        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model))
         {
             return Results.Empty;
         }

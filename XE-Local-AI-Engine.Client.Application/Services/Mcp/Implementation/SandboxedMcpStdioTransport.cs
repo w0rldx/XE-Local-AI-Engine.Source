@@ -210,18 +210,18 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 + "Install bubblewrap (bwrap) together with the user-namespace support the sandbox containment probe reports as missing, or change this server to the Privileged host tier if it genuinely needs access to this machine.");
         }
 
-        var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
-        var handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity), cancellationToken).ConfigureAwait(false);
+        var identity = await _identityProvider.GetAsync(cancellationToken);
+        var handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity), cancellationToken);
 
         ISandboxInteractiveProcess? process = null;
         try
         {
-            process = await _provider.StartInteractiveAsync(handle, BuildCommandRequest(), cancellationToken).ConfigureAwait(false);
+            process = await _provider.StartInteractiveAsync(handle, BuildCommandRequest(), cancellationToken);
 
             // StreamClientTransport's first argument is the stream the client WRITES to reach the server, and the
             // second is the one it READS the server's replies from — so they are the child's stdin and stdout.
             var streamTransport = new StreamClientTransport(process.StandardInput, process.StandardOutput, _loggerFactory);
-            var inner = await streamTransport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            var inner = await streamTransport.ConnectAsync(cancellationToken);
             return new SandboxedTransport(inner, process, _provider, handle);
         }
         catch
@@ -229,10 +229,10 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             // Nothing reached the caller, so nothing else will ever tear this down.
             if (process is not null)
             {
-                await process.DisposeAsync().ConfigureAwait(false);
+                await process.DisposeAsync();
             }
 
-            await KillQuietlyAsync(_provider, handle).ConfigureAwait(false);
+            await KillQuietlyAsync(_provider, handle);
             throw;
         }
     }
@@ -404,7 +404,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     {
         try
         {
-            await provider.KillAsync(handle, CancellationToken.None).ConfigureAwait(false);
+            await provider.KillAsync(handle, CancellationToken.None);
         }
         catch (Exception exception) when (exception is SandboxHandleInvalidException or IOException or UnauthorizedAccessException)
         {
@@ -519,9 +519,9 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         public async ValueTask DisposeAsync()
         {
             // Innermost first: stop reading the streams, then kill the process that owns them, then delete the jail.
-            await _inner.DisposeAsync().ConfigureAwait(false);
-            await _process.DisposeAsync().ConfigureAwait(false);
-            await KillQuietlyAsync(_provider, _handle).ConfigureAwait(false);
+            await _inner.DisposeAsync();
+            await _process.DisposeAsync();
+            await KillQuietlyAsync(_provider, _handle);
         }
     }
 }

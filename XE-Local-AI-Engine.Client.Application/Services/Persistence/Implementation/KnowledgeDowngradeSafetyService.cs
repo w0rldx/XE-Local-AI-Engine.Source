@@ -39,13 +39,13 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         var sourceConnectionString = dbContext.Database.GetConnectionString()
                                      ?? throw new InvalidOperationException("The node database connection string is unavailable.");
         await using var connection = CreateReadOnlyConnection(sourceConnectionString);
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        if (!await HasCollectionMigrationSchemaAsync(connection, cancellationToken).ConfigureAwait(false))
+        await connection.OpenAsync(cancellationToken);
+        if (!await HasCollectionMigrationSchemaAsync(connection, cancellationToken))
         {
             return new KnowledgeDowngradePreflightResult(false, true, 0, 0, 0, []);
         }
 
-        return await ReadConflictsAsync(connection, cancellationToken).ConfigureAwait(false);
+        return await ReadConflictsAsync(connection, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -67,13 +67,13 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         // which Microsoft.Data.Sqlite's VACUUM INTO surface does not expose.
         RejectReparsePoint(new DirectoryInfo(exportDirectory));
         RejectExistingDestination(destinationPath);
-        await VacuumIntoAsync(dbContext, destinationPath, cancellationToken).ConfigureAwait(false);
+        await VacuumIntoAsync(dbContext, destinationPath, cancellationToken);
 
         try
         {
-            var preflight = await PreflightArtifactAsync(destinationPath, cancellationToken).ConfigureAwait(false);
+            var preflight = await PreflightArtifactAsync(destinationPath, cancellationToken);
             var bytes = new FileInfo(destinationPath).Length;
-            var sha256 = await HashFileAsync(destinationPath, cancellationToken).ConfigureAwait(false);
+            var sha256 = await HashFileAsync(destinationPath, cancellationToken);
             return new KnowledgeDowngradeExportResult(destinationPath, bytes, sha256, preflight);
         }
         catch
@@ -87,13 +87,13 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         CancellationToken cancellationToken)
     {
         await using var connection = CreateReadOnlyConnection($"Data Source={databasePath}");
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        if (!await HasCollectionMigrationSchemaAsync(connection, cancellationToken).ConfigureAwait(false))
+        await connection.OpenAsync(cancellationToken);
+        if (!await HasCollectionMigrationSchemaAsync(connection, cancellationToken))
         {
             return new KnowledgeDowngradePreflightResult(false, true, 0, 0, 0, []);
         }
 
-        return await ReadConflictsAsync(connection, cancellationToken).ConfigureAwait(false);
+        return await ReadConflictsAsync(connection, cancellationToken);
     }
 
     private static SqliteConnection CreateReadOnlyConnection(string connectionString)
@@ -110,7 +110,7 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('knowledge_documents') WHERE name = 'collection_id';";
-        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1;
     }
 
@@ -133,8 +133,8 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         var groups = new List<KnowledgeDowngradeConflict>();
         var documentIdentifiers = new List<string>();
         string? currentHash = null;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             var contentHash = reader.GetString(0);
             if (currentHash is not null && !string.Equals(currentHash, contentHash, StringComparison.Ordinal))
@@ -225,14 +225,14 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         CancellationToken cancellationToken)
     {
         var escapedPath = destinationPath.Replace("'", "''", StringComparison.Ordinal);
-        await dbContext.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.OpenConnectionAsync(cancellationToken);
         try
         {
             await using var command = dbContext.Database.GetDbConnection().CreateCommand();
 #pragma warning disable CA2100, S2077 // SQLite cannot parameterize VACUUM INTO; the destination path is quote-escaped above.
             command.CommandText = $"VACUUM INTO '{escapedPath}';";
 #pragma warning restore CA2100, S2077
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch
         {
@@ -241,14 +241,14 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         }
         finally
         {
-            await dbContext.Database.CloseConnectionAsync().ConfigureAwait(false);
+            await dbContext.Database.CloseConnectionAsync();
         }
     }
 
     private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
     }
 
     private static void TryDeleteIncompleteArtifact(string path)

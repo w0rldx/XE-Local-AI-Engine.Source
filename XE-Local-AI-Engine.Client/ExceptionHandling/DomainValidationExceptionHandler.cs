@@ -81,7 +81,7 @@ public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExc
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",
             exception.GetType().Name);
 
-        await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status400BadRequest, cancellationToken).ConfigureAwait(false);
+        await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status400BadRequest, cancellationToken);
 
         return true;
     }

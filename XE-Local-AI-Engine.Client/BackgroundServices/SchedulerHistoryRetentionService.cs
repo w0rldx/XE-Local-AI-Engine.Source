@@ -44,7 +44,7 @@ public sealed class SchedulerHistoryRetentionService : BackgroundService
         {
             try
             {
-                if (!await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+                if (!await timer.WaitForNextTickAsync(stoppingToken))
                 {
                     break;
                 }
@@ -56,7 +56,7 @@ public sealed class SchedulerHistoryRetentionService : BackgroundService
 
             try
             {
-                await SweepAsync(stoppingToken).ConfigureAwait(false);
+                await SweepAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -78,7 +78,7 @@ public sealed class SchedulerHistoryRetentionService : BackgroundService
                                      .AddDays(-_options.HistoryRetentionDays)
                                      .ToUnixTimeMilliseconds();
 
-        var deletedRunCount = await runStore.SweepOlderThanAsync(cutoffUtc, cancellationToken).ConfigureAwait(false);
+        var deletedRunCount = await runStore.SweepOlderThanAsync(cutoffUtc, cancellationToken);
 
         if (deletedRunCount > 0)
         {

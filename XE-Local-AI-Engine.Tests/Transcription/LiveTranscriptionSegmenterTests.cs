@@ -29,7 +29,7 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(_ => []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        var ticks = await PushAsync(segmenter, 0, 3_000, 500).ConfigureAwait(false);
+        var ticks = await PushAsync(segmenter, 0, 3_000, 500);
 
         AssertEx.NotEmpty(transcriber.Windows, "The ticks still submit; it is the model that reports nothing.");
         AssertEx.Empty(ticks.SelectMany(tick => tick.Commits), "Audio the model found no speech in never becomes a segment.");
@@ -49,7 +49,7 @@ public sealed class LiveTranscriptionSegmenterTests
             : []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
-        var ticks = await PushAsync(segmenter, 0, 2_000, 500).ConfigureAwait(false);
+        var ticks = await PushAsync(segmenter, 0, 2_000, 500);
 
         var commits = ticks.SelectMany(tick => tick.Commits).ToList();
         AssertEx.Equal(2, commits.Count, "Both returned segments commit: the tail guard is suspended at the cap.");
@@ -64,7 +64,7 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(_ => []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
-        var ticks = await PushAsync(segmenter, 0, 2_000, 500).ConfigureAwait(false);
+        var ticks = await PushAsync(segmenter, 0, 2_000, 500);
 
         AssertEx.Empty(ticks.SelectMany(tick => tick.Commits), "A window the model found nothing in emits no row.");
         AssertEx.Equal(2_000L, segmenter.CommittedEndMs, "It is still dropped, or the cap could never clear the buffer.");
@@ -84,7 +84,7 @@ public sealed class LiveTranscriptionSegmenterTests
             : []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
-        var ticks = await PushAsync(segmenter, 0, 2_000, 500).ConfigureAwait(false);
+        var ticks = await PushAsync(segmenter, 0, 2_000, 500);
 
         var commits = ticks.SelectMany(tick => tick.Commits).ToList();
         AssertEx.Equal(1, commits.Count, "The overlapping repeat is dropped by the watermark, with no text comparison.");
@@ -98,7 +98,7 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        _ = await PushAsync(segmenter, 0, 999, 37).ConfigureAwait(false);
+        _ = await PushAsync(segmenter, 0, 999, 37);
 
         AssertEx.Equal(0, transcriber.CallCount, "A tick runs when audio time crosses the boundary, not when a frame arrives.");
         AssertEx.Equal(999L, segmenter.AudioEndMs, "The clock still advanced with every frame.");
@@ -110,11 +110,11 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        var ticks = await PushAsync(segmenter, 0, 1_500, 500).ConfigureAwait(false);
+        var ticks = await PushAsync(segmenter, 0, 1_500, 500);
         AssertEx.Empty(ticks.SelectMany(tick => tick.Commits), "A segment touching the end of the window is held back by the guard.");
         AssertEx.NotEmpty(ticks[^1].Partial, "It is provisional text in the meantime.");
 
-        var flush = await segmenter.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        var flush = await segmenter.FlushAsync(CancellationToken.None);
 
         AssertEx.Equal(1, flush.Commits.Count, "The flush suspends the guard, so the held tail commits.");
         AssertEx.Equal(0L, flush.Commits[0].StartMs, "It covers the whole retained span.");
@@ -141,7 +141,7 @@ public sealed class LiveTranscriptionSegmenterTests
             var transcriber = new ScriptedWhisperTranscriber(respond);
             var segmenter = Create(transcriber, Settings(maxWindowSeconds));
 
-            _ = await PushAsync(segmenter, 0, 12_000, 500).ConfigureAwait(false);
+            _ = await PushAsync(segmenter, 0, 12_000, 500);
 
             AssertEx.True(segmenter.CommittedEndMs > 0, $"The cap must move the watermark with {mode} at a {maxWindowSeconds} s window.");
             AssertCoversWithoutAHole(transcriber.Windows,
@@ -159,7 +159,7 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        _ = await PushAsync(segmenter, 0, 6_000, 500).ConfigureAwait(false);
+        _ = await PushAsync(segmenter, 0, 6_000, 500);
 
         AssertEx.ContainsSingle(transcriber.Windows,
             window => window.StartMs == 0 && window.EndMs == 5_000,
@@ -173,7 +173,7 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(_ => []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
-        _ = await PushAsync(segmenter, 0, 4_000, 500).ConfigureAwait(false);
+        _ = await PushAsync(segmenter, 0, 4_000, 500);
 
         // The fake decodes the submitted payload's own millisecond indices, so a segmenter that moved the watermark
         // without dropping the bytes would submit the stale prefix here and this range would read [0, 2000).
@@ -189,10 +189,10 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        _ = await PushAsync(segmenter, 0, 750, 250).ConfigureAwait(false);
+        _ = await PushAsync(segmenter, 0, 750, 250);
         AssertEx.Equal(0, transcriber.CallCount, "A recording shorter than one tick fires no tick.");
 
-        var flush = await segmenter.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        var flush = await segmenter.FlushAsync(CancellationToken.None);
 
         AssertEx.Equal(1, transcriber.CallCount, "The flush submits it anyway, or the whole dictation transcribes to nothing.");
         AssertEx.Equal(0L, transcriber.Windows[0].StartMs, "From the start of the recording.");
@@ -208,13 +208,13 @@ public sealed class LiveTranscriptionSegmenterTests
             : [new WhisperTranscriptSegment(0.0, window.DurationMs / 1000.0, "second", 0.9)]);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5, tailGuardMs: 100));
 
-        _ = await PushAsync(segmenter, 0, 1_000, 500).ConfigureAwait(false);
+        _ = await PushAsync(segmenter, 0, 1_000, 500);
         AssertEx.Equal(900L, segmenter.CommittedEndMs, "The first tick commits inside the shorter guard.");
 
-        _ = await PushAsync(segmenter, 1_000, 1_300, 300).ConfigureAwait(false);
+        _ = await PushAsync(segmenter, 1_000, 1_300, 300);
         AssertEx.Equal(1, transcriber.CallCount, "The 300 ms suffix fires no tick of its own.");
 
-        var flush = await segmenter.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        var flush = await segmenter.FlushAsync(CancellationToken.None);
 
         AssertEx.Equal(900L, transcriber.Windows[^1].StartMs, "The flush picks up where the commit left off.");
         AssertEx.Equal(1_300L, transcriber.Windows[^1].EndMs, "And carries the whole sub-second suffix.");
@@ -226,17 +226,17 @@ public sealed class LiveTranscriptionSegmenterTests
     {
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
-        _ = await PushAsync(segmenter, 0, 750, 250).ConfigureAwait(false);
+        _ = await PushAsync(segmenter, 0, 750, 250);
 
         transcriber.Failure = new InvalidOperationException("the runtime went away");
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(async () => await segmenter.FlushAsync(CancellationToken.None).ConfigureAwait(false),
-            "A failed finalization surfaces rather than pretending the audio was transcribed.").ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(async () => await segmenter.FlushAsync(CancellationToken.None),
+            "A failed finalization surfaces rather than pretending the audio was transcribed.");
 
         AssertEx.Equal(0L, segmenter.CommittedEndMs, "A failed flush must not move the watermark.");
         AssertEx.Equal(750L, segmenter.AudioEndMs, "The clock is unchanged too.");
 
         transcriber.Failure = null;
-        var retry = await segmenter.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        var retry = await segmenter.FlushAsync(CancellationToken.None);
 
         AssertEx.Equal(0L, transcriber.Windows[^1].StartMs, "The retained audio was still there for the retry.");
         AssertEx.Equal(750L, transcriber.Windows[^1].EndMs, "All of it.");
@@ -251,8 +251,8 @@ public sealed class LiveTranscriptionSegmenterTests
         var fine = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var fineSegmenter = Create(fine, Settings(maxWindowSeconds: 2));
 
-        var coarseTicks = await PushRawAsync(coarseSegmenter, LivePcm.Range(0, 4_000), 16_384).ConfigureAwait(false);
-        var fineTicks = await PushRawAsync(fineSegmenter, LivePcm.Range(0, 4_000), 2).ConfigureAwait(false);
+        var coarseTicks = await PushRawAsync(coarseSegmenter, LivePcm.Range(0, 4_000), 16_384);
+        var fineTicks = await PushRawAsync(fineSegmenter, LivePcm.Range(0, 4_000), 2);
 
         AssertEx.Equal(string.Join(';', coarse.Windows), string.Join(';', fine.Windows), "The frame partition must not change which windows are submitted.");
         AssertEx.Equal(Ranges(coarseTicks), Ranges(fineTicks), "Nor which segments commit, nor when.");
@@ -270,7 +270,7 @@ public sealed class LiveTranscriptionSegmenterTests
 
         // Sixteen of these carry one millisecond, so a clock accumulated per frame would divide 2 by 32 sixteen times,
         // stay at zero forever and never fire a tick.
-        _ = await PushRawAsync(segmenter, LivePcm.Range(0, 1_000), 2).ConfigureAwait(false);
+        _ = await PushRawAsync(segmenter, LivePcm.Range(0, 1_000), 2);
 
         AssertEx.Equal(1_000L, segmenter.AudioEndMs, "The cumulative byte count is what the clock is derived from.");
         AssertEx.Equal(1, transcriber.CallCount, "So the tick at one second fires exactly once.");
@@ -287,7 +287,7 @@ public sealed class LiveTranscriptionSegmenterTests
 
         // One 60 s push, which is the shape an in-process producer can legitimately deliver. A segmenter that
         // submitted "the whole uncommitted span, however long" would make a single 60 s inference request here.
-        _ = await segmenter.PushAsync(LivePcm.Range(0, 60_000), CancellationToken.None).ConfigureAwait(false);
+        _ = await segmenter.PushAsync(LivePcm.Range(0, 60_000), CancellationToken.None);
 
         AssertEx.NotEmpty(transcriber.Windows, "The push is processed, not buffered whole.");
         AssertEx.Equal(maxWindowSeconds * 1_000L,
@@ -301,7 +301,7 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(_ => []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
-        _ = await segmenter.PushAsync(LivePcm.Range(0, 20_000), CancellationToken.None).ConfigureAwait(false);
+        _ = await segmenter.PushAsync(LivePcm.Range(0, 20_000), CancellationToken.None);
 
         var starts = transcriber.Windows.Select(window => window.StartMs).ToList();
         AssertEx.Equal(string.Join(',', starts.OrderBy(start => start)),
@@ -319,8 +319,8 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(_ => [new WhisperTranscriptSegment(0.0, 0.0, "x", 0.5)]);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
-        _ = await AssertEx.ThrowsAsync<LiveSegmenterStalledException>(async () => await segmenter.PushAsync(LivePcm.Range(0, 4_000), CancellationToken.None).ConfigureAwait(false),
-            "A lane that cannot progress fails the session instead of discarding the audio it cannot resolve.").ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<LiveSegmenterStalledException>(async () => await segmenter.PushAsync(LivePcm.Range(0, 4_000), CancellationToken.None),
+            "A lane that cannot progress fails the session instead of discarding the audio it cannot resolve.");
     }
 
     [Test]
@@ -332,7 +332,7 @@ public sealed class LiveTranscriptionSegmenterTests
         };
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        var ticks = await PushAsync(segmenter, 0, 3_000, 500).ConfigureAwait(false);
+        var ticks = await PushAsync(segmenter, 0, 3_000, 500);
 
         AssertEx.Equal("en", segmenter.DetectedLanguageCode, "The first code any window reports is the session's.");
         AssertEx.ContainsSingle(ticks, tick => tick.DetectedLanguage == "en", "It is reported once, on the call that learned it.");
@@ -363,7 +363,7 @@ public sealed class LiveTranscriptionSegmenterTests
             : []);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
-        var ticks = await PushAsync(segmenter, 0, 2_000, 500).ConfigureAwait(false);
+        var ticks = await PushAsync(segmenter, 0, 2_000, 500);
 
         var commits = ticks.SelectMany(tick => tick.Commits).ToList();
         AssertEx.Equal(1, commits.Count, "An overrunning segment is the model's answer for this window and must still commit.");
@@ -378,8 +378,8 @@ public sealed class LiveTranscriptionSegmenterTests
             [new WhisperTranscriptSegment(0.0, (window.DurationMs + 20) / 1000.0, "ask what you can do", 0.9)]);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        _ = await PushAsync(segmenter, 0, 750, 250).ConfigureAwait(false);
-        var flush = await segmenter.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        _ = await PushAsync(segmenter, 0, 750, 250);
+        var flush = await segmenter.FlushAsync(CancellationToken.None);
 
         AssertEx.Equal(1, flush.Commits.Count, "A flush is the last word on this audio; rejecting the overrun loses the whole recording.");
         AssertEx.Equal(770L, flush.Commits[0].EndMs, "The commit keeps the model's own end time.");
@@ -395,7 +395,7 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        var ticks = await PushAsync(segmenter, 0, 1_000, 500).ConfigureAwait(false);
+        var ticks = await PushAsync(segmenter, 0, 1_000, 500);
 
         AssertEx.Empty(ticks.SelectMany(tick => tick.Commits), "An ordinary tick still honours the tail guard.");
         AssertEx.Equal(0L, segmenter.CommittedEndMs, "So the watermark has not moved.");
@@ -423,7 +423,7 @@ public sealed class LiveTranscriptionSegmenterTests
         for (var at = fromMs; at < toMs; at += frameMs)
         {
             var until = Math.Min(at + frameMs, toMs);
-            ticks.Add(await segmenter.PushAsync(LivePcm.Range(at, until), CancellationToken.None).ConfigureAwait(false));
+            ticks.Add(await segmenter.PushAsync(LivePcm.Range(at, until), CancellationToken.None));
         }
 
         return ticks;
@@ -435,7 +435,7 @@ public sealed class LiveTranscriptionSegmenterTests
         for (var offset = 0; offset < pcm.Length; offset += frameBytes)
         {
             var length = Math.Min(frameBytes, pcm.Length - offset);
-            ticks.Add(await segmenter.PushAsync(pcm.Slice(offset, length), CancellationToken.None).ConfigureAwait(false));
+            ticks.Add(await segmenter.PushAsync(pcm.Slice(offset, length), CancellationToken.None));
         }
 
         return ticks;
@@ -504,7 +504,7 @@ internal sealed class ScriptedWhisperTranscriber(Func<SubmittedWindow, IReadOnly
         AssertEx.True(request.UseVoiceActivityDetection, "A live window is always submitted with VAD on.");
 
         using var buffer = new MemoryStream();
-        await request.Audio.CopyToAsync(buffer, ct).ConfigureAwait(false);
+        await request.Audio.CopyToAsync(buffer, ct);
         request.Audio.Seek(offset: 0, SeekOrigin.Begin);
 
         var window = LivePcm.Decode(WavPayload.Read(buffer.ToArray()));

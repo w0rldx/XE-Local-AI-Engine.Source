@@ -31,7 +31,7 @@ public sealed class ManagedWorkSessionArtifactBlobStore : IWorkSessionArtifactBl
         ReadOnlyMemory<byte> content,
         CancellationToken cancellationToken = default)
     {
-        var written = await _blobs.WriteAsync(sessionId, artifactId, content, cancellationToken).ConfigureAwait(false);
+        var written = await _blobs.WriteAsync(sessionId, artifactId, content, cancellationToken);
         return new WorkSessionArtifactBlobWriteResult(written.OpaqueReference, written.ContentHash, written.ByteCount);
     }
 
@@ -41,7 +41,7 @@ public sealed class ManagedWorkSessionArtifactBlobStore : IWorkSessionArtifactBl
         long expectedByteCount,
         CancellationToken cancellationToken = default)
     {
-        var read = await _blobs.ReadAsync(sessionId, artifactId, expectedHash, expectedByteCount, cancellationToken).ConfigureAwait(false);
+        var read = await _blobs.ReadAsync(sessionId, artifactId, expectedHash, expectedByteCount, cancellationToken);
         return new WorkSessionArtifactBlobReadResult(Map(read.Status), read.Content);
     }
 

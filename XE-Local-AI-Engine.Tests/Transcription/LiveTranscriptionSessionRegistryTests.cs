@@ -41,9 +41,9 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await WaitForSegmentsAsync(published, count: 1).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        await WaitForSegmentsAsync(published, count: 1);
 
         Received.InOrder(() =>
         {
@@ -75,10 +75,9 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var published = fixture.RecordSegments();
 
         await fixture.Registry
-                     .StartLiveSessionAsync(sessionId, LiveOptions(persist: false, TranscriptionSourceKind.Dictation), CancellationToken.None)
-                     .ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        var segments = await WaitForSegmentsAsync(published, count: 1).ConfigureAwait(false);
+                     .StartLiveSessionAsync(sessionId, LiveOptions(persist: false, TranscriptionSourceKind.Dictation), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        var segments = await WaitForSegmentsAsync(published, count: 1);
 
         AssertEx.Equal("1|Mono|0-1000|w0-1000", Describe(segments[0]),
             "A persist-free session emits the identical commit event; only the row is missing.");
@@ -95,12 +94,11 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var published = fixture.RecordSegments();
 
         await fixture.Registry
-                     .StartLiveSessionAsync(sessionId, LiveOptions(persist: false, TranscriptionSourceKind.Dictation), CancellationToken.None)
-                     .ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await WaitForSegmentsAsync(published, count: 1).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 1_000, toMs: 2_000).ConfigureAwait(false);
-        var segments = await WaitForSegmentsAsync(published, count: 2).ConfigureAwait(false);
+                     .StartLiveSessionAsync(sessionId, LiveOptions(persist: false, TranscriptionSourceKind.Dictation), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        await WaitForSegmentsAsync(published, count: 1);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 1_000, toMs: 2_000);
+        var segments = await WaitForSegmentsAsync(published, count: 2);
 
         AssertEx.Equal("1,2", string.Join(',', segments.Select(static segment => segment.Seq)),
             "The counter is the registry's own, so the client's dedupe-on-sequence works with nothing in the database behind it.");
@@ -114,13 +112,12 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
 
         await fixture.Registry
-                     .StartLiveSessionAsync(sessionId, LiveOptions(persist: false, TranscriptionSourceKind.Dictation), CancellationToken.None)
-                     .ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500).ConfigureAwait(false);
-        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None).ConfigureAwait(false);
+                     .StartLiveSessionAsync(sessionId, LiveOptions(persist: false, TranscriptionSourceKind.Dictation), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
 
         AssertEx.Empty(fixture.Service.ReceivedCalls(), "There is no row to terminalize, so no status moves.");
-        await fixture.Publisher.Received(1).PublishStatusAsync(sessionId, LiveEndReason.Completed, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await fixture.Publisher.Received(1).PublishStatusAsync(sessionId, LiveEndReason.Completed, Arg.Any<CancellationToken>());
         AssertEx.False(fixture.Registry.IsLive(sessionId), "The entry is still dropped.");
     }
 
@@ -132,11 +129,11 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
 
         // No hub, no connection, no caller context: this is the whole seam an in-process capture source uses.
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        var segments = await WaitForSegmentsAsync(published, count: 1).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        var segments = await WaitForSegmentsAsync(published, count: 1);
 
         AssertEx.Equal("1|Mono|0-1000|w0-1000", Describe(segments[0]), "The lane committed the audio it was handed directly.");
         AssertEx.Equal(expected: 1, transcriber.CallCount, "And it reached the transcriber exactly once.");
@@ -150,14 +147,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None);
 
         // Serialized on purpose: the assertion is that the sequence follows COMMIT order, which is only a statement
         // about anything if the test decides that order rather than the scheduler.
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await WaitForSegmentsAsync(published, count: 1).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        var segments = await WaitForSegmentsAsync(published, count: 2).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000);
+        await WaitForSegmentsAsync(published, count: 1);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 1_000);
+        var segments = await WaitForSegmentsAsync(published, count: 2);
 
         AssertEx.Equal("1|You|0-1000|w0-1000;2|Others|0-1000|w0-1000",
             string.Join(';', segments.Select(Describe)),
@@ -172,9 +169,9 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        var segments = await WaitForSegmentsAsync(published, count: 1).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        var segments = await WaitForSegmentsAsync(published, count: 1);
 
         AssertEx.Equal(expected: 1L, segments[0].Seq,
             "A row numbered zero is excluded from its own session's first replay, because a fresh subscriber asks for everything after zero.");
@@ -188,9 +185,9 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(startingSeq: 7), CancellationToken.None).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        var segments = await WaitForSegmentsAsync(published, count: 1).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(startingSeq: 7), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        var segments = await WaitForSegmentsAsync(published, count: 1);
 
         AssertEx.Equal(expected: 8L, segments[0].Seq,
             "The first live commit is one past what the transcript already holds; re-allocating a taken sequence would hit the unique index.");
@@ -216,22 +213,22 @@ public sealed class LiveTranscriptionSessionRegistryTests
                        Arg.Any<CancellationToken>())
                    .Returns(_ => Interlocked.Increment(ref appendCount) == 1 ? firstAppend.Task : Task.CompletedTask);
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None);
 
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000);
         await AssertEx.EventuallyAsync(() => Volatile.Read(ref appendCount) == 1, TestBudgets.Contended,
-            "The first lane must reach persistence before the second one is released.").ConfigureAwait(false);
+            "The first lane must reach persistence before the second one is released.");
 
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 1_000);
         await AssertEx.EventuallyAsync(() => transcriber.CallCount == 2, TestBudgets.Contended,
-            "The second lane transcribes freely; it is the COMMIT it must queue behind.").ConfigureAwait(false);
-        await AssertEx.SettleAsync().ConfigureAwait(false);
+            "The second lane transcribes freely; it is the COMMIT it must queue behind.");
+        await AssertEx.SettleAsync();
 
         AssertEx.Empty(Snapshot(published),
             "Sequence two must not be published while sequence one is still inside its write: the client drops anything at or below its watermark, so the first segment would be lost for good.");
 
         firstAppend.SetResult();
-        var segments = await WaitForSegmentsAsync(published, count: 2).ConfigureAwait(false);
+        var segments = await WaitForSegmentsAsync(published, count: 2);
 
         AssertEx.Equal("1|You;2|Others", string.Join(';', segments.Select(static segment => $"{segment.Seq}|{segment.Channel}")),
             "Allocation, persistence and publication are one critical section, so publication order follows allocation order.");
@@ -246,14 +243,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var order = fixture.RecordOrder();
         var producer = new RecordingAudioProducer(order);
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500);
 
         var first = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
         var second = fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
-        await Task.WhenAll(first, second).ConfigureAwait(false);
-        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None).ConfigureAwait(false);
+        await Task.WhenAll(first, second);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
 
         AssertEx.Equal("stop,append,complete,status", string.Join(',', Snapshot(order)),
             "The producer stops before the lanes flush, the flushed segments persist before the row terminalizes, and the status push is last.");
@@ -265,8 +262,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<string?>(),
                          Arg.Any<string?>(),
                          Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
         AssertEx.False(fixture.Registry.IsLive(sessionId), "And the entry is gone.");
     }
 
@@ -278,14 +274,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var deleted = Guid.NewGuid();
         _ = registry.IsLive(Arg.Any<Guid>()).Returns(true);
 
-        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
 
-        _ = await harness.Service.CancelAsync(cancelled, CancellationToken.None).ConfigureAwait(false);
-        _ = await harness.Service.DeleteSessionAsync(deleted, CancellationToken.None).ConfigureAwait(false);
+        _ = await harness.Service.CancelAsync(cancelled, CancellationToken.None);
+        _ = await harness.Service.DeleteSessionAsync(deleted, CancellationToken.None);
 
-        await registry.Received(1).EndAsync(cancelled, LiveEndReason.Cancelled, Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await registry.Received(1).EndAsync(deleted, LiveEndReason.Cancelled, Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await registry.DidNotReceive().EndAsync(Arg.Any<Guid>(), LiveEndReason.Completed, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await registry.Received(1).EndAsync(cancelled, LiveEndReason.Cancelled, Arg.Any<CancellationToken>());
+        await registry.Received(1).EndAsync(deleted, LiveEndReason.Cancelled, Arg.Any<CancellationToken>());
+        await registry.DidNotReceive().EndAsync(Arg.Any<Guid>(), LiveEndReason.Completed, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -296,7 +292,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
 
         AssertEx.Equal(expected: 1, fixture.Time.ArmedTimerCount, "The deadline is armed at REGISTRATION, not at the first frame.");
         AssertEx.True(fixture.Registry.IsLive(sessionId), "Nothing has happened yet.");
@@ -305,7 +301,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         // ever reclaim this session.
         fixture.Time.Advance(AttachmentDeadline);
 
-        await WaitForEndAsync(statuses, LiveEndReason.NeverAttached).ConfigureAwait(false);
+        await WaitForEndAsync(statuses, LiveEndReason.NeverAttached);
         AssertEx.False(fixture.Registry.IsLive(sessionId), "A session nothing ever feeds must end by itself.");
     }
 
@@ -321,15 +317,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var statuses = fixture.RecordStatuses();
 
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(sourceKind: TranscriptionSourceKind.ApplicationProcess),
-                         CancellationToken.None)
-                     .ConfigureAwait(false);
+                         CancellationToken.None);
 
         var producer = new SilentProducer();
         var registration = fixture.Registry.AttachProducer(sessionId, producer);
         using (registration.Detach)
         {
             fixture.Time.Advance(AttachmentDeadline + TimeSpan.FromSeconds(1));
-            await AssertEx.SettleAsync().ConfigureAwait(false);
+            await AssertEx.SettleAsync();
 
             AssertEx.True(fixture.Registry.IsLive(sessionId),
                 "Attaching satisfies the deadline; a silent application must not be reaped as NeverAttached.");
@@ -347,16 +342,16 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
 
         var statuses = fixture.RecordStatuses();
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         fixture.Registry.NoteBrowserAttached(sessionId, "connection-1");
         fixture.Registry.NoteBrowserDetached(sessionId, "connection-1");
 
         // Native capture keeps feeding the session after the tab closed. It must not look like the tab came back.
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
 
         fixture.Time.Advance(TimeSpan.FromSeconds(GraceSeconds));
 
-        await WaitForEndAsync(statuses, LiveEndReason.Abandoned).ConfigureAwait(false);
+        await WaitForEndAsync(statuses, LiveEndReason.Abandoned);
         AssertEx.False(fixture.Registry.IsLive(sessionId), "A closed tab ends the session whatever else is still producing audio.");
     }
 
@@ -368,7 +363,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
 
         var statuses = fixture.RecordStatuses();
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
 
         // Registration happens on subscribe, so a connection that loses its microphone before pushing anything still
         // arms the grace when it drops.
@@ -379,7 +374,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         fixture.Time.Advance(TimeSpan.FromSeconds(GraceSeconds));
 
         // Abandoned, not NeverAttached: the grace is what reclaimed it, and the much longer deadline never elapsed.
-        await WaitForEndAsync(statuses, LiveEndReason.Abandoned).ConfigureAwait(false);
+        await WaitForEndAsync(statuses, LiveEndReason.Abandoned);
         AssertEx.False(fixture.Registry.IsLive(sessionId));
     }
 
@@ -392,7 +387,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var producer = new RecordingAudioProducer();
         var statuses = fixture.RecordStatuses();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
 
         // One window of audio per frame, into a transcriber that never answers. The budget is two windows.
@@ -403,25 +398,23 @@ public sealed class LiveTranscriptionSessionRegistryTests
         // burst can be admitted and refused before inference ever starts, which is a real outcome but not the one
         // this test is about: the finding is a lane held open by a slow transcriber while audio keeps arriving.
         await fixture.Registry
-                     .PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None)
-                     .ConfigureAwait(false);
-        await transcriber.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+                     .PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
 
         var accepted = 1;
         for (var frame = 1; frame < 12 && fixture.Registry.IsLive(sessionId); frame++)
         {
             await fixture.Registry
-                         .PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(frame * 1_000, (frame + 1) * 1_000), CancellationToken.None)
-                         .ConfigureAwait(false);
+                         .PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(frame * 1_000, (frame + 1) * 1_000), CancellationToken.None);
             accepted++;
         }
 
-        await WaitForEndAsync(statuses, LiveEndReason.Overloaded).ConfigureAwait(false);
+        await WaitForEndAsync(statuses, LiveEndReason.Overloaded);
 
         AssertEx.Equal(budgetBytes / frameBytes, accepted - 1,
             $"Exactly the budget was retained before the refusal: {accepted - 1} frames of {frameBytes} bytes against a budget of {budgetBytes}.");
         await AssertEx.EventuallyAsync(() => producer.StopCount == 1, TestBudgets.Contended,
-            "The producer is stopped promptly, while the transcriber is still holding the lane.").ConfigureAwait(false);
+            "The producer is stopped promptly, while the transcriber is still holding the lane.");
         AssertEx.Equal(expected: 1, transcriber.CallCount, "The gate was never released, so nothing drained behind the scenes.");
         await fixture.Service.Received(1)
                      .CompleteLiveAsync(sessionId,
@@ -430,8 +423,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<string?>(),
                          "live-overloaded",
                          Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -441,14 +433,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await transcriber.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
 
         // The gate is never released. Ending must not be a second thing waiting on the same answer.
         await AssertEx.CompletesAsync(fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None),
             TestBudgets.Contended,
-            "Ending a session waited behind the transcriber instead of cancelling it.").ConfigureAwait(false);
+            "Ending a session waited behind the transcriber instead of cancelling it.");
 
         AssertEx.Equal(expected: 1, transcriber.CallCount, "And it did not re-submit the retained audio on the way out.");
         AssertEx.False(fixture.Registry.IsLive(sessionId));
@@ -466,22 +458,21 @@ public sealed class LiveTranscriptionSessionRegistryTests
             Hangs = true
         };
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500);
 
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
-        await producer.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await producer.Entered.WaitAsync(TestBudgets.Contended);
 
         // Issued between "stop the producer" and "flush the lanes": admission is already shut, so this must not reach
         // a lane, be transcribed, or appear in the flushed transcript.
         AssertEx.False(fixture.Registry.IsLive(sessionId), "Admission closes first, synchronously.");
         await fixture.Registry
-                     .PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(5_000, 6_000), CancellationToken.None)
-                     .ConfigureAwait(false);
+                     .PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(5_000, 6_000), CancellationToken.None);
 
         producer.Release();
-        await ending.ConfigureAwait(false);
+        await ending;
 
         AssertEx.Equal("stop,append,complete,status", string.Join(',', Snapshot(order)), "The fixed order holds.");
         AssertEx.Empty(transcriber.Windows.Where(static window => window.StartMs >= 5_000),
@@ -496,24 +487,23 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await transcriber.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
 
         // A graceful end does NOT cancel the in-flight submission, so this lane is still inside PushAsync when the
         // drain bound runs out. The segmenter is single-threaded by contract: flushing it now would run a second
         // call against the buffer the first one is still rewriting.
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended,
-            "The drain bound must be armed before the clock is moved past it.").ConfigureAwait(false);
+            "The drain bound must be armed before the clock is moved past it.");
 
         fixture.Time.Advance(LaneDrainBound);
 
         // Failed, not Completed: the operator's last window never reached the model and the retained audio is gone,
         // so reporting success would hand them a whole-looking transcript that is missing its final seconds.
-        await WaitForEndAsync(statuses, LiveEndReason.Failed).ConfigureAwait(false);
-        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "A lane that will not drain must be abandoned, never allowed to hold the session open.")
-                      .ConfigureAwait(false);
+        await WaitForEndAsync(statuses, LiveEndReason.Failed);
+        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "A lane that will not drain must be abandoned, never allowed to hold the session open.");
         AssertEx.Equal(expected: 1, transcriber.CallCount,
             "The undrained lane was flushed anyway, which is a second concurrent call into a segmenter that is not thread-safe.");
         AssertEx.Empty(Snapshot(statuses).Where(static status => status == LiveEndReason.Completed),
@@ -525,8 +515,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<string?>(),
                          "live-flush-failed",
                          Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
         AssertEx.False(fixture.Registry.IsLive(sessionId));
 
         transcriber.Release();
@@ -540,15 +529,15 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
 
         // The first frame occupies the lane, so the second one is still sitting in the queue — unread — when the
         // producer gets control back and recycles its capture buffer.
-        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None).ConfigureAwait(false);
-        await transcriber.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
 
         var reused = LivePcm.Range(1_000, 2_000).ToArray();
-        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, reused, CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, reused, CancellationToken.None);
         LivePcm.Range(9_000, 10_000).Span.CopyTo(reused);
 
         transcriber.Release();
@@ -556,7 +545,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         // Waited on the second COMMIT, not on the fake's call count: the count is incremented on entry, so the
         // window list can still be one short when it reaches two and the assertion below would read a half-written
         // list and fail for the wrong reason.
-        await WaitForSegmentsAsync(published, count: 2).ConfigureAwait(false);
+        await WaitForSegmentsAsync(published, count: 2);
 
         AssertEx.Equal("[0,1000);[1000,2000)", string.Join(';', transcriber.Windows),
             "The queued frame was read out of the caller's buffer, so the transcript received whatever the producer put there next.");
@@ -582,16 +571,16 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var statuses = fixture.RecordStatuses();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await transcriber.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
 
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended,
-            "The drain bound must be armed before the clock is moved past it.").ConfigureAwait(false);
+            "The drain bound must be armed before the clock is moved past it.");
         fixture.Time.Advance(LaneDrainBound);
-        await WaitForEndAsync(statuses, LiveEndReason.Failed).ConfigureAwait(false);
-        await ending.ConfigureAwait(false);
+        await WaitForEndAsync(statuses, LiveEndReason.Failed);
+        await ending;
 
         // Now let the abandoned inference answer. Its commit is real; it is simply too late to exist.
         transcriber.Release();
@@ -601,7 +590,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         // with the guard removed whenever the continuation happened to be slow.
         await AssertEx.EventuallyAsync(() => fixture.Logger.CountContaining("Dropping a") > 0 || Snapshot(published).Count > 0,
             TestBudgets.Contended,
-            "The abandoned lane's late answer never reached the commit pipeline at all, so this test proved nothing.").ConfigureAwait(false);
+            "The abandoned lane's late answer never reached the commit pipeline at all, so this test proved nothing.");
 
         AssertEx.Empty(Snapshot(published),
             "A commit published after the terminal status would never be replayed, because the client has already stopped listening.");
@@ -609,8 +598,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                               .Where(static call => string.Equals(call.GetMethodInfo().Name, "AppendLiveSegmentAsync", StringComparison.Ordinal)),
             "And it must not reach the transcript either: the row is already terminal.");
         await fixture.Publisher.DidNotReceive()
-                     .PublishPartialAsync(Arg.Any<Guid>(), Arg.Any<TranscriptChannel>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .PublishPartialAsync(Arg.Any<Guid>(), Arg.Any<TranscriptChannel>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -627,20 +615,20 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var statuses = fixture.RecordStatuses();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await transcriber.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 500).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 500);
 
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => fixture.Time.ArmedTimerCount == 1, TestBudgets.Contended,
-            "The blocked lane's drain bound must be armed before the clock is moved past it.").ConfigureAwait(false);
+            "The blocked lane's drain bound must be armed before the clock is moved past it.");
         fixture.Time.Advance(LaneDrainBound);
 
         // The blocked lane is abandoned and the session is Failed because of it. The healthy lane is a different
         // lane: cancelling the session-wide token here would throw away speech that was ready to commit.
-        await WaitForEndAsync(statuses, LiveEndReason.Failed).ConfigureAwait(false);
-        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "The end still finishes.").ConfigureAwait(false);
+        await WaitForEndAsync(statuses, LiveEndReason.Failed);
+        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "The end still finishes.");
 
         AssertEx.Equal("1|Others|0-500|w0-500", string.Join(';', Snapshot(published).Select(Describe)),
             "One lane missing its drain deadline must not take the other lane's flushable speech with it.");
@@ -651,8 +639,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<string?>(),
                          "live-flush-failed",
                          Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
 
         transcriber.Release();
     }
@@ -665,13 +652,13 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
 
         // Half a tick, so the retained speech exists and only the flush can turn it into a segment.
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500);
         transcriber.Failure = new InvalidOperationException("the runtime went away");
 
-        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
 
         AssertEx.Equal("Failed", string.Join(',', Snapshot(statuses)),
             "A flush that threw leaves the operator without their last words; Completed would report success for an incomplete transcript.");
@@ -682,8 +669,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<string?>(),
                          "live-flush-failed",
                          "The final window could not be transcribed; the transcript may be missing its last seconds.",
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -696,18 +682,17 @@ public sealed class LiveTranscriptionSessionRegistryTests
         _ = registry.StartLiveSessionAsync(Arg.Any<Guid>(), Arg.Any<LiveSessionOptions>(), Arg.Any<CancellationToken>())
                     .Returns<Task>(call => throw new LiveSessionAlreadyRegisteredException(call.ArgAt<Guid>(0)));
 
-        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
         var created = await harness.Service
                                    .CreateSessionAsync(new CreateTranscriptionSessionInput
                                    {
                                        SourceKind = "Microphone"
-                                   }, CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                   }, CancellationToken.None);
 
-        var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None);
 
         AssertEx.Equal(StartLiveOutcome.AlreadyLive, result.Outcome, "The loser reports what a sequential second call reports.");
-        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None).ConfigureAwait(false), "The row still exists.");
+        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None), "The row still exists.");
         AssertEx.Equal(TranscriptionSessionStatus.Transcribing, row.Status,
             "Rolling back here would reset the WINNER's row to Created while its lanes are live.");
     }
@@ -723,18 +708,17 @@ public sealed class LiveTranscriptionSessionRegistryTests
         _ = registry.StartLiveSessionAsync(Arg.Any<Guid>(), Arg.Any<LiveSessionOptions>(), Arg.Any<CancellationToken>())
                     .Returns<Task>(call => throw new LiveSessionAlreadyRegisteredException(call.ArgAt<Guid>(0)));
 
-        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
         var created = await harness.Service
                                    .CreateSessionAsync(new CreateTranscriptionSessionInput
                                    {
                                        SourceKind = "Microphone"
-                                   }, CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                   }, CancellationToken.None);
 
-        var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None);
 
         AssertEx.Equal(StartLiveOutcome.AlreadyLive, result.Outcome, "Duplicate registration is identified by its own type, never by liveness.");
-        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None).ConfigureAwait(false), "The row still exists.");
+        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None), "The row still exists.");
         AssertEx.Equal(TranscriptionSessionStatus.Transcribing, row.Status,
             "Rolling back here would put a session the winner is finishing back into Created, after its terminal write.");
     }
@@ -750,18 +734,17 @@ public sealed class LiveTranscriptionSessionRegistryTests
         _ = registry.StartLiveSessionAsync(Arg.Any<Guid>(), Arg.Any<LiveSessionOptions>(), Arg.Any<CancellationToken>())
                     .Returns<Task>(_ => throw new ObjectDisposedException(nameof(LiveTranscriptionSessionRegistry)));
 
-        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
         var created = await harness.Service
                                    .CreateSessionAsync(new CreateTranscriptionSessionInput
                                    {
                                        SourceKind = "Microphone"
-                                   }, CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                   }, CancellationToken.None);
 
         _ = await AssertEx.ThrowsAsync<ObjectDisposedException>(() => harness.Service.StartLiveAsync(created.Id, CancellationToken.None),
-            "A registry that is shutting down is a failed start, not a duplicate one.").ConfigureAwait(false);
+            "A registry that is shutting down is a failed start, not a duplicate one.");
 
-        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None).ConfigureAwait(false), "The row still exists.");
+        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None), "The row still exists.");
         AssertEx.Equal(TranscriptionSessionStatus.Created, row.Status,
             "A row left in Transcribing with no registry entry accepts no audio and never ends.");
     }
@@ -780,33 +763,31 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var registry = Substitute.For<ILiveTranscriptionSessionRegistry>();
         _ = registry.IsLive(Arg.Any<Guid>()).Returns(false);
 
-        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
         var created = await harness.Service
                                    .CreateSessionAsync(new CreateTranscriptionSessionInput
                                    {
                                        SourceKind = "Microphone"
-                                   }, CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                   }, CancellationToken.None);
 
         // The start reads Created and is then parked inside that read.
         harness.ReadGate.Arm();
         var starting = harness.Service.StartLiveAsync(created.Id, CancellationToken.None);
-        await harness.ReadGate.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await harness.ReadGate.Entered.WaitAsync(TestBudgets.Contended);
 
         // A graceful end lands while it is parked, so the status it decided on is already stale.
         await harness.Service
-                     .CompleteLiveAsync(created.Id, TranscriptionSessionStatus.Completed, durationMs: 1_000, "en", errorCode: null, errorMessage: null, CancellationToken.None)
-                     .ConfigureAwait(false);
+                     .CompleteLiveAsync(created.Id, TranscriptionSessionStatus.Completed, durationMs: 1_000, "en", errorCode: null, errorMessage: null, CancellationToken.None);
         harness.ReadGate.Release();
 
-        var result = await starting.ConfigureAwait(false);
+        var result = await starting;
 
         AssertEx.Equal(StartLiveOutcome.SessionAlreadyFinished, result.Outcome,
             "A start that lost the row must say so, not write Transcribing over a terminal status.");
         AssertEx.Equal(TranscriptionSessionStatus.Completed, result.Status, "And report what the row actually says now.");
-        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None).ConfigureAwait(false), "The row exists.");
+        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None), "The row exists.");
         AssertEx.Equal(TranscriptionSessionStatus.Completed, row.Status, "A finished session must not be resurrected by a start that arrived late.");
-        await registry.DidNotReceiveWithAnyArgs().StartLiveSessionAsync(Guid.Empty, null!, default).ConfigureAwait(false);
+        await registry.DidNotReceiveWithAnyArgs().StartLiveSessionAsync(Guid.Empty, null!, default);
     }
 
     [Test]
@@ -815,20 +796,19 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var registry = Substitute.For<ILiveTranscriptionSessionRegistry>();
         _ = registry.IsLive(Arg.Any<Guid>()).Returns(false);
 
-        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
         var created = await harness.Service
                                    .CreateSessionAsync(new CreateTranscriptionSessionInput
                                    {
                                        SourceKind = "Microphone"
-                                   }, CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                   }, CancellationToken.None);
 
-        var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None);
 
         AssertEx.Equal(StartLiveOutcome.Started, result.Outcome, "The ordinary path still starts.");
-        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None).ConfigureAwait(false), "The row exists.");
+        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None), "The row exists.");
         AssertEx.Equal(TranscriptionSessionStatus.Transcribing, row.Status, "The compare-and-set moved it.");
-        await registry.Received(1).StartLiveSessionAsync(created.Id, Arg.Any<LiveSessionOptions>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await registry.Received(1).StartLiveSessionAsync(created.Id, Arg.Any<LiveSessionOptions>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -842,26 +822,24 @@ public sealed class LiveTranscriptionSessionRegistryTests
         _ = registry.IsLive(Arg.Any<Guid>()).Returns(false);
         _ = registry.EndAsync(Arg.Any<Guid>(), Arg.Any<LiveEndReason>(), Arg.Any<CancellationToken>()).Returns(_ => ending.Task);
 
-        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
         var created = await harness.Service
                                    .CreateSessionAsync(new CreateTranscriptionSessionInput
                                    {
                                        SourceKind = "Microphone"
-                                   }, CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                   }, CancellationToken.None);
 
         var delete = harness.Service.DeleteSessionAsync(created.Id, CancellationToken.None);
 
-        await AssertEx.StaysIncompleteAsync(delete, "Delete must join the in-flight end, not remove the row from under lanes that are still running.")
-                      .ConfigureAwait(false);
-        await registry.Received(1).EndAsync(created.Id, LiveEndReason.Cancelled, Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None).ConfigureAwait(false),
+        await AssertEx.StaysIncompleteAsync(delete, "Delete must join the in-flight end, not remove the row from under lanes that are still running.");
+        await registry.Received(1).EndAsync(created.Id, LiveEndReason.Cancelled, Arg.Any<CancellationToken>());
+        AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None),
             "The row is still there while the teardown runs.");
 
         ending.SetResult();
-        await delete.ConfigureAwait(false);
+        await delete;
 
-        AssertEx.Null(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None).ConfigureAwait(false), "And gone once it finished.");
+        AssertEx.Null(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None), "And gone once it finished.");
     }
 
     [Test]
@@ -876,7 +854,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         };
         var late = new RecordingAudioProducer();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         first.Token = fixture.Registry.AttachProducer(sessionId, first).ProducerToken;
 
         // Parked inside the first producer's StopAsync: admission is closed and the entry is STILL registered, which
@@ -884,13 +862,13 @@ public sealed class LiveTranscriptionSessionRegistryTests
         // Once the end completes the entry is gone and the unknown-session check would answer instead, so a test that
         // attaches after EndAsync returns proves nothing about this guard.
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
-        await first.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await first.Entered.WaitAsync(TestBudgets.Contended);
 
         _ = AssertEx.Throws<InvalidOperationException>(() => fixture.Registry.AttachProducer(sessionId, late),
             "A producer attached while the session is ending would capture forever: nothing left in the teardown will stop it.");
 
         first.Release();
-        await ending.ConfigureAwait(false);
+        await ending;
 
         AssertEx.Equal(expected: 0, late.StopCount, "Nothing was ever going to stop the late producer, which is why it had to be refused.");
         AssertEx.Equal(expected: 1, first.StopCount, "The producer that attached in time is still stopped exactly once.");
@@ -904,12 +882,12 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var producer = new RecordingAudioProducer();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         var registration = fixture.Registry.AttachProducer(sessionId, producer);
         producer.Token = registration.ProducerToken;
 
         AssertEx.False(registration.ProducerToken.IsCancellationRequested, "A live session's producer runs on an uncancelled token.");
-        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
 
         AssertEx.True(producer.TokenWasCancelledAtStop,
             "A producer that already stops on its token has nothing left for StopAsync to do, so the token is cancelled first.");
@@ -928,18 +906,17 @@ public sealed class LiveTranscriptionSessionRegistryTests
             Hangs = true
         };
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
 
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
-        await producer.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
-        await AssertEx.StaysIncompleteAsync(ending, "The bound has not elapsed yet, so the session is still waiting for its producer.").ConfigureAwait(false);
+        await producer.Entered.WaitAsync(TestBudgets.Contended);
+        await AssertEx.StaysIncompleteAsync(ending, "The bound has not elapsed yet, so the session is still waiting for its producer.");
 
         fixture.Time.Advance(ProducerStopBound);
 
-        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "A producer that hangs must be abandoned, never allowed to hold the session open.")
-                      .ConfigureAwait(false);
-        await fixture.Publisher.Received(1).PublishStatusAsync(sessionId, LiveEndReason.Completed, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "A producer that hangs must be abandoned, never allowed to hold the session open.");
+        await fixture.Publisher.Received(1).PublishStatusAsync(sessionId, LiveEndReason.Completed, Arg.Any<CancellationToken>());
 
         producer.Release();
     }
@@ -952,19 +929,19 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var producer = new RecordingAudioProducer();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await transcriber.Entered.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
 
         var ending = fixture.Registry.EndAsync(sessionId, LiveEndReason.Cancelled, CancellationToken.None);
 
         // The whole point: the capture hardware is released while the model is still thinking, not after it answers.
         await AssertEx.EventuallyAsync(() => producer.StopCount == 1, TestBudgets.Contended,
-            "The native producer waited behind an inference it has nothing to do with.").ConfigureAwait(false);
+            "The native producer waited behind an inference it has nothing to do with.");
         AssertEx.False(transcriber.Released, "The gate was still closed when the producer stopped.");
 
-        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "And the session still finished ending.").ConfigureAwait(false);
+        await AssertEx.CompletesAsync(ending, TestBudgets.Contended, "And the session still finished ending.");
     }
 
     [Test]
@@ -984,16 +961,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
                              TailGuardMs = 5_000,
                              TickMs = 1_000
                          }),
-                         CancellationToken.None)
-                     .ConfigureAwait(false);
+                         CancellationToken.None);
 
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 2_500).ConfigureAwait(false);
-        await AssertEx.EventuallyAsync(() => transcriber.CallCount == 2, TestBudgets.Contended, "Two ticks fired.").ConfigureAwait(false);
-        await AssertEx.SettleAsync().ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 2_500);
+        await AssertEx.EventuallyAsync(() => transcriber.CallCount == 2, TestBudgets.Contended, "Two ticks fired.");
+        await AssertEx.SettleAsync();
 
         await fixture.Publisher.Received(1)
-                     .PublishPartialAsync(sessionId, TranscriptChannel.Mono, "still talking", Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .PublishPartialAsync(sessionId, TranscriptChannel.Mono, "still talking", Arg.Any<CancellationToken>());
         await fixture.Publisher.DidNotReceive()
                      .PublishSegmentAsync(Arg.Any<Guid>(),
                          Arg.Any<long>(),
@@ -1002,8 +977,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<long>(),
                          Arg.Any<string>(),
                          Arg.Any<double?>(),
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1014,15 +988,15 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
 
         var statuses = fixture.RecordStatuses();
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         fixture.Registry.NoteBrowserAttached(sessionId, "connection-1");
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
         fixture.Registry.NoteBrowserDetached(sessionId, "connection-1");
 
         AssertEx.True(fixture.Registry.IsLive(sessionId), "The grace has not elapsed yet.");
         fixture.Time.Advance(TimeSpan.FromSeconds(GraceSeconds));
 
-        await WaitForEndAsync(statuses, LiveEndReason.Abandoned).ConfigureAwait(false);
+        await WaitForEndAsync(statuses, LiveEndReason.Abandoned);
         await fixture.Service.Received(1)
                      .CompleteLiveAsync(sessionId,
                          TranscriptionSessionStatus.Cancelled,
@@ -1030,8 +1004,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<string?>(),
                          Arg.Any<string?>(),
                          Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1041,7 +1014,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         fixture.Registry.NoteBrowserAttached(sessionId, "connection-1");
         fixture.Registry.NoteBrowserDetached(sessionId, "connection-1");
 
@@ -1049,12 +1022,11 @@ public sealed class LiveTranscriptionSessionRegistryTests
         fixture.Registry.NoteBrowserAttached(sessionId, "connection-2");
 
         fixture.Time.Advance(TimeSpan.FromSeconds(GraceSeconds * 4));
-        await AssertEx.SettleAsync().ConfigureAwait(false);
+        await AssertEx.SettleAsync();
 
         AssertEx.True(fixture.Registry.IsLive(sessionId), "Reattaching disarms the grace rather than merely postponing it.");
         await fixture.Publisher.DidNotReceive()
-                     .PublishStatusAsync(Arg.Any<Guid>(), Arg.Any<LiveEndReason>(), Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .PublishStatusAsync(Arg.Any<Guid>(), Arg.Any<LiveEndReason>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1065,14 +1037,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None);
 
         // Half a tick into each lane: nothing has been submitted, so only the flush can produce these segments.
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 500).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 500).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 500);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 500);
         AssertEx.Equal(expected: 0, transcriber.CallCount, "A sub-tick push submits nothing on its own.");
 
-        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
 
         var segments = Snapshot(published);
         AssertEx.Equal("1|You|0-500|w0-500;2|Others|0-500|w0-500", string.Join(';', segments.Select(Describe)),
@@ -1084,8 +1056,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<string?>(),
                          Arg.Any<string?>(),
                          Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1096,12 +1067,12 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var sessionId = Guid.NewGuid();
         var published = fixture.RecordSegments();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None);
 
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000).ConfigureAwait(false);
-        await WaitForSegmentsAsync(published, count: 1).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 2_000).ConfigureAwait(false);
-        var segments = await WaitForSegmentsAsync(published, count: 3).ConfigureAwait(false);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000);
+        await WaitForSegmentsAsync(published, count: 1);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 2_000);
+        var segments = await WaitForSegmentsAsync(published, count: 3);
 
         // Sequence is commit order; start time is speech order. Both are right, for different readers.
         AssertEx.Equal("1|You|0-1000;2|Others|0-1000;3|Others|1000-2000",
@@ -1122,10 +1093,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
 
-        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500).ConfigureAwait(false);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500);
 
-        await fixture.DisposeAsync().ConfigureAwait(false);
+        await fixture.DisposeAsync();
 
         AssertEx.False(fixture.Registry.IsLive(sessionId), "Shutting down releases every session it still holds.");
         await fixture.Service.Received(1)
@@ -1135,9 +1106,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          Arg.Any<string?>(),
                          Arg.Any<string?>(),
                          Arg.Any<string?>(),
-                         Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
-        await fixture.Publisher.Received(1).PublishStatusAsync(sessionId, LiveEndReason.Cancelled, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+                         Arg.Any<CancellationToken>());
+        await fixture.Publisher.Received(1).PublishStatusAsync(sessionId, LiveEndReason.Cancelled, Arg.Any<CancellationToken>());
     }
 
     private static readonly TranscriptChannel[] MonoLane = [TranscriptChannel.Mono];
@@ -1190,7 +1160,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
         for (var at = fromMs; at < toMs; at += frameMs)
         {
             var until = Math.Min(at + frameMs, toMs);
-            await registry.PushAudioAsync(sessionId, channel, LivePcm.Range(at, until), CancellationToken.None).ConfigureAwait(false);
+            await registry.PushAudioAsync(sessionId, channel, LivePcm.Range(at, until), CancellationToken.None);
         }
     }
 
@@ -1204,14 +1174,14 @@ public sealed class LiveTranscriptionSessionRegistryTests
     private static async Task WaitForEndAsync(List<LiveEndReason> statuses, LiveEndReason reason) =>
         await AssertEx.EventuallyAsync(() => Snapshot(statuses).Contains(reason),
             TestBudgets.Contended,
-            $"The session never finished ending as {reason}; statuses seen: [{string.Join(',', Snapshot(statuses))}].").ConfigureAwait(false);
+            $"The session never finished ending as {reason}; statuses seen: [{string.Join(',', Snapshot(statuses))}].");
 
     /// <summary>Waits until <paramref name="count" /> commits have been published, then snapshots them.</summary>
     private static async Task<IReadOnlyList<PublishedSegment>> WaitForSegmentsAsync(List<PublishedSegment> recorded, int count)
     {
         await AssertEx.EventuallyAsync(() => Snapshot(recorded).Count >= count,
             TestBudgets.Contended,
-            $"Expected {count} published commits; a frame is queued onto its lane, so its effect lands after the push returns.").ConfigureAwait(false);
+            $"Expected {count} published commits; a frame is queued onto its lane, so its effect lands after the push returns.");
         return Snapshot(recorded);
     }
 
@@ -1362,8 +1332,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         public async ValueTask DisposeAsync()
         {
-            await Registry.DisposeAsync().ConfigureAwait(false);
-            await _provider.DisposeAsync().ConfigureAwait(false);
+            await Registry.DisposeAsync();
+            await _provider.DisposeAsync();
         }
 
         private static Task Note(List<string> order, string step)
@@ -1436,20 +1406,20 @@ internal sealed class GatedWhisperTranscriber(Func<SubmittedWindow, IReadOnlyLis
 
         if (GatesFirstCallOnly && ordinal > 1)
         {
-            return await _inner.TranscribeAsync(modelId, request, ct).ConfigureAwait(false);
+            return await _inner.TranscribeAsync(modelId, request, ct);
         }
 
         if (IgnoresCancellation)
         {
-            await _gate.Task.ConfigureAwait(false);
+            await _gate.Task;
 
             // CancellationToken.None all the way down: a fake that parks past the abort but then lets the inner
             // call throw on the aborted token would never produce the late answer this mode exists to produce.
-            return await _inner.TranscribeAsync(modelId, request, CancellationToken.None).ConfigureAwait(false);
+            return await _inner.TranscribeAsync(modelId, request, CancellationToken.None);
         }
 
-        await _gate.Task.WaitAsync(ct).ConfigureAwait(false);
-        return await _inner.TranscribeAsync(modelId, request, ct).ConfigureAwait(false);
+        await _gate.Task.WaitAsync(ct);
+        return await _inner.TranscribeAsync(modelId, request, ct);
     }
 }
 
@@ -1498,7 +1468,7 @@ internal sealed class RecordingAudioProducer(List<string>? order = null) : ILive
         if (Hangs)
         {
             // Deliberately not linked to the caller's token: the registry's own bound is what has to release it.
-            await _release.Task.ConfigureAwait(false);
+            await _release.Task;
         }
     }
 }

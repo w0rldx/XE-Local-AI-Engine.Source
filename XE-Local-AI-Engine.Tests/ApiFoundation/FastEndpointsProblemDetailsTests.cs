@@ -24,15 +24,15 @@ public sealed class FastEndpointsProblemDetailsTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.ContentType?.MediaType,
             "problem+json",
             StringComparison.OrdinalIgnoreCase);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var root = document.RootElement;
 
         AssertEx.Equal(expected: 400, root.GetProperty("status").GetInt32());

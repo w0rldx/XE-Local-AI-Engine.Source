@@ -28,7 +28,7 @@ public sealed class ListCaptureProcessesEndpoint(IProcessAudioCaptureSource capt
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var candidates = await _captureSource.ListCandidatesAsync(ct).ConfigureAwait(false);
+        var candidates = await _captureSource.ListCandidatesAsync(ct);
 
         await Send.OkAsync(new CaptureProcessListResponse
         {
@@ -42,6 +42,6 @@ public sealed class ListCaptureProcessesEndpoint(IProcessAudioCaptureSource capt
                     HasAudio = candidate.HasAudio
                 })
             ]
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

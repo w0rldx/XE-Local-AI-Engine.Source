@@ -31,23 +31,23 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
     public async Task MigrateAsync_WhenApplied_CreatesAllThreeImageTables()
     {
         var databasePath = GetDatabasePath("image-tables-up.sqlite");
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "image_jobs").ConfigureAwait(false), "Migration should create image_jobs.");
-        AssertEx.True(await TableExistsAsync(connection, "generated_images").ConfigureAwait(false), "Migration should create generated_images.");
-        AssertEx.True(await TableExistsAsync(connection, "image_model_profiles").ConfigureAwait(false), "Migration should create image_model_profiles.");
+        AssertEx.True(await TableExistsAsync(connection, "image_jobs"), "Migration should create image_jobs.");
+        AssertEx.True(await TableExistsAsync(connection, "generated_images"), "Migration should create generated_images.");
+        AssertEx.True(await TableExistsAsync(connection, "image_model_profiles"), "Migration should create image_model_profiles.");
     }
 
     [Test]
     public async Task MigrateAsync_WhenApplied_ImageJobsHasExpectedColumns()
     {
         var databasePath = GetDatabasePath("image-jobs-columns-up.sqlite");
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetTableColumnsAsync(connection, "image_jobs").ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetTableColumnsAsync(connection, "image_jobs");
 
         AssertEx.True(columns.SetEquals(new[]
         {
@@ -76,11 +76,11 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
     public async Task MigrateAsync_WhenApplied_GeneratedImagesHasCascadeForeignKeyToImageJobs()
     {
         var databasePath = GetDatabasePath("generated-images-fk-up.sqlite");
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await HasCascadeForeignKeyAsync(connection, "generated_images", "image_jobs").ConfigureAwait(false),
+        AssertEx.True(await HasCascadeForeignKeyAsync(connection, "generated_images", "image_jobs"),
             "generated_images should carry a cascade FK to image_jobs.");
     }
 
@@ -91,7 +91,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
         const string promptText = "an-utterly-distinctive-prompt-phrase-for-encryption-assertion";
         var jobId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
@@ -109,17 +109,17 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
                 Status = ImageJobStatus.Queued,
                 CreatedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             });
-            await context.SaveChangesAsync().ConfigureAwait(false);
+            await context.SaveChangesAsync();
         }
 
         // At-rest: the plaintext prompt must not appear anywhere in the database file.
-        AssertEx.False(await DatabaseContainsAsync(databasePath, Encoding.UTF8.GetBytes(promptText)).ConfigureAwait(false),
+        AssertEx.False(await DatabaseContainsAsync(databasePath, Encoding.UTF8.GetBytes(promptText)),
             "The prompt must be encrypted at rest — its plaintext bytes must not appear in the database file.");
 
         // Round-trip: a fresh materialization decrypts the prompt back to the original.
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            var reloaded = AssertEx.NotNull(await context.ImageJobs.SingleOrDefaultAsync(job => job.Id == jobId).ConfigureAwait(false));
+            var reloaded = AssertEx.NotNull(await context.ImageJobs.SingleOrDefaultAsync(job => job.Id == jobId));
             AssertEx.Equal(promptText, Encoding.UTF8.GetString(reloaded.Prompt));
         }
     }
@@ -129,18 +129,18 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("image-tables-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateForMigration(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreImageMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreImageMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False(await TableExistsAsync(connection, "image_jobs").ConfigureAwait(false), "Rollback should drop image_jobs.");
-        AssertEx.False(await TableExistsAsync(connection, "generated_images").ConfigureAwait(false), "Rollback should drop generated_images.");
-        AssertEx.False(await TableExistsAsync(connection, "image_model_profiles").ConfigureAwait(false), "Rollback should drop image_model_profiles.");
+        AssertEx.False(await TableExistsAsync(connection, "image_jobs"), "Rollback should drop image_jobs.");
+        AssertEx.False(await TableExistsAsync(connection, "generated_images"), "Rollback should drop generated_images.");
+        AssertEx.False(await TableExistsAsync(connection, "image_model_profiles"), "Rollback should drop image_model_profiles.");
     }
 
     private NodeChatDbContext CreateForMigration(string databasePath)
@@ -151,7 +151,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -160,7 +160,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<bool> HasCascadeForeignKeyAsync(SqliteConnection connection, string tableName, string referencedTable)
@@ -170,8 +170,8 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
 #pragma warning disable CA2100
         command.CommandText = $"SELECT \"table\", \"on_delete\" FROM pragma_foreign_key_list('{tableName}');";
 #pragma warning restore CA2100
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             if (string.Equals(reader.GetString(0), referencedTable, StringComparison.Ordinal)
                 && reader.GetString(1).Contains("CASCADE", StringComparison.OrdinalIgnoreCase))
@@ -190,7 +190,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
 #pragma warning disable CA2100
         command.CommandText = $"SELECT * FROM {tableName} LIMIT 0;";
 #pragma warning restore CA2100
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -198,7 +198,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
 
     private static async Task<bool> DatabaseContainsAsync(string databasePath, byte[] needle)
     {
-        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath).ConfigureAwait(false);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         return ContainsSubsequence(fileBytes, needle);
     }
 

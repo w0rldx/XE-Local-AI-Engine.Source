@@ -34,22 +34,21 @@ internal sealed class DevelopmentRepositoryBindingService(
         CancellationToken cancellationToken = default)
     {
         var canonicalRoot = ResolveCanonicalRoot(hostPath);
-        await EnsureLocalGitTopLevelAsync(canonicalRoot, cancellationToken).ConfigureAwait(false);
-        var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration(displayAlias, canonicalRoot, SelectedFolderMode.Copy), cancellationToken)
-                                              .ConfigureAwait(false);
+        await EnsureLocalGitTopLevelAsync(canonicalRoot, cancellationToken);
+        var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration(displayAlias, canonicalRoot, SelectedFolderMode.Copy), cancellationToken);
         return new DevelopmentRepositoryReference(reference.Id, reference.Alias, "Available");
     }
 
     public async Task<IReadOnlyList<DevelopmentRepositoryReference>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var references = await _selectedFolders.ListReferencesAsync(cancellationToken).ConfigureAwait(false);
+        var references = await _selectedFolders.ListReferencesAsync(cancellationToken);
         var result = new List<DevelopmentRepositoryReference>(references.Count);
         foreach (var reference in references)
         {
             var availability = "Available";
             try
             {
-                _ = await ResolveFolderAsync(Guid.Parse(reference.Id), cancellationToken).ConfigureAwait(false);
+                _ = await ResolveFolderAsync(Guid.Parse(reference.Id), cancellationToken);
             }
             catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException
                                                   or SelectedFolderValidationException
@@ -72,14 +71,14 @@ internal sealed class DevelopmentRepositoryBindingService(
             throw new DevelopmentWorkspaceSecurityException("A registered Development repository is required.");
         }
 
-        var selected = await _selectedFolders.ResolveAsync(selectedFolderId.ToString(), cancellationToken).ConfigureAwait(false);
+        var selected = await _selectedFolders.ResolveAsync(selectedFolderId.ToString(), cancellationToken);
         if (selected.Mode != SelectedFolderMode.Copy)
         {
             throw new DevelopmentWorkspaceSecurityException("The selected folder is read-only and cannot be used for Development execution.");
         }
 
         var canonicalRoot = ResolveCanonicalRoot(selected.HostPath);
-        await EnsureLocalGitTopLevelAsync(canonicalRoot, cancellationToken).ConfigureAwait(false);
+        await EnsureLocalGitTopLevelAsync(canonicalRoot, cancellationToken);
         return new DevelopmentRepositoryBinding(Guid.Empty,
             selected.Id,
             selected.Alias,
@@ -90,8 +89,8 @@ internal sealed class DevelopmentRepositoryBindingService(
     public async Task<DevelopmentRepositoryBinding> ResolveProjectAsync(Guid projectId,
         CancellationToken cancellationToken = default)
     {
-        var project = await _store.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        return await ResolveProjectAsync(project, cancellationToken).ConfigureAwait(false);
+        var project = await _store.GetProjectAsync(projectId, cancellationToken);
+        return await ResolveProjectAsync(project, cancellationToken);
     }
 
     public async Task<DevelopmentRepositoryBinding> ResolveExecutionAsync(DevelopmentExecutionSnapshot snapshot,
@@ -103,7 +102,7 @@ internal sealed class DevelopmentRepositoryBindingService(
             throw new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution.");
         }
 
-        var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
+        var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken);
         EnsureIdentity(snapshot.RepositoryIdentityHash, binding.RepositoryIdentityHash);
         return binding with
         {
@@ -116,10 +115,10 @@ internal sealed class DevelopmentRepositoryBindingService(
         long expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        var project = await _store.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
+        var project = await _store.GetProjectAsync(projectId, cancellationToken);
+        var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken);
         EnsureIdentity(project.RepositoryIdentityHash, binding.RepositoryIdentityHash);
-        return await _store.ReconnectProjectRepositoryAsync(projectId, selectedFolderId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        return await _store.ReconnectProjectRepositoryAsync(projectId, selectedFolderId, expectedVersion, cancellationToken);
     }
 
     private async Task<DevelopmentRepositoryBinding> ResolveProjectAsync(DevelopmentProjectSnapshot project,
@@ -130,7 +129,7 @@ internal sealed class DevelopmentRepositoryBindingService(
             throw new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before this action.");
         }
 
-        var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
+        var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken);
         EnsureIdentity(project.RepositoryIdentityHash, binding.RepositoryIdentityHash);
         return binding with
         {
@@ -149,7 +148,7 @@ internal sealed class DevelopmentRepositoryBindingService(
         var git = new HostGitRunner(_options.MaxAttemptDurationSeconds);
         var result = await git.RunAsync(canonicalRoot,
             AgentHomeGit.Arguments("rev-parse", "--show-toplevel"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new DevelopmentWorkspaceSecurityException("The selected folder must be a Git repository root.");

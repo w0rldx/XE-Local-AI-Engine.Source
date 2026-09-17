@@ -320,7 +320,7 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         _ = _persist.Writer.TryComplete();
         try
         {
-            await _pump.ConfigureAwait(false);
+            await _pump;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -346,7 +346,7 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     {
         // CancellationToken.None throughout: these rows belong to a sequence the buffer has already published, so
         // abandoning the write would leave a visible event with no durable row behind it.
-        await foreach (var streamEvent in _persist.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
+        await foreach (var streamEvent in _persist.Reader.ReadAllAsync(CancellationToken.None))
         {
             await _executions.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(),
                                      streamEvent.ExecutionId,
@@ -354,8 +354,7 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
                                      streamEvent.Type,
                                      streamEvent.Payload?.GetRawText(),
                                      streamEvent.OccurredAtUtc),
-                                 CancellationToken.None)
-                             .ConfigureAwait(false);
+                                 CancellationToken.None);
         }
     }
 }

@@ -41,10 +41,10 @@ public sealed class LlamaCppRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         // The snapshot drives updateAvailable + upstreamLatestTag; recommendedTag is sourced from the editable
         // node-settings accessor (the authoritative "recommended" value), not the snapshot.
@@ -85,7 +85,7 @@ public sealed class LlamaCppRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime?refresh=true");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await catalog.DidNotReceiveWithAnyArgs().ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -115,7 +115,7 @@ public sealed class LlamaCppRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime?refresh=true");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await catalog.ReceivedWithAnyArgs().ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -136,7 +136,7 @@ public sealed class LlamaCppRuntimeEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await binaryManager.DidNotReceiveWithAnyArgs()
@@ -162,7 +162,7 @@ public sealed class LlamaCppRuntimeEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await binaryManager.DidNotReceiveWithAnyArgs()
@@ -187,10 +187,10 @@ public sealed class LlamaCppRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.Equal(expected: 2, doc.RootElement.GetProperty("runningProcessCount").GetInt32());
     }
@@ -224,10 +224,10 @@ public sealed class LlamaCppRuntimeEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.Equal(expected: 1, doc.RootElement.GetProperty("runningProcessCount").GetInt32());
 
@@ -258,10 +258,10 @@ public sealed class LlamaCppRuntimeEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.Contains(doc.RootElement.GetProperty("message").GetString(), "override", StringComparison.OrdinalIgnoreCase);
 
@@ -276,7 +276,7 @@ public sealed class LlamaCppRuntimeEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -310,7 +310,7 @@ public sealed class LlamaCppRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime?refresh=true");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await catalog.ReceivedWithAnyArgs().ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -330,10 +330,10 @@ public sealed class LlamaCppRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("checkedAtUtc").ValueKind);
         AssertEx.False(doc.RootElement.GetProperty("updateAvailable").GetBoolean());
     }
@@ -356,10 +356,10 @@ public sealed class LlamaCppRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime?refresh=true");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal(JsonValueKind.Number, doc.RootElement.GetProperty("checkedAtUtc").ValueKind);
     }
 

@@ -22,7 +22,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
         var entity = BuildEntity(input);
 
         _ = _dbContext.ScheduledJobRuns.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -31,8 +31,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
     {
         var entity = await _dbContext.ScheduledJobRuns
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(run => run.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(run => run.Id == id, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -43,8 +42,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
                                        .AsNoTracking()
                                        .Where(run => run.ScheduledJobId == scheduledJobId)
                                        .OrderByDescending(run => run.ActualFireTimeUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -79,8 +77,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
 
         var entities = await query
                              .OrderByDescending(run => run.ActualFireTimeUtc)
-                             .ToListAsync(cancellationToken)
-                             .ConfigureAwait(false);
+                             .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -92,8 +89,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
         if (!string.IsNullOrEmpty(input.QuartzFireInstanceId))
         {
             var existing = await _dbContext.ScheduledJobRuns
-                                           .FirstOrDefaultAsync(run => run.QuartzFireInstanceId == input.QuartzFireInstanceId, cancellationToken)
-                                           .ConfigureAwait(false);
+                                           .FirstOrDefaultAsync(run => run.QuartzFireInstanceId == input.QuartzFireInstanceId, cancellationToken);
 
             if (existing is not null)
             {
@@ -107,7 +103,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
 
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException) when (!string.IsNullOrEmpty(input.QuartzFireInstanceId))
         {
@@ -117,8 +113,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
 
             var winner = await _dbContext.ScheduledJobRuns
                                          .AsNoTracking()
-                                         .FirstOrDefaultAsync(run => run.QuartzFireInstanceId == input.QuartzFireInstanceId, cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .FirstOrDefaultAsync(run => run.QuartzFireInstanceId == input.QuartzFireInstanceId, cancellationToken);
 
             if (winner is not null)
             {
@@ -142,8 +137,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
         CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.ScheduledJobRuns
-                                     .FirstOrDefaultAsync(run => run.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(run => run.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -182,7 +176,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
             entity.ErrorDetails = errorDetails;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -190,8 +184,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
     public async Task<ScheduledJobRunRecord?> RequestCancellationAsync(Guid id, long requestedAtUtc, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.ScheduledJobRuns
-                                     .FirstOrDefaultAsync(run => run.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(run => run.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -200,7 +193,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
 
         entity.CancellationRequestedAtUtc = requestedAtUtc;
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -209,8 +202,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
     {
         var staleRuns = await _dbContext.ScheduledJobRuns
                                         .Where(run => ActiveStatuses.Contains(run.Status))
-                                        .ToListAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ToListAsync(cancellationToken);
 
         if (staleRuns.Count == 0)
         {
@@ -226,7 +218,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
             run.ErrorMessage = reason;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return staleRuns.Count;
     }
@@ -236,27 +228,24 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
         var expiredRunIds = await _dbContext.ScheduledJobRuns
                                             .Where(run => run.CreatedAtUtc < cutoffUtc)
                                             .Select(run => run.Id)
-                                            .ToListAsync(cancellationToken)
-                                            .ConfigureAwait(false);
+                                            .ToListAsync(cancellationToken);
 
         if (expiredRunIds.Count == 0)
         {
             return 0;
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         _ = await _dbContext.ScheduledJobRunEvents
                             .Where(runEvent => expiredRunIds.Contains(runEvent.RunId))
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
+                            .ExecuteDeleteAsync(cancellationToken);
 
         var deletedRunCount = await _dbContext.ScheduledJobRuns
                                               .Where(run => expiredRunIds.Contains(run.Id))
-                                              .ExecuteDeleteAsync(cancellationToken)
-                                              .ConfigureAwait(false);
+                                              .ExecuteDeleteAsync(cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
 
         return deletedRunCount;
     }

@@ -30,16 +30,16 @@ public sealed class InvalidateInferenceProfileEndpoint(IInferenceProfileService 
         if (req.ProfileId == Guid.Empty)
         {
             AddError("A profile id is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var result = await _inferenceProfileService.InvalidateAsync(req.ProfileId, ct).ConfigureAwait(false);
+        var result = await _inferenceProfileService.InvalidateAsync(req.ProfileId, ct);
 
         if (!result.Success || result.Profile is null)
         {
             AddError(result.FailureReason ?? "The profile could not be invalidated.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -47,6 +47,6 @@ public sealed class InvalidateInferenceProfileEndpoint(IInferenceProfileService 
             {
                 Profile = result.Profile.ToDto()
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

@@ -16,12 +16,12 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
     [Test]
     public async Task ReconcileRunningAttempts_IsExactlyOnceAndLeavesOrderedInterruptionEvent()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
-        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1)).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
+        _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1));
         var attemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                            attemptId,
@@ -29,13 +29,12 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           ExpectedTaskVersion: 2))
-                       .ConfigureAwait(false);
+                           ExpectedTaskVersion: 2));
 
-        AssertEx.Equal(expected: 1, await store.ReconcileRunningAttemptsAsync("restart").ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await store.ReconcileRunningAttemptsAsync("restart").ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await store.ReconcileRunningAttemptsAsync("restart"));
+        AssertEx.Equal(expected: 0, await store.ReconcileRunningAttemptsAsync("restart"));
 
-        var events = await store.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);
+        var events = await store.ListEventsAsync(seed.ProjectId);
         AssertEx.Equal(expected: 1, events.Count(item => item.EventType == "AttemptInterrupted"));
         AssertEx.Equal(attemptId, events.Single(item => item.EventType == "AttemptInterrupted").AttemptId);
     }
@@ -43,30 +42,29 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
     [Test]
     public async Task ReconcileRunningAttempts_ConcurrentCallsProduceOneTransitionAndOneEvent()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using (var seedScope = provider.CreateAsyncScope())
         {
             var seedStore = seedScope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
             var seed = DevelopmentTestFixture.CreateSeed();
-            _ = await seedStore.CreateProjectAsync(seed).ConfigureAwait(false);
-            _ = await seedStore.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1)).ConfigureAwait(false);
+            _ = await seedStore.CreateProjectAsync(seed);
+            _ = await seedStore.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1));
             _ = await seedStore.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                    Guid.NewGuid(),
                                    Guid.NewGuid(),
                                    DevelopmentAttemptRole.Coder,
                                    "local-model",
                                    "local",
-                                   ExpectedTaskVersion: 2))
-                               .ConfigureAwait(false);
+                                   ExpectedTaskVersion: 2));
 
             await using var firstScope = provider.CreateAsyncScope();
             await using var secondScope = provider.CreateAsyncScope();
             var first = firstScope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ReconcileRunningAttemptsAsync("restart");
             var second = secondScope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ReconcileRunningAttemptsAsync("restart");
-            var results = await Task.WhenAll(first, second).ConfigureAwait(false);
+            var results = await Task.WhenAll(first, second);
 
             AssertEx.Equal(expected: 1, results.Sum());
-            var events = await seedStore.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);
+            var events = await seedStore.ListEventsAsync(seed.ProjectId);
             AssertEx.Equal(expected: 1, events.Count(item => item.EventType == "AttemptInterrupted"));
         }
     }

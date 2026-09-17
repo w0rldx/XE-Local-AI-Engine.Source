@@ -37,15 +37,14 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         };
 
         _ = _dbContext.ImageJobs.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.ImageJobs
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(job => job.Id == jobId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(job => job.Id == jobId, cancellationToken);
 
         return entity is null ? null : ToView(entity);
     }
@@ -56,15 +55,14 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
                                        .AsNoTracking()
                                        .OrderByDescending(job => job.CreatedAtUtc)
                                        .ThenByDescending(job => job.Id)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToView).ToArray();
     }
 
     public async Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken)
     {
-        var entity = await LoadTrackedAsync(jobId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(jobId, cancellationToken);
         if (entity is null)
         {
             return;
@@ -72,7 +70,7 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
 
         entity.Status = ImageJobStatus.Generating;
         entity.StartedAtUtc = startedAtUtc;
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task MarkSucceededAsync(Guid jobId,
@@ -84,7 +82,7 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         long resolvedSeed,
         CancellationToken cancellationToken)
     {
-        var entity = await LoadTrackedAsync(jobId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(jobId, cancellationToken);
         if (entity is null)
         {
             return;
@@ -111,14 +109,14 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
             entity.Seed = resolvedSeed;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task MarkFailedAsync(Guid jobId, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedError);
 
-        var entity = await LoadTrackedAsync(jobId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(jobId, cancellationToken);
         if (entity is null)
         {
             return;
@@ -127,12 +125,12 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         entity.Status = ImageJobStatus.Failed;
         entity.SanitizedError = sanitizedError;
         entity.CompletedAtUtc = completedAtUtc;
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task MarkCancelledAsync(Guid jobId, long completedAtUtc, CancellationToken cancellationToken)
     {
-        var entity = await LoadTrackedAsync(jobId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(jobId, cancellationToken);
         if (entity is null)
         {
             return;
@@ -140,19 +138,19 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
 
         entity.Status = ImageJobStatus.Cancelled;
         entity.CompletedAtUtc = completedAtUtc;
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task MarkCancellationRequestedAsync(Guid jobId, long requestedAtUtc, CancellationToken cancellationToken)
     {
-        var entity = await LoadTrackedAsync(jobId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(jobId, cancellationToken);
         if (entity is null)
         {
             return;
         }
 
         entity.CancellationRequestedAtUtc = requestedAtUtc;
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Guid>> MarkInterruptedFailedAsync(string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
@@ -163,8 +161,7 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         // unmodified and the stored ciphertext is preserved.
         var entities = await _dbContext.ImageJobs
                                        .Where(job => job.Status == ImageJobStatus.Queued || job.Status == ImageJobStatus.Generating)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         if (entities.Count == 0)
         {
             return [];
@@ -177,7 +174,7 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
             entity.CompletedAtUtc = completedAtUtc;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return entities.Select(entity => entity.Id).ToArray();
     }
 

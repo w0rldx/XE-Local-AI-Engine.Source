@@ -77,7 +77,7 @@ public sealed class DraftEndpointTests
             factory.AddNodeBearerToken(request);
         }
 
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     [Test]
@@ -87,7 +87,7 @@ public sealed class DraftEndpointTests
         await using var factory = CreateFactory(stub);
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody(), authenticated: false).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody(), authenticated: false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount, "An unauthenticated request must never reach the drafting service.");
@@ -100,7 +100,7 @@ public sealed class DraftEndpointTests
         await using var factory = CreateFactory(stub);
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client, SkillDraftRoute, BuildCreateBody(), authenticated: false).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client, SkillDraftRoute, BuildCreateBody(), authenticated: false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount, "An unauthenticated request must never reach the drafting service.");
@@ -120,8 +120,7 @@ public sealed class DraftEndpointTests
                 {
                     mode = "create",
                     brief = "An agent that reviews Terraform plans."
-                })
-            .ConfigureAwait(false);
+                });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount, "A request missing the model must be rejected before the drafting service runs.");
@@ -134,7 +133,7 @@ public sealed class DraftEndpointTests
         await using var factory = CreateFactory(stub);
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody(new string('b', count: 4001))).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody(new string('b', count: 4001)));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount, "An oversized brief must never occupy the single draft slot.");
@@ -156,8 +155,7 @@ public sealed class DraftEndpointTests
                     modelName = "qwen3.5:0.8b",
                     brief = "Make it stricter.",
                     existingContent = new string('c', count: 20001)
-                })
-            .ConfigureAwait(false);
+                });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount, "Improve-mode content is capped at the endpoint like every other field.");
@@ -179,8 +177,7 @@ public sealed class DraftEndpointTests
                     modelName = "qwen3.5:0.8b",
                     brief = "Make it stricter.",
                     existingName = new string('n', count: 121)
-                })
-            .ConfigureAwait(false);
+                });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount);
@@ -204,8 +201,7 @@ public sealed class DraftEndpointTests
                     modelName = "qwen3.5:0.8b",
                     brief = "Make it stricter.",
                     existingName = new string('n', count: 65)
-                })
-            .ConfigureAwait(false);
+                });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, stub.CallCount);
@@ -224,7 +220,7 @@ public sealed class DraftEndpointTests
         };
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody("A brief comfortably longer than ten characters.")).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody("A brief comfortably longer than ten characters."));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -237,7 +233,7 @@ public sealed class DraftEndpointTests
         await using var factory = CreateFactory(stub);
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody()).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody());
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -250,11 +246,11 @@ public sealed class DraftEndpointTests
         await using var factory = CreateFactory(stub);
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody()).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody());
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal("NodeBusy", document.RootElement.GetProperty("code").GetString());
         AssertEx.NotNullOrEmpty(document.RootElement.GetProperty("message").GetString());
     }
@@ -267,11 +263,11 @@ public sealed class DraftEndpointTests
         await using var factory = CreateFactory(stub);
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client, SkillDraftRoute, BuildCreateBody()).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client, SkillDraftRoute, BuildCreateBody());
 
         AssertEx.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
 
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal("Unparseable", document.RootElement.GetProperty("code").GetString());
     }
 
@@ -282,12 +278,12 @@ public sealed class DraftEndpointTests
         await using var factory = CreateFactory(stub);
         using var client = factory.CreateClient();
 
-        var (agentsBefore, skillsBefore) = await CountRowsAsync(factory).ConfigureAwait(false);
+        var (agentsBefore, skillsBefore) = await CountRowsAsync(factory);
 
-        using var agentResponse = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody()).ConfigureAwait(false);
+        using var agentResponse = await PostAsync(factory, client, AgentDraftRoute, BuildCreateBody());
         AssertEx.Equal(HttpStatusCode.OK, agentResponse.StatusCode);
 
-        using var agentDocument = JsonDocument.Parse(await agentResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var agentDocument = JsonDocument.Parse(await agentResponse.Content.ReadAsStringAsync());
         var agentDraft = agentDocument.RootElement;
         AssertEx.Equal("terraform-reviewer", agentDraft.GetProperty("name").GetString());
         AssertEx.Contains(agentDraft.GetProperty("instructions").GetString(), "Terraform reviewer");
@@ -302,13 +298,13 @@ public sealed class DraftEndpointTests
         AssertEx.Equal(expected: 1_700_000_000_000L, metadata.GetProperty("generatedAtUtc").GetInt64());
         AssertEx.NotEmpty(metadata.GetProperty("assumptions").EnumerateArray().ToList());
 
-        using var skillResponse = await PostAsync(factory, client, SkillDraftRoute, BuildCreateBody()).ConfigureAwait(false);
+        using var skillResponse = await PostAsync(factory, client, SkillDraftRoute, BuildCreateBody());
         AssertEx.Equal(HttpStatusCode.OK, skillResponse.StatusCode);
 
-        using var skillDocument = JsonDocument.Parse(await skillResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var skillDocument = JsonDocument.Parse(await skillResponse.Content.ReadAsStringAsync());
         AssertEx.Contains(skillDocument.RootElement.GetProperty("body").GetString(), "Terraform reviewer");
 
-        var (agentsAfter, skillsAfter) = await CountRowsAsync(factory).ConfigureAwait(false);
+        var (agentsAfter, skillsAfter) = await CountRowsAsync(factory);
         AssertEx.Equal(agentsBefore, agentsAfter, "Drafting an agent must not write a row — the CRUD routes are the only persistence path.");
         AssertEx.Equal(skillsBefore, skillsAfter, "Drafting a skill must not write a row — the CRUD routes are the only persistence path.");
         AssertEx.Equal(expected: 1, stub.AgentCallCount);
@@ -321,21 +317,21 @@ public sealed class DraftEndpointTests
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
         var connection = dbContext.Database.GetDbConnection();
-        await dbContext.Database.OpenConnectionAsync().ConfigureAwait(false);
+        await dbContext.Database.OpenConnectionAsync();
 
         try
         {
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT (SELECT COUNT(*) FROM agent_definitions) AS agents, (SELECT COUNT(*) FROM agent_skills) AS skills";
 
-            using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-            _ = await reader.ReadAsync().ConfigureAwait(false);
+            using var reader = await command.ExecuteReaderAsync();
+            _ = await reader.ReadAsync();
 
             return (reader.GetInt64(ordinal: 0), reader.GetInt64(ordinal: 1));
         }
         finally
         {
-            await dbContext.Database.CloseConnectionAsync().ConfigureAwait(false);
+            await dbContext.Database.CloseConnectionAsync();
         }
     }
 

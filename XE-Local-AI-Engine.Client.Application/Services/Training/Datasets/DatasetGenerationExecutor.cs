@@ -70,15 +70,13 @@ public sealed class DatasetGenerationExecutor(
         var generationToken = cancellation.Token;
         try
         {
-            await GenerateAsync(work, generationToken).ConfigureAwait(false);
+            await GenerateAsync(work, generationToken);
             _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Ready)));
-            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Succeeded, errorMessage: null, generationToken)
-                            .ConfigureAwait(false);
+            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Succeeded, errorMessage: null, generationToken);
         }
         catch (OperationCanceledException) when (generationToken.IsCancellationRequested)
         {
-            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Cancelled, errorMessage: null, CancellationToken.None)
-                            .ConfigureAwait(false);
+            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Cancelled, errorMessage: null, CancellationToken.None);
 
             // An operator cancel is an ordinary outcome, already recorded — rethrowing it would make the queue log a
             // "queue failed" error for work that ended exactly as asked. Only a host stop propagates, because that is
@@ -94,8 +92,7 @@ public sealed class DatasetGenerationExecutor(
             var reason = exception is TrainingStoreException ? exception.Message : "Dataset generation failed.";
             _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State,
                 new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Failed), Reason: reason));
-            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, reason, CancellationToken.None)
-                            .ConfigureAwait(false);
+            _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Failed, reason, CancellationToken.None);
         }
         finally
         {
@@ -117,14 +114,14 @@ public sealed class DatasetGenerationExecutor(
         // own guard ever saw the first turn.
         TrainingModelEligibility.EnsureNotExternal(definition.TeacherModelName, "dataset generation teachers");
 
-        var provider = await _providerResolver.ResolveProviderForModelAsync(definition.TeacherModelName, cancellationToken).ConfigureAwait(false);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(definition.TeacherModelName, cancellationToken);
         // One node-local client for the whole run; IChatClient is IDisposable and this one is ours (never the shared singleton).
         using var teacherClient = provider.CreateChatClient(new LocalModelSelection
         {
             ModelName = definition.TeacherModelName,
             ProviderName = provider.ProviderName
         }).WithProviderTelemetry();
-        using var criticClient = await CreateCriticClientAsync(definition, cancellationToken).ConfigureAwait(false);
+        using var criticClient = await CreateCriticClientAsync(definition, cancellationToken);
 
         var systemInstructions = ComposeSystemInstructions(definition);
         _ = _events.Append(work.DatasetId, DatasetGenerationEventKind.State, new DatasetGenerationPayload(State: nameof(TrainingDatasetStatus.Generating)));
@@ -143,20 +140,19 @@ public sealed class DatasetGenerationExecutor(
                 // the string the seed field is carried as.
                 OffsetSeed(definition.BaseSeed, index));
 
-            var completion = await _runner.RunAsync(teacherClient, request, cancellationToken).ConfigureAwait(false);
+            var completion = await _runner.RunAsync(teacherClient, request, cancellationToken);
             if (!completion.Success)
             {
-                await RejectAsync(work.DatasetId, completion.FailureReason, cancellationToken).ConfigureAwait(false);
+                await RejectAsync(work.DatasetId, completion.FailureReason, cancellationToken);
                 continue;
             }
 
             var outcome = await _pipeline.ValidateAsync(completion.Text,
                                              new SampleValidationContext(definition, target.Kind, target.Label, RecordSchema, criticClient),
-                                             cancellationToken)
-                                         .ConfigureAwait(false);
+                                             cancellationToken);
             if (!outcome.Accepted || outcome.Content is null)
             {
-                await RejectAsync(work.DatasetId, outcome.RejectionReason, cancellationToken).ConfigureAwait(false);
+                await RejectAsync(work.DatasetId, outcome.RejectionReason, cancellationToken);
                 continue;
             }
 
@@ -168,8 +164,7 @@ public sealed class DatasetGenerationExecutor(
                                              JsonSerializer.SerializeToUtf8Bytes(outcome.Validation, TrainingJson.Options),
                                              TrainingSampleProvenance.Generated,
                                              SourceHash(contentJson)),
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
+                                         cancellationToken);
 
             _ = _events.Append(work.DatasetId,
                 append.Duplicate ? DatasetGenerationEventKind.Rejected : DatasetGenerationEventKind.SampleAdded,
@@ -183,7 +178,7 @@ public sealed class DatasetGenerationExecutor(
 
     private async Task RejectAsync(Guid datasetId, string? reason, CancellationToken cancellationToken)
     {
-        await _store.RecordRejectedSampleAsync(datasetId, cancellationToken).ConfigureAwait(false);
+        await _store.RecordRejectedSampleAsync(datasetId, cancellationToken);
         _ = _events.Append(datasetId, DatasetGenerationEventKind.Rejected, new DatasetGenerationPayload(Reason: reason));
         // The hub buffer is transient and evicted when the run terminalizes; the count survives but the reason would
         // not. Log it so a rejection stays diagnosable after the fact (invariant: fail-visible, never fail-silent).
@@ -201,7 +196,7 @@ public sealed class DatasetGenerationExecutor(
         // The critic never passes through the teacher runner, so this is the ONLY place its model is validated.
         TrainingModelEligibility.EnsureNotExternal(definition.CriticModelName, "dataset generation critics");
 
-        var provider = await _providerResolver.ResolveProviderForModelAsync(definition.CriticModelName, cancellationToken).ConfigureAwait(false);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(definition.CriticModelName, cancellationToken);
         return provider.CreateChatClient(new LocalModelSelection
         {
             ModelName = definition.CriticModelName,

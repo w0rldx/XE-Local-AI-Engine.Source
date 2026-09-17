@@ -35,7 +35,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
     {
         ArgumentNullException.ThrowIfNull(principal);
 
-        var user = await _userManager.GetUserAsync(principal).ConfigureAwait(false);
+        var user = await _userManager.GetUserAsync(principal);
         if (user is null)
         {
             _logger.LogWarning("Tutorial-state read for an authenticated principal that did not resolve to a node user.");
@@ -50,10 +50,10 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
         ArgumentNullException.ThrowIfNull(principal);
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        await PersistenceLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await PersistenceLock.WaitAsync(cancellationToken);
         try
         {
-            var user = await _userManager.GetUserAsync(principal).ConfigureAwait(false);
+            var user = await _userManager.GetUserAsync(principal);
             if (user is null)
             {
                 _logger.LogWarning("Tutorial-state save for an authenticated principal that did not resolve to a node user.");
@@ -63,7 +63,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
             // Authentication can load the user into this request's scoped DbContext before it reaches this lock.
             // Refresh that tracked entity so every serialized write merges against the latest tutorial JSON and
             // concurrency stamp rather than the snapshot captured while parallel requests were authorizing.
-            await _dbContext.Entry(user).ReloadAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.Entry(user).ReloadAsync(cancellationToken);
 
             var trimmedKey = key.Trim();
             var currentEntries = Deserialize(user.TutorialState);
@@ -80,7 +80,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
 
             user.TutorialState = Serialize(entries);
 
-            var updateResult = await _userManager.UpdateAsync(user).ConfigureAwait(false);
+            var updateResult = await _userManager.UpdateAsync(user);
             if (!updateResult.Succeeded)
             {
                 _logger.LogWarning("Failed to persist tutorial state for the current user: {Errors}.",

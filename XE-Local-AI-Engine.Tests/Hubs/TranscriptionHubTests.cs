@@ -35,7 +35,7 @@ public sealed class TranscriptionHubTests
         var sessions = Sessions();
         using var fixture = CreateHub(sessions, Live());
 
-        _ = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
+        _ = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
 
         // The other order leaves a window in which a segment committed between the read and the join reaches nobody.
         Received.InOrder(() =>
@@ -50,7 +50,7 @@ public sealed class TranscriptionHubTests
     {
         using var fixture = CreateHub(Sessions(Segment(8), Segment(9)), Live());
 
-        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 7).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 7);
 
         AssertEx.Equal(SessionId, snapshot.SessionId);
         AssertEx.Equal("Transcribing", snapshot.Status);
@@ -69,7 +69,7 @@ public sealed class TranscriptionHubTests
     {
         using var fixture = CreateHub(Sessions(), Live());
 
-        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 4).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 4);
 
         AssertEx.Empty(snapshot.Segments);
         AssertEx.Equal(expected: 4L, snapshot.LastSeq, "it has seen nothing new, so it has moved nowhere.");
@@ -80,7 +80,7 @@ public sealed class TranscriptionHubTests
     {
         using var fixture = CreateHub(Sessions([.. Enumerable.Range(1, ReplayLimit).Select(seq => Segment(seq))]), Live());
 
-        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
 
         AssertEx.Equal(ReplayLimit, snapshot.Segments.Count);
         AssertEx.False(snapshot.ReplayTruncated);
@@ -91,7 +91,7 @@ public sealed class TranscriptionHubTests
     {
         using var fixture = CreateHub(Sessions([.. Enumerable.Range(1, ReplayLimit + 1).Select(seq => Segment(seq))]), Live());
 
-        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
 
         AssertEx.Equal(ReplayLimit, snapshot.Segments.Count);
         AssertEx.True(snapshot.ReplayTruncated, "the cap is observed one row over it, never inferred from a full page.");
@@ -109,17 +109,17 @@ public sealed class TranscriptionHubTests
     {
         using var fixture = CreateHub(PagingSessions([.. Enumerable.Range(1, 7).Select(seq => Segment(seq))]), Live());
 
-        var first = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
+        var first = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
         AssertEx.True(first.ReplayTruncated);
         AssertEx.Equal(expected: 5L, first.LastSeq);
 
-        var second = await fixture.Hub.SubscribeSession(SessionId, first.LastSeq).ConfigureAwait(false);
+        var second = await fixture.Hub.SubscribeSession(SessionId, first.LastSeq);
         AssertEx.False(second.ReplayTruncated, "two rows are left and the cap is five.");
         AssertEx.Equal(expected: 2, second.Segments.Count, "exactly the rest, with nothing repeated.");
         AssertEx.Equal(expected: 6L, second.Segments[0].Seq, "and in order, starting one past the cursor.");
         AssertEx.Equal(expected: 7L, second.LastSeq);
 
-        var third = await fixture.Hub.SubscribeSession(SessionId, second.LastSeq).ConfigureAwait(false);
+        var third = await fixture.Hub.SubscribeSession(SessionId, second.LastSeq);
         AssertEx.Empty(third.Segments);
         AssertEx.Equal(second.LastSeq, third.LastSeq, "a caught-up subscriber keeps the watermark it came with.");
     }
@@ -135,7 +135,7 @@ public sealed class TranscriptionHubTests
         sessions.GetSessionSummaryAsync(SessionId, Arg.Any<CancellationToken>()).Returns((TranscriptionSessionSummaryView?)null);
         using var fixture = CreateHub(sessions, Live());
 
-        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 3).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 3);
 
         AssertEx.Empty(snapshot.Segments);
         AssertEx.False(snapshot.ReplayTruncated);
@@ -163,7 +163,7 @@ public sealed class TranscriptionHubTests
         live.IsLive(SessionId).Returns(false);
         using var fixture = CreateHub(sessions, live);
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: 0)).ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: 0));
 
         AssertEx.Equal(TranscriptionHubErrors.SessionNotFound, error.Message);
         Received.InOrder(() =>
@@ -178,7 +178,7 @@ public sealed class TranscriptionHubTests
     {
         using var fixture = CreateHub(Sessions(), Live());
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(Guid.Empty, afterSeq: 0)).ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(Guid.Empty, afterSeq: 0));
 
         AssertEx.Equal(TranscriptionHubErrors.SessionRequired, error.Message);
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
@@ -189,7 +189,7 @@ public sealed class TranscriptionHubTests
     {
         using var fixture = CreateHub(Sessions(), Live());
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: -1)).ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: -1));
 
         AssertEx.Equal(TranscriptionHubErrors.InvalidWatermark, error.Message);
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
@@ -202,7 +202,7 @@ public sealed class TranscriptionHubTests
         var live = Live();
         using var fixture = CreateHub(sessions, live, enabled: false);
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: 0)).ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: 0));
 
         AssertEx.Equal(TranscriptionHubErrors.Disabled, error.Message);
         AssertEx.Empty(sessions.ReceivedCalls());
@@ -220,7 +220,7 @@ public sealed class TranscriptionHubTests
         var live = Live();
         using var fixture = CreateHub(Sessions(), live);
 
-        _ = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
+        _ = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
 
         live.Received(1).NoteBrowserAttached(SessionId, ConnectionId);
     }
@@ -231,7 +231,7 @@ public sealed class TranscriptionHubTests
         var live = Live();
         using var fixture = CreateHub(Sessions(), live);
 
-        await fixture.Hub.UnsubscribeSession(SessionId).ConfigureAwait(false);
+        await fixture.Hub.UnsubscribeSession(SessionId);
 
         await fixture.Groups.Received(1).RemoveFromGroupAsync(ConnectionId, $"transcription-session-{SessionId:N}", Arg.Any<CancellationToken>());
         live.Received(1).NoteBrowserDetached(SessionId, ConnectionId);
@@ -244,7 +244,7 @@ public sealed class TranscriptionHubTests
         using var fixture = CreateHub(Sessions(), live);
         var frame = new byte[64];
 
-        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Others, frame).ConfigureAwait(false);
+        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Others, frame);
 
         await live.Received(1).PushAudioAsync(SessionId,
             TranscriptChannel.Others,
@@ -262,8 +262,7 @@ public sealed class TranscriptionHubTests
         live.IsLive(SessionId).Returns(false);
         using var fixture = CreateHub(Sessions(), live);
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[32]))
-                                  .ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[32]));
 
         // The registry drops a frame for a session that is not live; without this refusal the client would keep
         // capturing into nothing and never be told.
@@ -279,8 +278,7 @@ public sealed class TranscriptionHubTests
 
         var error = await AssertEx
                           .ThrowsAsync<HubException>(() =>
-                              fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[TranscriptionHub.MaxFrameBytes + 2]))
-                          .ConfigureAwait(false);
+                              fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[TranscriptionHub.MaxFrameBytes + 2]));
 
         AssertEx.Equal(TranscriptionHubErrors.FrameTooLarge, error.Message);
         await live.DidNotReceiveWithAnyArgs().PushAudioAsync(Guid.Empty, default, default, default);
@@ -293,7 +291,7 @@ public sealed class TranscriptionHubTests
         var live = Live();
         using var fixture = CreateHub(Sessions(), live);
 
-        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[TranscriptionHub.MaxFrameBytes]).ConfigureAwait(false);
+        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[TranscriptionHub.MaxFrameBytes]);
 
         await live.ReceivedWithAnyArgs(1).PushAudioAsync(Guid.Empty, default, default, default);
     }
@@ -304,8 +302,7 @@ public sealed class TranscriptionHubTests
         var live = Live();
         using var fixture = CreateHub(Sessions(), live);
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[33]))
-                                  .ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, new byte[33]));
 
         // Half a sample shifts every later sample by one byte and turns the rest of the lane into noise.
         AssertEx.Equal(TranscriptionHubErrors.FrameMisaligned, error.Message);
@@ -321,7 +318,7 @@ public sealed class TranscriptionHubTests
         var live = Live();
         using var fixture = CreateHub(Sessions(), live);
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, channel, new byte[32])).ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, channel, new byte[32]));
 
         AssertEx.Equal(TranscriptionHubErrors.UnknownChannel, error.Message);
         await live.DidNotReceiveWithAnyArgs().PushAudioAsync(Guid.Empty, default, default, default);
@@ -339,8 +336,7 @@ public sealed class TranscriptionHubTests
             .Returns(_ => throw new ArgumentException("this session carries no You lane"));
         using var fixture = CreateHub(Sessions(), live);
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.You, new byte[32]))
-                                  .ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.You, new byte[32]));
 
         AssertEx.Equal(TranscriptionHubErrors.UnknownChannel, error.Message);
     }
@@ -351,8 +347,8 @@ public sealed class TranscriptionHubTests
         var live = Live();
         using var fixture = CreateHub(Sessions(), live);
 
-        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, []).ConfigureAwait(false);
-        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, null!).ConfigureAwait(false);
+        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, []);
+        await fixture.Hub.PushAudioFrame(SessionId, (int)TranscriptChannel.Mono, null!);
 
         // A capture callback firing before its first buffer fills is a hiccup, not something to fail a session over.
         await live.DidNotReceiveWithAnyArgs().PushAudioAsync(Guid.Empty, default, default, default);
@@ -364,7 +360,7 @@ public sealed class TranscriptionHubTests
         var live = Live();
         using var fixture = CreateHub(Sessions(), live);
 
-        await fixture.Hub.EndSession(SessionId).ConfigureAwait(false);
+        await fixture.Hub.EndSession(SessionId);
 
         await live.Received(1).EndAsync(SessionId, LiveEndReason.Completed, Arg.Any<CancellationToken>());
     }
@@ -381,10 +377,10 @@ public sealed class TranscriptionHubTests
         live.IsLive(other).Returns(true);
         using var fixture = CreateHub(Sessions(), live);
 
-        _ = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
-        await fixture.Hub.PushAudioFrame(other, (int)TranscriptChannel.Mono, new byte[32]).ConfigureAwait(false);
+        _ = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
+        await fixture.Hub.PushAudioFrame(other, (int)TranscriptChannel.Mono, new byte[32]);
 
-        await fixture.Hub.OnDisconnectedAsync(exception: null).ConfigureAwait(false);
+        await fixture.Hub.OnDisconnectedAsync(exception: null);
 
         live.Received(1).NoteBrowserDetached(SessionId, ConnectionId);
         live.Received(1).NoteBrowserDetached(other, ConnectionId);
@@ -428,7 +424,7 @@ public sealed class TranscriptionHubTests
 
         await fixture.Groups.Received(1).AddToGroupAsync(ConnectionId, $"transcription-session-{SessionId:N}", Arg.Any<CancellationToken>());
         joined.SetResult();
-        var snapshot = await subscribing.ConfigureAwait(false);
+        var snapshot = await subscribing;
 
         AssertEx.Equal("Completed", snapshot.Status, "The snapshot reports where the session ended up, not where it was when the caller asked.");
     }

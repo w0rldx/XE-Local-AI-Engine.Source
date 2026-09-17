@@ -68,19 +68,19 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
     public async Task<string?> GetAccessTokenAsync()
     {
-        await EnsureCredentialsLoadedAsync().ConfigureAwait(false);
+        await EnsureCredentialsLoadedAsync();
         return IsTokenExpired ? null : _credentials?.AccessToken;
     }
 
     public async Task<Guid?> GetClientNodeIdAsync()
     {
-        await EnsureCredentialsLoadedAsync().ConfigureAwait(false);
+        await EnsureCredentialsLoadedAsync();
         return _credentials?.ClientNodeId;
     }
 
     public async Task<string?> GetRefreshTokenAsync()
     {
-        await EnsureCredentialsLoadedAsync().ConfigureAwait(false);
+        await EnsureCredentialsLoadedAsync();
         return _credentials?.RefreshToken;
     }
 
@@ -103,10 +103,10 @@ public sealed class TokenStore : ITokenStore, IDisposable
         var payload = JsonSerializer.SerializeToUtf8Bytes(credentials, SerializerOptions);
         var protectedPayload = _protector.Protect(payload);
 
-        await _lock.WaitAsync().ConfigureAwait(false);
+        await _lock.WaitAsync();
         try
         {
-            await File.WriteAllBytesAsync(_credentialsPath, protectedPayload).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(_credentialsPath, protectedPayload);
             SecureFilePermissions.Apply(_credentialsPath);
             _credentials = credentials;
         }
@@ -120,9 +120,9 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
     public async Task SetAutoConnectOnStartAsync(bool enabled)
     {
-        await EnsureCredentialsLoadedAsync().ConfigureAwait(false);
+        await EnsureCredentialsLoadedAsync();
 
-        await _lock.WaitAsync().ConfigureAwait(false);
+        await _lock.WaitAsync();
         try
         {
             if (_credentials is null)
@@ -137,7 +137,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
             var payload = JsonSerializer.SerializeToUtf8Bytes(_credentials, SerializerOptions);
             var protectedPayload = _protector.Protect(payload);
-            await File.WriteAllBytesAsync(_credentialsPath, protectedPayload).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(_credentialsPath, protectedPayload);
             SecureFilePermissions.Apply(_credentialsPath);
         }
         finally
@@ -150,7 +150,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
     public async Task ClearTokensAsync()
     {
-        await _lock.WaitAsync().ConfigureAwait(false);
+        await _lock.WaitAsync();
         try
         {
             if (File.Exists(_credentialsPath))
@@ -170,10 +170,10 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
     public async Task HandleKeyRotationAsync()
     {
-        await _lock.WaitAsync().ConfigureAwait(false);
+        await _lock.WaitAsync();
         try
         {
-            _credentials = await TryReadCredentialsLockedAsync(true).ConfigureAwait(false);
+            _credentials = await TryReadCredentialsLockedAsync(true);
         }
         finally
         {
@@ -219,10 +219,10 @@ public sealed class TokenStore : ITokenStore, IDisposable
         }
 
         // No token is available: ITokenStore exposes no cancellable member on this path.
-        await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await _lock.WaitAsync(CancellationToken.None);
         try
         {
-            _credentials = await TryReadCredentialsLockedAsync(true).ConfigureAwait(false);
+            _credentials = await TryReadCredentialsLockedAsync(true);
         }
         finally
         {
@@ -240,7 +240,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
         try
         {
             // No token is available: ITokenStore exposes no cancellable member on this path.
-            var protectedPayload = await File.ReadAllBytesAsync(_credentialsPath, CancellationToken.None).ConfigureAwait(false);
+            var protectedPayload = await File.ReadAllBytesAsync(_credentialsPath, CancellationToken.None);
             var payload = _protector.Unprotect(protectedPayload);
             return DeserializeCredentials(payload);
         }

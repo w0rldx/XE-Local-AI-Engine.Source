@@ -22,7 +22,7 @@ internal sealed class PlaybookAnalysisService(
     public async Task<PlaybookAnalysisOutcome> AnalyzeAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
         // Read the feedback-insights aggregate (reuse — never re-derive). Null means the agent does not exist → the endpoint 404s.
-        var insights = await _insightsService.GetAgentFeedbackInsightsAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var insights = await _insightsService.GetAgentFeedbackInsightsAsync(agentDefinitionId, cancellationToken);
         if (insights is null)
         {
             return new PlaybookAnalysisOutcome(AgentExists: false, MeetsThreshold: false, [], ProposedCount: 0, RejectedCount: 0, DuplicateCount: 0);
@@ -36,7 +36,7 @@ internal sealed class PlaybookAnalysisService(
             return new PlaybookAnalysisOutcome(AgentExists: true, MeetsThreshold: false, [], ProposedCount: 0, RejectedCount: 0, DuplicateCount: 0);
         }
 
-        var proposals = await _analysisAgent.ProposeAsync(insights, cancellationToken).ConfigureAwait(false);
+        var proposals = await _analysisAgent.ProposeAsync(insights, cancellationToken);
 
         // Enforce the proposal cap server-side as a hard limit (the prompt only requests it). This bounds review load
         // and prompt bloat regardless of what any agent implementation returns.
@@ -47,7 +47,7 @@ internal sealed class PlaybookAnalysisService(
         }
 
         var evidenceIds = BuildEvidenceIdSet(insights);
-        var existing = await _playbookActionService.ListByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var existing = await _playbookActionService.ListByAgentAsync(agentDefinitionId, cancellationToken);
         var dedupKeys = BuildDedupKeys(existing);
 
         var created = new List<PlaybookActionRecord>();
@@ -79,7 +79,7 @@ internal sealed class PlaybookAnalysisService(
                     _options.SuggestionPriority,
                     proposal.SourceFeedbackIds,
                     proposal.Confidence),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             created.Add(record);
         }

@@ -254,7 +254,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
     {
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var events = new List<IntegrationStreamEvent>();
-        await foreach (var streamEvent in harness.Buffer.ReadAsync(executionId, sinceSequence: 1, cancellation.Token).ConfigureAwait(false))
+        await foreach (var streamEvent in harness.Buffer.ReadAsync(executionId, sinceSequence: 1, cancellation.Token))
         {
             events.Add(streamEvent);
         }

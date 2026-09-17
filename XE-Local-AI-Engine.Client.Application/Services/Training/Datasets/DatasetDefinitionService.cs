@@ -39,8 +39,8 @@ public sealed class DatasetDefinitionService(
 
     public async Task<TrainingDefinitionRecord> CreateAsync(DatasetDefinitionDraft draft, CancellationToken cancellationToken = default)
     {
-        var input = await BuildInputAsync(draft, cancellationToken).ConfigureAwait(false);
-        return await _store.CreateDefinitionAsync(input, cancellationToken).ConfigureAwait(false);
+        var input = await BuildInputAsync(draft, cancellationToken);
+        return await _store.CreateDefinitionAsync(input, cancellationToken);
     }
 
     public async Task<TrainingDefinitionRecord> UpdateAsync(Guid definitionId,
@@ -48,8 +48,8 @@ public sealed class DatasetDefinitionService(
         DatasetDefinitionDraft draft,
         CancellationToken cancellationToken = default)
     {
-        var input = await BuildInputAsync(draft, cancellationToken).ConfigureAwait(false);
-        return await _store.UpdateDefinitionAsync(definitionId, expectedVersion, input, cancellationToken).ConfigureAwait(false);
+        var input = await BuildInputAsync(draft, cancellationToken);
+        return await _store.UpdateDefinitionAsync(definitionId, expectedVersion, input, cancellationToken);
     }
 
     public Task<TrainingDefinitionRecord?> GetAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
@@ -103,7 +103,7 @@ public sealed class DatasetDefinitionService(
 
         Validate(draft.Body);
 
-        var snapshot = await SnapshotToolsAsync(draft.Body, cancellationToken).ConfigureAwait(false);
+        var snapshot = await SnapshotToolsAsync(draft.Body, cancellationToken);
         var body = draft.Body with
         {
             SchemaVersion = 1,
@@ -186,7 +186,7 @@ public sealed class DatasetDefinitionService(
         }
 
         // The teacher is always node-local (invariant #5), so the offer is taken with isCloudModel: false.
-        var offered = await _offerProvider.GetOfferedToolsAsync(body.TeacherModelName, isCloudModel: false, cancellationToken).ConfigureAwait(false);
+        var offered = await _offerProvider.GetOfferedToolsAsync(body.TeacherModelName, isCloudModel: false, cancellationToken);
         var byName = offered.ToDictionary(tool => tool.Name, StringComparer.Ordinal);
         var missing = requested.Where(name => !byName.ContainsKey(name)).Order(StringComparer.Ordinal).ToArray();
         if (missing.Length > 0)

@@ -34,7 +34,7 @@ internal sealed class IntegrationSessionGate
     public async Task<IDisposable> EnterAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         var gate = _gates.GetOrAdd(sessionId, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await gate.WaitAsync(cancellationToken);
         return new Lease(gate);
     }
 

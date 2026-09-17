@@ -36,7 +36,7 @@ public sealed class OllamaProviderMapBackfillService(
     {
         try
         {
-            await BackfillAsync(_scopeFactory, _logger, stoppingToken).ConfigureAwait(false);
+            await BackfillAsync(_scopeFactory, _logger, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -59,7 +59,7 @@ public sealed class OllamaProviderMapBackfillService(
         var coordinator = scope.ServiceProvider.GetRequiredService<IOllamaProviderMapBackfillCoordinator>();
         try
         {
-            var mapped = await coordinator.BackfillAsync(cancellationToken).ConfigureAwait(false);
+            var mapped = await coordinator.BackfillAsync(cancellationToken);
             if (mapped > 0)
             {
                 logger.LogInformation("Backfilled {Count} pre-existing Ollama model(s) to the ollama provider map.", mapped);

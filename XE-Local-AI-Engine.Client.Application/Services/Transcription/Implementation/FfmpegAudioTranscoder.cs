@@ -104,19 +104,19 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
 
         try
         {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
             TryKill(process);
-            await WaitForExitAfterKillAsync(process).ConfigureAwait(false);
-            _ = await stderrTask.ConfigureAwait(false);
-            _ = await stdoutTask.ConfigureAwait(false);
+            await WaitForExitAfterKillAsync(process);
+            _ = await stderrTask;
+            _ = await stdoutTask;
             throw;
         }
 
-        var stderr = await stderrTask.ConfigureAwait(false);
-        _ = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask;
+        _ = await stdoutTask;
 
         if (process.ExitCode != 0)
         {
@@ -146,7 +146,7 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
         {
             while (true)
             {
-                var read = await reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+                var read = await reader.ReadAsync(buffer.AsMemory(), cancellationToken);
                 if (read == 0)
                 {
                     break;
@@ -229,7 +229,7 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
         using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(KillWaitSeconds));
         try
         {
-            await process.WaitForExitAsync(bound.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(bound.Token);
         }
         catch (Exception exception) when (exception is OperationCanceledException or InvalidOperationException)
         {

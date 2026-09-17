@@ -28,7 +28,7 @@ public sealed class WorkSessionHubTests
         var service = Service();
         using var fixture = CreateHub(service);
 
-        _ = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
+        _ = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
 
         // The other order leaves a window in which a change published between the read and the join reaches nobody.
         Received.InOrder(() =>
@@ -44,7 +44,7 @@ public sealed class WorkSessionHubTests
         var service = Service(events: [Event(sequence: 8), Event(sequence: 9)]);
         using var fixture = CreateHub(service);
 
-        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 7).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 7);
 
         AssertEx.Equal(SessionId, snapshot.SessionId);
         AssertEx.Equal("Running", snapshot.Status);
@@ -62,7 +62,7 @@ public sealed class WorkSessionHubTests
         var service = Service(events: [.. Enumerable.Range(1, ReplayCap).Select(sequence => Event(sequence))]);
         using var fixture = CreateHub(service);
 
-        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
 
         AssertEx.Equal(ReplayCap, snapshot.Events.Count);
         AssertEx.False(snapshot.ReplayTruncated);
@@ -74,7 +74,7 @@ public sealed class WorkSessionHubTests
         var service = Service(events: [.. Enumerable.Range(1, ReplayCap + 1).Select(sequence => Event(sequence))]);
         using var fixture = CreateHub(service);
 
-        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeSession(SessionId, afterSeq: 0);
 
         AssertEx.Equal(ReplayCap, snapshot.Events.Count);
         AssertEx.True(snapshot.ReplayTruncated);
@@ -87,7 +87,7 @@ public sealed class WorkSessionHubTests
         service.GetAsync(SessionId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new KeyNotFoundException("gone"));
         using var fixture = CreateHub(service);
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: 0));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -97,7 +97,7 @@ public sealed class WorkSessionHubTests
     {
         using var fixture = CreateHub(Service());
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(Guid.Empty, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(Guid.Empty, afterSeq: 0));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -107,7 +107,7 @@ public sealed class WorkSessionHubTests
     {
         using var fixture = CreateHub(Service());
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: -1)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: -1));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -118,7 +118,7 @@ public sealed class WorkSessionHubTests
         var service = Service();
         using var fixture = CreateHub(service, enabled: false);
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeSession(SessionId, afterSeq: 0));
 
         AssertEx.Empty(service.ReceivedCalls());
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
@@ -129,7 +129,7 @@ public sealed class WorkSessionHubTests
     {
         using var fixture = CreateHub(Service());
 
-        await fixture.Hub.UnsubscribeSession(SessionId).ConfigureAwait(false);
+        await fixture.Hub.UnsubscribeSession(SessionId);
 
         await fixture.Groups.Received(1).RemoveFromGroupAsync("connection", $"work-session-{SessionId:N}", Arg.Any<CancellationToken>());
     }

@@ -43,7 +43,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -61,7 +61,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -72,7 +72,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         // Route-only POST → send an empty object body (a truly empty body 415s).
         using var request = new HttpRequestMessage(HttpMethod.Post, HarvestRoute(agentId))
@@ -82,11 +82,11 @@ public sealed class HarvestGoldenConversationsEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -109,7 +109,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -120,7 +120,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(agentId, Guid.NewGuid()))
         {
@@ -129,7 +129,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -140,9 +140,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
         // A Manual (non-harvested) case must not be promotable via the approve route.
-        var goldenId = await SeedGoldenAsync(factory, agentId, GoldenConversationSource.Manual, enabled: false).ConfigureAwait(false);
+        var goldenId = await SeedGoldenAsync(factory, agentId, GoldenConversationSource.Manual, enabled: false);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(agentId, goldenId))
         {
@@ -151,7 +151,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -162,9 +162,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var otherAgentId = await SeedAgentAsync(factory, "Other").ConfigureAwait(false);
-        var goldenId = await SeedGoldenAsync(factory, ownerAgentId, GoldenConversationSource.Harvested, enabled: false).ConfigureAwait(false);
+        var ownerAgentId = await SeedAgentAsync(factory, "Owner");
+        var otherAgentId = await SeedAgentAsync(factory, "Other");
+        var goldenId = await SeedGoldenAsync(factory, ownerAgentId, GoldenConversationSource.Harvested, enabled: false);
 
         // Approve the owner's harvested case via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(otherAgentId, goldenId))
@@ -174,7 +174,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -185,8 +185,8 @@ public sealed class HarvestGoldenConversationsEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var goldenId = await SeedGoldenAsync(factory, agentId, GoldenConversationSource.Harvested, enabled: false).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var goldenId = await SeedGoldenAsync(factory, agentId, GoldenConversationSource.Harvested, enabled: false);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(agentId, goldenId))
         {
@@ -195,11 +195,11 @@ public sealed class HarvestGoldenConversationsEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -220,7 +220,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
             enabled,
             source,
             source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null,
-            source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null)).ConfigureAwait(false);
+            source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null));
         return added.Id;
     }
 
@@ -236,7 +236,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 }

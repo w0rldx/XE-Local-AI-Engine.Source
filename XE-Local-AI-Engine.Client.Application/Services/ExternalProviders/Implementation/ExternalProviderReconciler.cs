@@ -61,7 +61,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         // node default the configuration does not list is removed. Run against a config that merely looks empty because
         // the file could not be read — or because a newer build wrote it — it would erase the operator's whole external
         // setup and report success. So a non-authoritative read repairs nothing.
-        if (await _store.ReadForWriteAsync(cancellationToken).ConfigureAwait(false) is not ExternalProviderLoadResult.Loaded loaded)
+        if (await _store.ReadForWriteAsync(cancellationToken) is not ExternalProviderLoadResult.Loaded loaded)
         {
             _logger.LogWarning("Skipping external provider reconciliation: the connection store is not readable. Nothing was changed.");
             return new ExternalProviderReconciliationReport(0, 0, 0, 0, DefaultModelCleared: false);
@@ -79,8 +79,8 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         var registered = registrations.Select(registration => registration.ModelId).ToArray();
         var registeredSet = new HashSet<string>(registered, StringComparer.Ordinal);
 
-        var (written, removed) = await ReconcileProviderMapAsync(registered, registeredSet, cancellationToken).ConfigureAwait(false);
-        var (added, dropped, defaultCleared) = await ReconcileNodeSettingsAsync(registrations, registeredSet, cancellationToken).ConfigureAwait(false);
+        var (written, removed) = await ReconcileProviderMapAsync(registered, registeredSet, cancellationToken);
+        var (added, dropped, defaultCleared) = await ReconcileNodeSettingsAsync(registrations, registeredSet, cancellationToken);
 
         var report = new ExternalProviderReconciliationReport(written, removed, added, dropped, defaultCleared);
         if (report.Changed)
@@ -108,7 +108,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
     {
         // Snapshot first, repair per row under its own lease. See ICoordinatedModelProviderMapStore.ListAsync for why
         // the listing is deliberately lease-free and what re-reads under the lease.
-        var rows = await _mapStore.ListAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await _mapStore.ListAsync(cancellationToken);
         var externalRows = rows.Where(row => ExternalModelId.HasExternalScheme(row.ModelName)).ToArray();
 
         var written = 0;
@@ -122,7 +122,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
                 continue;
             }
 
-            if (await TryWriteMapRowAsync(modelId, cancellationToken).ConfigureAwait(false))
+            if (await TryWriteMapRowAsync(modelId, cancellationToken))
             {
                 written++;
             }
@@ -143,7 +143,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         var removed = 0;
         foreach (var modelName in orphans)
         {
-            if (await TryRemoveMapRowAsync(modelName, cancellationToken).ConfigureAwait(false))
+            if (await TryRemoveMapRowAsync(modelName, cancellationToken))
             {
                 removed++;
             }
@@ -158,11 +158,11 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         {
             await using var lease = await _leaseCoordinator.AcquireMapMutationAsync(modelId,
                 ModelProviderMapMutationKind.MapUpsert,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             // Re-read UNDER the lease: the snapshot that selected this model may be stale, and the upsert needs the
             // row's current revision to compare-and-swap against.
-            var current = await _mapStore.ReadWithRevisionAsync(lease, modelId, cancellationToken).ConfigureAwait(false);
+            var current = await _mapStore.ReadWithRevisionAsync(lease, modelId, cancellationToken);
             if (current is not null && string.Equals(current.ProviderName, ExternalProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
@@ -183,7 +183,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
                 modelId,
                 ExternalProviderConstants.ProviderName,
                 expectedRevision: null,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             return result is ProviderMapMutationResult.Mutated;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -205,9 +205,9 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         {
             await using var lease = await _leaseCoordinator.AcquireMapMutationAsync(modelName,
                 ModelProviderMapMutationKind.MapRemove,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
-            var current = await _mapStore.ReadWithRevisionAsync(lease, modelName, cancellationToken).ConfigureAwait(false);
+            var current = await _mapStore.ReadWithRevisionAsync(lease, modelName, cancellationToken);
             if (current is null || !string.Equals(current.ProviderName, ExternalProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
@@ -217,7 +217,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
                 current.ModelName,
                 current.ProviderName,
                 current.Revision,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             return result is ProviderMapRemovalResult.Removed;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -244,7 +244,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         // pass (this runs on every boot and every save, and a needless save churns the cache and the file). The
         // authoritative decision is re-made inside the coordinated update below against the settings as they are under
         // the lock, so a stale read here can cost a redundant write but can never produce a wrong one.
-        var preview = await _settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var preview = await _settingsStore.LoadAsync(cancellationToken);
         if (Diff(preview, desired, registeredSet) is (0, 0, false))
         {
             return (0, 0, false);
@@ -276,7 +276,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
                 ToolCapableModels = merged,
                 DefaultModelName = defaultCleared ? null : stored.DefaultModelName
             };
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
 
         if (defaultCleared)
         {

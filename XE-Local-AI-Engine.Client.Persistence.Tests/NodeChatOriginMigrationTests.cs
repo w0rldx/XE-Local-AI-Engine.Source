@@ -33,28 +33,28 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreOriginMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreOriginMigrationId);
 
-        await InsertHistoricalRowsAsync(databasePath, conversationId, messageId).ConfigureAwait(false);
+        await InsertHistoricalRowsAsync(databasePath, conversationId, messageId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);
-        var messageColumns = await GetMessageColumnsAsync(connection).ConfigureAwait(false);
+        var conversationColumns = await GetConversationColumnsAsync(connection);
+        var messageColumns = await GetMessageColumnsAsync(connection);
 
         AssertEx.True(conversationColumns.Contains("origin"), "conversations.origin should be added.");
         AssertEx.True(messageColumns.Contains("origin"), "messages.origin should be added.");
 
         AssertEx.Equal(NodeChatOrigin.Local,
-            await ReadConversationOriginAsync(connection, conversationId).ConfigureAwait(false),
+            await ReadConversationOriginAsync(connection, conversationId),
             "Existing conversations should default to Local origin.");
         AssertEx.Equal(NodeChatOrigin.Local,
-            await ReadMessageOriginAsync(connection, messageId).ConfigureAwait(false),
+            await ReadMessageOriginAsync(connection, messageId),
             "Existing messages should default to Local origin.");
     }
 
@@ -63,17 +63,17 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("origin-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreOriginMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreOriginMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);
-        var messageColumns = await GetMessageColumnsAsync(connection).ConfigureAwait(false);
+        var conversationColumns = await GetConversationColumnsAsync(connection);
+        var messageColumns = await GetMessageColumnsAsync(connection);
 
         AssertEx.False(conversationColumns.Contains("origin"), "Rollback should drop conversations.origin.");
         AssertEx.False(messageColumns.Contains("origin"), "Rollback should drop messages.origin.");
@@ -86,7 +86,7 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -111,13 +111,13 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
                 Origin = NodeChatOrigin.Remote
             });
 
-            await context.SaveChangesAsync().ConfigureAwait(false);
+            await context.SaveChangesAsync();
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            var conversation = await context.Conversations.SingleAsync(entity => entity.ConversationId == conversationId).ConfigureAwait(false);
-            var message = await context.Messages.SingleAsync(entity => entity.MessageId == messageId).ConfigureAwait(false);
+            var conversation = await context.Conversations.SingleAsync(entity => entity.ConversationId == conversationId);
+            var message = await context.Messages.SingleAsync(entity => entity.MessageId == messageId);
 
             AssertEx.Equal(NodeChatOrigin.Remote, conversation.Origin);
             AssertEx.Equal(NodeChatOrigin.Remote, message.Origin);
@@ -137,7 +137,7 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
 
     private static async Task InsertHistoricalRowsAsync(string databasePath, Guid conversationId, Guid messageId)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
         await using (var command = connection.CreateCommand())
         {
@@ -152,7 +152,7 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
             command.Parameters.AddWithValue("$last_seen_utc", value: 1234L);
             command.Parameters.AddWithValue("$purged", value: false);
 
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync();
         }
 
         await using (var command = connection.CreateCommand())
@@ -171,14 +171,14 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
             command.Parameters.AddWithValue("$updated_at_utc", value: 1234L);
             command.Parameters.AddWithValue("$status", NodeMessageStatus.Completed);
 
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync();
         }
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -186,19 +186,19 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM conversations LIMIT 0;";
-        return await ReadColumnNamesAsync(command).ConfigureAwait(false);
+        return await ReadColumnNamesAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> GetMessageColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM messages LIMIT 0;";
-        return await ReadColumnNamesAsync(command).ConfigureAwait(false);
+        return await ReadColumnNamesAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> ReadColumnNamesAsync(SqliteCommand command)
     {
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -209,7 +209,7 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT origin FROM conversations WHERE conversation_id = $id;";
         command.Parameters.AddWithValue("$id", conversationId.ToString());
-        return await ReadOriginScalarAsync(command).ConfigureAwait(false);
+        return await ReadOriginScalarAsync(command);
     }
 
     private static async Task<string> ReadMessageOriginAsync(SqliteConnection connection, Guid messageId)
@@ -217,12 +217,12 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT origin FROM messages WHERE message_id = $id;";
         command.Parameters.AddWithValue("$id", messageId.ToString());
-        return await ReadOriginScalarAsync(command).ConfigureAwait(false);
+        return await ReadOriginScalarAsync(command);
     }
 
     private static async Task<string> ReadOriginScalarAsync(SqliteCommand command)
     {
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value as string ?? throw new AssertionException("Expected a non-null origin value.");
     }
 

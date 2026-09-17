@@ -58,7 +58,6 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
         await _dbContext.BenchmarkWorkItems.Where(entity => entity.RunId == runId && entity.Kind == kind)
                         .OrderByDescending(entity => entity.QueueSequence)
                         .FirstOrDefaultAsync(cancellationToken)
-                        .ConfigureAwait(false)
         ?? throw new BenchmarkNotFoundException("Benchmark work item was not found.");
 
     private async Task AcquireWorkCompletionAsync(Guid runId,
@@ -73,8 +72,7 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
                                                         && entity.Kind == kind
                                                         && entity.Status == BenchmarkWorkStatus.Running
                                                         && entity.Version == expectedWorkVersion)
-                                       .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.Version, entity => entity.Version), cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.Version, entity => entity.Version), cancellationToken);
         if (acquired == 0)
         {
             throw new BenchmarkConflictException("VersionConflict");
@@ -82,13 +80,13 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
     }
 
     private async Task<BenchmarkProject> RequireProjectAsync(Guid projectId, CancellationToken cancellationToken) =>
-        await _dbContext.BenchmarkProjects.SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.BenchmarkProjects.SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
         ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
 
     private async Task<BenchmarkRun> RequireRunAsync(Guid runId, bool tracking, CancellationToken cancellationToken)
     {
         var query = tracking ? _dbContext.BenchmarkRuns.AsQueryable() : _dbContext.BenchmarkRuns.AsNoTracking();
-        return await query.SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false)
+        return await query.SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken)
                ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
     }
 
@@ -96,7 +94,7 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
     {
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {

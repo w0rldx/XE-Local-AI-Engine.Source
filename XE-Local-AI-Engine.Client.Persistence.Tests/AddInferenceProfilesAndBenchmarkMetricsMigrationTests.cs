@@ -17,11 +17,11 @@ public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CreatesInferenceProfilesWithTheFreezeColumns()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles.sqlite", ThisMigrationId);
 
-        AssertEx.True(await probe.TableExistsAsync("inference_profiles").ConfigureAwait(false), "inference_profiles must exist.");
+        AssertEx.True(await probe.TableExistsAsync("inference_profiles"), "inference_profiles must exist.");
 
-        AssertEx.True((await probe.ColumnsAsync("inference_profiles").ConfigureAwait(false)).SetEquals(new[]
+        AssertEx.True((await probe.ColumnsAsync("inference_profiles")).SetEquals(new[]
         {
             "id",
             "machine_key",
@@ -47,16 +47,16 @@ public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests
             "updated_at_utc"
         }), "inference_profiles must expose exactly the columns this migration created.");
 
-        AssertEx.True(await probe.IndexExistsAsync("inference_profiles", "IX_inference_profiles_status", unique: false, "status").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("inference_profiles", "IX_inference_profiles_status", unique: false, "status"),
             "Spawn scans profiles by status, so status must be indexed.");
     }
 
     [Test]
     public async Task Migrate_ToThisMigration_AddsTheBenchmarkMeasurementColumns()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles-benchmarks.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles-benchmarks.sqlite", ThisMigrationId);
 
-        AssertEx.True((await probe.ColumnsAsync("model_fit_benchmarks").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("model_fit_benchmarks")).IsSupersetOf(new[]
         {
             "backend",
             "cache_hit_rate",
@@ -78,7 +78,7 @@ public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_AllowsOnlyOneProfilePerMachineModelRoleAndBackend()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles-unique.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles-unique.sqlite", ThisMigrationId);
 
         AssertEx.True(await probe.IndexExistsAsync("inference_profiles",
                 "IX_inference_profiles_machine_key_model_name_role_backend",
@@ -86,16 +86,16 @@ public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests
                 "machine_key",
                 "model_name",
                 "role",
-                "backend").ConfigureAwait(false),
+                "backend"),
             "The profile identity must be uniquely indexed.");
 
-        await InsertProfileAsync(probe, backend: "cuda").ConfigureAwait(false);
+        await InsertProfileAsync(probe, backend: "cuda");
 
         // A different backend on the same box and model is a different profile and must be allowed.
-        await InsertProfileAsync(probe, backend: "vulkan").ConfigureAwait(false);
+        await InsertProfileAsync(probe, backend: "vulkan");
 
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertProfileAsync(probe, backend: "cuda"),
-            "A second profile with the same identity must be rejected.").ConfigureAwait(false);
+            "A second profile with the same identity must be rejected.");
     }
 
     private static Task InsertProfileAsync(MigrationSchemaProbe probe, string backend)

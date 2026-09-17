@@ -407,13 +407,13 @@ public static class ConfigureServices
                            }
 
                            var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<NodeUser>>();
-                           var user = await userManager.FindByIdAsync(userId).ConfigureAwait(false);
+                           var user = await userManager.FindByIdAsync(userId);
 
                            // No persisted row for the subject: preserve the base stateless-JWT posture (the token
                            // authenticates and each endpoint resolves the user itself). The stamp is a revocation signal
                            // for existing users, not an existence check — the single operator always exists after setup.
                            if (user is not null
-                               && !string.Equals(await userManager.GetSecurityStampAsync(user).ConfigureAwait(false), tokenStamp, StringComparison.Ordinal))
+                               && !string.Equals(await userManager.GetSecurityStampAsync(user), tokenStamp, StringComparison.Ordinal))
                            {
                                context.Fail("Access token security stamp is stale.");
                            }
@@ -583,7 +583,7 @@ public static class ConfigureServices
                     message = string.Equals(policyName, NodeAuthRateLimits.AuthPolicy, StringComparison.Ordinal)
                         ? "Too many auth attempts. Please try again later."
                         : "Too many requests. Please try again later."
-                }, cancellationToken).ConfigureAwait(false);
+                }, cancellationToken);
             };
         });
 

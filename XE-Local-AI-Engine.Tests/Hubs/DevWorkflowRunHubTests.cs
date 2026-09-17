@@ -29,7 +29,7 @@ public sealed class DevWorkflowRunHubTests
         var store = Store();
         using var fixture = CreateHub(store, Runs());
 
-        _ = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        _ = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
 
         // The other order leaves a window in which a change published between the read and the join reaches nobody.
         Received.InOrder(() =>
@@ -44,7 +44,7 @@ public sealed class DevWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store([Event(8), Event(9)]), Runs());
 
-        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 7).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 7);
 
         AssertEx.Equal(RunId, snapshot.RunId);
         AssertEx.Equal("WaitingForApproval", snapshot.Status);
@@ -62,7 +62,7 @@ public sealed class DevWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayCap).Select(sequence => Event(sequence))]), Runs());
 
-        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
 
         AssertEx.Equal(ReplayCap, snapshot.Events.Count);
         AssertEx.False(snapshot.ReplayTruncated);
@@ -73,7 +73,7 @@ public sealed class DevWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayCap + 1).Select(sequence => Event(sequence))]), Runs());
 
-        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
 
         AssertEx.Equal(ReplayCap, snapshot.Events.Count);
         AssertEx.True(snapshot.ReplayTruncated, "the cap is observed one row over it, never inferred from a full page.");
@@ -86,7 +86,7 @@ public sealed class DevWorkflowRunHubTests
         runs.GetAsync(RunId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new DevWorkflowNotFoundException("gone"));
         using var fixture = CreateHub(Store(), runs);
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -96,7 +96,7 @@ public sealed class DevWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store(), Runs());
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(Guid.Empty, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(Guid.Empty, afterSeq: 0));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -106,7 +106,7 @@ public sealed class DevWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store(), Runs());
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: -1)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: -1));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -117,7 +117,7 @@ public sealed class DevWorkflowRunHubTests
         var runs = Runs();
         using var fixture = CreateHub(Store(), runs, enabled: false);
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0));
 
         AssertEx.Empty(runs.ReceivedCalls());
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
@@ -128,7 +128,7 @@ public sealed class DevWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store(), Runs());
 
-        await fixture.Hub.UnsubscribeRun(RunId).ConfigureAwait(false);
+        await fixture.Hub.UnsubscribeRun(RunId);
 
         await fixture.Groups.Received(1).RemoveFromGroupAsync("connection", $"dev-workflow-run-{RunId:N}", Arg.Any<CancellationToken>());
     }

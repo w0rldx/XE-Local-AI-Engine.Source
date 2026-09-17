@@ -32,7 +32,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(Guid.NewGuid(), Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -44,7 +44,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(Guid.NewGuid(), Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -55,7 +55,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, Guid.NewGuid()))
         {
@@ -65,7 +65,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -76,7 +76,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(agentId, Guid.NewGuid()))
         {
@@ -85,7 +85,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -96,9 +96,9 @@ public sealed class SuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var otherAgentId = await SeedAgentAsync(factory, "Other").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, ownerAgentId).ConfigureAwait(false);
+        var ownerAgentId = await SeedAgentAsync(factory, "Owner");
+        var otherAgentId = await SeedAgentAsync(factory, "Other");
+        var actionId = await SeedSuggestionAsync(factory, ownerAgentId);
 
         // Promote the owner's suggestion via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(otherAgentId, actionId))
@@ -108,7 +108,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -119,9 +119,9 @@ public sealed class SuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var otherAgentId = await SeedAgentAsync(factory, "Other").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, ownerAgentId).ConfigureAwait(false);
+        var ownerAgentId = await SeedAgentAsync(factory, "Owner");
+        var otherAgentId = await SeedAgentAsync(factory, "Other");
+        var actionId = await SeedSuggestionAsync(factory, ownerAgentId);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(otherAgentId, actionId))
         {
@@ -130,7 +130,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -141,8 +141,8 @@ public sealed class SuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId))
         {
@@ -151,14 +151,14 @@ public sealed class SuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // The eval gate blocks a promote until the latest eval has passed. A freshly-authored suggestion
         // has no eval, so the gate returns 409 EvalRequired and the action stays Suggested (still inert). A successful
         // 200/Enabled promote requires a passing eval (model-dependent — covered by the Wave-2 service unit tests).
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -175,18 +175,18 @@ public sealed class SuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
 
         // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(agentId, actionId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, "Body-less reject POST must not return 415.");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.Equal("Archived", document.RootElement.GetProperty("state").GetString());
     }
@@ -197,8 +197,8 @@ public sealed class SuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(agentId, actionId))
         {
@@ -207,11 +207,11 @@ public sealed class SuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -232,7 +232,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -247,7 +247,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
             "search",
             Priority: 100,
             [Guid.NewGuid()],
-            Confidence: 0.8d)).ConfigureAwait(false);
+            Confidence: 0.8d));
         return created.Id;
     }
 }

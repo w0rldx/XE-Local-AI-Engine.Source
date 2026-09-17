@@ -22,10 +22,10 @@ public sealed class GetGgufDownloadOperationStatusEndpoint(IGgufDownloadCoordina
         var status = _downloadCoordinator.GetStatus(req.OperationId);
         if (status is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(GgufDownloadStatusMapper.Map(status), ct).ConfigureAwait(false);
+        await Send.OkAsync(GgufDownloadStatusMapper.Map(status), ct);
     }
 }

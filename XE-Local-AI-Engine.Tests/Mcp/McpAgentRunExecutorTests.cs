@@ -32,7 +32,7 @@ public sealed class McpAgentRunExecutorTests
                 MaxCloudSpawns = 1
             });
 
-        _ = await executor.ExecuteAsync(CreateRun(), CancellationToken.None).ConfigureAwait(false);
+        _ = await executor.ExecuteAsync(CreateRun(), CancellationToken.None);
 
         AssertEx.NotNull(observedContext);
         AssertEx.Equal(expected: 0, observedContext!.Depth);
@@ -50,7 +50,7 @@ public sealed class McpAgentRunExecutorTests
                  .Returns(expected);
         var executor = CreateExecutor(execution);
 
-        var outcome = await executor.ExecuteAsync(CreateRun(), CancellationToken.None).ConfigureAwait(false);
+        var outcome = await executor.ExecuteAsync(CreateRun(), CancellationToken.None);
 
         AssertEx.Equal(expected, outcome);
         AssertEx.Null(SpawnContext.Current,
@@ -80,7 +80,7 @@ public sealed class McpAgentRunExecutorTests
             ModelOverrideId = "override-model"
         };
 
-        _ = await executor.ExecuteAsync(run, CancellationToken.None).ConfigureAwait(false);
+        _ = await executor.ExecuteAsync(run, CancellationToken.None);
 
         AssertEx.Equal(run.AgentDefinitionId.Value.ToString("D"), captured!.AgentKey);
         AssertEx.Equal("override-model", captured.ModelOverrideId);
@@ -139,7 +139,7 @@ public sealed class McpAgentRunExecutorTests
             RequestingKeyPrefix = null
         };
 
-        var outcome = await CreateExecutor(execution).ExecuteAsync(run, CancellationToken.None).ConfigureAwait(false);
+        var outcome = await CreateExecutor(execution).ExecuteAsync(run, CancellationToken.None);
 
         AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
         AssertEx.False(captured!.InboundContext.IsAgentic);
@@ -160,7 +160,7 @@ public sealed class McpAgentRunExecutorTests
             BindingFingerprint = null,
             Task = null,
             PayloadExpired = true
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
 
         AssertEx.Equal(SpawnOutcomeKind.Failed, outcome.Kind);
         AssertEx.Equal(McpExecutionFailureCodes.AgentConfigChanged, outcome.FailureCode!);
@@ -193,7 +193,7 @@ public sealed class McpAgentRunExecutorTests
 
         AssertEx.False(pending.IsCompleted, "durable execution must not return while the workspace execution service still owns its lease.");
         released.SetResult(SpawnOutcome.Success("released"));
-        var outcome = await pending.ConfigureAwait(false);
+        var outcome = await pending;
         AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
         AssertEx.Equal(workspaceId, capturedWorkspaceId!.Value);
     }

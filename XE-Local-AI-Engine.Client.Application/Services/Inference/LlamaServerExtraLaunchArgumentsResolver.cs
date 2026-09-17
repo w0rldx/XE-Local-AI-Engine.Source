@@ -45,7 +45,7 @@ public sealed class LlamaServerExtraLaunchArgumentsResolver : ILlamaServerExtraL
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IModelLaunchArgumentsStore>();
-            var raw = await store.GetRawArgumentsAsync(modelName, ct).ConfigureAwait(false);
+            var raw = await store.GetRawArgumentsAsync(modelName, ct);
             if (string.IsNullOrWhiteSpace(raw))
             {
                 return None;

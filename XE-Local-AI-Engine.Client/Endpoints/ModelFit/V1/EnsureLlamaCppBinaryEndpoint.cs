@@ -27,14 +27,14 @@ public sealed class EnsureLlamaCppBinaryEndpoint(ILlamaCppRuntimeAdministrationS
         if (ModelFitMapper.TryParseVariant(req.Variant) is not { } variant)
         {
             AddError("Variant is not supported.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var result = await _administrationService.EnsureAsync(variant, ct).ConfigureAwait(false);
+        var result = await _administrationService.EnsureAsync(variant, ct);
         if (result.Succeeded)
         {
-            await Send.OkAsync(result.Binary!.ToResponse(result.RecommendedTag!), ct).ConfigureAwait(false);
+            await Send.OkAsync(result.Binary!.ToResponse(result.RecommendedTag!), ct);
             return;
         }
 
@@ -44,11 +44,11 @@ public sealed class EnsureLlamaCppBinaryEndpoint(ILlamaCppRuntimeAdministrationS
             {
                 RunningProcessCount = result.RunningProcessCount,
                 Message = result.DisplayMessage!
-            })).ConfigureAwait(false);
+            }));
             return;
         }
 
         AddError(result.DisplayMessage ?? "The llama.cpp runtime could not be acquired.");
-        await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        await Send.ErrorsAsync(cancellation: ct);
     }
 }

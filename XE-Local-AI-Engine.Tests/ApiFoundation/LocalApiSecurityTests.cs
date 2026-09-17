@@ -20,7 +20,7 @@ public sealed class LocalApiSecurityTests
             new
             {
                 Name = "operator"
-            }).ConfigureAwait(false);
+            });
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -33,7 +33,7 @@ public sealed class LocalApiSecurityTests
         using var request = CreateProbeRequest();
         request.Headers.Add("Authorization", "Bearer invalid-token");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -46,7 +46,7 @@ public sealed class LocalApiSecurityTests
         using var request = CreateProbeRequest(factory);
         request.Headers.Host = "evil.example";
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -59,7 +59,7 @@ public sealed class LocalApiSecurityTests
         using var request = CreateProbeRequest(factory);
         request.Headers.Add("Origin", "https://evil.example");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -72,7 +72,7 @@ public sealed class LocalApiSecurityTests
         using var request = CreateProbeRequest(factory);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }

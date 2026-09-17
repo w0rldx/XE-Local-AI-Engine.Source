@@ -51,16 +51,16 @@ public sealed class LocalModelCatalogService(
         // The effective selected model resolves through the accessor (stored DefaultModelName > appsettings
         // Agent:LocalChat:DefaultModel seed); the configured default stays the appsettings seed so the picker can
         // still surface "node default" distinctly from the operator's selection.
-        var selectedModelName = await _runtimeSettings.GetDefaultModelNameAsync(cancellationToken).ConfigureAwait(false);
+        var selectedModelName = await _runtimeSettings.GetDefaultModelNameAsync(cancellationToken);
 
         // Cloud models (Codex + Azure Foundry) and installed GGUFs are served independently of Ollama, so they are
         // resolved up front and survive an unreachable Ollama below.
-        var hasCodexSession = await HasUsableCodexSessionAsync(cancellationToken).ConfigureAwait(false);
-        var azureConnection = await _cloudModelResolver.ResolveAzureFoundryConnectionAsync(cancellationToken).ConfigureAwait(false);
-        var ggufModels = await ResolveInstalledGgufModelsAsync(cancellationToken).ConfigureAwait(false);
-        var externalModels = await ResolveExternalModelsAsync(cancellationToken).ConfigureAwait(false);
+        var hasCodexSession = await HasUsableCodexSessionAsync(cancellationToken);
+        var azureConnection = await _cloudModelResolver.ResolveAzureFoundryConnectionAsync(cancellationToken);
+        var ggufModels = await ResolveInstalledGgufModelsAsync(cancellationToken);
+        var externalModels = await ResolveExternalModelsAsync(cancellationToken);
 
-        var (ollamaModels, classifications) = await ResolveOllamaModelsAsync(cancellationToken).ConfigureAwait(false);
+        var (ollamaModels, classifications) = await ResolveOllamaModelsAsync(cancellationToken);
 
         return new LocalModelCatalog(selectedModelName,
             _localChatOptions.Value.DefaultModel,
@@ -87,7 +87,7 @@ public sealed class LocalModelCatalogService(
     {
         try
         {
-            return await _externalProviderRegistry.ListRegistrationsAsync(cancellationToken).ConfigureAwait(false);
+            return await _externalProviderRegistry.ListRegistrationsAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -111,10 +111,9 @@ public sealed class LocalModelCatalogService(
     {
         try
         {
-            var models = (await _modelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false)).ToArray();
+            var models = (await _modelService.ListLocalModelsAsync(cancellationToken)).ToArray();
             var classifications = await _classificationService
-                                        .ClassifyAsync(models.Select(static model => new ModelIdentity(model.Name, model.Digest)), cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ClassifyAsync(models.Select(static model => new ModelIdentity(model.Name, model.Digest)), cancellationToken);
 
             return new OllamaModelListing(models, classifications);
         }
@@ -146,7 +145,7 @@ public sealed class LocalModelCatalogService(
     {
         try
         {
-            return await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+            return await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -168,7 +167,7 @@ public sealed class LocalModelCatalogService(
     {
         try
         {
-            var session = await _codexTokenStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+            var session = await _codexTokenStore.LoadAsync(cancellationToken);
             return session is not null && !session.IsExpired(_codexOptions.ExpirySkew, _timeProvider.GetUtcNow());
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

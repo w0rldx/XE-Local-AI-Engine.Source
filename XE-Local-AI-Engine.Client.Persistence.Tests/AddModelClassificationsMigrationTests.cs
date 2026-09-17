@@ -29,19 +29,19 @@ public sealed class AddModelClassificationsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-classifications-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreModelClassificationsMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreModelClassificationsMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "model_classifications").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "model_classifications"),
             "Migration should create the model_classifications table.");
 
-        var columns = await GetColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetColumnsAsync(connection);
         AssertEx.True(columns.SetEquals(new[]
         {
             "model_name",
@@ -53,7 +53,7 @@ public sealed class AddModelClassificationsMigrationTests : IDisposable
             "updated_at_utc"
         }), "model_classifications should expose the mapped columns.");
 
-        AssertEx.True(await ModelNameUsesNoCaseCollationAsync(connection).ConfigureAwait(false),
+        AssertEx.True(await ModelNameUsesNoCaseCollationAsync(connection),
             "model_classifications.model_name should use NOCASE collation.");
     }
 
@@ -62,16 +62,16 @@ public sealed class AddModelClassificationsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-classifications-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreModelClassificationsMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreModelClassificationsMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False(await TableExistsAsync(connection, "model_classifications").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "model_classifications"),
             "Rollback should drop the model_classifications table.");
     }
 
@@ -83,7 +83,7 @@ public sealed class AddModelClassificationsMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -92,14 +92,14 @@ public sealed class AddModelClassificationsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlySet<string>> GetColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM model_classifications LIMIT 0;";
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -112,7 +112,7 @@ public sealed class AddModelClassificationsMigrationTests : IDisposable
         // caller-supplied SQL.
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'model_classifications';";
-        var sql = await command.ExecuteScalarAsync().ConfigureAwait(false) as string;
+        var sql = await command.ExecuteScalarAsync() as string;
         return sql is not null
                && sql.Contains("model_name", StringComparison.Ordinal)
                && sql.Contains("NOCASE", StringComparison.OrdinalIgnoreCase);

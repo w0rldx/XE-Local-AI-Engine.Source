@@ -24,16 +24,15 @@ public sealed class ListEligibleBenchmarkAgentsEndpoint(IBenchmarkCatalogService
         if (string.IsNullOrWhiteSpace(req.ModelName))
         {
             AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var agents = await _catalog.ListEligibleAgentsAsync(req.ModelName, ct).ConfigureAwait(false);
+        var agents = await _catalog.ListEligibleAgentsAsync(req.ModelName, ct);
         await Send.OkAsync(new ListEligibleBenchmarkAgentsResponse
                   {
                       Items = [.. agents.Select(static agent => agent.ToResponse())]
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 }
 
@@ -52,11 +51,10 @@ public sealed class ListEligibleBenchmarkModelsEndpoint(IBenchmarkCatalogService
 
     public override async Task HandleAsync(EligibleBenchmarkModelsRequest req, CancellationToken ct)
     {
-        var models = await _catalog.ListEligibleModelsAsync(req.ContextTokens, ct).ConfigureAwait(false);
+        var models = await _catalog.ListEligibleModelsAsync(req.ContextTokens, ct);
         await Send.OkAsync(new ListEligibleBenchmarkModelsResponse
                   {
                       Items = [.. models.Select(static model => model.ToResponse())]
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 }

@@ -34,14 +34,14 @@ internal sealed class BenchmarkCatalogService(
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        _ = await ReadEligibleModelFactsAsync(modelName.Trim(), cancellationToken).ConfigureAwait(false);
-        var (_, supportsTools, isCloud) = await _modelCapabilities.ResolveAsync(modelName, cancellationToken).ConfigureAwait(false);
+        _ = await ReadEligibleModelFactsAsync(modelName.Trim(), cancellationToken);
+        var (_, supportsTools, isCloud) = await _modelCapabilities.ResolveAsync(modelName, cancellationToken);
         if (isCloud)
         {
             throw new BenchmarkNotFoundException("Benchmark model was not found.");
         }
 
-        var definitions = await _agentDefinitions.ListAsync(cancellationToken).ConfigureAwait(false);
+        var definitions = await _agentDefinitions.ListAsync(cancellationToken);
         var eligible = new List<BenchmarkEligibleAgent>();
         foreach (var definition in definitions.Where(static definition => definition.Kind == AgentDefinitionKind.Single))
         {
@@ -51,8 +51,7 @@ internal sealed class BenchmarkCatalogService(
                                                   supportsTools,
                                                   honorModelProfile: false,
                                                   activeModelIsCloud: false,
-                                                  cancellationToken)
-                                              .ConfigureAwait(false);
+                                                  cancellationToken);
             if (runtime is null)
             {
                 continue;
@@ -82,7 +81,7 @@ internal sealed class BenchmarkCatalogService(
             throw new BenchmarkValidationException("Context tokens must be positive.");
         }
 
-        var descriptors = await _ggufModels.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var descriptors = await _ggufModels.ListInstalledModelsAsync(cancellationToken);
         var eligible = new List<BenchmarkEligibleModel>();
         foreach (var descriptor in descriptors.Where(static model => model.IsAvailable)
                                               .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
@@ -96,12 +95,12 @@ internal sealed class BenchmarkCatalogService(
 
             try
             {
-                var facts = await ReadEligibleModelFactsAsync(descriptor.ModelName, cancellationToken).ConfigureAwait(false);
+                var facts = await ReadEligibleModelFactsAsync(descriptor.ModelName, cancellationToken);
                 if (facts.ModelContentFingerprint is not { } fingerprint)
                 {
                     // A legacy entry acquired before the registry recorded an aggregate identity has to be verified to
                     // learn one. That model alone pays the hashing cost the whole catalog used to pay.
-                    await using var lease = await AcquireEligibleModelAsync(descriptor.ModelName, cancellationToken).ConfigureAwait(false);
+                    await using var lease = await AcquireEligibleModelAsync(descriptor.ModelName, cancellationToken);
                     eligible.Add(new BenchmarkEligibleModel(lease.Snapshot.ModelName,
                         descriptor.MaxContextTokens,
                         EffectiveContextTokens: null,
@@ -147,7 +146,7 @@ internal sealed class BenchmarkCatalogService(
         InstalledModelFacts? facts;
         try
         {
-            facts = await _installedModels.ReadFactsAsync(modelName, cancellationToken).ConfigureAwait(false);
+            facts = await _installedModels.ReadFactsAsync(modelName, cancellationToken);
         }
         catch (KeyNotFoundException exception)
         {
@@ -176,7 +175,7 @@ internal sealed class BenchmarkCatalogService(
         IBenchmarkInstalledModelLease lease;
         try
         {
-            lease = await _installedModels.AcquireAsync(modelName, cancellationToken).ConfigureAwait(false);
+            lease = await _installedModels.AcquireAsync(modelName, cancellationToken);
         }
         catch (KeyNotFoundException exception)
         {
@@ -201,7 +200,7 @@ internal sealed class BenchmarkCatalogService(
         }
         catch
         {
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
             throw;
         }
     }

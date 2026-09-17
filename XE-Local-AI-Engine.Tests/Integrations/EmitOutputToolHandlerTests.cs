@@ -26,7 +26,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
 
         // No BeginScope: this is the scheduler, a benchmark and every other caller that never seeds the ambient.
-        var answer = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments());
 
         AssertEx.Contains(answer, "only works inside an integration execution");
         AssertEx.Empty(fixture.Executions.Events);
@@ -40,7 +40,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(Guid.NewGuid());
 
-        var answer = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments());
 
         AssertEx.Contains(answer, "only works inside an integration execution");
         AssertEx.Empty(fixture.Executions.Events);
@@ -52,7 +52,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture(runningExecution: false);
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        var answer = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments());
 
         AssertEx.Contains(answer, "No integration execution is currently running");
         AssertEx.Empty(fixture.Executions.Events);
@@ -65,8 +65,8 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        var first = await fixture.Handler.ExecuteAsync(Arguments("""{"ok":true}""")).ConfigureAwait(false);
-        var second = await fixture.Handler.ExecuteAsync(Arguments("""{"ok":false}""")).ConfigureAwait(false);
+        var first = await fixture.Handler.ExecuteAsync(Arguments("""{"ok":true}"""));
+        var second = await fixture.Handler.ExecuteAsync(Arguments("""{"ok":false}"""));
 
         AssertEx.Contains(first, "Output delivered to the caller");
         AssertEx.Contains(second, "Output delivered to the caller");
@@ -84,7 +84,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        _ = await fixture.Handler.ExecuteAsync(Arguments("""{"reading":42}""", "text/plain")).ConfigureAwait(false);
+        _ = await fixture.Handler.ExecuteAsync(Arguments("""{"reading":42}""", "text/plain"));
 
         var detail = AssertEx.NotNull(fixture.Executions.Events[0].DetailJson);
         using var envelope = JsonDocument.Parse(detail);
@@ -105,7 +105,7 @@ public sealed class EmitOutputToolHandlerTests
         var underByPayloadOverByEnvelope = $$"""{"text":"{{new string('x', count: 160)}}"}""";
         AssertEx.True(Encoding.UTF8.GetByteCount(underByPayloadOverByEnvelope) < 200, "The fixture needs a payload that only the envelope pushes over.");
 
-        var answer = await fixture.Handler.ExecuteAsync(Arguments(underByPayloadOverByEnvelope)).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments(underByPayloadOverByEnvelope));
 
         AssertEx.Contains(answer, "Nothing was delivered");
         AssertEx.Empty(fixture.Executions.Events);
@@ -119,8 +119,8 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture(maxOutputBytesPerExecution: 120);
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        var accepted = await fixture.Handler.ExecuteAsync(Arguments("""{"a":1}""")).ConfigureAwait(false);
-        var refused = await fixture.Handler.ExecuteAsync(Arguments($$"""{"b":"{{new string('y', count: 100)}}"}""")).ConfigureAwait(false);
+        var accepted = await fixture.Handler.ExecuteAsync(Arguments("""{"a":1}"""));
+        var refused = await fixture.Handler.ExecuteAsync(Arguments($$"""{"b":"{{new string('y', count: 100)}}"}"""));
 
         AssertEx.Contains(accepted, "Output delivered");
         AssertEx.Contains(refused, "nothing further was delivered");
@@ -143,7 +143,7 @@ public sealed class EmitOutputToolHandlerTests
 
         for (var i = 0; i < 3; i++)
         {
-            _ = await fixture.Handler.ExecuteAsync(Arguments("""{"a":1}""")).ConfigureAwait(false);
+            _ = await fixture.Handler.ExecuteAsync(Arguments("""{"a":1}"""));
         }
 
         var perCall = Encoding.UTF8.GetByteCount("""{"contentType":"application/json","payload":{"a":1}}""");
@@ -156,7 +156,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        _ = await fixture.Handler.ExecuteAsync(Arguments("""{"reading":42}""")).ConfigureAwait(false);
+        _ = await fixture.Handler.ExecuteAsync(Arguments("""{"reading":42}"""));
 
         var envelope = AssertEx.NotNull(fixture.Executions.Events[0].DetailJson);
         AssertEx.Equal((long)Encoding.UTF8.GetByteCount(envelope), fixture.Row().OutputBytes,
@@ -172,13 +172,13 @@ public sealed class EmitOutputToolHandlerTests
         fixture.Executions.BlockOutputAppendUntil = release;
 
         var call = fixture.Handler.ExecuteAsync(Arguments());
-        await fixture.Buffer.WaitForReserveAsync().ConfigureAwait(false);
+        await fixture.Buffer.WaitForReserveAsync();
 
         AssertEx.Equal(expected: 1, fixture.Buffer.Reserved.Count);
         AssertEx.Empty(fixture.Buffer.Published, "A frame published before its row commits could name a result absent from durable history.");
 
         release.SetResult();
-        _ = await call.ConfigureAwait(false);
+        _ = await call;
         AssertEx.Equal(expected: 1, fixture.Buffer.Published.Count, "Publish arrives only after the commit returns.");
     }
 
@@ -190,7 +190,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture(maxOutputBytesPerExecution: 40, preCheckCap: 1_000_000);
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        var answer = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments());
 
         AssertEx.Contains(answer, "nothing further was delivered");
         AssertEx.Empty(fixture.Executions.Events);
@@ -208,8 +208,8 @@ public sealed class EmitOutputToolHandlerTests
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
         fixture.Executions.ThrowOnNextOutputAppend = true;
 
-        _ = await AssertEx.ThrowsAsync<Exception>(async () => await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false),
-            "A persistence failure must end the turn rather than return a sentence.").ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<Exception>(async () => await fixture.Handler.ExecuteAsync(Arguments()),
+            "A persistence failure must end the turn rather than return a sentence.");
 
         AssertEx.Empty(fixture.Buffer.Published);
         AssertEx.Equal(fixture.Buffer.Reserved.Single(), fixture.Buffer.Abandoned.Single(),
@@ -224,12 +224,12 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture(maxOutputBytesPerExecution: 200);
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        _ = await fixture.Handler.ExecuteAsync(Arguments("""{"a":1}""")).ConfigureAwait(false);
+        _ = await fixture.Handler.ExecuteAsync(Arguments("""{"a":1}"""));
 
         fixture.Executions.ThrowOnNextOutputAppend = true;
-        _ = await AssertEx.ThrowsAsync<Exception>(async () => await fixture.Handler.ExecuteAsync(Arguments("""{"b":2}""")).ConfigureAwait(false)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<Exception>(async () => await fixture.Handler.ExecuteAsync(Arguments("""{"b":2}""")));
 
-        _ = await fixture.Handler.ExecuteAsync(Arguments($$"""{"c":"{{new string('z', count: 400)}}"}""")).ConfigureAwait(false);
+        _ = await fixture.Handler.ExecuteAsync(Arguments($$"""{"c":"{{new string('z', count: 400)}}"}"""));
 
         AssertEx.Equal(fixture.Buffer.Reserved.Count,
             fixture.Buffer.Published.Count + fixture.Buffer.Abandoned.Count,
@@ -242,9 +242,9 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
         fixture.Executions.ThrowOnNextOutputAppend = true;
-        _ = await AssertEx.ThrowsAsync<Exception>(async () => await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<Exception>(async () => await fixture.Handler.ExecuteAsync(Arguments()));
 
-        var answer = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments());
 
         AssertEx.Contains(answer, "Output delivered");
         AssertEx.Equal(expected: 1, fixture.Buffer.Published.Count);
@@ -260,7 +260,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture(bufferWatermark: 40);
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        _ = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+        _ = await fixture.Handler.ExecuteAsync(Arguments());
 
         AssertEx.Equal(expected: 41L, fixture.Executions.Events[0].Sequence);
         AssertEx.Equal(expected: 41L, fixture.Buffer.Published[0].Sequence);
@@ -272,7 +272,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture(rowLastSequence: 40, bufferWatermark: 11);
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        _ = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+        _ = await fixture.Handler.ExecuteAsync(Arguments());
 
         AssertEx.Equal(expected: 40L, fixture.Row().LastSequence, "The row's watermark is a running MAXIMUM, so a slower appender cannot move it back.");
     }
@@ -286,7 +286,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        var answer = await fixture.Handler.ExecuteAsync(Arguments("""{"a":1}""", contentType)).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments("""{"a":1}""", contentType));
 
         AssertEx.Contains(answer, "is not a media type");
         AssertEx.Empty(fixture.Executions.Events);
@@ -299,8 +299,8 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        var unknownKey = await fixture.Handler.ExecuteAsync("""{"payload":{"a":1},"nope":true}""").ConfigureAwait(false);
-        var noPayload = await fixture.Handler.ExecuteAsync("""{"contentType":"application/json"}""").ConfigureAwait(false);
+        var unknownKey = await fixture.Handler.ExecuteAsync("""{"payload":{"a":1},"nope":true}""");
+        var noPayload = await fixture.Handler.ExecuteAsync("""{"contentType":"application/json"}""");
 
         AssertEx.Contains(unknownKey, "Send exactly this shape");
         AssertEx.Contains(noPayload, "needs a payload");
@@ -316,7 +316,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        var answer = await fixture.Handler.ExecuteAsync("""{"payload":{"a":1},"customer-secret-launch-code":true}""").ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync("""{"payload":{"a":1},"customer-secret-launch-code":true}""");
 
         AssertEx.Contains(answer, "Send exactly this shape");
         AssertEx.Empty(fixture.Logger.Entries.Where(entry => entry.Message.Contains("customer-secret-launch-code", StringComparison.Ordinal)
@@ -333,7 +333,7 @@ public sealed class EmitOutputToolHandlerTests
         using var fixture = new Fixture();
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 
-        var answer = await fixture.Handler.ExecuteAsync(Arguments("""{"secret":"launch-code-alpha-zero"}""")).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments("""{"secret":"launch-code-alpha-zero"}"""));
 
         AssertEx.False(answer.Contains("launch-code-alpha-zero", StringComparison.Ordinal), "The acknowledgement must never echo the payload back into the transcript.");
     }
@@ -347,7 +347,7 @@ public sealed class EmitOutputToolHandlerTests
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
         _ = fixture.Buffer.Untracked.Add(fixture.ExecutionId);
 
-        var answer = await fixture.Handler.ExecuteAsync(Arguments()).ConfigureAwait(false);
+        var answer = await fixture.Handler.ExecuteAsync(Arguments());
 
         AssertEx.Contains(answer, "No integration execution is currently running");
         AssertEx.Empty(fixture.Executions.Events);

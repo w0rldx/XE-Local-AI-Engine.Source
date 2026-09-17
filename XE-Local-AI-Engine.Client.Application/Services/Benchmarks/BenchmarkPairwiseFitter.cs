@@ -32,7 +32,7 @@ public sealed class BenchmarkPairwiseFitter(IBenchmarkStore store, ILogger<Bench
 
     public async Task<bool> TryPublishAsync(Guid projectId, CancellationToken cancellationToken)
     {
-        var revision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var revision = await _store.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
         if (revision?.PolicyJson is not { } policyJson)
         {
             return false;
@@ -44,7 +44,7 @@ public sealed class BenchmarkPairwiseFitter(IBenchmarkStore store, ILogger<Bench
             return false;
         }
 
-        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
         if (cohort.PolicyRevisionId is not { } revisionId || !IsComplete(cohort))
         {
             return false;
@@ -55,7 +55,7 @@ public sealed class BenchmarkPairwiseFitter(IBenchmarkStore store, ILogger<Bench
                               .OrderBy(static comparison => comparison.Sequence)
                               .ToArray();
         var fitKey = ComputeFitKey(policy, revisionId, cohort);
-        var active = await _store.GetActivePairwiseFitAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var active = await _store.GetActivePairwiseFitAsync(projectId, cancellationToken);
         if (string.Equals(active?.FitKey, fitKey, StringComparison.Ordinal))
         {
             return false;
@@ -83,7 +83,7 @@ public sealed class BenchmarkPairwiseFitter(IBenchmarkStore store, ILogger<Bench
             // the replicate budget it was configured with rather than a zero the row cannot hold.
             fit is { Iterations: > 0 } ? fit.Iterations : BenchmarkBradleyTerry.MaximumIterations,
             BenchmarkBradleyTerry.DefaultReplicates);
-        var published = await _store.PublishPairwiseFitAsync(command, cancellationToken).ConfigureAwait(false);
+        var published = await _store.PublishPairwiseFitAsync(command, cancellationToken);
         if (published)
         {
             _logger.LogInformation("Benchmark project {ProjectId}: published pairwise fit over {VerdictCount} verdicts{Refusal}.",

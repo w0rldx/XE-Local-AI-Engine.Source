@@ -74,7 +74,7 @@ public sealed class SchedulerEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(TemplatesRoute()).ConfigureAwait(false);
+        using var response = await client.GetAsync(TemplatesRoute());
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -85,7 +85,7 @@ public sealed class SchedulerEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(JobsRoute()).ConfigureAwait(false);
+        using var response = await client.GetAsync(JobsRoute());
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -102,7 +102,7 @@ public sealed class SchedulerEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -113,7 +113,7 @@ public sealed class SchedulerEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(JobByIdRoute(Guid.NewGuid())).ConfigureAwait(false);
+        using var response = await client.GetAsync(JobByIdRoute(Guid.NewGuid()));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -130,7 +130,7 @@ public sealed class SchedulerEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -142,7 +142,7 @@ public sealed class SchedulerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, JobByIdRoute(Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -159,7 +159,7 @@ public sealed class SchedulerEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -176,7 +176,7 @@ public sealed class SchedulerEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -193,7 +193,7 @@ public sealed class SchedulerEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -204,7 +204,7 @@ public sealed class SchedulerEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(RunsRoute()).ConfigureAwait(false);
+        using var response = await client.GetAsync(RunsRoute());
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -215,7 +215,7 @@ public sealed class SchedulerEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(RunByIdRoute(Guid.NewGuid())).ConfigureAwait(false);
+        using var response = await client.GetAsync(RunByIdRoute(Guid.NewGuid()));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -232,7 +232,7 @@ public sealed class SchedulerEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -245,7 +245,7 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, TemplatesRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -258,7 +258,7 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobsRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -271,7 +271,7 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobByIdRoute(Guid.NewGuid()));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -284,7 +284,7 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunsRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -297,7 +297,7 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunByIdRoute(Guid.NewGuid()));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -315,7 +315,7 @@ public sealed class SchedulerEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -337,15 +337,14 @@ public sealed class SchedulerEndpointTests
                                            ScheduledRunTrigger.Manual,
                                            ScheduledRunStatus.Succeeded,
                                            ScheduledFireTimeUtc: null,
-                                           ActualFireTimeUtc: null))
-                                       .ConfigureAwait(false);
+                                           ActualFireTimeUtc: null));
             runId = stored.Id;
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(runId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -380,13 +379,13 @@ public sealed class SchedulerEndpointTests
             Content = JsonContent.Create(body)
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // ScheduledJobValidationException → global DomainValidationExceptionHandler → 400.
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         // Response must be a structured error body, not an empty 400.
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         AssertEx.True(payload.Length > 0, "Error response must have a non-empty body.");
     }
 
@@ -412,7 +411,7 @@ public sealed class SchedulerEndpointTests
             Content = JsonContent.Create(body)
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -444,8 +443,7 @@ public sealed class SchedulerEndpointTests
                                         PreventOverlap: false,
                                         MaxRuntimeSeconds: null,
                                         ParameterJson: null,
-                                        ScheduledJobCreator.User))
-                                    .ConfigureAwait(false);
+                                        ScheduledJobCreator.User));
             jobId = stored.Id;
         }
 
@@ -456,12 +454,12 @@ public sealed class SchedulerEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // ScheduledJobValidationException → global DomainValidationExceptionHandler → 400 (not an unhandled 500).
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         AssertEx.True(payload.Length > 0, "Error response must have a non-empty body.");
     }
 
@@ -475,10 +473,10 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, JobsRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
 
         // The response must not echo raw parameter_json.
         AssertEx.False(json.Contains("parameterJson", StringComparison.OrdinalIgnoreCase),
@@ -502,10 +500,10 @@ public sealed class SchedulerEndpointTests
         // empty DB and verify the schema contract via the items array being present.
         using var request = new HttpRequestMessage(HttpMethod.Get, JobsRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
 
         // The list response wraps results in an "items" array.
@@ -521,10 +519,10 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunsRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
 
         // Raw encrypted fields must never appear in the wire response.
         AssertEx.False(json.Contains("detailsJson", StringComparison.OrdinalIgnoreCase),

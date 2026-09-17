@@ -24,13 +24,13 @@ internal sealed class LocalModelAdministrationService(
         }
 
         var canonicalName = modelName!.Trim();
-        var providerName = await providerResolver.ResolveProviderNameForModelAsync(canonicalName, cancellationToken).ConfigureAwait(false);
+        var providerName = await providerResolver.ResolveProviderNameForModelAsync(canonicalName, cancellationToken);
         if (string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
         {
             CommittedModelDeletion committed;
             try
             {
-                committed = await deletionCoordinator.CommitDeleteAsync(canonicalName, cancellationToken).ConfigureAwait(false);
+                committed = await deletionCoordinator.CommitDeleteAsync(canonicalName, cancellationToken);
             }
             catch (KeyNotFoundException)
             {
@@ -39,7 +39,7 @@ internal sealed class LocalModelAdministrationService(
 
             try
             {
-                await deletionCoordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None).ConfigureAwait(false);
+                await deletionCoordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None);
             }
             catch (Exception exception)
             {
@@ -53,7 +53,7 @@ internal sealed class LocalModelAdministrationService(
 
         try
         {
-            await providerResolver.ResolveProvider(providerName).DeleteModelAsync(canonicalName, cancellationToken).ConfigureAwait(false);
+            await providerResolver.ResolveProvider(providerName).DeleteModelAsync(canonicalName, cancellationToken);
         }
         catch (ExternalProviderOperationNotSupportedException exception)
         {
@@ -71,7 +71,7 @@ internal sealed class LocalModelAdministrationService(
         LocalModelSelectionPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        var validationFailure = await defaultModelSelectionPolicy.ValidateAsync(modelName, policy, cancellationToken).ConfigureAwait(false);
+        var validationFailure = await defaultModelSelectionPolicy.ValidateAsync(modelName, policy, cancellationToken);
         if (validationFailure is not null)
         {
             return new LocalModelSelectionResult(false, null, null,
@@ -92,11 +92,10 @@ internal sealed class LocalModelAdministrationService(
             {
                 DefaultModelName = selectedModelName
             };
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
 
         await defaultModelSelectionPolicy
-              .InvalidateCacheForTransitionAsync(previousModelName, selectedModelName, cancellationToken)
-              .ConfigureAwait(false);
+              .InvalidateCacheForTransitionAsync(previousModelName, selectedModelName, cancellationToken);
 
         return new LocalModelSelectionResult(true, selectedModelName, previousModelName);
     }

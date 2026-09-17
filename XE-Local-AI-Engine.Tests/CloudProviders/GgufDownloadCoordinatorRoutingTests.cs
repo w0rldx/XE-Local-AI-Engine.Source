@@ -602,7 +602,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             ClaimEntered.TrySetResult();
             if (BlockClaim)
             {
-                await ReleaseClaim.Task.ConfigureAwait(false);
+                await ReleaseClaim.Task;
             }
 
             return new ProviderMapClaimResult.Created(_receipt);

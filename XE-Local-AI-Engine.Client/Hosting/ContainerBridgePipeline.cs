@@ -175,13 +175,13 @@ internal static class ContainerBridgePipeline
         context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
         context.Response.Headers[HeaderNames.Allow] = allowed;
         context.Response.ContentType = MediaTypeNames.Application.Json;
-        await context.Response.WriteAsync(MethodNotAllowedBody, context.RequestAborted).ConfigureAwait(false);
+        await context.Response.WriteAsync(MethodNotAllowedBody, context.RequestAborted);
     }
 
     private static async Task WriteNotFoundAsync(HttpContext context)
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         context.Response.ContentType = MediaTypeNames.Application.Json;
-        await context.Response.WriteAsync(NotFoundBody, context.RequestAborted).ConfigureAwait(false);
+        await context.Response.WriteAsync(NotFoundBody, context.RequestAborted);
     }
 }

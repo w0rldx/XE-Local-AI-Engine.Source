@@ -51,10 +51,10 @@ public sealed class ExternalProviderAdministrationService : IExternalProviderAdm
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var result = await _store.SaveConnectionAsync(request, cancellationToken).ConfigureAwait(false);
+        var result = await _store.SaveConnectionAsync(request, cancellationToken);
         if (result is ExternalProviderWriteResult.Committed committed)
         {
-            await ApplySideEffectsAsync(committed.Changed, cancellationToken).ConfigureAwait(false);
+            await ApplySideEffectsAsync(committed.Changed, cancellationToken);
             _logger.LogInformation("Saved external connection '{ConnectionId}' with {ModelCount} registered model(s).",
                 request.Id,
                 request.Models.Count);
@@ -68,10 +68,10 @@ public sealed class ExternalProviderAdministrationService : IExternalProviderAdm
         string? expectedRevision,
         CancellationToken cancellationToken = default)
     {
-        var result = await _store.DeleteConnectionAsync(connectionId, expectedRevision, cancellationToken).ConfigureAwait(false);
+        var result = await _store.DeleteConnectionAsync(connectionId, expectedRevision, cancellationToken);
         if (result is ExternalProviderWriteResult.Committed committed)
         {
-            await ApplySideEffectsAsync(committed.Changed, cancellationToken).ConfigureAwait(false);
+            await ApplySideEffectsAsync(committed.Changed, cancellationToken);
             if (committed.Changed)
             {
                 _logger.LogInformation("Deleted external connection '{ConnectionId}' and its registered models.", connectionId);
@@ -97,6 +97,6 @@ public sealed class ExternalProviderAdministrationService : IExternalProviderAdm
             _chatClientCacheInvalidator.ClearClientCache();
         }
 
-        _ = await _reconciler.ReconcileAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _reconciler.ReconcileAsync(cancellationToken);
     }
 }

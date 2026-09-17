@@ -64,7 +64,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                                         	refstorage = reftable
                                         """);
 
-        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None);
         var config = ReadConfig(workspace);
 
         AssertEx.Contains(config, "repositoryformatversion = 1");
@@ -94,7 +94,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                                         	path = /tmp/evil-config
                                         """);
 
-        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None);
         var config = ReadConfig(workspace);
 
         // Asserted as the absence of the PAYLOAD rather than of specific key names: the property is that no definition
@@ -118,7 +118,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                                         	fetch = +refs/heads/*:refs/remotes/origin/*
                                         """);
 
-        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None);
 
         AssertEx.False(ReadConfig(workspace).Contains("origin", StringComparison.OrdinalIgnoreCase));
     }
@@ -136,9 +136,9 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                                         	worktreeConfig = true
                                         """);
         var worktreeConfig = Path.Combine(workspace, ".git", "config.worktree");
-        await File.WriteAllTextAsync(worktreeConfig, "[core]\n\tfsmonitor = /tmp/pwn.sh\n", CancellationToken.None).ConfigureAwait(false);
+        await File.WriteAllTextAsync(worktreeConfig, "[core]\n\tfsmonitor = /tmp/pwn.sh\n", CancellationToken.None);
 
-        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None);
 
         AssertEx.False(File.Exists(worktreeConfig));
         AssertEx.False(ReadConfig(workspace).Contains("worktreeConfig", StringComparison.OrdinalIgnoreCase));
@@ -153,14 +153,14 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
 
         var workspace = CreateWorkspace("[core]\n\trepositoryformatversion = 0\n");
         var outside = Path.Combine(_root, "outside.txt");
-        await File.WriteAllTextAsync(outside, "untouched", CancellationToken.None).ConfigureAwait(false);
+        await File.WriteAllTextAsync(outside, "untouched", CancellationToken.None);
         var configPath = Path.Combine(workspace, ".git", "config");
         File.Delete(configPath);
         File.CreateSymbolicLink(configPath, outside);
 
-        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None);
 
-        AssertEx.Equal("untouched", await File.ReadAllTextAsync(outside, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Equal("untouched", await File.ReadAllTextAsync(outside, CancellationToken.None));
         AssertEx.Null(File.ResolveLinkTarget(configPath, returnFinalTarget: false));
     }
 
@@ -170,10 +170,10 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         // The end-to-end regression pin, through the real service that runs host-side git. Both payloads are planted in
         // the workspace's own .git/config exactly as a build or test command could write them — DevelopmentWorkspaceSecurity
         // blocks the workspace TOOLS from naming that path, but nothing stops a command writing it as a side effect.
-        var fixture = await CreatePoisonedWorkspaceAsync().ConfigureAwait(false);
+        var fixture = await CreatePoisonedWorkspaceAsync();
         var service = new DevelopmentPatchEvidenceService(Options.Create(OptionsValue()));
 
-        var evidence = await service.ExportAsync(fixture.Session).ConfigureAwait(false);
+        var evidence = await service.ExportAsync(fixture.Session);
 
         AssertEx.False(File.Exists(fixture.FilterSentinel), "the filter.<driver>.clean payload executed on the host.");
         AssertEx.False(File.Exists(fixture.FsmonitorSentinel), "the core.fsmonitor payload executed on the host.");
@@ -189,10 +189,10 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         // The control that makes the test above mean something. It runs the same planted repository through the same
         // hardened argument vector the service uses, WITHOUT the rewrite, and asserts the payload fires — so a green
         // result above is evidence the rewrite worked rather than evidence the payload was never reachable.
-        var fixture = await CreatePoisonedWorkspaceAsync().ConfigureAwait(false);
+        var fixture = await CreatePoisonedWorkspaceAsync();
 
         await DevelopmentMountBrokerTests.RunGitAsync(fixture.Session.HostWorktreePath,
-            [.. HardenedArguments(), "add", "-A", "--", "."]).ConfigureAwait(false);
+            [.. HardenedArguments(), "add", "-A", "--", "."]);
 
         AssertEx.True(File.Exists(fixture.FilterSentinel),
             "the filter.<driver>.clean payload did NOT execute under the hardened argument vector, so the regression pin above proves nothing.");
@@ -220,14 +220,14 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         Directory.CreateDirectory(workspace);
         Directory.CreateDirectory(runtime);
 
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.email", "gitconfig@example.invalid").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.name", "Git Config Test").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(workspace, "README.md"), "base\n").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "add", "README.md").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "commit", "-m", "base").ConfigureAwait(false);
-        var baseCommit = await ReadHeadAsync(workspace).ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "checkout", "--detach", baseCommit).ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "init", "--initial-branch=main", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.email", "gitconfig@example.invalid");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.name", "Git Config Test");
+        await File.WriteAllTextAsync(Path.Combine(workspace, "README.md"), "base\n");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "add", "README.md");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "commit", "-m", "base");
+        var baseCommit = await ReadHeadAsync(workspace);
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "checkout", "--detach", baseCommit);
 
         var filterSentinel = Path.Combine(_root, "SENTINEL-FILTER-" + Guid.NewGuid().ToString("N"));
         var fsmonitorSentinel = Path.Combine(_root, "SENTINEL-FSMONITOR-" + Guid.NewGuid().ToString("N"));
@@ -236,7 +236,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         // fails to parse would look like a payload that was blocked.
         var payload = Path.Combine(_root, "payload-" + Guid.NewGuid().ToString("N") + ".sh");
         await File.WriteAllTextAsync(payload,
-            $"#!/bin/sh\ntouch \"{filterSentinel}\"\ntouch \"{fsmonitorSentinel}\"\ncat\n").ConfigureAwait(false);
+            $"#!/bin/sh\ntouch \"{filterSentinel}\"\ntouch \"{fsmonitorSentinel}\"\ncat\n");
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(payload,
@@ -252,9 +252,9 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
              	clean = {payload}
              	smudge = cat
 
-             """).ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(workspace, ".gitattributes"), "* filter=pwn\n").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(workspace, "feature.txt"), "implemented\n").ConfigureAwait(false);
+             """);
+        await File.WriteAllTextAsync(Path.Combine(workspace, ".gitattributes"), "* filter=pwn\n");
+        await File.WriteAllTextAsync(Path.Combine(workspace, "feature.txt"), "implemented\n");
 
         var session = new DevelopmentWorkspaceSession(Guid.NewGuid(),
             Guid.NewGuid(),
@@ -300,8 +300,8 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
             StartInfo = startInfo
         };
         process.Start();
-        var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
         return output.Trim();
     }
 

@@ -109,15 +109,15 @@ public sealed class InferenceProfileService : IInferenceProfileService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        var filePath = await _ggufModelStore.ResolveModelFilePathAsync(modelName, ct).ConfigureAwait(false);
+        var filePath = await _ggufModelStore.ResolveModelFilePathAsync(modelName, ct);
         if (string.IsNullOrWhiteSpace(filePath))
         {
             _logger.LogInformation("Rejected explore for a non-local model (Inference Optimizer profiles node-local GGUF models only).");
             return ExploreResult.Fail($"Model '{modelName}' is not a local GGUF; the Inference Optimizer profiles node-local models only.");
         }
 
-        var machineKey = await _machineKeyProvider.GetMachineKeyAsync(ct).ConfigureAwait(false);
-        var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
+        var machineKey = await _machineKeyProvider.GetMachineKeyAsync(ct);
+        var variant = await _variantSelector.SelectVariantAsync(ct);
         var backend = InferenceBackends.FromVariant(variant);
 
         // GPU-only by construction: SpawnCoreAsync runs llama-fit-params only for a non-CPU variant, so a CPU explore
@@ -129,9 +129,9 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 "A context-tokens override is supported on GPU variants only; llama-fit-params does not run on the CPU backend, so the requested window could not be recorded in the profile.");
         }
 
-        var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
+        var installed = await _runtimeStore.ReadAsync(ct);
         var build = installed?.Tag is { } tag && !string.IsNullOrWhiteSpace(tag) ? tag : UnknownBuild;
-        var metadata = await _ggufMetadataReader.ReadMetadataAsync(filePath, ct).ConfigureAwait(false);
+        var metadata = await _ggufMetadataReader.ReadMetadataAsync(filePath, ct);
 
         ResolvedLaunchArguments? draft;
         try
@@ -143,7 +143,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput,
                     context.StartupOutput,
                     context.SuccessfulLaunchArguments)),
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (LlamaServerProfilingRefusedException exception)
         {
@@ -173,9 +173,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 filePath,
                 metadata,
                 draft,
-                ct)
-            .ConfigureAwait(false);
-        var record = await _profileStore.CreateOrUpdateExploredAsync(input, ct).ConfigureAwait(false);
+                ct);
+        var record = await _profileStore.CreateOrUpdateExploredAsync(input, ct);
         return ExploreResult.Ok(ToView(record));
     }
 
@@ -189,13 +188,13 @@ public sealed class InferenceProfileService : IInferenceProfileService
         bool allowPreSpawnVramPressure,
         CancellationToken ct)
     {
-        var profile = await FindProfileByIdAsync(profileId, ct).ConfigureAwait(false);
+        var profile = await FindProfileByIdAsync(profileId, ct);
         if (profile is null)
         {
             return BenchmarkResult.Fail($"No inference profile with id {profileId}.");
         }
 
-        var filePath = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct).ConfigureAwait(false);
+        var filePath = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct);
         if (string.IsNullOrWhiteSpace(filePath))
         {
             return BenchmarkResult.Fail($"Model '{profile.ModelName}' is no longer a local GGUF; benchmark is node-local only.");
@@ -206,9 +205,9 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return BenchmarkResult.Fail($"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
         }
 
-        if (!await IsReplayableUnderCurrentSemanticsAsync(profile, filePath, ct).ConfigureAwait(false))
+        if (!await IsReplayableUnderCurrentSemanticsAsync(profile, filePath, ct))
         {
-            _ = await _profileStore.MarkStaleAsync(profile.Id, ct).ConfigureAwait(false);
+            _ = await _profileStore.MarkStaleAsync(profile.Id, ct);
             return BenchmarkResult.Fail($"Profile {profileId} was created under different launch semantics or model/runtime revision; re-explore before benchmarking.");
         }
 
@@ -230,7 +229,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 ModelName: profile.ModelName,
                 Status: ModelFitRunStatus.Running,
                 StartedAtUtc: startedAtUtc),
-            ct).ConfigureAwait(false);
+            ct);
 
         var spec = InferenceBenchmarkSpec.Golden(profile.Backend, profile.CtxSize, _benchmarkVramAdmission) with
         {
@@ -247,7 +246,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 enableMetrics: true,
                 body: (context, innerCt) => _harness.RunAsync(context, spec, innerCt),
                 ct,
-                captureVramBeforeSpawn: innerCt => CapturePreSpawnVramAsync(profile.Backend, innerCt)).ConfigureAwait(false);
+                captureVramBeforeSpawn: innerCt => CapturePreSpawnVramAsync(profile.Backend, innerCt));
         }
         catch (OperationCanceledException)
         {
@@ -266,8 +265,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
                                     stderrExcerpt: exception.Message,
                                     diagnosticsJson: null,
                                     completedAtUtc: NowUnixMs(),
-                                    ct)
-                                .ConfigureAwait(false);
+                                    ct);
             return BenchmarkResult.SkippedInUse(exception.Message, snapshot.Id);
         }
         catch (Exception exception)
@@ -281,14 +279,13 @@ public sealed class InferenceProfileService : IInferenceProfileService
                                     stderrExcerpt: $"Benchmark spawn error: {exception.GetType().Name}.",
                                     diagnosticsJson: null,
                                     completedAtUtc: NowUnixMs(),
-                                    ct)
-                                .ConfigureAwait(false);
+                                    ct);
             return BenchmarkResult.Fail($"Benchmark spawn failed: {exception.GetType().Name}.", snapshot.Id);
         }
 
         var completedAtUtc = NowUnixMs();
         var benchmarkRow = MapBenchmarkInput(profile, metrics);
-        await _benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id, [benchmarkRow], ct).ConfigureAwait(false);
+        await _benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id, [benchmarkRow], ct);
 
         var terminalStatus = metrics.Success ? ModelFitRunStatus.Succeeded : ModelFitRunStatus.Failed;
         await _snapshotStore.MarkTerminalAsync(snapshot.Id,
@@ -299,8 +296,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
                                 stderrExcerpt: metrics.Success ? null : metrics.FailureReason,
                                 diagnosticsJson: null,
                                 completedAtUtc: completedAtUtc,
-                                ct)
-                            .ConfigureAwait(false);
+                                ct);
 
         return new BenchmarkResult(metrics.Success,
             metrics.Success ? null : metrics.FailureReason,
@@ -312,7 +308,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     /// <inheritdoc />
     public async Task<ProfileActionResult> FreezeAsync(Guid profileId, CancellationToken ct)
     {
-        var profile = await FindProfileByIdAsync(profileId, ct).ConfigureAwait(false);
+        var profile = await FindProfileByIdAsync(profileId, ct);
         if (profile is null)
         {
             return ProfileActionResult.Fail($"No inference profile with id {profileId}.");
@@ -328,11 +324,11 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return ProfileActionResult.Fail($"Profile {profileId} has no complete machine-readable GPU placement; re-explore after llama-fit-params is available.");
         }
 
-        var filePath = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct).ConfigureAwait(false);
+        var filePath = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct);
         if (string.IsNullOrWhiteSpace(filePath)
-            || !await IsReplayableUnderCurrentSemanticsAsync(profile, filePath, ct).ConfigureAwait(false))
+            || !await IsReplayableUnderCurrentSemanticsAsync(profile, filePath, ct))
         {
-            _ = await _profileStore.MarkStaleAsync(profile.Id, ct).ConfigureAwait(false);
+            _ = await _profileStore.MarkStaleAsync(profile.Id, ct);
             return ProfileActionResult.Fail($"Profile {profileId} no longer matches the active launch semantics or model/runtime revision; re-explore before freezing.");
         }
 
@@ -342,7 +338,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         // justification, so a benchmark captured before the change must NOT freeze the new configuration — the user is
         // told to re-benchmark. NOTE: this stricter gate applies to FUTURE freezes only; already-frozen profiles are
         // deliberately left untouched (no retroactive invalidation).
-        var benchmark = await _benchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, ct).ConfigureAwait(false);
+        var benchmark = await _benchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, ct);
         if (benchmark is null)
         {
             return ProfileActionResult.Fail($"Profile {profileId} has no successful benchmark for its current configuration; re-benchmark before freezing.");
@@ -357,21 +353,21 @@ public sealed class InferenceProfileService : IInferenceProfileService
         // --list-devices figure is a process-local residency budget under WDDM and can ignore external pressure, so it is
         // recorded independently for diagnostics and must never substitute for missing global-free evidence. CPU profiles
         // deliberately keep no VRAM baseline; unrelated GPU pressure must never invalidate a CPU placement.
-        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
         long? globalFreeVramAtFreeze = null;
         long? processBudgetVramAtFreeze = null;
         if (!string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase))
         {
             globalFreeVramAtFreeze = hardware.AvailableVramBytes;
             processBudgetVramAtFreeze =
-                await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct).ConfigureAwait(false);
+                await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct);
         }
 
         var frozen = await _profileStore.MarkFrozenAsync(profileId,
             benchmark.SnapshotId,
             globalFreeVramAtFreeze,
             processBudgetVramAtFreeze,
-            ct).ConfigureAwait(false);
+            ct);
         if (frozen is null)
         {
             // The store gate rejected the transition (not Explored at write time) — surface as a failed result, do not throw.
@@ -388,22 +384,22 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return new LlamaServerProfilingVramSnapshot(GlobalFreeBytes: null, ProcessBudgetBytes: null);
         }
 
-        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
-        var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct).ConfigureAwait(false);
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
+        var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
         return new LlamaServerProfilingVramSnapshot(hardware.AvailableVramBytes, processBudget);
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<InferenceProfileView>> ListProfilesAsync(CancellationToken ct)
     {
-        var records = await _profileStore.ListAsync(ct).ConfigureAwait(false);
+        var records = await _profileStore.ListAsync(ct);
         return records.Select(ToView).ToList();
     }
 
     /// <inheritdoc />
     public async Task<ProfileActionResult> InvalidateAsync(Guid profileId, CancellationToken ct)
     {
-        var updated = await _profileStore.MarkStaleAsync(profileId, ct).ConfigureAwait(false);
+        var updated = await _profileStore.MarkStaleAsync(profileId, ct);
         if (updated is null)
         {
             return ProfileActionResult.Fail($"No inference profile with id {profileId}.");
@@ -435,7 +431,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 draft?.KvTypeK,
                 draft?.KvTypeV,
                 draft?.FlashAttn ?? false),
-            ct).ConfigureAwait(false);
+            ct);
 
         return new InferenceProfileInput(MachineKey: machineKey,
             ModelName: modelName,
@@ -550,12 +546,12 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return false;
         }
 
-        if (!await _launchPolicyFingerprintProvider.MatchesAsync(profile, modelFilePath, ct).ConfigureAwait(false))
+        if (!await _launchPolicyFingerprintProvider.MatchesAsync(profile, modelFilePath, ct))
         {
             return false;
         }
 
-        return !await _invalidationEvaluator.ContradictsCurrentPlacementAsync(profile, ct).ConfigureAwait(false);
+        return !await _invalidationEvaluator.ContradictsCurrentPlacementAsync(profile, ct);
     }
 
     private static InferenceProfileView ToView(InferenceProfileRecord record)
@@ -606,7 +602,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     // id lookup reads the full list (no Persistence-store change) and filters in memory.
     private async Task<InferenceProfileRecord?> FindProfileByIdAsync(Guid profileId, CancellationToken ct)
     {
-        var all = await _profileStore.ListAsync(ct).ConfigureAwait(false);
+        var all = await _profileStore.ListAsync(ct);
         return all.FirstOrDefault(profile => profile.Id == profileId);
     }
 }

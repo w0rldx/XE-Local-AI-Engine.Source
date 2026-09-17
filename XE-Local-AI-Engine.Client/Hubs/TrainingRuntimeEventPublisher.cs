@@ -9,7 +9,7 @@ internal sealed class TrainingRuntimeEventPublisher(IHubContext<TrainingRuntimeH
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
         await hubContext.Clients.All.SendAsync(TrainingRuntimeHubEvents.StatusChanged,
-            TrainingRuntimeStatusHubMessage.FromContract(statusEvent), cancellationToken).ConfigureAwait(false);
+            TrainingRuntimeStatusHubMessage.FromContract(statusEvent), cancellationToken);
     }
 }
 

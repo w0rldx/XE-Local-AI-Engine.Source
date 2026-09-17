@@ -23,13 +23,13 @@ public sealed class GetIntegrationSessionEndpoint(IntegrationSessionService sess
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var session = await _sessions.GetAsync(Route<Guid>("sessionId"), ct).ConfigureAwait(false);
+        var session = await _sessions.GetAsync(Route<Guid>("sessionId"), ct);
         if (session is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(IntegrationMapper.ToResponse(session), ct).ConfigureAwait(false);
+        await Send.OkAsync(IntegrationMapper.ToResponse(session), ct);
     }
 }

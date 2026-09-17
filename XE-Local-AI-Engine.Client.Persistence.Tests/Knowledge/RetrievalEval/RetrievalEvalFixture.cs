@@ -98,7 +98,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
 
         // A copy of the shared at-head template, not a replay of the whole declared chain: what this fixture exercises
         // is the ingestion pipeline over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         var documentIdsByKey = new Dictionary<string, Guid>(StringComparer.Ordinal);
 
@@ -124,7 +124,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
                 NullLogger<KnowledgeIngestionService>.Instance);
 
             var connection = ingestionContext.Database.GetDbConnection();
-            await OpenAsync(connection, cancellationToken).ConfigureAwait(false);
+            await OpenAsync(connection, cancellationToken);
 
             foreach (var document in documents)
             {
@@ -133,11 +133,11 @@ internal sealed class RetrievalEvalFixture : IDisposable
 
                 var bytes = Encoding.UTF8.GetBytes(document.Body);
                 blobStore.Register(documentId, bytes);
-                await InsertPendingDocumentRowAsync(ingestionContext, connection, documentId, bytes.Length, cancellationToken).ConfigureAwait(false);
+                await InsertPendingDocumentRowAsync(ingestionContext, connection, documentId, bytes.Length, cancellationToken);
 
-                await ingestionService.RunAsync(documentId, cancellationToken).ConfigureAwait(false);
+                await ingestionService.RunAsync(documentId, cancellationToken);
 
-                var status = await ReadStatusAsync(connection, documentId, cancellationToken).ConfigureAwait(false);
+                var status = await ReadStatusAsync(connection, documentId, cancellationToken);
                 if (!string.Equals(status, KnowledgeDocumentStatus.Indexed.ToString(), StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture,
@@ -243,7 +243,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
         AddParameter(command, "$size", sizeBytes);
         AddParameter(command, "$hash", "hash-" + documentId.ToString("N"));
         AddParameter(command, "$path", documentId.ToString("D") + ".md");
-        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task<string?> ReadStatusAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
@@ -251,7 +251,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT status FROM knowledge_documents WHERE document_id = $id;";
         AddParameter(command, "$id", documentId);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         return result as string;
     }
 
@@ -259,7 +259,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
     {
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await connection.OpenAsync(cancellationToken);
         }
     }
 

@@ -21,13 +21,13 @@ public sealed class UpdateCustomToolEndpoint(ICustomToolService customToolServic
         // The id travels in the route; the body carries the full replacement definition. A masked secret round-tripped
         // in the body resolves back to the stored value in the service, so an unrelated edit never clears a secret.
         var customToolId = Route<Guid>("customToolId");
-        var view = await _customToolService.UpdateAsync(customToolId, req, ct).ConfigureAwait(false);
+        var view = await _customToolService.UpdateAsync(customToolId, req, ct);
         if (view is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(view, ct).ConfigureAwait(false);
+        await Send.OkAsync(view, ct);
     }
 }

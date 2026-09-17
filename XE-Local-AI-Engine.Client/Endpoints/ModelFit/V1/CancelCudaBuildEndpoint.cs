@@ -26,6 +26,6 @@ public sealed class CancelCudaBuildEndpoint(LlamaCppRuntimeOrchestrationService 
     {
         // Cancel() returns false when nothing is in flight — its own "already cancelling / nothing running" guard. [secLOW-2]
         _runtime.CancelCudaBuild();
-        await Send.OkAsync(_runtime.GetCudaBuildStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(_runtime.GetCudaBuildStatus().ToResponse(), ct);
     }
 }

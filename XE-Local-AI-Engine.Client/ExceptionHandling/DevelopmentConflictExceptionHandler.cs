@@ -44,7 +44,7 @@ public sealed class DevelopmentConflictExceptionHandler(ILogger<DevelopmentConfl
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",
             exception.GetType().Name);
 
-        await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status409Conflict, cancellationToken).ConfigureAwait(false);
+        await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status409Conflict, cancellationToken);
 
         return true;
     }

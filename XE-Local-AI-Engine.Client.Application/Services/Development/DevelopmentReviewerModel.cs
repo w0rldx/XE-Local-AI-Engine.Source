@@ -64,7 +64,7 @@ internal sealed class DevelopmentReviewerModel(
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
         ArgumentNullException.ThrowIfNull(tools);
-        await RejectExternalModelAsync(modelId, cancellationToken).ConfigureAwait(false);
+        await RejectExternalModelAsync(modelId, cancellationToken);
         var isCloud = _cloudFactory.IsCloudProviderSelected(modelId);
         if (isCloud && cloudRoute is null)
         {
@@ -110,16 +110,15 @@ internal sealed class DevelopmentReviewerModel(
         }
         else
         {
-            var localProvider = await _localProviderResolver.ResolveProviderForModelAsync(modelId, cancellationToken).ConfigureAwait(false);
-            var knownModels = await localProvider.ListModelsAsync(cancellationToken).ConfigureAwait(false);
+            var localProvider = await _localProviderResolver.ResolveProviderForModelAsync(modelId, cancellationToken);
+            var knownModels = await localProvider.ListModelsAsync(cancellationToken);
             if (!knownModels.Any(model => model.IsAvailable
                                           && string.Equals(model.ModelName, modelId, StringComparison.OrdinalIgnoreCase)))
             {
                 throw new DevelopmentWorkspaceSecurityException("Development reviewer attempts require a known, available local model.");
             }
 
-            contextBudget = await DevelopmentAttemptContextBudget.ResolveAsync(localProvider, modelId, maxOutputTokens, "reviewer", _logger, cancellationToken)
-                                                                 .ConfigureAwait(false);
+            contextBudget = await DevelopmentAttemptContextBudget.ResolveAsync(localProvider, modelId, maxOutputTokens, "reviewer", _logger, cancellationToken);
             options = new ChatOptions
             {
                 ModelId = modelId,
@@ -167,7 +166,7 @@ internal sealed class DevelopmentReviewerModel(
         var updates = new List<ChatResponseUpdate>();
         await foreach (var update in _chatClient.GetStreamingResponseAsync(messages,
                            options,
-                           cancellationToken).ConfigureAwait(false))
+                           cancellationToken))
         {
             updates.Add(update);
             liveProgress?.Output(update);
@@ -219,7 +218,7 @@ internal sealed class DevelopmentReviewerModel(
             return;
         }
 
-        if (await _modelTrustResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
+        if (await _modelTrustResolver.ResolveAsync(modelId, cancellationToken) != ModelTrustLocality.Local)
         {
             throw new DevelopmentWorkspaceSecurityException("Development attempts cannot use an external model that is not declared local to this node's trust boundary.");
         }
@@ -318,7 +317,7 @@ internal sealed class DevelopmentReviewerModel(
             Count(toolId, arguments);
             try
             {
-                return await action().ConfigureAwait(false);
+                return await action();
             }
             finally
             {

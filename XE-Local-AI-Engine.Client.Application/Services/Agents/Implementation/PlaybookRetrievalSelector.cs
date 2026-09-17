@@ -52,7 +52,7 @@ internal static class PlaybookRetrievalSelector
 
         // The ranker returns the top-k in RELEVANCE order (most relevant first). Trim to the token budget here, while the
         // relevance order is still intact, so the lowest-ranked items are dropped first; THEN re-impose the store order.
-        var ranked = await ranker.SelectTopKAsync(retrievalQuery, enabled, topK, cancellationToken).ConfigureAwait(false);
+        var ranked = await ranker.SelectTopKAsync(retrievalQuery, enabled, topK, cancellationToken);
 
         var budgeted = TrimToBudget(ranked, maxInjectedMemoryTokens, maxInjectedFailureMemoryTokens, logger);
 

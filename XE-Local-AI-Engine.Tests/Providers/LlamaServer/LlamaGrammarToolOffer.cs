@@ -75,7 +75,7 @@ internal static class LlamaGrammarToolOffer
     /// </summary>
     public static async Task<string> CaptureWireBodyAsync(ChatOptions options, CancellationToken cancellationToken = default)
     {
-        return await CaptureWireBodyAsync([new ChatMessage(ChatRole.User, "hi")], options, cancellationToken).ConfigureAwait(false);
+        return await CaptureWireBodyAsync([new ChatMessage(ChatRole.User, "hi")], options, cancellationToken);
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ internal static class LlamaGrammarToolOffer
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(BuildDefaultClientOptions(), http);
 
-        await chat.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        await chat.GetResponseAsync(messages, options, cancellationToken);
 
         return handler.CapturedBody
                ?? throw new InvalidOperationException("The OpenAI adapter produced no request body to capture.");
@@ -113,7 +113,7 @@ internal static class LlamaGrammarToolOffer
         var chat = BuildOpenAiChatClient(LlamaServerOpenAIAdapterFactory.BuildClientOptions(new Uri("http://127.0.0.1:1/v1"), TimeSpan.FromSeconds(30)),
             http);
 
-        await chat.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        await chat.GetResponseAsync(messages, options, cancellationToken);
 
         return handler.CapturedBody
                ?? throw new InvalidOperationException("The llama-server OpenAI adapter produced no request body to capture.");
@@ -179,7 +179,7 @@ internal static class LlamaGrammarToolOffer
         {
             if (request.Content is not null)
             {
-                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken);
             }
 
             return new HttpResponseMessage(HttpStatusCode.OK)

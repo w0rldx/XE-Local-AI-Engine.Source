@@ -24,13 +24,13 @@ public sealed class GetAgentFeedbackInsightsEndpoint(IFeedbackInsightsService fe
 
     public override async Task HandleAsync(GetAgentFeedbackInsightsRequest req, CancellationToken ct)
     {
-        var result = await _feedbackInsightsService.GetAgentFeedbackInsightsAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
+        var result = await _feedbackInsightsService.GetAgentFeedbackInsightsAsync(req.AgentDefinitionId, ct);
         if (result is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(result.ToResponse(), ct);
     }
 }

@@ -1308,7 +1308,7 @@ public sealed class BenchmarkStoreTests : IDisposable
     {
         try
         {
-            await action().ConfigureAwait(false);
+            await action();
             return (true, null);
         }
         catch (BenchmarkConflictException exception)

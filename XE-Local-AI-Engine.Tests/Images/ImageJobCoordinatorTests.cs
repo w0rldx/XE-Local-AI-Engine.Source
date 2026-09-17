@@ -29,7 +29,7 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: true);
 
-        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("a queued job prompt"), CancellationToken.None).ConfigureAwait(false);
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("a queued job prompt"), CancellationToken.None);
 
         // The queued row is persisted before EnqueueAsync returns, and the FIRST buffered replay event is Queued (seq 0)
         // regardless of any later transition the detached worker makes.
@@ -54,9 +54,9 @@ public sealed class ImageJobCoordinatorTests
         using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "A training run holds the node.");
         using var harness = Harness.Create(blockRuntime: false, gpuWorkGate: gate);
 
-        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("while training"), CancellationToken.None).ConfigureAwait(false);
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("while training"), CancellationToken.None);
 
-        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed).ConfigureAwait(false);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
         AssertEx.Equal(expected: 0, harness.Runtime.CallCount, "The runtime must not be called while a run holds the GPU.");
     }
 
@@ -65,19 +65,19 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: true);
 
-        var first = await harness.Coordinator.EnqueueAsync(NewInput("first"), CancellationToken.None).ConfigureAwait(false);
-        await harness.Runtime.Started.WaitAsync(Timeout).ConfigureAwait(false);
+        var first = await harness.Coordinator.EnqueueAsync(NewInput("first"), CancellationToken.None);
+        await harness.Runtime.Started.WaitAsync(Timeout);
 
-        var second = await harness.Coordinator.EnqueueAsync(NewInput("second"), CancellationToken.None).ConfigureAwait(false);
+        var second = await harness.Coordinator.EnqueueAsync(NewInput("second"), CancellationToken.None);
 
         // The single generation slot is held by the first (blocked) job, so the second job's detached run task is parked
         // on _generationSlot.WaitAsync and cannot reach the runtime or flip to Generating until the first releases. That
         // is a structural guarantee, not a timing one, so the second is observably still Queued with no wall-clock wait.
-        var secondView = await harness.Coordinator.GetAsync(second, CancellationToken.None).ConfigureAwait(false);
+        var secondView = await harness.Coordinator.GetAsync(second, CancellationToken.None);
         AssertEx.Equal(ImageJobStatus.Queued, AssertEx.NotNull(secondView).Status);
         AssertEx.Equal(expected: 1, harness.Runtime.CallCount);
 
-        var firstView = await harness.Coordinator.GetAsync(first, CancellationToken.None).ConfigureAwait(false);
+        var firstView = await harness.Coordinator.GetAsync(first, CancellationToken.None);
         AssertEx.Equal(ImageJobStatus.Generating, AssertEx.NotNull(firstView).Status);
 
         harness.Runtime.Release();
@@ -88,9 +88,9 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: false, admitJobs: false);
 
-        _ = await AssertEx.ThrowsAsync<ImageRuntimeBusyException>(() => harness.Coordinator.EnqueueAsync(NewInput("blocked-by-runtime-mutation"), CancellationToken.None)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ImageRuntimeBusyException>(() => harness.Coordinator.EnqueueAsync(NewInput("blocked-by-runtime-mutation"), CancellationToken.None));
 
-        AssertEx.Empty(await harness.Coordinator.ListAsync(CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Empty(await harness.Coordinator.ListAsync(CancellationToken.None));
         AssertEx.Equal(expected: 0, harness.ActivityGate.ActiveLeaseCount);
     }
 
@@ -99,14 +99,14 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: true);
 
-        _ = await harness.Coordinator.EnqueueAsync(NewInput("running"), CancellationToken.None).ConfigureAwait(false);
-        await harness.Runtime.Started.WaitAsync(Timeout).ConfigureAwait(false);
+        _ = await harness.Coordinator.EnqueueAsync(NewInput("running"), CancellationToken.None);
+        await harness.Runtime.Started.WaitAsync(Timeout);
 
-        var queued = await harness.Coordinator.EnqueueAsync(NewInput("queued-then-cancelled"), CancellationToken.None).ConfigureAwait(false);
-        var cancelled = await harness.Coordinator.CancelAsync(queued, CancellationToken.None).ConfigureAwait(false);
+        var queued = await harness.Coordinator.EnqueueAsync(NewInput("queued-then-cancelled"), CancellationToken.None);
+        var cancelled = await harness.Coordinator.CancelAsync(queued, CancellationToken.None);
         AssertEx.True(cancelled, "Cancelling a tracked queued job returns true.");
 
-        await WaitForStatusAsync(harness, queued, ImageJobStatus.Cancelled).ConfigureAwait(false);
+        await WaitForStatusAsync(harness, queued, ImageJobStatus.Cancelled);
 
         // The runtime was only ever entered by the running job — the cancelled-while-queued job never called it.
         AssertEx.Equal(expected: 1, harness.Runtime.CallCount);
@@ -120,14 +120,14 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: true);
 
-        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("running-then-cancelled"), CancellationToken.None).ConfigureAwait(false);
-        await harness.Runtime.Started.WaitAsync(Timeout).ConfigureAwait(false);
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("running-then-cancelled"), CancellationToken.None);
+        await harness.Runtime.Started.WaitAsync(Timeout);
 
-        var cancelled = await harness.Coordinator.CancelAsync(jobId, CancellationToken.None).ConfigureAwait(false);
+        var cancelled = await harness.Coordinator.CancelAsync(jobId, CancellationToken.None);
         AssertEx.True(cancelled, "Cancelling a tracked generating job returns true.");
 
         // The runtime was blocked awaiting the ct; cancellation unblocks it and the job lands Cancelled.
-        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Cancelled).ConfigureAwait(false);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Cancelled);
         AssertEx.True(harness.Runtime.ObservedCancellation, "The runtime's cancellation token must have been signalled.");
     }
 
@@ -136,11 +136,11 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: false);
 
-        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("completes"), CancellationToken.None).ConfigureAwait(false);
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("completes"), CancellationToken.None);
 
-        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded).ConfigureAwait(false);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
 
-        var view = AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None).ConfigureAwait(false));
+        var view = AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None));
         var imageId = AssertEx.NotNull((object?)view.ImageId, "A succeeded job records the produced image id.");
         // The image was persisted through the blob store, and its id matches the one stamped on the job.
         AssertEx.True(harness.Images.Added.TryGetValue((Guid)imageId, out var storedJobId), "The image must be persisted via the store.");
@@ -164,11 +164,11 @@ public sealed class ImageJobCoordinatorTests
             Width = 100,
             Height = 512
         };
-        var jobId = await harness.Coordinator.EnqueueAsync(input, CancellationToken.None).ConfigureAwait(false);
+        var jobId = await harness.Coordinator.EnqueueAsync(input, CancellationToken.None);
 
-        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded).ConfigureAwait(false);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
 
-        var view = AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None).ConfigureAwait(false));
+        var view = AssertEx.NotNull(await harness.Coordinator.GetAsync(jobId, CancellationToken.None));
         AssertEx.Equal(expected: 128, view.Width, "A succeeded job must report the produced width (128), not the requested one (100).");
         AssertEx.Equal(expected: 512, view.Height);
     }
@@ -178,12 +178,12 @@ public sealed class ImageJobCoordinatorTests
     {
         using var harness = Harness.Create(blockRuntime: true);
 
-        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("interrupted-by-shutdown"), CancellationToken.None).ConfigureAwait(false);
-        await harness.Runtime.Started.WaitAsync(Timeout).ConfigureAwait(false);
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("interrupted-by-shutdown"), CancellationToken.None);
+        await harness.Runtime.Started.WaitAsync(Timeout);
 
         // Graceful shutdown: DisposeAsync cancels the in-flight job and drains its run task, so the terminal Cancelled
         // state is persisted BEFORE DisposeAsync returns (no reliance on the startup reconciler for a clean shutdown).
-        await harness.Coordinator.DisposeAsync().ConfigureAwait(false);
+        await harness.Coordinator.DisposeAsync();
 
         AssertEx.Equal(ImageJobStatus.Cancelled, harness.Store.StatusOf(jobId));
         AssertEx.True(harness.Runtime.ObservedCancellation, "The runtime's cancellation token must have been signalled.");
@@ -213,9 +213,9 @@ public sealed class ImageJobCoordinatorTests
             new GpuWorkGate());
         AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
 
-        var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None).ConfigureAwait(false);
+        var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => store.StatusOf(jobId) == ImageJobStatus.Succeeded, Timeout,
-            $"Job {jobId} did not reach status {ImageJobStatus.Succeeded}.").ConfigureAwait(false);
+            $"Job {jobId} did not reach status {ImageJobStatus.Succeeded}.");
         AssertEx.NotEmpty(coordinator.SnapshotBufferedEvents(jobId));
 
         // Before the retention window elapses a timer tick must keep the log (late subscribers can still replay it).
@@ -230,7 +230,7 @@ public sealed class ImageJobCoordinatorTests
         {
             timeProvider.FireEvictionTick();
             return coordinator.SnapshotBufferedEvents(jobId).Count == 0;
-        }, Timeout, "The idle eviction tick must release the terminal job's replay log after retention.").ConfigureAwait(false);
+        }, Timeout, "The idle eviction tick must release the terminal job's replay log after retention.");
     }
 
     // Minimal TimeProvider for the eviction test: settable clock + captures the coordinator's periodic timer callback
@@ -310,11 +310,11 @@ public sealed class ImageJobCoordinatorTests
             Context = context
         };
 
-        await hub.Subscribe(jobId).ConfigureAwait(false);
+        await hub.Subscribe(jobId);
 
         // Join-then-replay: the connection is added to the per-job group first, then every buffered event is replayed to
         // the caller in seq order.
-        await groups.Received(1).AddToGroupAsync("conn-1", ImageJobHub.JobGroup(jobId), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await groups.Received(1).AddToGroupAsync("conn-1", ImageJobHub.JobGroup(jobId), Arg.Any<CancellationToken>());
         Received.InOrder(() =>
         {
             caller.SendCoreAsync(ImageJobHubEvents.StatusChanged, Arg.Is<object?[]>(args => args.Length == 1 && ReferenceEquals(args[0], event0)), Arg.Any<CancellationToken>());
@@ -340,7 +340,7 @@ public sealed class ImageJobCoordinatorTests
     private static async Task WaitForStatusAsync(Harness harness, Guid jobId, ImageJobStatus status)
     {
         await AssertEx.EventuallyAsync(() => harness.Store.StatusOf(jobId) == status, Timeout,
-            $"Job {jobId} did not reach status {status}.").ConfigureAwait(false);
+            $"Job {jobId} did not reach status {status}.");
     }
 
     private sealed record Harness(
@@ -486,7 +486,7 @@ public sealed class ImageJobCoordinatorTests
             {
                 if (blockUntilReleased)
                 {
-                    await _release.Task.WaitAsync(ct).ConfigureAwait(false);
+                    await _release.Task.WaitAsync(ct);
                 }
 
                 ct.ThrowIfCancellationRequested();

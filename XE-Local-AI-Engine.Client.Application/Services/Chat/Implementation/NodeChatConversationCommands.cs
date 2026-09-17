@@ -39,7 +39,7 @@ internal sealed class NodeChatConversationCommands(
                 // A new conversation inherits the bound agent's default-temporary-chat flag (adaptive-memory write-only
                 // suppression). Read it inline from agent_definitions on the same connection so the seam is self-
                 // contained (no store injected into the raw-SQL write path); an unbound conversation defaults to false.
-                var memoryExcluded = await ReadAgentDefaultTemporaryChatAsync(dbContext, request.AgentDefinitionId, token).ConfigureAwait(false);
+                var memoryExcluded = await ReadAgentDefaultTemporaryChatAsync(dbContext, request.AgentDefinitionId, token);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
@@ -55,14 +55,14 @@ internal sealed class NodeChatConversationCommands(
                 AddParameter(command, "$agent_definition_id", request.AgentDefinitionId);
                 AddParameter(command, "$memory_excluded", memoryExcluded ? 1 : 0);
                 AddParameter(command, "$kind", request.Kind);
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                await command.ExecuteNonQueryAsync(token);
 
                 return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, Purged: false, [], request.Origin,
                     AgentDefinitionId: request.AgentDefinitionId,
                     MemoryExcluded: memoryExcluded);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     /// <summary>
@@ -81,8 +81,8 @@ internal sealed class NodeChatConversationCommands(
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         command.CommandText = "SELECT default_temporary_chat FROM agent_definitions WHERE id = $id;";
         AddParameter(command, "$id", definitionId);
-        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         // SQLite stores the bool as 0/1; a missing row returns null → non-temporary.
         return result is not null and not DBNull && Convert.ToInt64(result, CultureInfo.InvariantCulture) != 0L;
     }
@@ -101,12 +101,12 @@ internal sealed class NodeChatConversationCommands(
                 // Read the existing row regardless of purged state: an already-purged row still occupies the id,
                 // so we must NOT attempt to recreate it. INSERT OR IGNORE makes the insert race-safe against the
                 // serialized remote dispatch path.
-                var existing = await ReadConversationRowAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                var existing = await ReadConversationRowAsync(dbContext, request.ConversationId, token);
                 if (existing is not null)
                 {
                     return existing with
                     {
-                        Messages = await ReadMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false)
+                        Messages = await ReadMessagesAsync(dbContext, request.ConversationId, token)
                     };
                 }
 
@@ -121,18 +121,18 @@ internal sealed class NodeChatConversationCommands(
                 AddParameter(command, "$created_at_utc", request.CreatedAtUtc);
                 AddParameter(command, "$last_seen_utc", request.CreatedAtUtc);
                 AddParameter(command, "$origin", request.Origin);
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                await command.ExecuteNonQueryAsync(token);
 
                 // Re-read so a concurrent insert that won the race (IGNORE) still returns the authoritative row.
-                var ensured = await ReadConversationRowAsync(dbContext, request.ConversationId, token).ConfigureAwait(false)
+                var ensured = await ReadConversationRowAsync(dbContext, request.ConversationId, token)
                               ?? throw new InvalidOperationException("The node chat conversation could not be ensured.");
                 return ensured with
                 {
-                    Messages = await ReadMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false)
+                    Messages = await ReadMessagesAsync(dbContext, request.ConversationId, token)
                 };
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<string?> GetConversationOriginAsync(Guid conversationId, CancellationToken cancellationToken = default)
@@ -144,11 +144,11 @@ internal sealed class NodeChatConversationCommands(
                 command.CommandText = "SELECT origin FROM conversations WHERE conversation_id = $conversation_id;";
                 AddParameter(command, "$conversation_id", conversationId);
 
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                var result = await command.ExecuteScalarAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                var result = await command.ExecuteScalarAsync(token);
                 return result as string;
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, Guid>?> GetSelectedPathAsync(Guid conversationId, CancellationToken cancellationToken = default)
@@ -160,11 +160,11 @@ internal sealed class NodeChatConversationCommands(
                 command.CommandText = "SELECT selected_path_json FROM conversations WHERE conversation_id = $conversation_id AND purged = 0;";
                 AddParameter(command, "$conversation_id", conversationId);
 
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                var result = await command.ExecuteScalarAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                var result = await command.ExecuteScalarAsync(token);
                 return DeserializeSelectedPath(result as string);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, Guid>> SetSelectedPathAsync(NodeChatSetSelectedPathRequest request, CancellationToken cancellationToken = default)
@@ -189,12 +189,12 @@ internal sealed class NodeChatConversationCommands(
                 AddParameter(command, "$selected_path_json", SerializeSelectedPath(selectedPath));
                 AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$conversation_id", request.ConversationId);
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                await command.ExecuteNonQueryAsync(token);
 
                 return (IReadOnlyDictionary<Guid, Guid>)new Dictionary<Guid, Guid>(selectedPath);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<NodeChatDeleteResultDto> DeleteConversationAsync(NodeChatDeleteConversationRequest request, CancellationToken cancellationToken = default)
@@ -208,7 +208,7 @@ internal sealed class NodeChatConversationCommands(
         var result = await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
-                await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
 
                 var cancelCount = await dbContext.Database.ExecuteSqlRawAsync(sql: """
                                                                                    UPDATE messages
@@ -220,35 +220,35 @@ internal sealed class NodeChatConversationCommands(
                         NodeChatMessageStatusValues.Cancelled, request.DeletedAtUtc, request.ConversationId, NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued,
                         NodeChatMessageStatusValues.Streaming
                     ],
-                    token).ConfigureAwait(false);
+                    token);
 
                 if (request.PurgeImmediately)
                 {
                     // Read the owned session id BEFORE the rows go; nothing can resolve it afterwards.
-                    workSessionId = await ReadWorkSessionIdAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                    workSessionId = await ReadWorkSessionIdAsync(dbContext, request.ConversationId, token);
 
                     // Delete the complete DB footprint through the shared helper so this path and the retention sweeper
                     // never drift on which child tables constitute a conversation. On-disk upload blobs are torn down
                     // after commit below.
-                    await ConversationFootprintPurge.DeleteAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                    await ConversationFootprintPurge.DeleteAsync(dbContext, request.ConversationId, token);
                 }
                 else
                 {
                     await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET purged = 1, last_seen_utc = {0} WHERE conversation_id = {1};",
                         [request.DeletedAtUtc, request.ConversationId],
-                        token).ConfigureAwait(false);
+                        token);
                 }
 
-                await transaction.CommitAsync(token).ConfigureAwait(false);
+                await transaction.CommitAsync(token);
                 return new NodeChatDeleteResultDto(request.ConversationId, cancelCount > 0, request.PurgeImmediately);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         if (request.PurgeImmediately && _uploadedFileStore is not null)
         {
             // The encrypted upload bytes and cached extracted text live on disk, not in a column, so the FK cascade /
             // raw-SQL row purge above does not touch them. Remove the conversation's on-disk upload directory too.
-            await _uploadedFileStore.DeleteAllForConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
+            await _uploadedFileStore.DeleteAllForConversationAsync(request.ConversationId, cancellationToken);
         }
 
         if (workSessionId is { } sessionId)
@@ -271,8 +271,7 @@ internal sealed class NodeChatConversationCommands(
         return await dbContext.AgentWorkSessions.AsNoTracking()
                               .Where(entity => entity.ConversationId == conversationId)
                               .Select(entity => (Guid?)entity.Id)
-                              .SingleOrDefaultAsync(cancellationToken)
-                              .ConfigureAwait(false);
+                              .SingleOrDefaultAsync(cancellationToken);
     }
 
     public async Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)
@@ -292,12 +291,12 @@ internal sealed class NodeChatConversationCommands(
                 AddParameter(command, "$title", EncryptTitle(title, dbContext, request.ConversationId));
                 AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$conversation_id", request.ConversationId);
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                var updated = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                var updated = await command.ExecuteNonQueryAsync(token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<NodeChatConversationDto?> SetConversationPinnedAsync(NodeChatSetConversationPinnedRequest request, CancellationToken cancellationToken = default)
@@ -309,11 +308,11 @@ internal sealed class NodeChatConversationCommands(
             {
                 var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET is_pinned = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
                     [request.IsPinned, request.UpdatedAtUtc, request.ConversationId],
-                    token).ConfigureAwait(false);
+                    token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<NodeChatConversationDto?> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default)
@@ -325,11 +324,11 @@ internal sealed class NodeChatConversationCommands(
             {
                 var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET archived = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
                     [request.Archived, request.UpdatedAtUtc, request.ConversationId],
-                    token).ConfigureAwait(false);
+                    token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<NodeChatConversationDto?> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default)
@@ -352,12 +351,12 @@ internal sealed class NodeChatConversationCommands(
                 AddParameter(command, "$updated_at", summary is null ? null : request.UpdatedAtUtc);
                 AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$conversation_id", request.ConversationId);
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                var updated = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                var updated = await command.ExecuteNonQueryAsync(token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default)
@@ -370,10 +369,10 @@ internal sealed class NodeChatConversationCommands(
                 // Plaintext non-nullable bool column → ExecuteSqlRawAsync is sufficient (mirrors SetConversationPinnedAsync).
                 var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET memory_excluded = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
                     [request.MemoryExcluded, request.UpdatedAtUtc, request.ConversationId],
-                    token).ConfigureAwait(false);
+                    token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

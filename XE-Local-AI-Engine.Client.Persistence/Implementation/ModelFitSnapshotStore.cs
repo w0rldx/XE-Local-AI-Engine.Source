@@ -42,7 +42,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
         };
 
         _ = _dbContext.ModelFitSnapshots.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToSummary(entity);
     }
@@ -62,8 +62,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
         if (status != ModelFitRunStatus.Succeeded)
         {
             var entity = await _dbContext.ModelFitSnapshots
-                                         .FirstOrDefaultAsync(snapshot => snapshot.Id == id, cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .FirstOrDefaultAsync(snapshot => snapshot.Id == id, cancellationToken);
 
             if (entity is null)
             {
@@ -72,16 +71,15 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
 
             ApplyTerminalFields(entity, status, exitCode, durationMs, rawJson, stderrExcerpt, diagnosticsJson, completedAtUtc);
 
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
             return ToSummary(entity);
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var succeeding = await _dbContext.ModelFitSnapshots
-                                         .FirstOrDefaultAsync(snapshot => snapshot.Id == id, cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .FirstOrDefaultAsync(snapshot => snapshot.Id == id, cancellationToken);
 
         if (succeeding is null)
         {
@@ -98,8 +96,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
                                               snapshot.UseCase == succeeding.UseCase &&
                                               snapshot.ProviderName == succeeding.ProviderName &&
                                               snapshot.ModelName == succeeding.ModelName)
-                                          .ToListAsync(cancellationToken)
-                                          .ConfigureAwait(false);
+                                          .ToListAsync(cancellationToken);
 
         foreach (var stale in priorLatest)
         {
@@ -109,8 +106,8 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
         ApplyTerminalFields(succeeding, status, exitCode, durationMs, rawJson, stderrExcerpt, diagnosticsJson, completedAtUtc);
         succeeding.IsLatestSuccessful = true;
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return ToSummary(succeeding);
     }
@@ -132,8 +129,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
                                          snapshot.ProviderName == providerName &&
                                          snapshot.ModelName == modelName)
                                      .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
-                                     .FirstOrDefaultAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(cancellationToken);
 
         return entity is null ? null : ToSummary(entity);
     }
@@ -158,8 +154,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
         var entities = await query
                              .OrderByDescending(snapshot => snapshot.CreatedAtUtc)
                              .Take(limit < 1 ? 1 : limit)
-                             .ToListAsync(cancellationToken)
-                             .ConfigureAwait(false);
+                             .ToListAsync(cancellationToken);
 
         return entities.Select(ToSummary).ToArray();
     }
@@ -168,8 +163,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
     {
         var entity = await _dbContext.ModelFitSnapshots
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(snapshot => snapshot.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(snapshot => snapshot.Id == id, cancellationToken);
 
         if (entity is null)
         {

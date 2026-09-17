@@ -35,7 +35,7 @@ public sealed partial class BenchmarkStore
         if (judgePolicy is null && initialItems is not { Count: > 0 })
         {
             _dbContext.BenchmarkProjects.Add(entity);
-            await SaveAsync(cancellationToken).ConfigureAwait(false);
+            await SaveAsync(cancellationToken);
             return ToRecord(entity, frozen: false);
         }
 
@@ -43,12 +43,12 @@ public sealed partial class BenchmarkStore
         // circular project↔revision pointers force: project with a null pointer, then the revision, then the pointer.
         // The items ride the same transaction so a project never exists without a question to ask — which is what lets
         // every read path stop inventing one.
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         _dbContext.BenchmarkProjects.Add(entity);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         if (judgePolicy is not null)
         {
-            await ApplyJudgePolicyChangeAsync(entity, judgePolicy, now, cancellationToken).ConfigureAwait(false);
+            await ApplyJudgePolicyChangeAsync(entity, judgePolicy, now, cancellationToken);
         }
 
         if (initialItems is { Count: > 0 })
@@ -63,27 +63,27 @@ public sealed partial class BenchmarkStore
             entity.TaskItemSetHash = BenchmarkTaskItemHashing.ComputeSetHash(created);
         }
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(entity, frozen: false);
     }
 
     public async Task<BenchmarkProjectRecord?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        var project = await _dbContext.BenchmarkProjects.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken).ConfigureAwait(false);
+        var project = await _dbContext.BenchmarkProjects.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken);
         if (project is null)
         {
             return null;
         }
 
-        var frozen = await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken).ConfigureAwait(false);
+        var frozen = await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken);
         return ToRecord(project, frozen);
     }
 
     public async Task<IReadOnlyList<BenchmarkProjectRecord>> ListProjectsAsync(CancellationToken cancellationToken = default)
     {
-        var projects = await _dbContext.BenchmarkProjects.AsNoTracking().OrderBy(entity => entity.Name).ThenBy(entity => entity.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
-        var frozenIds = await _dbContext.BenchmarkRuns.AsNoTracking().Select(entity => entity.ProjectId).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
+        var projects = await _dbContext.BenchmarkProjects.AsNoTracking().OrderBy(entity => entity.Name).ThenBy(entity => entity.Id).ToListAsync(cancellationToken);
+        var frozenIds = await _dbContext.BenchmarkRuns.AsNoTracking().Select(entity => entity.ProjectId).Distinct().ToListAsync(cancellationToken);
         var frozen = frozenIds.ToHashSet();
         return projects.Select(entity => ToRecord(entity, frozen.Contains(entity.Id))).ToArray();
     }
@@ -95,16 +95,16 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken = default)
     {
         ValidateProject(input);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedVersion);
-        if (await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken).ConfigureAwait(false))
+        if (await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken))
         {
             throw new BenchmarkConflictException("ProjectFrozen");
         }
 
         var now = Now();
-        await SyncFirstItemPromptAsync(project, input.CoreTaskJson, now, cancellationToken).ConfigureAwait(false);
+        await SyncFirstItemPromptAsync(project, input.CoreTaskJson, now, cancellationToken);
         project.Name = input.Name.Trim();
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
@@ -123,20 +123,20 @@ public sealed partial class BenchmarkStore
         {
             // Same transaction as the field edit: an edit that committed without its judge change would leave the
             // project judging under a policy the operator has just replaced.
-            await ApplyJudgePolicyChangeAsync(project, judgePolicyChange, now, cancellationToken).ConfigureAwait(false);
+            await ApplyJudgePolicyChangeAsync(project, judgePolicyChange, now, cancellationToken);
         }
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(project, frozen: false);
     }
 
     public async Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedVersion);
-        if (await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken).ConfigureAwait(false))
+        if (await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken))
         {
             throw new BenchmarkConflictException("ProjectFrozen");
         }
@@ -144,18 +144,18 @@ public sealed partial class BenchmarkStore
         // Same explicit order as run deletion, for the same reason: the project stops pointing at its revision
         // before the revisions go, and nothing relies on a cascade that this database does not enforce.
         project.CurrentJudgePolicyRevisionId = null;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
 
         // The guard above refuses a project that still holds runs, so every run-scoped child (work items, judge and
         // fidelity attempts, comparisons) went with its run. What is scoped to the PROJECT did not: task items hold
         // encrypted prompts, reference answers and verifier overrides and outlive every run, and a pairwise fit is
         // only DEACTIVATED when the runs it was fitted over are deleted. Both are children of the project row, so
         // both go before it.
-        await _dbContext.BenchmarkTaskItems.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await _dbContext.BenchmarkTaskItems.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
-        _ = await _dbContext.BenchmarkProjects.Where(entity => entity.Id == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.BenchmarkProjects.Where(entity => entity.Id == projectId).ExecuteDeleteAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 }

@@ -79,7 +79,7 @@ internal sealed class LocalModelProxyForwarder
         ArgumentNullException.ThrowIfNull(context);
         var ct = context.RequestAborted;
 
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(ct);
         var data = installed
                    .Where(model => model.IsAvailable)
                    .Select(model => new
@@ -95,7 +95,7 @@ internal sealed class LocalModelProxyForwarder
         {
             @object = "list",
             data
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 
     /// <summary>Handles <c>POST proxy/v1/chat/completions</c>.</summary>
@@ -111,22 +111,22 @@ internal sealed class LocalModelProxyForwarder
         var ct = context.RequestAborted;
 
         using var buffer = new MemoryStream();
-        await context.Request.Body.CopyToAsync(buffer, ct).ConfigureAwait(false);
+        await context.Request.Body.CopyToAsync(buffer, ct);
         var body = buffer.ToArray();
 
         if (!TryReadModel(body, out var model))
         {
             await WriteErrorAsync(context, StatusCodes.Status400BadRequest,
-                "Request body must be JSON with a non-empty \"model\" field.", "invalid_request_error", ct).ConfigureAwait(false);
+                "Request body must be JSON with a non-empty \"model\" field.", "invalid_request_error", ct);
             return;
         }
 
         // Existence check against the local GGUF catalog is what makes this llama.cpp-only and refuses cloud model
         // names — an unknown or cloud model is a 404 here rather than a route to any other provider.
-        if (!await IsInstalledLlamaModelAsync(model, ct).ConfigureAwait(false))
+        if (!await IsInstalledLlamaModelAsync(model, ct))
         {
             await WriteErrorAsync(context, StatusCodes.Status404NotFound,
-                $"The model '{model}' does not exist as a local model on this node.", "invalid_request_error", ct).ConfigureAwait(false);
+                $"The model '{model}' does not exist as a local model on this node.", "invalid_request_error", ct);
             return;
         }
 
@@ -147,21 +147,21 @@ internal sealed class LocalModelProxyForwarder
         {
             try
             {
-                endpoint = await _supervisor.EnsureRunningAsync(model, role, ct).ConfigureAwait(false);
+                endpoint = await _supervisor.EnsureRunningAsync(model, role, ct);
             }
             catch (LlamaRuntimeException ex)
             {
                 // Spawn failed, the loaded-model cap was reached, or restart-backoff was exceeded. The message is already
                 // sanitized by the supervisor. A busy/at-capacity node is a retryable condition, not a permanent failure.
                 _logger.LogWarning(ex, "Model proxy could not provision model {Model} for {Role}.", model, role);
-                await WriteBusyAsync(context, "The local runtime could not load the requested model right now (it may be at capacity). Try again shortly.", ct).ConfigureAwait(false);
+                await WriteBusyAsync(context, "The local runtime could not load the requested model right now (it may be at capacity). Try again shortly.", ct);
                 return;
             }
 
             var acquisition = _supervisor.TryAcquireInferenceLease(model, role);
             if (acquisition.ProcessEvicting)
             {
-                await WriteBusyAsync(context, "The requested model is being ejected by the operator. Try again shortly.", ct).ConfigureAwait(false);
+                await WriteBusyAsync(context, "The requested model is being ejected by the operator. Try again shortly.", ct);
                 return;
             }
 
@@ -173,7 +173,7 @@ internal sealed class LocalModelProxyForwarder
 
             if (profilingReEnsures++ >= MaxProfilingReEnsures)
             {
-                await WriteBusyAsync(context, "The requested model is being profiled by a benchmark right now. Try again shortly.", ct).ConfigureAwait(false);
+                await WriteBusyAsync(context, "The requested model is being profiled by a benchmark right now. Try again shortly.", ct);
                 return;
             }
         }
@@ -193,8 +193,7 @@ internal sealed class LocalModelProxyForwarder
         try
         {
             upstreamResponse = await httpClient
-                                     .SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct)
-                                     .ConfigureAwait(false);
+                                     .SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
@@ -204,7 +203,7 @@ internal sealed class LocalModelProxyForwarder
             // written to the response yet, so the status is still ours to set. (A caller disconnect surfaces as
             // OperationCanceledException, not these, so it is not mistaken for a runtime failure.)
             _logger.LogWarning(ex, "Model proxy could not reach the llama-server child for model {Model} ({Role}).", model, role);
-            await WriteBusyAsync(context, "The local model runtime is temporarily unavailable. Try again shortly.", ct).ConfigureAwait(false);
+            await WriteBusyAsync(context, "The local model runtime is temporarily unavailable. Try again shortly.", ct);
             return;
         }
 
@@ -220,8 +219,8 @@ internal sealed class LocalModelProxyForwarder
             // the caller would not see tokens incrementally.
             context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
-            await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-            await PumpWithIdleDeadlineAsync(upstreamStream, context, ct).ConfigureAwait(false);
+            await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
+            await PumpWithIdleDeadlineAsync(upstreamStream, context, ct);
         }
     }
 
@@ -245,7 +244,7 @@ internal sealed class LocalModelProxyForwarder
                     idleCts.CancelAfter(_upstreamIdleTimeout);
                     try
                     {
-                        read = await upstream.ReadAsync(buffer.AsMemory(0, StreamCopyBufferSize), idleCts.Token).ConfigureAwait(false);
+                        read = await upstream.ReadAsync(buffer.AsMemory(0, StreamCopyBufferSize), idleCts.Token);
                     }
                     catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !ct.IsCancellationRequested)
                     {
@@ -262,8 +261,8 @@ internal sealed class LocalModelProxyForwarder
                     return;
                 }
 
-                await context.Response.Body.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                await context.Response.Body.FlushAsync(ct).ConfigureAwait(false);
+                await context.Response.Body.WriteAsync(buffer.AsMemory(0, read), ct);
+                await context.Response.Body.FlushAsync(ct);
             }
         }
         finally
@@ -274,7 +273,7 @@ internal sealed class LocalModelProxyForwarder
 
     private async Task<bool> IsInstalledLlamaModelAsync(string model, CancellationToken ct)
     {
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(ct);
         return installed.Any(descriptor =>
             descriptor.IsAvailable && string.Equals(descriptor.ModelName, model, StringComparison.OrdinalIgnoreCase));
     }
@@ -328,6 +327,6 @@ internal sealed class LocalModelProxyForwarder
                 type,
                 code = (string?)null
             }
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

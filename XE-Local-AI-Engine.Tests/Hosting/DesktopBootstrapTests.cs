@@ -223,7 +223,7 @@ public sealed class DesktopBootstrapTests : IDisposable
             return configuration[NodeOperatorSecretProvider.EnvVarName];
         })).ToArray();
 
-        var secrets = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var secrets = await Task.WhenAll(tasks);
 
         var distinct = secrets.Distinct(StringComparer.Ordinal).ToArray();
         AssertEx.Equal(1, distinct.Length);

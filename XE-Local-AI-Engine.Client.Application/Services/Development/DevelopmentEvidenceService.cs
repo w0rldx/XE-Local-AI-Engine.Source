@@ -61,7 +61,7 @@ internal sealed class DevelopmentEvidenceService(
         ArgumentNullException.ThrowIfNull(session);
         try
         {
-            var artifacts = await _store.ListArtifactsAsync(taskId, cancellationToken).ConfigureAwait(false);
+            var artifacts = await _store.ListArtifactsAsync(taskId, cancellationToken);
             var patch = LatestValid(artifacts, DevelopmentArtifactKind.Patch);
             var manifest = LatestValid(artifacts, DevelopmentArtifactKind.ChangedFilesManifest);
             if (patch.AttemptId != manifest.AttemptId
@@ -72,9 +72,9 @@ internal sealed class DevelopmentEvidenceService(
                 throw new DevelopmentInvalidTransitionException("The latest patch and changed-file manifest are not one exact evidence subject.");
             }
 
-            var patchContent = await ReadRequiredAsync(patch, cancellationToken).ConfigureAwait(false);
-            var manifestContent = await ReadRequiredAsync(manifest, cancellationToken).ConfigureAwait(false);
-            var current = await _patchEvidence.ExportAsync(session, cancellationToken).ConfigureAwait(false);
+            var patchContent = await ReadRequiredAsync(patch, cancellationToken);
+            var manifestContent = await ReadRequiredAsync(manifest, cancellationToken);
+            var current = await _patchEvidence.ExportAsync(session, cancellationToken);
             if (!string.Equals(current.BaseCommit, patch.BaseCommit, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(current.PatchHash, patch.ContentHash, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(current.ManifestHash, manifest.ContentHash, StringComparison.OrdinalIgnoreCase)
@@ -92,7 +92,7 @@ internal sealed class DevelopmentEvidenceService(
         {
             await InvalidateApprovalEvidenceAsync(taskId,
                 "The exact Development evidence no longer matches the current workspace.",
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
             throw;
         }
     }
@@ -101,9 +101,9 @@ internal sealed class DevelopmentEvidenceService(
         DevelopmentArtifactKind kind,
         CancellationToken cancellationToken = default)
     {
-        var artifacts = await _store.ListArtifactsAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var artifacts = await _store.ListArtifactsAsync(taskId, cancellationToken);
         var artifact = LatestValid(artifacts, kind);
-        return new DevelopmentArtifactWith<ReadOnlyMemory<byte>>(artifact, await ReadRequiredAsync(artifact, cancellationToken).ConfigureAwait(false));
+        return new DevelopmentArtifactWith<ReadOnlyMemory<byte>>(artifact, await ReadRequiredAsync(artifact, cancellationToken));
     }
 
     public async Task InvalidateApprovalEvidenceAsync(Guid taskId,
@@ -111,7 +111,7 @@ internal sealed class DevelopmentEvidenceService(
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
-        var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var task = await _store.GetTaskAsync(taskId, cancellationToken);
         if (task.Status is not (DevelopmentTaskStatus.Validation
             or DevelopmentTaskStatus.InReview
             or DevelopmentTaskStatus.AwaitingApply))
@@ -125,12 +125,11 @@ internal sealed class DevelopmentEvidenceService(
                                     Guid.NewGuid(),
                                     task.Version,
                                     sanitizedReason),
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                                cancellationToken);
         }
         catch (DevelopmentConcurrencyException)
         {
-            var current = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+            var current = await _store.GetTaskAsync(taskId, cancellationToken);
             if (current.Status != DevelopmentTaskStatus.InProgress)
             {
                 throw;
@@ -138,7 +137,7 @@ internal sealed class DevelopmentEvidenceService(
         }
         catch (DevelopmentInvalidTransitionException)
         {
-            var current = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+            var current = await _store.GetTaskAsync(taskId, cancellationToken);
             if (current.Status != DevelopmentTaskStatus.InProgress)
             {
                 throw;
@@ -166,7 +165,7 @@ internal sealed class DevelopmentEvidenceService(
         }
 
         var artifactId = Guid.NewGuid();
-        var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken).ConfigureAwait(false);
+        var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken);
         return new DevelopmentPreparedArtifact(artifactId,
             new DevelopmentAttachArtifactCommand(artifactId,
                 snapshot.ProjectId,
@@ -197,7 +196,7 @@ internal sealed class DevelopmentEvidenceService(
             artifact.Id,
             artifact.ContentHash,
             artifact.ByteCount,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (read.Status != DevelopmentArtifactReadStatus.Found)
         {
             throw new DevelopmentInvalidTransitionException($"The {artifact.Kind} artifact failed immutable blob verification ({read.Status}).");

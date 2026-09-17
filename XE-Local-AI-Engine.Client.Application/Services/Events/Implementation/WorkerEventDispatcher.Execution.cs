@@ -22,7 +22,7 @@ public sealed partial class WorkerEventDispatcher
 
         try
         {
-            await _remoteInvocationQueue.WaitAsync(_shutdownCts.Token).ConfigureAwait(false);
+            await _remoteInvocationQueue.WaitAsync(_shutdownCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -32,7 +32,7 @@ public sealed partial class WorkerEventDispatcher
 
         try
         {
-            await RunQueuedInvocationAsync(context, package).ConfigureAwait(false);
+            await RunQueuedInvocationAsync(context, package);
         }
         finally
         {
@@ -72,7 +72,7 @@ public sealed partial class WorkerEventDispatcher
         _logger.LogInformation("Dispatched invocation assignment for {InvocationId}.", runtimePackage.InvocationId);
         PublishStateChanged(snapshot);
 
-        await RunInvocationWithRemotePersistenceAsync(context, runtimePackage).ConfigureAwait(false);
+        await RunInvocationWithRemotePersistenceAsync(context, runtimePackage);
     }
 
     /// <summary>
@@ -87,14 +87,14 @@ public sealed partial class WorkerEventDispatcher
 
         try
         {
-            session = await _remotePersistenceCoordinator.BeginAsync(runtimePackage, CancellationToken.None).ConfigureAwait(false);
+            session = await _remotePersistenceCoordinator.BeginAsync(runtimePackage, CancellationToken.None);
         }
         catch (Exception exception)
         {
             // Persistence is best-effort relative to the agent run: never block/fail a platform invocation
             // because the node-local mirror could not be written. Run without persistence in that case.
             _logger.LogError(exception, "Failed to begin remote persistence for invocation {InvocationId}; running without node-local persistence.", runtimePackage.InvocationId);
-            await RunInvocationAsync(context).ConfigureAwait(false);
+            await RunInvocationAsync(context);
             return;
         }
 
@@ -105,7 +105,7 @@ public sealed partial class WorkerEventDispatcher
             // pump against a terminal row.
             _logger.LogInformation("Remote persistence session not opened for invocation {InvocationId} (assistant row already terminal); running without node-local persistence.",
                 runtimePackage.InvocationId);
-            await RunInvocationAsync(context).ConfigureAwait(false);
+            await RunInvocationAsync(context);
             return;
         }
 
@@ -128,13 +128,13 @@ public sealed partial class WorkerEventDispatcher
 
         try
         {
-            await RunInvocationAsync(context).ConfigureAwait(false);
+            await RunInvocationAsync(context);
         }
         finally
         {
             InvocationStateChanged -= OnInvocationStateChanged;
             stateChannel.Writer.TryComplete();
-            await persistenceTask.ConfigureAwait(false);
+            await persistenceTask;
         }
     }
 
@@ -146,9 +146,9 @@ public sealed partial class WorkerEventDispatcher
 
         try
         {
-            await foreach (var state in stateReader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
+            await foreach (var state in stateReader.ReadAllAsync(CancellationToken.None))
             {
-                terminalPersisted = await session.ApplyAsync(state, CancellationToken.None).ConfigureAwait(false);
+                terminalPersisted = await session.ApplyAsync(state, CancellationToken.None);
                 if (terminalPersisted)
                 {
                     break;
@@ -159,7 +159,7 @@ public sealed partial class WorkerEventDispatcher
             {
                 // The run ended without a terminal state reaching us (process/stream loss). Terminalize the
                 // node-local mirror as interrupted so it does not hang in a non-terminal state.
-                await session.TerminalizeInterruptedAsync(false).ConfigureAwait(false);
+                await session.TerminalizeInterruptedAsync(false);
             }
         }
         catch (Exception exception)
@@ -174,7 +174,7 @@ public sealed partial class WorkerEventDispatcher
             messageId,
             reason,
             nodeKeyIdUsed);
-        await _hubMessageSender.Value.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed, CancellationToken.None).ConfigureAwait(false);
+        await _hubMessageSender.Value.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed, CancellationToken.None);
     }
 
     private async Task EmitEncryptedFailureAsync(EncryptedRuntimePackageDto package, string error, FailureCategory failureCategory = FailureCategory.AgentRuntime)
@@ -191,7 +191,7 @@ public sealed partial class WorkerEventDispatcher
             EpochVersion = package.EpochVersion,
             FailureCategory = failureCategory.ToString(),
             Error = error
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
     }
 
     private async Task RunInvocationAsync(InvocationExecutionContext context)
@@ -212,7 +212,7 @@ public sealed partial class WorkerEventDispatcher
 
         try
         {
-            await _invocationRunner.RunAsync(context, CancellationToken.None).ConfigureAwait(false);
+            await _invocationRunner.RunAsync(context, CancellationToken.None);
 
             UpdateInvocation(package.InvocationId,
                 state =>

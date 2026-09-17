@@ -31,7 +31,7 @@ internal sealed class ExternalAppResourceGate(IRuntimeDeviceAudit audit, INodeDa
     {
         ArgumentNullException.ThrowIfNull(manifest);
 
-        var profile = await _audit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct).ConfigureAwait(false);
+        var profile = await _audit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct);
 
         var requiredMemory = ((long)manifest.Resources.MinimumMemoryMb * 1024 * 1024) + MemoryHeadroomBytes;
         var availableMemory = profile.AvailableRamBytes;

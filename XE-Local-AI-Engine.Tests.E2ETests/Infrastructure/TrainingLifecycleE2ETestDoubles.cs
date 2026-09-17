@@ -179,7 +179,7 @@ public static class TrainingLifecycleE2ETestDoubles
                     yield return line;
                 }
 
-                await Task.CompletedTask.ConfigureAwait(false);
+                await Task.CompletedTask;
             }
 
             public Task<int> WaitForExitAsync(CancellationToken ct) =>
@@ -287,7 +287,7 @@ public static class TrainingLifecycleE2ETestDoubles
         }
 
         public async Task<ITrainingEvaluationInstalledModelLease> AcquireAsync(string modelName, CancellationToken ct) =>
-            new Lease(_path, await ShaAsync(_path, ct).ConfigureAwait(false));
+            new Lease(_path, await ShaAsync(_path, ct));
 
         public Task<string?> ResolveModelFilePathAsync(string name, CancellationToken ct) =>
             Task.FromResult<string?>(_path);
@@ -330,7 +330,7 @@ public static class TrainingLifecycleE2ETestDoubles
         private static async Task<string> ShaAsync(string path, CancellationToken ct)
         {
             await using var stream = File.OpenRead(path);
-            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct));
         }
 
         private sealed class Lease(string path, string sha) : ITrainingEvaluationInstalledModelLease
@@ -351,19 +351,19 @@ public static class TrainingLifecycleE2ETestDoubles
             Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task> bind,
             Func<TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body, CancellationToken ct)
         {
-            var model = await IdentityAsync(request.ModelFilePath, request.AdapterFilePath, ct).ConfigureAwait(false);
+            var model = await IdentityAsync(request.ModelFilePath, request.AdapterFilePath, ct);
             var launch = LaunchReceipt();
-            await bind(new TransientLlamaServerEvaluationProvenance(model, launch), ct).ConfigureAwait(false);
+            await bind(new TransientLlamaServerEvaluationProvenance(model, launch), ct);
             var session = new TransientLlamaServerEvaluationSession(new Uri("http://127.0.0.1:1/v1"), model.ModelId, model, launch);
-            var value = await body(session, ct).ConfigureAwait(false);
+            var value = await body(session, ct);
             return new TransientLlamaServerEvaluationResult<T>(value, model, launch,
                 new TransientLlamaServerTeardownEvidence(4242, true, true, false, true));
         }
 
         private static async Task<TransientLlamaServerModelProvenance> IdentityAsync(string modelPath, string? adapterPath, CancellationToken ct)
         {
-            var model = await File.ReadAllBytesAsync(modelPath, ct).ConfigureAwait(false);
-            var adapter = adapterPath is null ? null : await File.ReadAllBytesAsync(adapterPath, ct).ConfigureAwait(false);
+            var model = await File.ReadAllBytesAsync(modelPath, ct);
+            var adapter = adapterPath is null ? null : await File.ReadAllBytesAsync(adapterPath, ct);
             return new(Path.GetFileName(modelPath), model.LongLength, Convert.ToHexStringLower(SHA256.HashData(model)),
                 adapterPath is null ? null : Path.GetFileName(adapterPath), adapter?.LongLength,
                 adapter is null ? null : Convert.ToHexStringLower(SHA256.HashData(adapter)));
@@ -403,7 +403,7 @@ public static class TrainingLifecycleE2ETestDoubles
             public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
                 ChatOptions? options = null, [EnumeratorCancellation] CancellationToken ct = default)
             {
-                await Task.CompletedTask.ConfigureAwait(false);
+                await Task.CompletedTask;
                 yield break;
             }
 
@@ -419,7 +419,7 @@ public static class TrainingLifecycleE2ETestDoubles
         public async Task<PreparedGgufImport> PrepareAsync(GgufImportSource source, GgufImportDestination destination,
             IProgress<GgufImportProgress>? progress, CancellationToken ct)
         {
-            var bytes = await File.ReadAllBytesAsync(source.AbsolutePath, ct).ConfigureAwait(false);
+            var bytes = await File.ReadAllBytesAsync(source.AbsolutePath, ct);
             var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var entry = new GgufModelRegistryEntry
             {

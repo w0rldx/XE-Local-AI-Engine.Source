@@ -56,7 +56,7 @@ public sealed class TranscriptionCaptureEndpointTests
             }
 
             factory.AddNonOperatorBearerToken(forbidden);
-            using var forbiddenResponse = await client.SendAsync(forbidden).ConfigureAwait(false);
+            using var forbiddenResponse = await client.SendAsync(forbidden);
             AssertEx.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode, $"'{method} {route}' must refuse a non-operator.");
 
             // The control: without it a route broken for everyone would pass the assertion above.
@@ -70,7 +70,7 @@ public sealed class TranscriptionCaptureEndpointTests
             }
 
             factory.AddNodeBearerToken(allowed);
-            using var allowedResponse = await client.SendAsync(allowed).ConfigureAwait(false);
+            using var allowedResponse = await client.SendAsync(allowed);
             AssertEx.True(allowedResponse.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden),
                 $"'{method} {route}' must admit an operator (got {(int)allowedResponse.StatusCode}).");
         }
@@ -83,7 +83,7 @@ public sealed class TranscriptionCaptureEndpointTests
         await using var factory = FactoryWith(new NotSupportedProcessAudioCaptureSource());
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync($"{ApiPrefix}/transcription/capture/processes").ConfigureAwait(false);
+        using var response = await client.GetAsync($"{ApiPrefix}/transcription/capture/processes");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -97,10 +97,10 @@ public sealed class TranscriptionCaptureEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/capture/processes");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.False(body.GetProperty("supported").GetBoolean(), "A host without process loopback reports the capability as false.");
         AssertEx.Equal(0, body.GetProperty("processes").GetArrayLength(), "There is nothing to offer, and that is not an error.");
     }
@@ -118,10 +118,10 @@ public sealed class TranscriptionCaptureEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/capture/processes");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.True(body.GetProperty("supported").GetBoolean(), "A supported host says so.");
         var first = body.GetProperty("processes")[0];
         AssertEx.Equal(1234, first.GetProperty("pid").GetInt32());
@@ -141,10 +141,10 @@ public sealed class TranscriptionCaptureEndpointTests
         {
             processId = 4321
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal("capture-not-supported", body.GetProperty("reason").GetString(),
             "The SPA branches on the reason code, not on the prose.");
     }
@@ -165,10 +165,10 @@ public sealed class TranscriptionCaptureEndpointTests
         {
             processId = 4321
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal("session-not-live", body.GetProperty("reason").GetString(),
             "The caller can fix this one and retry, which is what separates it from the 400 above.");
     }
@@ -187,7 +187,7 @@ public sealed class TranscriptionCaptureEndpointTests
         {
             processId = 0
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode,
             "WithProcessLoopback takes a uint, so a zero or negative id is never a process that could be captured.");
@@ -203,7 +203,7 @@ public sealed class TranscriptionCaptureEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}/capture/process");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, "There was no capture to stop.");
     }
@@ -239,10 +239,10 @@ public sealed class TranscriptionCaptureEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/runtime");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal(processCaptureSupported, body.GetProperty("processCaptureSupported").GetBoolean(),
             "The SPA gates the per-application source on this flag.");
         AssertEx.Equal(vadInstalled, body.GetProperty("vadInstalled").GetBoolean(),
@@ -259,7 +259,7 @@ public sealed class TranscriptionCaptureEndpointTests
             IsSupported = true
         });
         using var client = factory.CreateClient();
-        var sessionId = await RegisterLiveSessionAsync(factory).ConfigureAwait(false);
+        var sessionId = await RegisterLiveSessionAsync(factory);
         var route = $"{ApiPrefix}/transcription/sessions/{sessionId}/capture/process";
 
         using var start = Authorized(factory, HttpMethod.Post, route);
@@ -267,15 +267,15 @@ public sealed class TranscriptionCaptureEndpointTests
         {
             processId = 4321
         });
-        using var started = await client.SendAsync(start).ConfigureAwait(false);
+        using var started = await client.SendAsync(start);
 
         AssertEx.Equal(HttpStatusCode.OK, started.StatusCode);
-        var body = await started.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await started.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal(sessionId.ToString(), body.GetProperty("sessionId").GetString(), "The answer names the session it attached to.");
         AssertEx.True(body.GetProperty("capturing").GetBoolean(), "Capture is running.");
 
         using var stop = Authorized(factory, HttpMethod.Delete, route);
-        using var stopped = await client.SendAsync(stop).ConfigureAwait(false);
+        using var stopped = await client.SendAsync(stop);
 
         AssertEx.Equal(HttpStatusCode.NoContent, stopped.StatusCode, "A stop that stopped something answers 204, not 404.");
     }
@@ -290,7 +290,7 @@ public sealed class TranscriptionCaptureEndpointTests
             IsSupported = true
         });
         using var client = factory.CreateClient();
-        var sessionId = await RegisterLiveSessionAsync(factory).ConfigureAwait(false);
+        var sessionId = await RegisterLiveSessionAsync(factory);
         var route = $"{ApiPrefix}/transcription/sessions/{sessionId}/capture/process";
 
         using var first = Authorized(factory, HttpMethod.Post, route);
@@ -298,7 +298,7 @@ public sealed class TranscriptionCaptureEndpointTests
         {
             processId = 4321
         });
-        using var firstResponse = await client.SendAsync(first).ConfigureAwait(false);
+        using var firstResponse = await client.SendAsync(first);
         AssertEx.Equal(HttpStatusCode.OK, firstResponse.StatusCode, "The control: the first start must succeed, or the conflict below proves nothing.");
 
         using var second = Authorized(factory, HttpMethod.Post, route);
@@ -306,15 +306,15 @@ public sealed class TranscriptionCaptureEndpointTests
         {
             processId = 9876
         });
-        using var secondResponse = await client.SendAsync(second).ConfigureAwait(false);
+        using var secondResponse = await client.SendAsync(second);
 
         AssertEx.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
-        var body = await secondResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await secondResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal("capture-already-running", body.GetProperty("reason").GetString(),
             "A second start is refused, not queued, and says which of the two conflicts it is.");
 
         using var stop = Authorized(factory, HttpMethod.Delete, route);
-        using var stopped = await client.SendAsync(stop).ConfigureAwait(false);
+        using var stopped = await client.SendAsync(stop);
         AssertEx.Equal(HttpStatusCode.NoContent, stopped.StatusCode, "Left tidy so the host's shutdown has nothing to drain.");
     }
 
@@ -336,8 +336,7 @@ public sealed class TranscriptionCaptureEndpointTests
                               SourceKind = TranscriptionSourceKind.ApplicationProcess,
                               Persist = false
                           },
-                          CancellationToken.None)
-                      .ConfigureAwait(false);
+                          CancellationToken.None);
         return sessionId;
     }
 
@@ -376,9 +375,9 @@ public sealed class TranscriptionCaptureEndpointTests
             // the coordinator remove the entry and the already-capturing arm could never be observed. A token
             // registration, not a timer, so nothing here waits on the clock.
             var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            await using (cancellationToken.Register(() => stopped.TrySetResult()).ConfigureAwait(false))
+            await using (cancellationToken.Register(() => stopped.TrySetResult()))
             {
-                await stopped.Task.ConfigureAwait(false);
+                await stopped.Task;
             }
 
             cancellationToken.ThrowIfCancellationRequested();

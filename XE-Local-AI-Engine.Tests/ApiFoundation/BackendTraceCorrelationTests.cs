@@ -57,12 +57,12 @@ public sealed class BackendTraceCorrelationTests
         factory.AddNodeBearerToken(request);
         request.Headers.TryAddWithoutValidation("traceparent", InboundTraceparent);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
 
         AssertEx.True(document.RootElement.TryGetProperty("traceId", out var traceId),
             "Expected ProblemDetails to contain a traceId extension.");
@@ -93,7 +93,7 @@ public sealed class BackendTraceCorrelationTests
         factory.AddNodeBearerToken(request);
         request.Headers.TryAddWithoutValidation("traceparent", InboundTraceparent);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -144,7 +144,7 @@ public sealed class BackendTraceCorrelationTests
         factory.AddNodeBearerToken(request);
         request.Headers.TryAddWithoutValidation("traceparent", InboundTraceparent);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -183,7 +183,7 @@ public sealed class BackendTraceCorrelationTests
         factory.AddNodeBearerToken(request);
         request.Headers.TryAddWithoutValidation("traceparent", InboundTraceparentUnsampled);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 

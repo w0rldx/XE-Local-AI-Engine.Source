@@ -19,7 +19,7 @@ public sealed class DeadLetterFlushService
 
     public async Task FlushAsync(CancellationToken cancellationToken = default)
     {
-        var pendingEntries = await _deadLetterStore.GetPendingAsync(cancellationToken).ConfigureAwait(false);
+        var pendingEntries = await _deadLetterStore.GetPendingAsync(cancellationToken);
         if (pendingEntries.Count == 0)
         {
             _logger.LogDebug("Dead letter flush skipped because no pending entries were found.");
@@ -40,10 +40,9 @@ public sealed class DeadLetterFlushService
             try
             {
                 await _hubMessageSender.Value
-                                       .SendInvocationFailedAsync(pendingEntry, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SendInvocationFailedAsync(pendingEntry, cancellationToken);
 
-                await _deadLetterStore.RemoveAsync(pendingEntry.InvocationId, cancellationToken).ConfigureAwait(false);
+                await _deadLetterStore.RemoveAsync(pendingEntry.InvocationId, cancellationToken);
                 flushed++;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

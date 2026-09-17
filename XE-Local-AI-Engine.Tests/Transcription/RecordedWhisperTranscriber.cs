@@ -132,7 +132,7 @@ internal sealed class RecordedWhisperTranscriber : IWhisperTranscriber
         AssertEx.True(request.Audio.CanSeek, "The transcriber is handed a seekable stream so the request can declare its length.");
         AssertEx.Equal("audio/wav", request.ContentType, "The live path submits WAV.");
 
-        var wav = await ReadAndRewindAsync(request.Audio, ct).ConfigureAwait(false);
+        var wav = await ReadAndRewindAsync(request.Audio, ct);
         var payload = WavPayload.Read(wav);
         var durationMs = payload.Length / 32;
 
@@ -179,7 +179,7 @@ internal sealed class RecordedWhisperTranscriber : IWhisperTranscriber
     {
         var start = audio.Position;
         using var buffer = new MemoryStream();
-        await audio.CopyToAsync(buffer, ct).ConfigureAwait(false);
+        await audio.CopyToAsync(buffer, ct);
         audio.Seek(start, SeekOrigin.Begin);
         return buffer.ToArray();
     }

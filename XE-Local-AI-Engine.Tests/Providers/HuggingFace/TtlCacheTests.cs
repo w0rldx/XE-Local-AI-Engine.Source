@@ -134,7 +134,7 @@ public sealed class TtlCacheTests
         async Task<int> Factory(CancellationToken _)
         {
             var count = Interlocked.Increment(ref calls);
-            await release.Task.ConfigureAwait(false);
+            await release.Task;
             return count;
         }
 

@@ -22,8 +22,8 @@ public sealed class GetToolCapableModelsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/agents/tool-capable-models");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var models = await ReadJsonAsync<ToolCapableModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var models = await ReadJsonAsync<ToolCapableModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expected: 1, models.Models.Count);
@@ -37,8 +37,8 @@ public sealed class GetToolCapableModelsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/agents/tool-capable-models");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var models = await ReadJsonAsync<ToolCapableModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var models = await ReadJsonAsync<ToolCapableModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expected: 2, models.Models.Count);
@@ -68,7 +68,7 @@ public sealed class GetToolCapableModelsEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 }

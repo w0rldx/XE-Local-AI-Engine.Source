@@ -25,38 +25,34 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint(ImageRuntimeOrche
     {
         if (!OperatingSystem.IsLinux())
         {
-            await BlockAsync("not-linux", "In-app source builds are available on Linux only.", imageRuntime.GetActivitySnapshot()).ConfigureAwait(false);
+            await BlockAsync("not-linux", "In-app source builds are available on Linux only.", imageRuntime.GetActivitySnapshot());
             return;
         }
 
         try
         {
-            var result = await imageRuntime.StartAsync(request.ToContract(), ct).ConfigureAwait(false);
+            var result = await imageRuntime.StartAsync(request.ToContract(), ct);
             switch (result.Outcome)
             {
                 case StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning:
                     await BlockAsync("already-building",
                             "A stable-diffusion.cpp source build is already in progress.",
-                            result.Activity ?? imageRuntime.GetActivitySnapshot())
-                        .ConfigureAwait(false);
+                            result.Activity ?? imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.InsufficientDisk:
                     await BlockAsync("prerequisites",
                             "There is not enough free disk space to build the image runtime.",
-                            result.Activity ?? imageRuntime.GetActivitySnapshot())
-                        .ConfigureAwait(false);
+                            result.Activity ?? imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
                             "One or more build prerequisites are missing; resolve the checklist before building.",
-                            result.Activity ?? imageRuntime.GetActivitySnapshot())
-                        .ConfigureAwait(false);
+                            result.Activity ?? imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
                             "Wait for active image jobs and image-runtime processes to finish before starting the build.",
-                            result.Activity ?? imageRuntime.GetActivitySnapshot())
-                        .ConfigureAwait(false);
+                            result.Activity ?? imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.Started:
                     break;
@@ -68,11 +64,11 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint(ImageRuntimeOrche
             {
                 Started = true,
                 Status = imageRuntime.GetStatus().ToResponse()
-            }, ct).ConfigureAwait(false);
+            }, ct);
         }
         catch (StableDiffusionRuntimeException exception)
         {
-            await BlockAsync("source-build-error", exception.Message, imageRuntime.GetActivitySnapshot()).ConfigureAwait(false);
+            await BlockAsync("source-build-error", exception.Message, imageRuntime.GetActivitySnapshot());
         }
     }
 

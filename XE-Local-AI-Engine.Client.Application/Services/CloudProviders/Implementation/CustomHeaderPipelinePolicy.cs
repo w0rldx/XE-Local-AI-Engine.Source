@@ -27,7 +27,7 @@ internal sealed class CustomHeaderPipelinePolicy : PipelinePolicy
     public override async ValueTask ProcessAsync(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
     {
         ApplyHeaders(message);
-        await ProcessNextAsync(message, pipeline, currentIndex).ConfigureAwait(false);
+        await ProcessNextAsync(message, pipeline, currentIndex);
     }
 
     private void ApplyHeaders(PipelineMessage message)

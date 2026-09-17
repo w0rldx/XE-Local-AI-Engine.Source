@@ -21,7 +21,7 @@ public sealed class CancelGgufImportEndpoint(IGgufImportTransactionCoordinator c
         var status = _coordinator.GetStatus(req.OperationId);
         if (status is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -31,6 +31,6 @@ public sealed class CancelGgufImportEndpoint(IGgufImportTransactionCoordinator c
             OperationId = req.OperationId,
             CancellationRequested = cancelled,
             Status = GgufImportEndpointSupport.Map(_coordinator.GetStatus(req.OperationId) ?? status)
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

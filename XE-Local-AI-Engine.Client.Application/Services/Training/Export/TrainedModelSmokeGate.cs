@@ -63,8 +63,8 @@ public sealed class TrainedModelSmokeGate(
 
         try
         {
-            using var admission = await _loadAdmission.AcquireAsync(cancellationToken).ConfigureAwait(false);
-            return await _launcher.RunAsync(request, ProbeAsync, cancellationToken).ConfigureAwait(false);
+            using var admission = await _loadAdmission.AcquireAsync(cancellationToken);
+            return await _launcher.RunAsync(request, ProbeAsync, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -92,7 +92,7 @@ public sealed class TrainedModelSmokeGate(
 
         // The template read-back is first because it is the cheap half: a fine-tune whose tokenizer files did not
         // survive the merge answers /props without a chat template, and every tool call after that is meaningless.
-        if (!await HasChatTemplateAsync(session, token).ConfigureAwait(false))
+        if (!await HasChatTemplateAsync(session, token))
         {
             return Failed("the loaded model reports no chat template, so it cannot serve chat or tool calls");
         }
@@ -122,7 +122,7 @@ public sealed class TrainedModelSmokeGate(
         {
             // NOT the function-invoking client: the gate is asking whether the model EMITS a well-formed call, and
             // letting the middleware run the tool would hide a malformed call behind a successful round trip.
-            response = await chatClient.GetResponseAsync(messages, options, token).ConfigureAwait(false);
+            response = await chatClient.GetResponseAsync(messages, options, token);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -156,14 +156,14 @@ public sealed class TrainedModelSmokeGate(
         try
         {
             using var client = _httpClientFactory.CreateClient();
-            using var response = await client.GetAsync(new Uri(session.BaseAddress, "/props"), cancellationToken).ConfigureAwait(false);
+            using var response = await client.GetAsync(new Uri(session.BaseAddress, "/props"), cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return false;
             }
 
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
             return document.RootElement.TryGetProperty("chat_template", out var template)
                    && template.ValueKind == JsonValueKind.String
                    && !string.IsNullOrWhiteSpace(template.GetString());

@@ -27,16 +27,16 @@ public sealed class WorkSessionToolHandlerTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            var added = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Read the runtime docs","status":"Active"}]}""").ConfigureAwait(false);
+            var added = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Read the runtime docs","status":"Active"}]}""");
             AssertEx.Contains(added, "1 work-plan change");
         }
 
-        var tasks = await ReadTasksAsync(factory, sessionId).ConfigureAwait(false);
+        var tasks = await ReadTasksAsync(factory, sessionId);
         var task = AssertEx.NotNull(tasks.SingleOrDefault(), "The batch adds exactly one task.");
         AssertEx.Equal("Read the runtime docs", task.Title);
         AssertEx.Equal(AgentWorkSessionTaskStatus.Active, task.Status);
@@ -44,10 +44,10 @@ public sealed class WorkSessionToolHandlerTests
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            _ = await handler.ExecuteAsync($$"""{"operations":[{"op":"complete","taskId":"{{task.Id}}"}]}""").ConfigureAwait(false);
+            _ = await handler.ExecuteAsync($$"""{"operations":[{"op":"complete","taskId":"{{task.Id}}"}]}""");
         }
 
-        AssertEx.Equal(AgentWorkSessionTaskStatus.Done, (await ReadTasksAsync(factory, sessionId).ConfigureAwait(false)).Single().Status);
+        AssertEx.Equal(AgentWorkSessionTaskStatus.Done, (await ReadTasksAsync(factory, sessionId)).Single().Status);
     }
 
     [Test]
@@ -57,35 +57,34 @@ public sealed class WorkSessionToolHandlerTests
         // time the agent switched tasks — and WorkSessionDetail.CurrentTaskId is what the session page reads.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            _ = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"First","status":"Active"},{"op":"add","title":"Second"}]}""").ConfigureAwait(false);
+            _ = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"First","status":"Active"},{"op":"add","title":"Second"}]}""");
         }
 
-        var tasks = await ReadTasksAsync(factory, sessionId).ConfigureAwait(false);
+        var tasks = await ReadTasksAsync(factory, sessionId);
         var first = tasks.Single(task => task.Title == "First");
         var second = tasks.Single(task => task.Title == "Second");
-        AssertEx.Equal(first.Id, await ReadDetailCurrentTaskAsync(factory, sessionId).ConfigureAwait(false));
+        AssertEx.Equal(first.Id, await ReadDetailCurrentTaskAsync(factory, sessionId));
 
         // Switching the active task mid-run must move the pointer with it.
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            _ = await handler.ExecuteAsync($$"""{"operations":[{"op":"complete","taskId":"{{first.Id}}"},{"op":"update","taskId":"{{second.Id}}","status":"Active"}]}""")
-                             .ConfigureAwait(false);
+            _ = await handler.ExecuteAsync($$"""{"operations":[{"op":"complete","taskId":"{{first.Id}}"},{"op":"update","taskId":"{{second.Id}}","status":"Active"}]}""");
         }
 
-        AssertEx.Equal(second.Id, await ReadDetailCurrentTaskAsync(factory, sessionId).ConfigureAwait(false));
+        AssertEx.Equal(second.Id, await ReadDetailCurrentTaskAsync(factory, sessionId));
 
         // Finishing the current task leaves no pointer rather than one aimed at finished work.
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            _ = await handler.ExecuteAsync($$"""{"operations":[{"op":"complete","taskId":"{{second.Id}}"}]}""").ConfigureAwait(false);
+            _ = await handler.ExecuteAsync($$"""{"operations":[{"op":"complete","taskId":"{{second.Id}}"}]}""");
         }
 
-        AssertEx.Null(await ReadDetailCurrentTaskAsync(factory, sessionId).ConfigureAwait(false));
+        AssertEx.Null(await ReadDetailCurrentTaskAsync(factory, sessionId));
     }
 
     [Test]
@@ -98,17 +97,17 @@ public sealed class WorkSessionToolHandlerTests
         // deserialization, burned the step's entire provider-call budget retrying.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            AssertEx.Contains(await handler.ExecuteAsync($$"""{"operations":[{"op":"add","{{alias}}":" Read the runtime docs "}]}""").ConfigureAwait(false),
+            AssertEx.Contains(await handler.ExecuteAsync($$"""{"operations":[{"op":"add","{{alias}}":" Read the runtime docs "}]}"""),
                 "1 work-plan change");
         }
 
         AssertEx.Equal("Read the runtime docs",
-            (await ReadTasksAsync(factory, sessionId).ConfigureAwait(false)).Single().Title,
+            (await ReadTasksAsync(factory, sessionId)).Single().Title,
             $"'{alias}' is an alias for 'title', trimmed like one.");
     }
 
@@ -116,11 +115,11 @@ public sealed class WorkSessionToolHandlerTests
     public async Task UpdateWorkPlan_Add_WhenNoTitleOrAlias_ReturnsSentenceWithExample()
     {
         var factory = Host.Factory;
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        var result = await handler.ExecuteAsync("""{"operations":[{"op":"add"}]}""").ConfigureAwait(false);
+        var result = await handler.ExecuteAsync("""{"operations":[{"op":"add"}]}""");
 
         AssertEx.Contains(result, "needs a title");
         AssertEx.Contains(result, "\"op\":\"add\"", message: "The sentence carries a shape the model can copy, not just a complaint.");
@@ -132,11 +131,11 @@ public sealed class WorkSessionToolHandlerTests
         // Valid JSON, wrong shape: the deserializer rejects the unknown key for the whole batch, and its own message
         // names the CLR request type — useless to a model and the thing that used to be echoed straight back.
         var factory = Host.Factory;
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        var result = await handler.ExecuteAsync("""{"operations":[{"op":"add","label":"Investigate"}]}""").ConfigureAwait(false);
+        var result = await handler.ExecuteAsync("""{"operations":[{"op":"add","label":"Investigate"}]}""");
 
         AssertEx.Contains(result, WorkSessionToolDefinitions.UpdateWorkPlan.ExampleArguments);
         AssertEx.False(result.Contains("WorkPlanOperationRequest", StringComparison.Ordinal), "The parser's message is for the log, never for the model.");
@@ -146,11 +145,11 @@ public sealed class WorkSessionToolHandlerTests
     public async Task UpdateWorkPlan_WhenAnOperationIsUnknown_ReturnsAnActionableSentence()
     {
         var factory = Host.Factory;
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        var result = await handler.ExecuteAsync("""{"operations":[{"op":"annihilate"}]}""").ConfigureAwait(false);
+        var result = await handler.ExecuteAsync("""{"operations":[{"op":"annihilate"}]}""");
 
         AssertEx.Contains(result, "must be one of add, update, complete or drop");
     }
@@ -159,11 +158,11 @@ public sealed class WorkSessionToolHandlerTests
     public async Task UpdateWorkPlan_WhenATitleIsOverLength_ReturnsTheBoundSentence()
     {
         var factory = Host.Factory;
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        var result = await handler.ExecuteAsync($$"""{"operations":[{"op":"add","title":"{{new string('t', 400)}}"}]}""").ConfigureAwait(false);
+        var result = await handler.ExecuteAsync($$"""{"operations":[{"op":"add","title":"{{new string('t', 400)}}"}]}""");
 
         AssertEx.Contains(result, "exceeded the maximum length");
     }
@@ -176,18 +175,17 @@ public sealed class WorkSessionToolHandlerTests
         // the workflow executor's Blocked-task signal cannot fire on a single-step node at all.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         string added;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            added = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Obtain approval"},{"op":"add","title":"Write choice.md"}]}""")
-                                 .ConfigureAwait(false);
+            added = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Obtain approval"},{"op":"add","title":"Write choice.md"}]}""");
         }
 
         AssertEx.Contains(added, "Added 2 task(s):");
-        foreach (var task in await ReadTasksAsync(factory, sessionId).ConfigureAwait(false))
+        foreach (var task in await ReadTasksAsync(factory, sessionId))
         {
             AssertEx.Contains(added,
                 $"\"{task.Title}\" = {task.Id}",
@@ -199,11 +197,10 @@ public sealed class WorkSessionToolHandlerTests
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
             _ = await handler
-                      .ExecuteAsync($$"""{"operations":[{"op":"update","taskId":"{{approvalId}}","status":"Blocked","blockedReason":"No operator answered."}]}""")
-                      .ConfigureAwait(false);
+                      .ExecuteAsync($$"""{"operations":[{"op":"update","taskId":"{{approvalId}}","status":"Blocked","blockedReason":"No operator answered."}]}""");
         }
 
-        var blocked = (await ReadTasksAsync(factory, sessionId).ConfigureAwait(false)).Single(task => task.Title == "Obtain approval");
+        var blocked = (await ReadTasksAsync(factory, sessionId)).Single(task => task.Title == "Obtain approval");
         AssertEx.Equal(AgentWorkSessionTaskStatus.Blocked, blocked.Status, "An id taken from the add result is one 'update' accepts.");
         AssertEx.Equal("No operator answered.", blocked.BlockedReason);
     }
@@ -216,7 +213,7 @@ public sealed class WorkSessionToolHandlerTests
         // landed as a second task row.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
         const string Arguments = """{"operations":[{"op":"add","title":"Read the runtime docs","detail":"Start at the pin","status":"Active"}]}""";
 
@@ -224,11 +221,11 @@ public sealed class WorkSessionToolHandlerTests
         string retry;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            first = await handler.ExecuteAsync(Arguments).ConfigureAwait(false);
-            retry = await handler.ExecuteAsync(Arguments).ConfigureAwait(false);
+            first = await handler.ExecuteAsync(Arguments);
+            retry = await handler.ExecuteAsync(Arguments);
         }
 
-        var tasks = await ReadTasksAsync(factory, sessionId).ConfigureAwait(false);
+        var tasks = await ReadTasksAsync(factory, sessionId);
         AssertEx.Equal(expected: 1, tasks.Count, "A byte-identical retry of the same batch commits once.");
         var task = tasks[0];
         AssertEx.Equal(IdFromAddResult(first, "Read the runtime docs"),
@@ -246,19 +243,18 @@ public sealed class WorkSessionToolHandlerTests
         // succeed for the rest of the step.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         string second;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            _ = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Investigate the pin"}]}""").ConfigureAwait(false);
-            second = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Investigate the pin"},{"op":"add","title":"Write the report"}]}""")
-                                  .ConfigureAwait(false);
+            _ = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Investigate the pin"}]}""");
+            second = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Investigate the pin"},{"op":"add","title":"Write the report"}]}""");
         }
 
         AssertEx.Contains(second, "Added 2 task(s):");
-        var titles = (await ReadTasksAsync(factory, sessionId).ConfigureAwait(false)).Select(static task => task.Title).ToList();
+        var titles = (await ReadTasksAsync(factory, sessionId)).Select(static task => task.Title).ToList();
         AssertEx.Contains(titles, "Write the report", "The new add commits rather than being rolled back with the repeat.");
     }
 
@@ -269,17 +265,16 @@ public sealed class WorkSessionToolHandlerTests
         // is not silently collapsed into one task by the same determinism that makes the retry safe.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
         string added;
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            added = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Run the gate"},{"op":"add","title":"Run the gate"}]}""")
-                                 .ConfigureAwait(false);
+            added = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"Run the gate"},{"op":"add","title":"Run the gate"}]}""");
         }
 
-        var tasks = await ReadTasksAsync(factory, sessionId).ConfigureAwait(false);
+        var tasks = await ReadTasksAsync(factory, sessionId);
         AssertEx.Equal(2, tasks.Count, "Two adds are two tasks even when they carry the same content.");
         AssertEx.Equal(2, tasks.Select(static task => task.Id).Distinct().Count(), "Their ids differ by batch position.");
         foreach (var task in tasks)
@@ -292,12 +287,12 @@ public sealed class WorkSessionToolHandlerTests
     public async Task UpdateWorkPlan_Add_BeyondTheListedBound_CountsTheRestRatherThanNamingThem()
     {
         var factory = Host.Factory;
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
         var operations = string.Join(',', Enumerable.Range(1, 13).Select(static index => $$"""{"op":"add","title":"Task {{index}}"}"""));
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        var result = await handler.ExecuteAsync($$"""{"operations":[{{operations}}]}""").ConfigureAwait(false);
+        var result = await handler.ExecuteAsync($$"""{"operations":[{{operations}}]}""");
 
         AssertEx.Contains(result, "Added 13 task(s):");
         AssertEx.Contains(result, "\"Task 10\" = ");
@@ -313,14 +308,14 @@ public sealed class WorkSessionToolHandlerTests
         // Private host: the recording publisher is per-test state, so sharing it would let siblings' publishes bleed in.
         await using var factory = NewFactory(publisher);
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.RecordFinding.ToolName);
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        var result = await handler.ExecuteAsync("""{"kind":"Decision","text":"Use the process sandbox.","sourceRef":"docs/adr-0004"}""").ConfigureAwait(false);
+        var result = await handler.ExecuteAsync("""{"kind":"Decision","text":"Use the process sandbox.","sourceRef":"docs/adr-0004"}""");
 
         AssertEx.Contains(result, "Recorded a Decision");
-        var finding = (await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId).ConfigureAwait(false)).Single();
+        var finding = (await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId)).Single();
         AssertEx.Equal(AgentWorkSessionFindingKind.Decision, finding.Kind);
         AssertEx.Equal("docs/adr-0004", finding.SourceRef);
         // The published watermark is the event row's, which the store stamps just after the finding's — a subscriber is
@@ -334,11 +329,11 @@ public sealed class WorkSessionToolHandlerTests
     public async Task RecordFinding_WhenTheKindIsUnknown_ReturnsTheEnumSentence()
     {
         var factory = Host.Factory;
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
         var handler = Handler(factory, WorkSessionToolDefinitions.RecordFinding.ToolName);
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        AssertEx.Contains(await handler.ExecuteAsync("""{"kind":"Rumour","text":"Something."}""").ConfigureAwait(false),
+        AssertEx.Contains(await handler.ExecuteAsync("""{"kind":"Rumour","text":"Something."}"""),
             "must be one of Finding, Evidence, Decision or OpenQuestion");
     }
 
@@ -347,22 +342,22 @@ public sealed class WorkSessionToolHandlerTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.SaveArtifact.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            AssertEx.Contains(await handler.ExecuteAsync("""{"name":"report.md","mediaType":"text/markdown","kind":"Report","text":"first"}""").ConfigureAwait(false),
+            AssertEx.Contains(await handler.ExecuteAsync("""{"name":"report.md","mediaType":"text/markdown","kind":"Report","text":"first"}"""),
                 "Saved artifact 'report.md'");
-            _ = await handler.ExecuteAsync("""{"name":"report.md","mediaType":"text/markdown","kind":"Report","text":"second"}""").ConfigureAwait(false);
+            _ = await handler.ExecuteAsync("""{"name":"report.md","mediaType":"text/markdown","kind":"Report","text":"second"}""");
         }
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var artifacts = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListArtifactsAsync(sessionId).ConfigureAwait(false);
+        var artifacts = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListArtifactsAsync(sessionId);
         var artifact = AssertEx.NotNull(artifacts.SingleOrDefault(), "Saving under an existing name replaces it rather than adding a second row.");
         AssertEx.Equal(expected: 6, artifact.SizeBytes);
 
-        var content = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ReadArtifactContentAsync(sessionId, artifact.Id).ConfigureAwait(false);
+        var content = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ReadArtifactContentAsync(sessionId, artifact.Id);
         AssertEx.Equal("second", content.Content);
         AssertEx.False(content.IsBase64, "A text media type comes back as text.");
     }
@@ -371,12 +366,12 @@ public sealed class WorkSessionToolHandlerTests
     public async Task SaveArtifact_WhenBothOrNeitherPayloadIsGiven_Refuses()
     {
         var factory = Host.Factory;
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
         var handler = Handler(factory, WorkSessionToolDefinitions.SaveArtifact.ToolName);
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
-        AssertEx.Contains(await handler.ExecuteAsync("""{"name":"a","mediaType":"text/plain","kind":"Note"}""").ConfigureAwait(false), "exactly one of 'text' or 'base64'");
-        AssertEx.Contains(await handler.ExecuteAsync("""{"name":"a","mediaType":"text/plain","kind":"Note","text":"x","base64":"eA=="}""").ConfigureAwait(false),
+        AssertEx.Contains(await handler.ExecuteAsync("""{"name":"a","mediaType":"text/plain","kind":"Note"}"""), "exactly one of 'text' or 'base64'");
+        AssertEx.Contains(await handler.ExecuteAsync("""{"name":"a","mediaType":"text/plain","kind":"Note","text":"x","base64":"eA=="}"""),
             "exactly one of 'text' or 'base64'");
     }
 
@@ -386,17 +381,17 @@ public sealed class WorkSessionToolHandlerTests
         // Private host: the artifact cap it asserts on is a host-level config value.
         await using var factory = NewFactory(configuration: ("WorkSessions:MaxArtifactBytes", "32"));
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.SaveArtifact.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            AssertEx.Contains(await handler.ExecuteAsync($$"""{"name":"big","mediaType":"text/plain","kind":"Note","text":"{{new string('x', 64)}}"}""").ConfigureAwait(false),
+            AssertEx.Contains(await handler.ExecuteAsync($$"""{"name":"big","mediaType":"text/plain","kind":"Note","text":"{{new string('x', 64)}}"}"""),
                 "over this node's");
         }
 
         await using var scope = factory.Services.CreateAsyncScope();
-        AssertEx.Empty(await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListArtifactsAsync(sessionId).ConfigureAwait(false));
+        AssertEx.Empty(await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListArtifactsAsync(sessionId));
     }
 
     [Test]
@@ -404,18 +399,18 @@ public sealed class WorkSessionToolHandlerTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Everything asked for is recorded."}""").ConfigureAwait(false), "close at the end of this turn");
+            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Everything asked for is recorded."}"""), "close at the end of this turn");
         }
 
         AssertEx.Equal(AgentWorkSessionStatus.Draft,
-            (await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId).ConfigureAwait(false)).Status,
+            (await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId)).Status,
             "The tool never terminalizes: the turn has to finish cleanly and the supervisor closes the session.");
-        AssertEx.Contains(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false),
+        AssertEx.Contains(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId),
             entry => entry.EventType == WorkSessionEventTypes.CompletionRequested);
     }
 
@@ -430,16 +425,16 @@ public sealed class WorkSessionToolHandlerTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            _ = await handler.ExecuteAsync($$"""{"summary":"What it came to.","objectiveMet":{{(objectiveMet ? "true" : "false")}}}""").ConfigureAwait(false);
+            _ = await handler.ExecuteAsync($$"""{"summary":"What it came to.","objectiveMet":{{(objectiveMet ? "true" : "false")}}}""");
         }
 
         AssertEx.Equal(objectiveMet,
-            AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))).ObjectiveMet,
+            AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).ObjectiveMet,
             "The declaration is the whole point of the argument, so it has to survive to the event.");
     }
 
@@ -450,15 +445,15 @@ public sealed class WorkSessionToolHandlerTests
         // them as unmet would retroactively block node runs whose sessions finished cleanly.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            _ = await handler.ExecuteAsync("""{"summary":"Everything asked for is recorded."}""").ConfigureAwait(false);
+            _ = await handler.ExecuteAsync("""{"summary":"Everything asked for is recorded."}""");
         }
 
-        AssertEx.Null(AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))).ObjectiveMet);
+        AssertEx.Null(AssertEx.NotNull(ReadCompletionDetail(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))).ObjectiveMet);
     }
 
     [Test]
@@ -466,16 +461,16 @@ public sealed class WorkSessionToolHandlerTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
 
         using (AgentRunConversationContext.BeginScope(session.ConversationId))
         {
-            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Done.","objectiveWasMet":false}""").ConfigureAwait(false),
+            AssertEx.Contains(await handler.ExecuteAsync("""{"summary":"Done.","objectiveWasMet":false}"""),
                 WorkSessionToolDefinitions.CompleteWorkSession.ExampleArguments);
         }
 
-        AssertEx.False((await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false))
+        AssertEx.False((await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId))
             .Any(static entry => entry.EventType == WorkSessionEventTypes.CompletionRequested),
             "A call the deserializer refused must not close the session.");
     }
@@ -488,7 +483,7 @@ public sealed class WorkSessionToolHandlerTests
         foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
         {
             AssertEx.Equal("This tool only works inside a work session.",
-                await handler.ExecuteAsync("{}").ConfigureAwait(false),
+                await handler.ExecuteAsync("{}"),
                 $"{handler.ToolName} must be inert outside a session — that is what makes the profile-opt-in offer safe.");
         }
     }
@@ -501,7 +496,7 @@ public sealed class WorkSessionToolHandlerTests
         using var scope = AgentRunConversationContext.BeginScope(Guid.NewGuid());
         foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
         {
-            AssertEx.Contains(await handler.ExecuteAsync("{}").ConfigureAwait(false), "only works inside a work session");
+            AssertEx.Contains(await handler.ExecuteAsync("{}"), "only works inside a work session");
         }
     }
 
@@ -510,18 +505,17 @@ public sealed class WorkSessionToolHandlerTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                           .TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Cancelled))
-                           .ConfigureAwait(false);
+                           .TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Cancelled));
         }
 
         using var ambient = AgentRunConversationContext.BeginScope(session.ConversationId);
         foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
         {
-            AssertEx.Contains(await handler.ExecuteAsync("{}").ConfigureAwait(false),
+            AssertEx.Contains(await handler.ExecuteAsync("{}"),
                 "already closed",
                 message: $"{handler.ToolName} must refuse a closed session before it looks at the arguments.");
         }
@@ -542,7 +536,7 @@ public sealed class WorkSessionToolHandlerTests
 
         foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
         {
-            AssertEx.Equal("Work sessions are disabled on this node.", await handler.ExecuteAsync("{}").ConfigureAwait(false));
+            AssertEx.Equal("Work sessions are disabled on this node.", await handler.ExecuteAsync("{}"));
         }
     }
 
@@ -550,12 +544,12 @@ public sealed class WorkSessionToolHandlerTests
     public async Task EveryHandler_OnMalformedJson_ReturnsTheParseSentence()
     {
         var factory = Host.Factory;
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
         foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
         {
-            var result = await handler.ExecuteAsync("{ not json").ConfigureAwait(false);
+            var result = await handler.ExecuteAsync("{ not json");
             AssertEx.Contains(result, "were not valid JSON");
             AssertEx.Contains(result,
                 Example(handler.ToolName),
@@ -609,12 +603,12 @@ public sealed class WorkSessionToolHandlerTests
     private static async Task<Guid?> ReadDetailCurrentTaskAsync(TestServerWebAppFactory factory, Guid sessionId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        return (await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().GetAsync(sessionId).ConfigureAwait(false)).CurrentTaskId;
+        return (await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().GetAsync(sessionId)).CurrentTaskId;
     }
 
     private static async Task<IReadOnlyList<WorkSessionTaskSnapshot>> ReadTasksAsync(TestServerWebAppFactory factory, Guid sessionId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListTasksAsync(sessionId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListTasksAsync(sessionId);
     }
 }

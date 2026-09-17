@@ -78,7 +78,7 @@ internal sealed class ToolInvocationService(
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
             if (context.Timeout <= TimeSpan.Zero)
             {
-                await deadline.CancelAsync().ConfigureAwait(false);
+                await deadline.CancelAsync();
             }
             else
             {
@@ -87,7 +87,7 @@ internal sealed class ToolInvocationService(
 
             // Step 1b. The model-agnostic CATALOG, not the offer: a workflow node has no active model, so the offer's
             // capability gate would silently withhold six of the eight invocable tools.
-            var catalog = await _offerProvider.GetKnownToolsAsync(budget.Token).ConfigureAwait(false);
+            var catalog = await _offerProvider.GetKnownToolsAsync(budget.Token);
             var entry = catalog.FirstOrDefault(candidate => string.Equals(candidate.Name, toolName, StringComparison.Ordinal)
                                                             && string.Equals(candidate.Source, BuiltinSource, StringComparison.Ordinal));
             if (entry is null)
@@ -119,7 +119,7 @@ internal sealed class ToolInvocationService(
             // Step 8. Whatever is left of the budget armed above — the validation this call has already done came out
             // of the same one.
             budget.Token.ThrowIfCancellationRequested();
-            var result = Stringify(await executable.InvokeAsync(arguments!, budget.Token).ConfigureAwait(false));
+            var result = Stringify(await executable.InvokeAsync(arguments!, budget.Token));
 
             // Step 10. A repair envelope means the wrapper's own deserialization branch answered rather than the tool.
             // Pre-validation cannot reach that branch, so the result is inspected before it counts as a success.
@@ -167,7 +167,7 @@ internal sealed class ToolInvocationService(
     /// <inheritdoc />
     public async Task<IReadOnlyList<InvocableToolDescriptor>> ListInvocableToolsAsync(CancellationToken cancellationToken = default)
     {
-        var catalog = await _offerProvider.GetKnownToolsAsync(cancellationToken).ConfigureAwait(false);
+        var catalog = await _offerProvider.GetKnownToolsAsync(cancellationToken);
         var invocable = new List<InvocableToolDescriptor>();
         foreach (var entry in catalog)
         {

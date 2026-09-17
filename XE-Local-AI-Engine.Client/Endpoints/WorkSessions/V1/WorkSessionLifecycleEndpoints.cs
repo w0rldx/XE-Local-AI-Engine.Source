@@ -28,8 +28,8 @@ public sealed class StartWorkSessionEndpoint(IWorkSessionService service) : Endp
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var started = await _service.StartAsync(req.SessionId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: started.ToResponse())).ConfigureAwait(false);
+        var started = await _service.StartAsync(req.SessionId, ct);
+        await Send.ResultAsync(Results.Accepted(value: started.ToResponse()));
     }
 }
 
@@ -50,8 +50,8 @@ public sealed class PauseWorkSessionEndpoint(IWorkSessionService service) : Endp
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var paused = await _service.PauseAsync(req.SessionId, ct).ConfigureAwait(false);
-        await Send.OkAsync(paused.ToResponse(), ct).ConfigureAwait(false);
+        var paused = await _service.PauseAsync(req.SessionId, ct);
+        await Send.OkAsync(paused.ToResponse(), ct);
     }
 }
 
@@ -73,8 +73,8 @@ public sealed class ResumeWorkSessionEndpoint(IWorkSessionService service) : End
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var resumed = await _service.ResumeAsync(req.SessionId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: resumed.ToResponse())).ConfigureAwait(false);
+        var resumed = await _service.ResumeAsync(req.SessionId, ct);
+        await Send.ResultAsync(Results.Accepted(value: resumed.ToResponse()));
     }
 }
 
@@ -95,7 +95,7 @@ public sealed class CancelWorkSessionEndpoint(IWorkSessionService service) : End
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var cancelled = await _service.CancelAsync(req.SessionId, ct).ConfigureAwait(false);
-        await Send.OkAsync(cancelled.ToResponse(), ct).ConfigureAwait(false);
+        var cancelled = await _service.CancelAsync(req.SessionId, ct);
+        await Send.OkAsync(cancelled.ToResponse(), ct);
     }
 }

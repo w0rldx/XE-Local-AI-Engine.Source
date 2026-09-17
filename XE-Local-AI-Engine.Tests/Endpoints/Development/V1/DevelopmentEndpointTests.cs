@@ -49,7 +49,7 @@ public sealed class DevelopmentEndpointTests
             request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
         }
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require the operator token.");
     }
@@ -64,7 +64,7 @@ public sealed class DevelopmentEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await service.Received(1).GetProjectAsync(ProjectId, Arg.Any<CancellationToken>());
@@ -80,7 +80,7 @@ public sealed class DevelopmentEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await service.Received(1).GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>());
@@ -103,8 +103,8 @@ public sealed class DevelopmentEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}/events");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(json, "3 of 15 tests failed");
@@ -142,8 +142,8 @@ public sealed class DevelopmentEndpointTests
         using var drivenRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}");
         driven.AddNodeBearerToken(drivenRequest);
 
-        using var drivenResponse = await drivenClient.SendAsync(drivenRequest).ConfigureAwait(false);
-        var drivenJson = await drivenResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var drivenResponse = await drivenClient.SendAsync(drivenRequest);
+        var drivenJson = await drivenResponse.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, drivenResponse.StatusCode);
         AssertEx.Contains(drivenJson, $"\"workflowRunId\":\"{runId}\"", StringComparison.OrdinalIgnoreCase);
@@ -155,8 +155,8 @@ public sealed class DevelopmentEndpointTests
         using var ordinaryRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}");
         ordinary.AddNodeBearerToken(ordinaryRequest);
 
-        using var ordinaryResponse = await ordinaryClient.SendAsync(ordinaryRequest).ConfigureAwait(false);
-        var ordinaryJson = await ordinaryResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var ordinaryResponse = await ordinaryClient.SendAsync(ordinaryRequest);
+        var ordinaryJson = await ordinaryResponse.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, ordinaryResponse.StatusCode);
         AssertEx.False(ordinaryJson.Contains(runId.ToString(), StringComparison.OrdinalIgnoreCase),
@@ -180,8 +180,8 @@ public sealed class DevelopmentEndpointTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var responseJson = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var responseJson = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(responseJson.Contains(HostPath, StringComparison.Ordinal));
@@ -202,8 +202,7 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenSelectedFolderIdIsUnknown_ReturnsNotFound(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                new SelectedFolderNotFoundException("The selected folder id is not registered."))
-            .ConfigureAwait(false);
+                new SelectedFolderNotFoundException("The selected folder id is not registered."));
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -217,8 +216,7 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenSelectedFolderInputIsRejected_ReturnsBadRequest(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                new SelectedFolderValidationException("The selected folder id is not a valid identifier."))
-            .ConfigureAwait(false);
+                new SelectedFolderValidationException("The selected folder id is not a valid identifier."));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -234,8 +232,7 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenWorkspaceSecurityRejectsTheSuppliedFolder_ReturnsBadRequest(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                new DevelopmentWorkspaceSecurityException("The selected folder must be a Git repository root."))
-            .ConfigureAwait(false);
+                new DevelopmentWorkspaceSecurityException("The selected folder must be a Git repository root."));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -249,8 +246,7 @@ public sealed class DevelopmentEndpointTests
         // These three carry no folder at all — projectId/taskId/operationId only — so every workspace-security
         // rejection they can produce is the stored workspace state blocking a well-formed request.
         using var response = await SendWithFailingServiceAsync(operation,
-                new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches."))
-            .ConfigureAwait(false);
+                new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches."));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -263,8 +259,7 @@ public sealed class DevelopmentEndpointTests
     public async Task Operation_WhenPersistedRepositoryStateBlocksIt_ReturnsConflict(string operation)
     {
         using var response = await SendWithFailingServiceAsync(operation,
-                new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution."))
-            .ConfigureAwait(false);
+                new DevelopmentRepositoryStateConflictException("The Development project repository must be reconnected before execution."));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -273,8 +268,7 @@ public sealed class DevelopmentEndpointTests
     public async Task CreateProject_WhenSelectedFolderAliasIsAlreadyRegistered_ReturnsConflict()
     {
         using var response = await SendWithFailingServiceAsync("create",
-                new SelectedFolderConflictException("A selected folder with alias 'repo-one' is already registered."))
-            .ConfigureAwait(false);
+                new SelectedFolderConflictException("A selected folder with alias 'repo-one' is already registered."));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -297,7 +291,7 @@ public sealed class DevelopmentEndpointTests
         using var request = StaleSelectedFolderRequest(operation);
         factory.AddNodeBearerToken(request);
 
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     [Test]

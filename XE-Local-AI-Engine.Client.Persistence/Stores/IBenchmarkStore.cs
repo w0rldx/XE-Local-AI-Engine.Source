@@ -357,7 +357,7 @@ public interface IBenchmarkStore
 
     async Task<IReadOnlyList<BenchmarkRunRecord>> RecoverRunsOnStartupAsync(CancellationToken cancellationToken = default)
     {
-        _ = await RecoverOnStartupAsync(cancellationToken).ConfigureAwait(false);
+        _ = await RecoverOnStartupAsync(cancellationToken);
         return [];
     }
 

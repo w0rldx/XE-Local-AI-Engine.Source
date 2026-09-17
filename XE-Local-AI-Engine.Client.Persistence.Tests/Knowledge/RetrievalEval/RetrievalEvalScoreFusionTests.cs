@@ -49,14 +49,13 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
             _keyHolder,
             RetrievalEvalCorpus.ScoreFusionDocuments,
             RetrievalEvalCorpus.ScoreFusionSynonyms,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         var queries = RetrievalEvalCorpus.ScoreFusionQueries;
 
-        var rrf = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None)
-                                            .ConfigureAwait(false);
+        var rrf = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
         var aware = await RetrievalEvalHarness.EvaluateAsync(
-            fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
+            fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
 
         Report("scorefusion-hard-rrf", rrf);
         Report("scorefusion-hard-aware", aware);
@@ -78,14 +77,13 @@ public sealed class RetrievalEvalScoreFusionTests : IDisposable
     public async Task ScoreAwareFusion_DoesNotRegress_TheSaturatedBaseline()
     {
         Directory.CreateDirectory(_rootPath);
-        using var fixture = await RetrievalEvalFixture.BuildAsync(Path.Combine(_rootPath, "scorefusion-baseline.sqlite"), _keyHolder, CancellationToken.None).ConfigureAwait(false);
+        using var fixture = await RetrievalEvalFixture.BuildAsync(Path.Combine(_rootPath, "scorefusion-baseline.sqlite"), _keyHolder, CancellationToken.None);
 
         var queries = RetrievalEvalFixture.Queries;
 
-        var rrf = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None)
-                                            .ConfigureAwait(false);
+        var rrf = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(RankFusionStrategy.Rrf, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
         var aware = await RetrievalEvalHarness.EvaluateAsync(
-            fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
+            fixture.CreateHybridSearchService(RankFusionStrategy.ScoreAware, ScoreWeight), queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
 
         Report("baseline-rrf", rrf);
         Report("baseline-aware", aware);

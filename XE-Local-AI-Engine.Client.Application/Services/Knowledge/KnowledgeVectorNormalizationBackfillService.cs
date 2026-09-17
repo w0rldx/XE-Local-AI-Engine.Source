@@ -66,7 +66,7 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
     {
         try
         {
-            if (await IsMarkerSetAsync(cancellationToken).ConfigureAwait(false))
+            if (await IsMarkerSetAsync(cancellationToken))
             {
                 normalizationState.MarkComplete();
                 return;
@@ -74,11 +74,11 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
 
             await using var scope = scopeFactory.CreateAsyncScope();
             var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
-            await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+            await OpenIfNeededAsync(connection, cancellationToken);
 
-            var normalized = await NormalizeVectorsAsync(connection, DefaultBatchSize, cancellationToken).ConfigureAwait(false);
+            var normalized = await NormalizeVectorsAsync(connection, DefaultBatchSize, cancellationToken);
 
-            await SetMarkerAsync(cancellationToken).ConfigureAwait(false);
+            await SetMarkerAsync(cancellationToken);
             normalizationState.MarkComplete();
 
             if (normalized > 0)
@@ -115,13 +115,13 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var batch = await ReadBatchAsync(connection, cursor, effectiveBatch, cancellationToken).ConfigureAwait(false);
+            var batch = await ReadBatchAsync(connection, cursor, effectiveBatch, cancellationToken);
             if (batch.Count == 0)
             {
                 break;
             }
 
-            await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
             foreach (var (rowId, embedding) in batch)
             {
                 cursor = rowId;
@@ -136,11 +136,11 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
                 update.CommandText = UpdateEmbeddingSql;
                 AddParameter(update, "$embedding", embedding);
                 AddParameter(update, "$rowid", rowId);
-                _ = await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await update.ExecuteNonQueryAsync(cancellationToken);
                 written++;
             }
 
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
         }
 
         return written;
@@ -157,11 +157,11 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
         AddParameter(command, "$limit", batchSize);
 
         var rows = new List<EmbeddingRow>(batchSize);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             var rowId = reader.GetInt64(0);
-            var embedding = await reader.GetFieldValueAsync<byte[]>(ordinal: 1, cancellationToken).ConfigureAwait(false);
+            var embedding = await reader.GetFieldValueAsync<byte[]>(ordinal: 1, cancellationToken);
             rows.Add(new EmbeddingRow(rowId, embedding));
         }
 
@@ -172,12 +172,12 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = IsMarkerSetSql;
         AddParameter(command, "$name", MarkerName);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(result, CultureInfo.InvariantCulture) != 0;
     }
 
@@ -185,12 +185,12 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = SetMarkerSql;
         AddParameter(command, "$name", MarkerName);
-        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     // One stored chunk vector read for rescaling: its rowid (also the paging cursor) and the raw float blob, which is

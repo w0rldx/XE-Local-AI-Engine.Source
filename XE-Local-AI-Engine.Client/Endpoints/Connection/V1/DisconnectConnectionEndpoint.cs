@@ -18,7 +18,7 @@ public sealed class DisconnectConnectionEndpoint(IConnectionControlService conne
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var status = await _connectionControlService.DisconnectAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(status.ToResponse(), ct).ConfigureAwait(false);
+        var status = await _connectionControlService.DisconnectAsync(ct);
+        await Send.OkAsync(status.ToResponse(), ct);
     }
 }

@@ -16,15 +16,14 @@ public sealed class DevWorkflowRuleSetStoreTests
         using var fixture = new DevWorkflowTestFixture();
         Guid ruleSetId;
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = DevWorkflowTestFixture.StoreFor(context);
             var created = await store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(),
                                          "House rules",
                                          "Always write the test first.",
                                          ProjectScope,
-                                         "What every agent node on this project must follow."))
-                                     .ConfigureAwait(false);
+                                         "What every agent node on this project must follow."));
             ruleSetId = created.Id;
 
             AssertEx.Equal(expected: 1, created.Version);
@@ -39,7 +38,7 @@ public sealed class DevWorkflowRuleSetStoreTests
         await using (var readContext = fixture.CreateContext())
         {
             var store = DevWorkflowTestFixture.StoreFor(readContext);
-            var read = await store.GetRuleSetAsync(ruleSetId).ConfigureAwait(false);
+            var read = await store.GetRuleSetAsync(ruleSetId);
 
             AssertEx.Equal("House rules", read.Name);
             AssertEx.Equal("What every agent node on this project must follow.", read.Description);
@@ -55,9 +54,9 @@ public sealed class DevWorkflowRuleSetStoreTests
     public async Task UpdateRuleSet_RewritesTheHashWithTheBodyAndBumpsTheVersion()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store).ConfigureAwait(false);
+        var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store);
 
         var updated = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(created.Id,
                                      created.Version,
@@ -65,8 +64,7 @@ public sealed class DevWorkflowRuleSetStoreTests
                                      "Never touch production.",
                                      ProjectScope,
                                      Description: null,
-                                     Enabled: false))
-                                 .ConfigureAwait(false);
+                                     Enabled: false));
 
         AssertEx.Equal(expected: 2, updated.Version);
         AssertEx.Equal("House rules v2", updated.Name);
@@ -82,21 +80,19 @@ public sealed class DevWorkflowRuleSetStoreTests
     public async Task UpdateRuleSet_WithAStaleVersion_IsRefusedAndLeavesTheStoredDocumentAlone()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store, body: "Original text.").ConfigureAwait(false);
-        _ = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(created.Id, created.Version, "Renamed", "Second text.", DevWorkflowTestFixture.MatchAllScope))
-                       .ConfigureAwait(false);
+        var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store, body: "Original text.");
+        _ = await store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(created.Id, created.Version, "Renamed", "Second text.", DevWorkflowTestFixture.MatchAllScope));
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(created.Id,
                                   created.Version,
                                   "Loser",
                                   "Third text.",
                                   DevWorkflowTestFixture.MatchAllScope)),
-                              "A second edit made against version 1 must be refused rather than silently overwrite the one that landed.")
-                          .ConfigureAwait(false);
+                              "A second edit made against version 1 must be refused rather than silently overwrite the one that landed.");
 
-        var read = await store.GetRuleSetAsync(created.Id).ConfigureAwait(false);
+        var read = await store.GetRuleSetAsync(created.Id);
         AssertEx.Equal("Second text.", read.Body, "The refused edit must not have reached the row.");
     }
 
@@ -104,31 +100,30 @@ public sealed class DevWorkflowRuleSetStoreTests
     public async Task GetRuleSet_WhenItWasDeleted_ReportsItMissing()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store).ConfigureAwait(false);
+        var created = await DevWorkflowTestFixture.CreateRuleSetAsync(store);
 
-        await store.DeleteRuleSetAsync(created.Id).ConfigureAwait(false);
+        await store.DeleteRuleSetAsync(created.Id);
 
-        AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync("dev_workflow_rule_sets").ConfigureAwait(false), "DELETE is a hard delete, not an archive flag.");
-        _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => store.GetRuleSetAsync(created.Id)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync("dev_workflow_rule_sets"), "DELETE is a hard delete, not an archive flag.");
+        _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => store.GetRuleSetAsync(created.Id));
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => store.DeleteRuleSetAsync(created.Id),
-                              "Deleting the same rule set twice must answer 404 rather than pretend it removed one.")
-                          .ConfigureAwait(false);
+                              "Deleting the same rule set twice must answer 404 rather than pretend it removed one.");
     }
 
     [Test]
     public async Task ListRuleSets_IsOrderedByNameAndListEnabledDropsTheDisabledOnes()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Zulu").ConfigureAwait(false);
-        _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Alpha").ConfigureAwait(false);
-        _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Mike", enabled: false).ConfigureAwait(false);
+        _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Zulu");
+        _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Alpha");
+        _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store, "Mike", enabled: false);
 
-        var all = await store.ListRuleSetsAsync().ConfigureAwait(false);
-        var enabled = await store.ListEnabledRuleSetsAsync().ConfigureAwait(false);
+        var all = await store.ListRuleSetsAsync();
+        var enabled = await store.ListEnabledRuleSetsAsync();
 
         AssertEx.Equal("Alpha,Mike,Zulu", string.Join(',', all.Select(item => item.Name)), "The list is ordered by name — the order matches are injected in.");
         AssertEx.Equal("Alpha,Zulu", string.Join(',', enabled.Select(item => item.Name)), "A disabled rule set is not part of the resolver's working set.");

@@ -19,7 +19,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
     {
         var harness = new Harness(lease: null);
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspaceBusy, result.FailureCode!);
         AssertEx.False(result.DisplayMessage.Contains(harness.Workspace.HostPath, StringComparison.Ordinal),
@@ -50,7 +50,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         });
         harness.WorkspaceService.OnPrepare = () => order.Add("workspace");
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
         using (result.Session)
             using (result.Session!.EnterAmbientScope())
             {
@@ -74,7 +74,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         var harness = new Harness(lease);
         harness.WorkspaceService.PreparationException = new IOException($"copy refused at {harness.Workspace.HostPath}");
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
         AssertEx.Null(result.Session);
@@ -97,7 +97,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         var harness = new Harness(lease);
         harness.WorkspaceService.Snapshots = [Snapshot(harness.Workspace.Alias, SelectedFolderCopyStatus.BlockedQuota)];
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
         AssertEx.Null(result.Session);
@@ -115,7 +115,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         var harness = new Harness(lease);
         harness.WorkspaceService.Snapshots = [];
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
         AssertEx.Null(result.Session);
@@ -131,7 +131,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         var harness = new Harness(lease);
         harness.WorkspaceService.Snapshots = [Snapshot("different-workspace", SelectedFolderCopyStatus.Copied)];
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
         AssertEx.Null(result.Session);
@@ -151,7 +151,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         lease.OnDispose = () => order.Add("release");
         harness.Manifest.InitializationException = new IOException("manifest refused");
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
         AssertEx.Equal(1, harness.Isolation.RecoverCallCount);
@@ -177,7 +177,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
                    throw new IOException("create refused");
                });
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
         AssertEx.Equal(1, harness.Isolation.RecoverCallCount);
@@ -203,7 +203,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
                    throw new SelectedFolderValidationException("revoked");
                });
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspaceNotAuthorized, result.FailureCode!);
         AssertEx.False(result.DisplayMessage.Contains(harness.Workspace.HostPath, StringComparison.Ordinal),
@@ -223,7 +223,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         harness.WorkspaceService.PreparationException = new IOException("copy refused");
         harness.Isolation.RecoveryException = new AgentHomeWorkspacePoisonedException();
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
         AssertEx.Null(result.Session);
@@ -237,7 +237,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         var harness = new Harness(lease: null);
         harness.LeaseManager.IsPoisonedValue = true;
 
-        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
 
         AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
         AssertEx.Equal(0, harness.Manifest.InitializeCallCount);

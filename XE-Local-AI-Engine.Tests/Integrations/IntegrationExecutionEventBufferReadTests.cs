@@ -479,7 +479,7 @@ public sealed class IntegrationExecutionEventBufferReadTests
         // A deadline rather than an open wait: a regression must fail the run, not hang it.
         using var cancellation = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(10));
         var events = new List<IntegrationStreamEvent>();
-        await foreach (var streamEvent in buffer.ReadAsync(executionId, sinceSequence, cancellation.Token).ConfigureAwait(false))
+        await foreach (var streamEvent in buffer.ReadAsync(executionId, sinceSequence, cancellation.Token))
         {
             events.Add(streamEvent);
         }
@@ -529,7 +529,7 @@ public sealed class IntegrationExecutionEventBufferReadTests
         public Reader(IIntegrationExecutionEventBuffer buffer, Guid executionId, long sinceSequence) =>
             Completion = Task.Run(async () =>
                 {
-                    await foreach (var streamEvent in buffer.ReadAsync(executionId, sinceSequence, _cancellation.Token).ConfigureAwait(false))
+                    await foreach (var streamEvent in buffer.ReadAsync(executionId, sinceSequence, _cancellation.Token))
                     {
                         lock (_gate)
                         {

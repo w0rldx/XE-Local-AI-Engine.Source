@@ -47,21 +47,21 @@ public abstract class XESerialE2ETestBase : XEE2ETestBase
         await page.GotoAsync(nodeAppUrl, new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
-        }).ConfigureAwait(false);
+        });
 
         // Target the input directly: the login form has a single password field, and Mantine's
         // PasswordInput also renders a "Toggle password visibility" button plus a required-asterisk
         // label, so GetByLabel("Password") is either ambiguous (matches the toggle) or empty (exact
         // misses the asterisk). The type='password' input is unique on this page.
         await page.Locator("input[type='password']")
-                  .FillAsync(XENodeE2EWebApplicationFactory.AdminPassword).ConfigureAwait(false);
+                  .FillAsync(XENodeE2EWebApplicationFactory.AdminPassword);
         await page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
             Name = "Sign in"
-        }).ClickAsync().ConfigureAwait(false);
+        }).ClickAsync();
 
         // On success the SPA navigates away from /login.
-        await page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase)).ConfigureAwait(false);
+        await page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase));
     }
 }
 #pragma warning restore S101

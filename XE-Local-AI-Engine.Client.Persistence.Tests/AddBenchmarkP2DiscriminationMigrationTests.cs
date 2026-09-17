@@ -19,14 +19,14 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_CreatesTheThreeTablesAndTheFidelityProjection()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-up.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-up.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("benchmark_fidelity_attempts").ConfigureAwait(false), "The migration must create benchmark_fidelity_attempts.");
-        AssertEx.True(await probe.TableExistsAsync("benchmark_pairwise_fits").ConfigureAwait(false), "The migration must create benchmark_pairwise_fits.");
-        AssertEx.True(await probe.TableExistsAsync("benchmark_comparisons").ConfigureAwait(false), "The migration must create benchmark_comparisons.");
+        AssertEx.True(await probe.TableExistsAsync("benchmark_fidelity_attempts"), "The migration must create benchmark_fidelity_attempts.");
+        AssertEx.True(await probe.TableExistsAsync("benchmark_pairwise_fits"), "The migration must create benchmark_pairwise_fits.");
+        AssertEx.True(await probe.TableExistsAsync("benchmark_comparisons"), "The migration must create benchmark_comparisons.");
 
         // The projection is 13 columns; counting them here keeps the documented contract and schema in step.
-        var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("benchmark_runs");
         string[] projection =
         [
             "fidelity_attempt_id",
@@ -46,7 +46,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
         AssertEx.Equal(expected: 13, projection.Length, "The fidelity projection is 13 columns.");
         AssertEx.True(runColumns.IsSupersetOf(projection), "benchmark_runs must carry the whole fidelity projection.");
 
-        var projectColumns = await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false);
+        var projectColumns = await probe.ColumnsAsync("benchmark_projects");
         AssertEx.True(projectColumns.IsSupersetOf(new[]
             {
                 "fidelity_enabled",
@@ -57,9 +57,9 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
             }),
             "The migration must persist the project's fidelity settings, including which base model a KLD number is measured against.");
 
-        var revisionColumns = await probe.ColumnsAsync("benchmark_judge_policy_revisions").ConfigureAwait(false);
+        var revisionColumns = await probe.ColumnsAsync("benchmark_judge_policy_revisions");
         AssertEx.True(revisionColumns.Contains("comparison_set_version"), "M7 must add the comparison-set version the fit is checked against.");
-        AssertEx.Equal("0", await probe.ColumnDefaultAsync("benchmark_judge_policy_revisions", "comparison_set_version").ConfigureAwait(false),
+        AssertEx.Equal("0", await probe.ColumnDefaultAsync("benchmark_judge_policy_revisions", "comparison_set_version"),
             "An existing revision has no comparisons, so its set version starts at 0.");
     }
 
@@ -71,9 +71,9 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_LeavesBenchmarkRunsWithNoPairwiseColumns()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-no-pairwise.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-no-pairwise.sqlite");
 
-        var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("benchmark_runs");
         var offenders = runColumns.Where(column => column.Contains("pairwise", StringComparison.OrdinalIgnoreCase)).ToArray();
         AssertEx.Empty(offenders);
     }
@@ -85,8 +85,8 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_RebuildingTheWorkItemCheck_PreservesQueueSequenceValues()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-rebuild.sqlite", PreP2MigrationId).ConfigureAwait(false);
-        await SeedProjectRunAsync(probe).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-rebuild.sqlite", PreP2MigrationId);
+        await SeedProjectRunAsync(probe);
         await probe.ExecuteAsync("""
                                  INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, status, attempt, version, enqueued_at_utc)
                                  VALUES (41, $run, 'Primary', NULL, 'Queued', 1, 1, 100),
@@ -97,34 +97,31 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
             command.Parameters.AddWithValue("$attempt", Guid.NewGuid());
         });
 
-        await probe.MigrateToAsync(targetMigration: null).ConfigureAwait(false);
+        await probe.MigrateToAsync(targetMigration: null);
 
-        var sequences = await probe.LongsAsync("SELECT queue_sequence FROM benchmark_work_items ORDER BY queue_sequence;").ConfigureAwait(false);
+        var sequences = await probe.LongsAsync("SELECT queue_sequence FROM benchmark_work_items ORDER BY queue_sequence;");
         AssertEx.True(sequences.SequenceEqual([41L, 77L]), $"The rebuild must carry queue_sequence values through; got [{string.Join(", ", sequences)}].");
     }
 
     [Test]
     public async Task Migrate_RewrittenCheck_AcceptsAllFourKindsAndRejectsAMismatchedId()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-check.sqlite").ConfigureAwait(false);
-        await SeedProjectRunAsync(probe).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-check.sqlite");
+        await SeedProjectRunAsync(probe);
 
-        await InsertWorkItemAsync(probe, 1, "Primary", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null).ConfigureAwait(false);
-        await InsertWorkItemAsync(probe, 2, "Judge", judgeAttemptId: Guid.NewGuid(), comparisonId: null, fidelityAttemptId: null).ConfigureAwait(false);
-        await InsertWorkItemAsync(probe, 3, "Fidelity", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: Guid.NewGuid()).ConfigureAwait(false);
-        await InsertWorkItemAsync(probe, 4, "Comparison", judgeAttemptId: null, comparisonId: Guid.NewGuid(), fidelityAttemptId: null).ConfigureAwait(false);
+        await InsertWorkItemAsync(probe, 1, "Primary", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null);
+        await InsertWorkItemAsync(probe, 2, "Judge", judgeAttemptId: Guid.NewGuid(), comparisonId: null, fidelityAttemptId: null);
+        await InsertWorkItemAsync(probe, 3, "Fidelity", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: Guid.NewGuid());
+        await InsertWorkItemAsync(probe, 4, "Comparison", judgeAttemptId: null, comparisonId: Guid.NewGuid(), fidelityAttemptId: null);
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 5, "Comparison", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null),
-                              "A Comparison item with no comparison id names nothing to execute and must be rejected.")
-                          .ConfigureAwait(false);
+                              "A Comparison item with no comparison id names nothing to execute and must be rejected.");
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 6, "Fidelity", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null),
-                              "A Fidelity item with no attempt id names nothing to measure and must be rejected.")
-                          .ConfigureAwait(false);
+                              "A Fidelity item with no attempt id names nothing to measure and must be rejected.");
 
         // Each arm names EVERY id column, so one item cannot claim to be two kinds of work at once.
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 7, "Fidelity", judgeAttemptId: null, comparisonId: Guid.NewGuid(), fidelityAttemptId: Guid.NewGuid()),
-                              "A Fidelity item carrying a comparison id must be rejected.")
-                          .ConfigureAwait(false);
+                              "A Fidelity item carrying a comparison id must be rejected.");
     }
 
     /// <summary>
@@ -136,18 +133,18 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_ExpressionIndexes_AreCoalescedAndFiltered()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-indexes.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-indexes.sqlite");
 
-        var slotAttempt = await IndexSqlAsync(probe, "ux_benchmark_comparisons_slot_attempt").ConfigureAwait(false);
+        var slotAttempt = await IndexSqlAsync(probe, "ux_benchmark_comparisons_slot_attempt");
         AssertEx.True(slotAttempt.Contains("COALESCE(task_case_id, x'00')", StringComparison.Ordinal),
             $"The per-attempt slot index must key on the COALESCE expression, not the nullable column; got: {slotAttempt}");
 
-        var slotLive = await IndexSqlAsync(probe, "ux_benchmark_comparisons_slot_live").ConfigureAwait(false);
+        var slotLive = await IndexSqlAsync(probe, "ux_benchmark_comparisons_slot_live");
         AssertEx.True(slotLive.Contains("COALESCE(task_case_id, x'00')", StringComparison.Ordinal), $"The live-slot index must key on the COALESCE expression; got: {slotLive}");
         AssertEx.True(slotLive.Contains("WHERE status IN ('Queued', 'Running', 'Succeeded')", StringComparison.Ordinal),
             $"The live-slot index must be filtered on status so a failed slot can be retried; got: {slotLive}");
 
-        var active = await IndexSqlAsync(probe, "ux_benchmark_pairwise_fits_active").ConfigureAwait(false);
+        var active = await IndexSqlAsync(probe, "ux_benchmark_pairwise_fits_active");
         AssertEx.True(active.Contains("COALESCE(task_case_id, x'00')", StringComparison.Ordinal), $"The active-fit pointer must key on the COALESCE expression; got: {active}");
         AssertEx.True(active.Contains("WHERE is_active = 1", StringComparison.Ordinal), $"At most one ACTIVE fit per scope — the filter is the pointer; got: {active}");
     }
@@ -155,46 +152,44 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_WhenRolledBack_RestoresTheTwoKindCheckAndDropsEverythingP2Added()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-down.sqlite");
 
-        await probe.MigrateToAsync(PreP2MigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreP2MigrationId);
 
-        AssertEx.False(await probe.TableExistsAsync("benchmark_fidelity_attempts").ConfigureAwait(false), "Rollback must drop benchmark_fidelity_attempts.");
-        AssertEx.False(await probe.TableExistsAsync("benchmark_pairwise_fits").ConfigureAwait(false), "Rollback must drop benchmark_pairwise_fits.");
-        AssertEx.False(await probe.TableExistsAsync("benchmark_comparisons").ConfigureAwait(false), "Rollback must drop benchmark_comparisons.");
+        AssertEx.False(await probe.TableExistsAsync("benchmark_fidelity_attempts"), "Rollback must drop benchmark_fidelity_attempts.");
+        AssertEx.False(await probe.TableExistsAsync("benchmark_pairwise_fits"), "Rollback must drop benchmark_pairwise_fits.");
+        AssertEx.False(await probe.TableExistsAsync("benchmark_comparisons"), "Rollback must drop benchmark_comparisons.");
 
-        var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("benchmark_runs");
         AssertEx.False(runColumns.Contains("perplexity_mean"), "Rollback must drop the fidelity projection.");
         AssertEx.True(runColumns.Contains("repeat_mode"), "Rollback must leave the preceding migration's columns intact.");
 
-        var workItemColumns = await probe.ColumnsAsync("benchmark_work_items").ConfigureAwait(false);
+        var workItemColumns = await probe.ColumnsAsync("benchmark_work_items");
         AssertEx.False(workItemColumns.Contains("comparison_id"), "Rollback must drop comparison_id.");
         AssertEx.False(workItemColumns.Contains("fidelity_attempt_id"), "Rollback must drop fidelity_attempt_id.");
         AssertEx.True(workItemColumns.Contains("judge_attempt_id"), "Rollback must retain the original work-item schema.");
 
-        await SeedProjectRunAsync(probe).ConfigureAwait(false);
+        await SeedProjectRunAsync(probe);
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => probe.ExecuteAsync("""
                                                                                  INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, status, attempt, version, enqueued_at_utc)
                                                                                  VALUES (9, $run, 'Fidelity', NULL, 'Queued', 1, 1, 1);
                                                                                  """, command => command.Parameters.AddWithValue("$run", RunId)),
-                              "The restored two-kind CHECK must reject a Fidelity item again.")
-                          .ConfigureAwait(false);
+                              "The restored two-kind CHECK must reject a Fidelity item again.");
     }
 
     [Test]
     public async Task Migrate_RecordsThisMigrationInTheChatChain()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-applied.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-applied.sqlite");
 
-        var applied = await probe.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
+        var applied = await probe.AppliedMigrationsAsync(identityContext: false);
         AssertEx.True(applied.Contains(P2MigrationId), "The discrimination migration must be part of the chat chain a fresh box applies.");
     }
 
     private static async Task<string> IndexSqlAsync(MigrationSchemaProbe probe, string indexName)
     {
         var sql = await probe.ScalarAsync("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = $name;",
-                                 command => command.Parameters.AddWithValue("$name", indexName))
-                             .ConfigureAwait(false);
+                                 command => command.Parameters.AddWithValue("$name", indexName));
         return AssertEx.NotNull(Convert.ToString(sql, CultureInfo.InvariantCulture), $"Index {indexName} must exist.");
     }
 

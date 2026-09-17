@@ -23,19 +23,19 @@ public sealed class PreviewDevelopmentPatchEndpoint(IDevelopmentManagementServic
     {
         try
         {
-            var preview = await _service.PreviewAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false);
+            var preview = await _service.PreviewAsync(req.ProjectId, req.TaskId, ct);
             await Send.OkAsync(new DevelopmentPatchPreviewResponse(preview.SubjectHash,
                     preview.PatchHash,
                     preview.ManifestHash,
                     preview.ExpectedResultHash,
                     preview.Patch,
                     preview.ChangedFiles),
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct);
         }
     }
 }
@@ -60,19 +60,19 @@ public sealed class ApplyDevelopmentPatchEndpoint(IDevelopmentManagementService 
         {
             // No run named: this is the operator's own apply, and it is refused for a task a LIVE workflow run is
             // driving. The 409 that refusal becomes is the same shape every other Development precondition uses.
-            var result = await _service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, onBehalfOfWorkflowRunId: null, ct).ConfigureAwait(false);
+            var result = await _service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, onBehalfOfWorkflowRunId: null, ct);
             await Send.OkAsync(new DevelopmentApplyResponse(result.OperationId,
                     result.Phase,
                     result.Outcome,
                     result.Status,
                     result.Version,
                     result.Sequence),
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct);
         }
     }
 }

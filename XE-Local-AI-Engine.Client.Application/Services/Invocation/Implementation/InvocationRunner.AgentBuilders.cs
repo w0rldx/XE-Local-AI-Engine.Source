@@ -31,12 +31,12 @@ public sealed partial class InvocationRunner
         var participants = new List<OrchestrationParticipant>(spec.Participants.Count);
         foreach (var participant in spec.Participants)
         {
-            var participantResolution = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken).ConfigureAwait(false);
+            var participantResolution = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken);
             if (participantResolution.Substituted)
             {
                 await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
                     BuildModelSubstitutedNoticeMessage(participantResolution.RequestedModel, participantResolution.Model),
-                    participant.Key).ConfigureAwait(false);
+                    participant.Key);
             }
 
             // Resolve THIS participant's launched effective context window so its inner provider-round budgeter
@@ -45,7 +45,7 @@ public sealed partial class InvocationRunner
                 resolvedModel,
                 turnEffectiveContextTokens,
                 package.InvocationId,
-                invocationToken).ConfigureAwait(false);
+                invocationToken);
 
             participants.Add(new OrchestrationParticipant
             {
@@ -126,13 +126,13 @@ public sealed partial class InvocationRunner
             return turnEffectiveContextTokens;
         }
 
-        var provider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken).ConfigureAwait(false);
+        var provider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken);
         if (provider is null)
         {
             return null;
         }
 
-        return await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken).ConfigureAwait(false);
+        return await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken);
     }
 
     private IReadOnlyList<AITool> BuildParticipantTools(RuntimePackage package, IReadOnlyList<AllowedToolDto> tools)
@@ -184,14 +184,14 @@ public sealed partial class InvocationRunner
         // process downstream (LlamaServerProcessSupervisor throws a clean NonRetryable if the GGUF is missing).
         if (!string.IsNullOrWhiteSpace(trimmedModel))
         {
-            var providerName = await _providerResolver.ResolveProviderNameForModelAsync(trimmedModel, cancellationToken).ConfigureAwait(false);
+            var providerName = await _providerResolver.ResolveProviderNameForModelAsync(trimmedModel, cancellationToken);
             if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
             {
                 return new ModelResolution(trimmedModel, Substituted: false, RequestedModel: trimmedModel);
             }
         }
 
-        if (await _capabilityReporter.VerifyOllamaAndModelAsync(trimmedModel, cancellationToken).ConfigureAwait(false))
+        if (await _capabilityReporter.VerifyOllamaAndModelAsync(trimmedModel, cancellationToken))
         {
             var verifiedModel = string.IsNullOrWhiteSpace(trimmedModel) ? _defaultModel : trimmedModel;
             return new ModelResolution(verifiedModel, Substituted: false, RequestedModel: trimmedModel);
@@ -385,7 +385,7 @@ public sealed partial class InvocationRunner
         {
             gate.NoticeEmitted = true;
             await transport.EmitNoticeAsync(TurnNoticeKind.HistoryTruncated,
-                BuildHistoryTruncatedNoticeMessage(result)).ConfigureAwait(false);
+                BuildHistoryTruncatedNoticeMessage(result));
         }
 
         return result.Messages;

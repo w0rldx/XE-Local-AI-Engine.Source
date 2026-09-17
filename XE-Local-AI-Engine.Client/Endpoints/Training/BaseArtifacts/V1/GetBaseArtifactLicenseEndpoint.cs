@@ -24,14 +24,14 @@ public sealed class GetBaseArtifactLicenseEndpoint(IBaseArtifactService baseArti
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)
     {
-        var license = await baseArtifactService.GetLicenseAsync(request.ArtifactId, ct).ConfigureAwait(false);
+        var license = await baseArtifactService.GetLicenseAsync(request.ArtifactId, ct);
         if (license is null)
         {
             // Also the answer while a download is still running: the metadata is written with the terminal Ready state.
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(license.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(license.ToResponse(), ct);
     }
 }

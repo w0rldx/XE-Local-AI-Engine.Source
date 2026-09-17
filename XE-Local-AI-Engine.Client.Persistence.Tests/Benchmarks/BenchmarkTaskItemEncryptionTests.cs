@@ -44,10 +44,10 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
         var databasePath = GetDatabasePath("task-item-roundtrip.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
-        var first = await readContext.BenchmarkTaskItems.SingleAsync(entity => entity.Id == FirstItemId).ConfigureAwait(false);
+        var first = await readContext.BenchmarkTaskItems.SingleAsync(entity => entity.Id == FirstItemId);
         AssertEx.Equal(PromptJson, Encoding.UTF8.GetString(first.PromptJson));
         AssertEx.Equal(ReferenceJson, Encoding.UTF8.GetString(first.ReferenceAnswerJson!));
         AssertEx.Equal(VerifierJson, Encoding.UTF8.GetString(first.VerifierConfigJson!));
@@ -55,7 +55,7 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
 
         // A plain prompt item carries none of the three optional payloads; the optional path must store and read NULL
         // rather than dereference a missing value.
-        var second = await readContext.BenchmarkTaskItems.SingleAsync(entity => entity.Id == SecondItemId).ConfigureAwait(false);
+        var second = await readContext.BenchmarkTaskItems.SingleAsync(entity => entity.Id == SecondItemId);
         AssertEx.Null(second.ReferenceAnswerJson, "An item with no reference answer stays NULL.");
         AssertEx.Null(second.VerifierConfigJson, "An item with no verifier override stays NULL.");
         AssertEx.Null(second.GeneratorConfigJson, "A prompt item has no generator parameters.");
@@ -67,17 +67,17 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
         var databasePath = GetDatabasePath("task-item-at-rest.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
 
         // One literal statement — CA2100 rejects a composed command text, so the columns cannot be looped over.
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT prompt_json, reference_answer_json, verifier_config_json, generator_config_json FROM benchmark_task_items WHERE id = $id;";
         command.Parameters.AddWithValue("$id", FirstItemId);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        AssertEx.True(await reader.ReadAsync().ConfigureAwait(false), "Expected a seeded item to inspect.");
+        await using var reader = await command.ExecuteReaderAsync();
+        AssertEx.True(await reader.ReadAsync(), "Expected a seeded item to inspect.");
 
         var plaintexts = new[]
         {
@@ -100,14 +100,14 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
         var databasePath = GetDatabasePath("task-item-plaintext.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT kind || '|' || input_hash FROM benchmark_task_items WHERE id = $id;";
         command.Parameters.AddWithValue("$id", FirstItemId);
-        AssertEx.Equal("prompt|v1:" + new string('c', count: 64), (string)(await command.ExecuteScalarAsync().ConfigureAwait(false))!);
+        AssertEx.Equal("prompt|v1:" + new string('c', count: 64), (string)(await command.ExecuteScalarAsync())!);
     }
 
     [Test]
@@ -115,7 +115,7 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
     {
         var databasePath = GetDatabasePath("task-item-row-swap.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         await ExecuteAsync(databasePath,
             "UPDATE benchmark_task_items SET prompt_json = (SELECT prompt_json FROM benchmark_task_items WHERE id = $first) WHERE id = $second;",
@@ -123,12 +123,11 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
             {
                 command.Parameters.AddWithValue("$first", FirstItemId);
                 command.Parameters.AddWithValue("$second", SecondItemId);
-            }).ConfigureAwait(false);
+            });
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkTaskItems.SingleAsync(entity => entity.Id == SecondItemId),
-                              "One item's prompt must not read back as another item's.")
-                          .ConfigureAwait(false);
+                              "One item's prompt must not read back as another item's.");
     }
 
     [Test]
@@ -136,25 +135,24 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
     {
         var databasePath = GetDatabasePath("task-item-column-swap.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         // Same row, same key — only the AAD column name differs, which is exactly what must stop a verifier config
         // (expected answers) from being served as the prompt.
         await ExecuteAsync(databasePath,
             "UPDATE benchmark_task_items SET prompt_json = verifier_config_json WHERE id = $id;",
-            command => command.Parameters.AddWithValue("$id", FirstItemId)).ConfigureAwait(false);
+            command => command.Parameters.AddWithValue("$id", FirstItemId));
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkTaskItems.SingleAsync(entity => entity.Id == FirstItemId),
-                              "A verifier config presented as a prompt must fail the AEAD tag check.")
-                          .ConfigureAwait(false);
+                              "A verifier config presented as a prompt must fail the AEAD tag check.");
     }
 
     private static async Task SeedAsync(string databasePath, INodeSqliteKeyHolder keyHolder)
     {
         await using var context = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
-        _ = await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureDeletedAsync();
+        _ = await context.Database.EnsureCreatedAsync();
 
         _ = context.BenchmarkProjects.Add(new BenchmarkProject
         {
@@ -196,7 +194,7 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
             CreatedAtUtc = 1,
             UpdatedAtUtc = 1
         });
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
 
         // The save-changes interceptor restores plaintext onto the tracked graph after the flush, so the in-memory
         // entity never observes ciphertext.
@@ -206,13 +204,13 @@ public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
     private static async Task ExecuteAsync(string databasePath, string sql, Action<SqliteCommand> configure)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
 #pragma warning disable CA2100 // Fixed literals from this suite; every value is a bound parameter.
         command.CommandText = sql;
 #pragma warning restore CA2100
         configure(command);
-        AssertEx.Equal(expected: 1, await command.ExecuteNonQueryAsync().ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await command.ExecuteNonQueryAsync());
     }
 
     private static void AssertCiphertext(byte[] stored, string plaintext, string columnName)

@@ -79,7 +79,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         // maps to the installed nomic-embed GGUF on a llama.cpp node). Resolve ONCE and return the resolved name so the
         // ingestion lane can stamp the exact model that produced these vectors as the document row and chunk-vector scope
         // key. The search lane resolves the same way, so chunk vectors and query vectors are built by the identical model.
-        var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+        var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
         var embeddingModelName = resolution.Name;
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
@@ -109,7 +109,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             IReadOnlyList<Embedding<float>> generated;
             try
             {
-                generated = await generator.GenerateAsync(batch, options: null, cancellationToken).ConfigureAwait(false);
+                generated = await generator.GenerateAsync(batch, options: null, cancellationToken);
             }
             catch (HttpRequestException exception) when (exception.StatusCode is not null)
             {
@@ -157,7 +157,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         try
         {
             var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
-            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
 
             // A non-confident resolution is a bare fallback name, not an actually-installed model — its window is unknown.
             if (!resolution.IsConfident)
@@ -165,7 +165,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                 return null;
             }
 
-            var installed = await provider.ListModelsAsync(cancellationToken).ConfigureAwait(false);
+            var installed = await provider.ListModelsAsync(cancellationToken);
             var descriptor = installed.FirstOrDefault(model =>
                 string.Equals(model.ModelName, resolution.Name, StringComparison.OrdinalIgnoreCase));
 
@@ -190,7 +190,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         try
         {
             var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
-            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
             var identity = KnowledgeEmbeddingVectorPolicy.TryCreateExpectedIdentity(resolution, _options.EmbeddingVectorMode);
             return identity is null
                 ? null

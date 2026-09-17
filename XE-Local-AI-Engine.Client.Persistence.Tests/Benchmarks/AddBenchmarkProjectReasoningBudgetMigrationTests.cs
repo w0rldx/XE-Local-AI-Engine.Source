@@ -21,40 +21,40 @@ public sealed class AddBenchmarkProjectReasoningBudgetMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsTheColumnWithNoBackfilledDefault()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget.sqlite");
 
-        var columns = await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("benchmark_projects");
 
         AssertEx.True(columns.Contains(Column), $"benchmark_projects must record {Column}.");
-        AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_projects", Column).ConfigureAwait(false),
+        AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_projects", Column),
             "A project created before the budget existed pinned nothing, and NULL is the only honest way to say so.");
     }
 
     [Test]
     public async Task ReasoningBudget_MustStayInsideTheProjectContext()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget-constraint.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget-constraint.sqlite");
 
-        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, reasoningBudgetTokens: 4096)).ConfigureAwait(false);
-        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, reasoningBudgetTokens: 0)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, reasoningBudgetTokens: 4096));
+        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, reasoningBudgetTokens: 0));
 
-        await InsertProjectAsync(probe, reasoningBudgetTokens: 4095).ConfigureAwait(false);
-        await InsertProjectAsync(probe, reasoningBudgetTokens: null).ConfigureAwait(false);
+        await InsertProjectAsync(probe, reasoningBudgetTokens: 4095);
+        await InsertProjectAsync(probe, reasoningBudgetTokens: null);
     }
 
     [Test]
     public async Task Migrate_Down_RemovesTheColumnAndKeepsTheRows()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget-down.sqlite").ConfigureAwait(false);
-        await InsertProjectAsync(probe, reasoningBudgetTokens: 2048).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget-down.sqlite");
+        await InsertProjectAsync(probe, reasoningBudgetTokens: 2048);
 
-        await probe.MigrateToAsync(PreviousMigration).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreviousMigration);
 
-        var columns = await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("benchmark_projects");
 
         AssertEx.False(columns.Contains(Column), $"Down must drop benchmark_projects.{Column}.");
         AssertEx.True(columns.Contains("max_output_tokens"), "Down must not take the sibling budget column with it.");
-        AssertEx.Equal(expected: 1L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_projects;").ConfigureAwait(false));
+        AssertEx.Equal(expected: 1L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_projects;"));
     }
 
     private static Task InsertProjectAsync(MigrationSchemaProbe probe, int? reasoningBudgetTokens) =>

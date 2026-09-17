@@ -32,23 +32,23 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
         var databasePath = GetDatabasePath("pin-archive-defaults.sqlite");
         var conversationId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePinArchiveMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePinArchiveMigrationId);
 
-        await InsertHistoricalConversationAsync(databasePath, conversationId).ConfigureAwait(false);
+        await InsertHistoricalConversationAsync(databasePath, conversationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetConversationColumnsAsync(connection);
         AssertEx.True(columns.Contains("is_pinned"), "conversations.is_pinned should be added.");
         AssertEx.True(columns.Contains("archived"), "conversations.archived should be added.");
 
-        AssertEx.False(await ReadIsPinnedAsync(connection, conversationId).ConfigureAwait(false), "Existing conversations should default to is_pinned = false.");
-        AssertEx.False(await ReadArchivedAsync(connection, conversationId).ConfigureAwait(false), "Existing conversations should default to archived = false.");
+        AssertEx.False(await ReadIsPinnedAsync(connection, conversationId), "Existing conversations should default to is_pinned = false.");
+        AssertEx.False(await ReadArchivedAsync(connection, conversationId), "Existing conversations should default to archived = false.");
     }
 
     [Test]
@@ -56,16 +56,16 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("pin-archive-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PrePinArchiveMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PrePinArchiveMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetConversationColumnsAsync(connection);
         AssertEx.False(columns.Contains("is_pinned"), "Rollback should drop conversations.is_pinned.");
         AssertEx.False(columns.Contains("archived"), "Rollback should drop conversations.archived.");
     }
@@ -76,7 +76,7 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
         var databasePath = GetDatabasePath("pin-archive-roundtrip.sqlite");
         var conversationId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -89,12 +89,12 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
                 Archived = true
             });
 
-            await context.SaveChangesAsync().ConfigureAwait(false);
+            await context.SaveChangesAsync();
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            var conversation = await context.Conversations.SingleAsync(entity => entity.ConversationId == conversationId).ConfigureAwait(false);
+            var conversation = await context.Conversations.SingleAsync(entity => entity.ConversationId == conversationId);
             AssertEx.True(conversation.IsPinned, "is_pinned should round-trip as true.");
             AssertEx.True(conversation.Archived, "archived should round-trip as true.");
         }
@@ -113,7 +113,7 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
 
     private static async Task InsertHistoricalConversationAsync(string databasePath, Guid conversationId)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
@@ -126,13 +126,13 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
         command.Parameters.AddWithValue("$last_seen_utc", value: 1234L);
         command.Parameters.AddWithValue("$purged", value: false);
 
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -141,7 +141,7 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM conversations LIMIT 0;";
 
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -152,7 +152,7 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT is_pinned FROM conversations WHERE conversation_id = $id;";
         command.Parameters.AddWithValue("$id", conversationId.ToString());
-        return await ReadBoolScalarAsync(command).ConfigureAwait(false);
+        return await ReadBoolScalarAsync(command);
     }
 
     private static async Task<bool> ReadArchivedAsync(SqliteConnection connection, Guid conversationId)
@@ -160,12 +160,12 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT archived FROM conversations WHERE conversation_id = $id;";
         command.Parameters.AddWithValue("$id", conversationId.ToString());
-        return await ReadBoolScalarAsync(command).ConfigureAwait(false);
+        return await ReadBoolScalarAsync(command);
     }
 
     private static async Task<bool> ReadBoolScalarAsync(SqliteCommand command)
     {
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return Convert.ToInt64(value, CultureInfo.InvariantCulture) != 0;
     }
 

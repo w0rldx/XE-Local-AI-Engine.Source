@@ -117,7 +117,7 @@ public sealed class TranscriptionUploadStreamingTests
     [Test]
     public async Task Upload_WhileRequestActive_LeavesNoFrameworkTempFile()
     {
-        await AssertNoFrameworkSpillEventuallyAsync("before the test starts").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("before the test starts");
 
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var service = new StubTranscriptionService
@@ -131,14 +131,14 @@ public sealed class TranscriptionUploadStreamingTests
         try
         {
             var send = client.SendAsync(request);
-            await AwaitHandlerAsync(service).ConfigureAwait(false);
+            await AwaitHandlerAsync(service);
 
             // The whole body has been consumed by now — the handler only reaches the transcription step after the
             // copy — so a buffered implementation's spill file would exist at exactly this moment.
             AssertNoFrameworkSpill("while the request is still in flight");
 
             gate.SetResult();
-            using var response = await send.ConfigureAwait(false);
+            using var response = await send;
             AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         }
         finally
@@ -146,14 +146,14 @@ public sealed class TranscriptionUploadStreamingTests
             request.Dispose();
         }
 
-        await AssertNoFrameworkSpillEventuallyAsync("after the response").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("after the response");
         AssertOwnedFilesDeleted(service);
     }
 
     [Test]
     public async Task BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp()
     {
-        await AssertNoFrameworkSpillEventuallyAsync("before the test starts").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("before the test starts");
 
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -168,15 +168,14 @@ public sealed class TranscriptionUploadStreamingTests
         try
         {
             var send = client.SendAsync(request);
-            await AssertEx.CompletesAsync(entered.Task, GateTimeout, "The buffered control route must finish reading the form.")
-                          .ConfigureAwait(false);
+            await AssertEx.CompletesAsync(entered.Task, GateTimeout, "The buffered control route must finish reading the form.");
 
             AssertEx.NotEmpty(FrameworkTempSentinel.Files(),
                 "The buffered control must spill to the sentinel directory. An empty one here means the sentinel is "
                 + "not watching the directory the framework uses, and every other test in this class proves nothing.");
 
             gate.SetResult();
-            using var response = await send.ConfigureAwait(false);
+            using var response = await send;
             AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         }
         finally
@@ -185,13 +184,13 @@ public sealed class TranscriptionUploadStreamingTests
         }
 
         // And the spill is gone once the request ends — which is exactly why "empty afterwards" is not evidence.
-        await AssertNoFrameworkSpillEventuallyAsync("after the buffered request ended").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("after the buffered request ended");
     }
 
     [Test]
     public async Task Upload_WhenRejected_LeavesNoFrameworkTempFile()
     {
-        await AssertNoFrameworkSpillEventuallyAsync("before the test starts").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("before the test starts");
 
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var service = new StubTranscriptionService
@@ -209,11 +208,11 @@ public sealed class TranscriptionUploadStreamingTests
         try
         {
             var send = client.SendAsync(request);
-            await AwaitHandlerAsync(service).ConfigureAwait(false);
+            await AwaitHandlerAsync(service);
             AssertNoFrameworkSpill("while a refused request is still in flight");
 
             gate.SetResult();
-            using var response = await send.ConfigureAwait(false);
+            using var response = await send;
             AssertEx.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         }
         finally
@@ -221,14 +220,14 @@ public sealed class TranscriptionUploadStreamingTests
             request.Dispose();
         }
 
-        await AssertNoFrameworkSpillEventuallyAsync("after the refusal").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("after the refusal");
         AssertOwnedFilesDeleted(service);
     }
 
     [Test]
     public async Task Upload_WhenCancelled_LeavesNoFrameworkTempFile()
     {
-        await AssertNoFrameworkSpillEventuallyAsync("before the test starts").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("before the test starts");
 
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var service = new StubTranscriptionService
@@ -243,11 +242,11 @@ public sealed class TranscriptionUploadStreamingTests
         try
         {
             var send = client.SendAsync(request, abort.Token);
-            await AwaitHandlerAsync(service).ConfigureAwait(false);
+            await AwaitHandlerAsync(service);
             AssertNoFrameworkSpill("while the request the client is about to abandon is in flight");
 
-            await abort.CancelAsync().ConfigureAwait(false);
-            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => send).ConfigureAwait(false);
+            await abort.CancelAsync();
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => send);
         }
         finally
         {
@@ -259,15 +258,14 @@ public sealed class TranscriptionUploadStreamingTests
         // client stops waiting the moment it cancels, while the server-side unwind is still a step behind it.
         await AssertEx.EventuallyAsync(() => OwnedFiles(service).Count == 0,
                           GateTimeout,
-                          "A cancelled upload must leave no engine-owned audio behind.")
-                      .ConfigureAwait(false);
-        await AssertNoFrameworkSpillEventuallyAsync("after the client abandoned the request").ConfigureAwait(false);
+                          "A cancelled upload must leave no engine-owned audio behind.");
+        await AssertNoFrameworkSpillEventuallyAsync("after the client abandoned the request");
     }
 
     [Test]
     public async Task Upload_WhenHandlerThrows_LeavesNoFrameworkTempFile()
     {
-        await AssertNoFrameworkSpillEventuallyAsync("before the test starts").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("before the test starts");
 
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var service = new StubTranscriptionService
@@ -282,11 +280,11 @@ public sealed class TranscriptionUploadStreamingTests
         try
         {
             var send = client.SendAsync(request);
-            await AwaitHandlerAsync(service).ConfigureAwait(false);
+            await AwaitHandlerAsync(service);
             AssertNoFrameworkSpill("while the request that is about to fail is in flight");
 
             gate.SetResult();
-            using var response = await send.ConfigureAwait(false);
+            using var response = await send;
             AssertEx.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         }
         finally
@@ -294,7 +292,7 @@ public sealed class TranscriptionUploadStreamingTests
             request.Dispose();
         }
 
-        await AssertNoFrameworkSpillEventuallyAsync("after the handler threw").ConfigureAwait(false);
+        await AssertNoFrameworkSpillEventuallyAsync("after the handler threw");
         AssertOwnedFilesDeleted(service);
     }
 
@@ -401,13 +399,13 @@ public sealed class TranscriptionUploadStreamingTests
                 {
                     if (!string.Equals(context.Request.Path.Value, BufferedControlRoute, StringComparison.Ordinal))
                     {
-                        await nextMiddleware().ConfigureAwait(false);
+                        await nextMiddleware();
                         return;
                     }
 
-                    _ = await context.Request.ReadFormAsync(context.RequestAborted).ConfigureAwait(false);
+                    _ = await context.Request.ReadFormAsync(context.RequestAborted);
                     _ = entered.TrySetResult();
-                    await gate.Task.ConfigureAwait(false);
+                    await gate.Task;
                     context.Response.StatusCode = StatusCodes.Status200OK;
                 });
 

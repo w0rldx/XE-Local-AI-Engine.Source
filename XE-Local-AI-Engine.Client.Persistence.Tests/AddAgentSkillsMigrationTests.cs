@@ -29,19 +29,19 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("agent-skills-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAgentSkillsMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAgentSkillsMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "agent_skills").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "agent_skills"),
             "Migration should create the agent_skills table.");
 
-        var columns = await GetAgentSkillsColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetAgentSkillsColumnsAsync(connection);
         AssertEx.True(columns.SetEquals(new[]
         {
             "id",
@@ -65,10 +65,10 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
             "generation_metadata_json"
         }), "agent_skills should expose the mapped columns.");
 
-        AssertEx.True(await NameUsesNoCaseUniqueAsync(connection).ConfigureAwait(false),
+        AssertEx.True(await NameUsesNoCaseUniqueAsync(connection),
             "agent_skills.name should be NOCASE and uniquely indexed.");
 
-        var agentColumns = await GetAgentDefinitionsColumnsAsync(connection).ConfigureAwait(false);
+        var agentColumns = await GetAgentDefinitionsColumnsAsync(connection);
         AssertEx.True(agentColumns.Contains("allowed_skill_ids_json"),
             "Migration should add allowed_skill_ids_json to agent_definitions.");
     }
@@ -78,19 +78,19 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("agent-skills-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreAgentSkillsMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreAgentSkillsMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False(await TableExistsAsync(connection, "agent_skills").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "agent_skills"),
             "Rollback should drop the agent_skills table.");
 
-        var agentColumns = await GetAgentDefinitionsColumnsAsync(connection).ConfigureAwait(false);
+        var agentColumns = await GetAgentDefinitionsColumnsAsync(connection);
         AssertEx.False(agentColumns.Contains("allowed_skill_ids_json"),
             "Rollback should drop allowed_skill_ids_json from agent_definitions.");
     }
@@ -103,7 +103,7 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -112,26 +112,26 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlySet<string>> GetAgentSkillsColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM agent_skills LIMIT 0;";
-        return await ReadColumnNamesAsync(command).ConfigureAwait(false);
+        return await ReadColumnNamesAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> GetAgentDefinitionsColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM agent_definitions LIMIT 0;";
-        return await ReadColumnNamesAsync(command).ConfigureAwait(false);
+        return await ReadColumnNamesAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> ReadColumnNamesAsync(SqliteCommand command)
     {
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -143,11 +143,11 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
         // unique index over name exists. PRAGMA/literal SQL only — free of caller-supplied input.
         await using var tableCommand = connection.CreateCommand();
         tableCommand.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'agent_skills';";
-        var tableSql = await tableCommand.ExecuteScalarAsync().ConfigureAwait(false) as string;
+        var tableSql = await tableCommand.ExecuteScalarAsync() as string;
 
         await using var indexCommand = connection.CreateCommand();
         indexCommand.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'agent_skills' AND sql LIKE '%UNIQUE%';";
-        var indexSql = await indexCommand.ExecuteScalarAsync().ConfigureAwait(false) as string;
+        var indexSql = await indexCommand.ExecuteScalarAsync() as string;
 
         return tableSql is not null
                && tableSql.Contains("name", StringComparison.Ordinal)

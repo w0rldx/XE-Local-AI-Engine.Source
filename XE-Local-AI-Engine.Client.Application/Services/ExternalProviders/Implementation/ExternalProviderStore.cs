@@ -50,7 +50,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     /// <inheritdoc />
     public async Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default)
     {
-        return await ReadForWriteAsync(cancellationToken).ConfigureAwait(false) is ExternalProviderLoadResult.Loaded loaded
+        return await ReadForWriteAsync(cancellationToken) is ExternalProviderLoadResult.Loaded loaded
             ? loaded.Config
             : new StoredExternalProviderConfig();
     }
@@ -58,10 +58,10 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     /// <inheritdoc />
     public async Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            return await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            return await LoadUnlockedAsync(cancellationToken);
         }
         finally
         {
@@ -79,10 +79,10 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         // normalized values it produces are what actually get stored.
         var candidate = Validate(request);
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            var current = await LoadForWriteUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            var current = await LoadForWriteUnlockedAsync(cancellationToken);
             if (IsSuperseded(current, request.ExpectedRevision))
             {
                 return new ExternalProviderWriteResult.Superseded(current);
@@ -118,7 +118,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                 connections[index] = merged;
             }
 
-            return new ExternalProviderWriteResult.Committed(await WriteAsync(connections, cancellationToken).ConfigureAwait(false), Changed: true);
+            return new ExternalProviderWriteResult.Committed(await WriteAsync(connections, cancellationToken), Changed: true);
         }
         finally
         {
@@ -133,10 +133,10 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     {
         var canonicalId = CanonicalizeId(connectionId);
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            var current = await LoadForWriteUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            var current = await LoadForWriteUnlockedAsync(cancellationToken);
             if (IsSuperseded(current, expectedRevision))
             {
                 return new ExternalProviderWriteResult.Superseded(current);
@@ -150,7 +150,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                 return new ExternalProviderWriteResult.Committed(current, Changed: false);
             }
 
-            return new ExternalProviderWriteResult.Committed(await WriteAsync(remaining, cancellationToken).ConfigureAwait(false), Changed: true);
+            return new ExternalProviderWriteResult.Committed(await WriteAsync(remaining, cancellationToken), Changed: true);
         }
         finally
         {
@@ -433,7 +433,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         byte[] payload;
         try
         {
-            var protectedPayload = await File.ReadAllBytesAsync(_storePath, cancellationToken).ConfigureAwait(false);
+            var protectedPayload = await File.ReadAllBytesAsync(_storePath, cancellationToken);
             payload = _protector.Unprotect(protectedPayload);
         }
         catch (CryptographicException exception)
@@ -485,7 +485,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     /// </summary>
     private async Task<StoredExternalProviderConfig> LoadForWriteUnlockedAsync(CancellationToken cancellationToken)
     {
-        return await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false) switch
+        return await LoadUnlockedAsync(cancellationToken) switch
         {
             ExternalProviderLoadResult.Loaded loaded => loaded.Config,
             ExternalProviderLoadResult.Missing => new StoredExternalProviderConfig(),
@@ -509,7 +509,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         };
 
         var protectedPayload = _protector.Protect(JsonSerializer.SerializeToUtf8Bytes(config, SerializerOptions));
-        await WriteProtectedPayloadAsync(protectedPayload, cancellationToken).ConfigureAwait(false);
+        await WriteProtectedPayloadAsync(protectedPayload, cancellationToken);
         SecureFilePermissions.Apply(_storePath);
         return config;
     }
@@ -535,9 +535,9 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         }
 
         var stream = new FileStream(_storePath, options);
-        await using (stream.ConfigureAwait(false))
+        await using (stream)
         {
-            await stream.WriteAsync(protectedPayload, cancellationToken).ConfigureAwait(false);
+            await stream.WriteAsync(protectedPayload, cancellationToken);
         }
     }
 

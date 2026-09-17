@@ -73,10 +73,10 @@ public sealed class WorkSessionAgentSeeder : IHostedService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-            var seededSlugs = await store.ListSeededSlugsAsync(cancellationToken).ConfigureAwait(false);
+            var seededSlugs = await store.ListSeededSlugsAsync(cancellationToken);
 
-            await SeedAsync(store, seededSlugs, AgentDefaults.WorkSessionGeneralAgentSeedSlug, BuildGeneralSeedInput(), cancellationToken).ConfigureAwait(false);
-            await SeedAsync(store, seededSlugs, AgentDefaults.WorkSessionResearchAgentSeedSlug, BuildResearchSeedInput(), cancellationToken).ConfigureAwait(false);
+            await SeedAsync(store, seededSlugs, AgentDefaults.WorkSessionGeneralAgentSeedSlug, BuildGeneralSeedInput(), cancellationToken);
+            await SeedAsync(store, seededSlugs, AgentDefaults.WorkSessionResearchAgentSeedSlug, BuildResearchSeedInput(), cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -156,7 +156,7 @@ public sealed class WorkSessionAgentSeeder : IHostedService
     /// </summary>
     private async Task RepairClockToolNameAsync(IAgentDefinitionStore store, string slug, CancellationToken cancellationToken)
     {
-        if (await store.GetBySeedSlugAsync(slug, cancellationToken).ConfigureAwait(false) is not { } existing
+        if (await store.GetBySeedSlugAsync(slug, cancellationToken) is not { } existing
             || !existing.AllowedToolNames.Contains(LegacyClockToolName, StringComparer.Ordinal))
         {
             return;
@@ -193,7 +193,7 @@ public sealed class WorkSessionAgentSeeder : IHostedService
             existing.GenerationMetadataJson,
             existing.DisableToolRelevanceFilter);
 
-        _ = await store.UpdateAsync(existing.Id, repaired, cancellationToken).ConfigureAwait(false);
+        _ = await store.UpdateAsync(existing.Id, repaired, cancellationToken);
         _logger.LogInformation("Repaired the clock tool name on the seeded agent definition {AgentDefinitionId} (slug {SeedSlug}).", existing.Id, slug);
     }
 
@@ -224,11 +224,11 @@ public sealed class WorkSessionAgentSeeder : IHostedService
     {
         if (seededSlugs.Contains(slug))
         {
-            await RepairClockToolNameAsync(store, slug, cancellationToken).ConfigureAwait(false);
+            await RepairClockToolNameAsync(store, slug, cancellationToken);
             return;
         }
 
-        var seeded = await store.AddSeededAsync(input, slug, cancellationToken).ConfigureAwait(false);
+        var seeded = await store.AddSeededAsync(input, slug, cancellationToken);
         _logger.LogInformation("Seeded the {AgentName} agent definition {AgentDefinitionId} (slug {SeedSlug}).", input.Name, seeded.Id, slug);
     }
 }

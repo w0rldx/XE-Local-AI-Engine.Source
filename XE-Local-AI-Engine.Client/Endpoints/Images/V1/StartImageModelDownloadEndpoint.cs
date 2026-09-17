@@ -30,7 +30,7 @@ public sealed class StartImageModelDownloadEndpoint(IImageModelDownloadCoordinat
         if (!validation.IsValid)
         {
             AddError(validation.Error!);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -42,7 +42,7 @@ public sealed class StartImageModelDownloadEndpoint(IImageModelDownloadCoordinat
         if (fileSetError is not null)
         {
             AddError(fileSetError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -56,6 +56,6 @@ public sealed class StartImageModelDownloadEndpoint(IImageModelDownloadCoordinat
             ModelName = ticket.ModelName,
             Accepted = true,
             AlreadyInFlight = ticket.AlreadyInFlight
-        })).ConfigureAwait(false);
+        }));
     }
 }

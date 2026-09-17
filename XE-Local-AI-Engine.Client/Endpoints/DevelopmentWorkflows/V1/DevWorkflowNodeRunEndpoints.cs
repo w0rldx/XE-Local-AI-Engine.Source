@@ -31,7 +31,7 @@ public sealed class GetDevWorkflowNodeRunEndpoint(DevWorkflowRunComposer compose
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await Send.OkAsync(await _composer.ComposeNodeAsync(req.RunId, req.NodeRunId, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        await Send.OkAsync(await _composer.ComposeNodeAsync(req.RunId, req.NodeRunId, ct), ct);
     }
 }
 
@@ -56,12 +56,11 @@ public sealed class ListDevWorkflowArtifactsEndpoint(DevWorkflowRunQueryService 
         ArgumentNullException.ThrowIfNull(req);
 
         // The run is read first so an unknown one answers 404 rather than an empty page.
-        _ = await _runQueries.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+        _ = await _runQueries.GetRunAsync(req.RunId, ct);
 
-        var artifacts = await _runQueries.ListArtifactsAsync(req.RunId, req.SinceSeq, ct).ConfigureAwait(false);
+        var artifacts = await _runQueries.ListArtifactsAsync(req.RunId, req.SinceSeq, ct);
         var items = artifacts.Select(DevWorkflowContractMapper.ToResponse).ToList();
-        await Send.OkAsync(new ListDevWorkflowArtifactsResponse(items, DevWorkflowContractMapper.HighestSequence(items.Select(static item => item.Sequence))), ct)
-                  .ConfigureAwait(false);
+        await Send.OkAsync(new ListDevWorkflowArtifactsResponse(items, DevWorkflowContractMapper.HighestSequence(items.Select(static item => item.Sequence))), ct);
     }
 }
 
@@ -87,7 +86,7 @@ public sealed class GetDevWorkflowArtifactContentEndpoint(DevWorkflowRunQuerySer
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var artifact = await _runQueries.GetArtifactAsync(req.ArtifactId, ct).ConfigureAwait(false);
+        var artifact = await _runQueries.GetArtifactAsync(req.ArtifactId, ct);
         if (artifact.RunId != req.RunId || !artifact.IsValid)
         {
             // An artifact of another run — or one the node already marked invalid — reads as absent, so one run's
@@ -102,12 +101,11 @@ public sealed class GetDevWorkflowArtifactContentEndpoint(DevWorkflowRunQuerySer
             await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status413PayloadTooLarge,
                           title: "Artifact too large",
                           detail: string.Create(CultureInfo.InvariantCulture,
-                              $"The artifact is {artifact.SizeBytes} bytes, over this node's {_options.MaxArtifactBytes}-byte limit for reading one back.")))
-                      .ConfigureAwait(false);
+                              $"The artifact is {artifact.SizeBytes} bytes, over this node's {_options.MaxArtifactBytes}-byte limit for reading one back.")));
             return;
         }
 
-        var read = await _blobs.ReadAsync(req.RunId, req.ArtifactId, artifact.ContentSha256, artifact.SizeBytes, ct).ConfigureAwait(false);
+        var read = await _blobs.ReadAsync(req.RunId, req.ArtifactId, artifact.ContentSha256, artifact.SizeBytes, ct);
         if (read.Status != DevWorkflowArtifactReadStatus.Found)
         {
             // Bytes the node cannot vouch for are not bytes it hands over. The row stays; the read reads as "gone".
@@ -116,6 +114,6 @@ public sealed class GetDevWorkflowArtifactContentEndpoint(DevWorkflowRunQuerySer
 
         var isBase64 = !ArtifactMediaTypes.IsText(artifact.MediaType);
         var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : Encoding.UTF8.GetString(read.Content.Span);
-        await Send.OkAsync(new DevWorkflowArtifactContentResponse(artifact.ToResponse(), content, isBase64), ct).ConfigureAwait(false);
+        await Send.OkAsync(new DevWorkflowArtifactContentResponse(artifact.ToResponse(), content, isBase64), ct);
     }
 }

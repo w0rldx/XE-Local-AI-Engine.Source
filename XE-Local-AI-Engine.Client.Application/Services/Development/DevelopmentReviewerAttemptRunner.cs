@@ -68,7 +68,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(repository);
-        var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
+        var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken);
         EnsureRunnable(snapshot);
         var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -77,19 +77,19 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
 
         try
         {
-            var task = await _store.GetTaskAsync(snapshot.TaskId, timeout.Token).ConfigureAwait(false);
-            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token).ConfigureAwait(false);
-            var evidence = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token).ConfigureAwait(false);
+            var task = await _store.GetTaskAsync(snapshot.TaskId, timeout.Token);
+            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token);
+            var evidence = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token);
             DevelopmentArtifactWith<DevelopmentValidationReport> validation;
             try
             {
-                validation = await ReadValidationAsync(snapshot.TaskId, evidence, profile.ComputeDigest(), timeout.Token).ConfigureAwait(false);
+                validation = await ReadValidationAsync(snapshot.TaskId, evidence, profile.ComputeDigest(), timeout.Token);
             }
             catch (DevelopmentInvalidTransitionException)
             {
                 await _evidence.InvalidateApprovalEvidenceAsync(snapshot.TaskId,
                     "The exact Development validation evidence is no longer authoritative.",
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None);
                 throw;
             }
 
@@ -108,7 +108,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 evidence,
                 validationArtifact,
                 validationReport,
-                timeout.Token).ConfigureAwait(false);
+                timeout.Token);
             var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
             var prompt = BuildPrompt(snapshot, task, validationReport, profile);
             await PersistPromptAsync(snapshot,
@@ -116,7 +116,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 evidence,
                 validationArtifact.Id,
                 profile,
-                protectedRoots).ConfigureAwait(false);
+                protectedRoots);
             var model = await _reviewerModel.RunAsync(snapshot.ModelId,
                 prompt,
                 tools,
@@ -124,10 +124,10 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 _options.MaxToolCalls,
                 liveProgress,
                 cloudContext?.Route,
-                timeout.Token).ConfigureAwait(false);
+                timeout.Token);
             var submission = DevelopmentArtifactSanitizer.Sanitize(model.Submission, protectedRoots);
 
-            var afterReview = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token).ConfigureAwait(false);
+            var afterReview = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token);
             if (!string.Equals(evidence.Current.SubjectHash, afterReview.Current.SubjectHash, StringComparison.OrdinalIgnoreCase))
             {
                 throw new DevelopmentWorkspaceSecurityException("The workspace subject changed during a read-only review attempt.");
@@ -154,7 +154,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 reviewInputArtifactIds,
                 ProfileVersion,
                 profile.ComputeDigest(),
-                timeout.Token).ConfigureAwait(false);
+                timeout.Token);
 
             var target = submission.Disposition == DevelopmentReviewDisposition.Approved
                 ? DevelopmentTaskStatus.AwaitingApply
@@ -170,8 +170,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                                         : null,
                                     model.InputTokens,
                                     model.OutputTokens),
-                                CancellationToken.None)
-                            .ConfigureAwait(false);
+                                CancellationToken.None);
             return new DevelopmentReviewerAttemptResult(snapshot.AttemptId,
                 prepared.ArtifactId,
                 submission.Disposition,
@@ -189,8 +188,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                                             : DevelopmentAttemptStatus.Failed,
                                         snapshot.AttemptVersion,
                                         SanitizedReason(exception)),
-                                    CancellationToken.None)
-                                .ConfigureAwait(false);
+                                    CancellationToken.None);
             }
             catch (DevelopmentInvalidTransitionException)
             {
@@ -226,8 +224,8 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 [evidence.PatchArtifact.Id, evidence.ManifestArtifact.Id, validationArtifactId],
                 ProfileVersion,
                 profile.ComputeDigest(),
-                CancellationToken.None).ConfigureAwait(false);
-            _ = await _store.AttachArtifactAsync(prepared.Attachment, CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
+            _ = await _store.AttachArtifactAsync(prepared.Attachment, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -245,14 +243,14 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     {
         var (validationArtifact, validationContent) = await _evidence.ReadLatestAsync(taskId,
             DevelopmentArtifactKind.ValidationReport,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedProfileDigest);
         var report = JsonSerializer.Deserialize<DevelopmentValidationReport>(validationContent.Span, JsonOptions)
                      ?? throw new DevelopmentInvalidTransitionException("The validation report artifact is invalid.");
         var inputIds = validationArtifact.InputArtifactIdsJson is { } json
             ? JsonSerializer.Deserialize<Guid[]>(json.Span, JsonOptions) ?? []
             : [];
-        var latestCoder = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
+        var latestCoder = (await _store.ListAttemptsAsync(taskId, cancellationToken))
             .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
                                       && attempt.Status == DevelopmentAttemptStatus.Succeeded);
         if (!report.Passed
@@ -306,7 +304,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 new DevelopmentCloudContextExcerpt("validation-report.json", JsonSerializer.Serialize(validationReport, JsonOptions))
             ],
             [evidence.PatchArtifact.Id, evidence.ManifestArtifact.Id, validationArtifact.Id],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private static void EnsureRunnable(DevelopmentExecutionSnapshot snapshot)

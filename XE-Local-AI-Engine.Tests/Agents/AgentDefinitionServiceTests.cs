@@ -20,10 +20,10 @@ public sealed class AgentDefinitionServiceTests
         var stored = CreateRecord(input);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(stored);
 
-        var result = await service.CreateAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAsync(input);
 
         AssertEx.Equal(stored.Id, result.Id);
-        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -32,8 +32,8 @@ public sealed class AgentDefinitionServiceTests
         var service = CreateService(out var store);
         var input = CreateInput("   ");
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -42,8 +42,8 @@ public sealed class AgentDefinitionServiceTests
         var service = CreateService(out var store);
         var input = CreateInput(instructions: "");
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -56,7 +56,7 @@ public sealed class AgentDefinitionServiceTests
                 ["NotAllowed"] = true
             });
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
     }
 
     [Test]
@@ -65,7 +65,7 @@ public sealed class AgentDefinitionServiceTests
         var service = CreateService(out _);
         var input = CreateInput(reasoningEffort: "turbo");
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
     }
 
     [Test]
@@ -76,10 +76,10 @@ public sealed class AgentDefinitionServiceTests
         var input = CreateInput(allowedTools: ["GetCurrentTime", "MaybeLaterTool"]);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
 
-        var result = await service.CreateAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAsync(input);
 
         AssertEx.NotNull(result);
-        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -90,7 +90,7 @@ public sealed class AgentDefinitionServiceTests
         var input = CreateInput(allowedTools: ["GetCurrentTime"]);
         store.UpdateAsync(id, input, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
 
-        var result = await service.UpdateAsync(id, input).ConfigureAwait(false);
+        var result = await service.UpdateAsync(id, input);
 
         AssertEx.True(result is null, "Updating a missing definition must return null.");
     }
@@ -101,8 +101,8 @@ public sealed class AgentDefinitionServiceTests
         var service = CreateService(out var store);
         var input = CreateInput("");
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.UpdateAsync(Guid.NewGuid(), input)).ConfigureAwait(false);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.UpdateAsync(Guid.NewGuid(), input));
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -115,9 +115,9 @@ public sealed class AgentDefinitionServiceTests
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(record);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([record]);
 
-        AssertEx.Equal(expected: true, await service.DeleteAsync(id).ConfigureAwait(false));
-        AssertEx.Equal(record.Id, (await service.GetByIdAsync(id).ConfigureAwait(false))!.Id);
-        AssertEx.Equal(expected: 1, (await service.ListAsync().ConfigureAwait(false)).Count);
+        AssertEx.Equal(expected: true, await service.DeleteAsync(id));
+        AssertEx.Equal(record.Id, (await service.GetByIdAsync(id))!.Id);
+        AssertEx.Equal(expected: 1, (await service.ListAsync()).Count);
     }
 
     [Test]
@@ -127,10 +127,10 @@ public sealed class AgentDefinitionServiceTests
         var record = CreateRecord(CreateInput());
         store.GetByIdAsync(record.Id, Arg.Any<CancellationToken>()).Returns(record);
 
-        var result = await service.GetByKeyAsync(record.Id.ToString()).ConfigureAwait(false);
+        var result = await service.GetByKeyAsync(record.Id.ToString());
 
         AssertEx.Equal(record.Id, AssertEx.NotNull(result).Id);
-        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -140,8 +140,8 @@ public sealed class AgentDefinitionServiceTests
         var record = CreateRecord(CreateInput("Exact Name"));
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([record]);
 
-        AssertEx.Equal(record.Id, AssertEx.NotNull(await service.GetByKeyAsync("Exact Name").ConfigureAwait(false)).Id);
-        AssertEx.True(await service.GetByKeyAsync("exact name").ConfigureAwait(false) is null,
+        AssertEx.Equal(record.Id, AssertEx.NotNull(await service.GetByKeyAsync("Exact Name")).Id);
+        AssertEx.True(await service.GetByKeyAsync("exact name") is null,
             "agent names must resolve by exact ordinal match.");
     }
 
@@ -150,10 +150,10 @@ public sealed class AgentDefinitionServiceTests
     {
         var service = CreateService(out var store);
 
-        AssertEx.True(await service.GetByKeyAsync("   ").ConfigureAwait(false) is null,
+        AssertEx.True(await service.GetByKeyAsync("   ") is null,
             "blank agent keys must not resolve.");
-        await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -176,10 +176,10 @@ public sealed class AgentDefinitionServiceTests
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([StoredRecord(triage), StoredRecord(specialist)]);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
 
-        var result = await service.CreateAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAsync(input);
 
         AssertEx.NotNull(result);
-        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -194,10 +194,10 @@ public sealed class AgentDefinitionServiceTests
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([StoredRecord(triage), StoredRecord(specialist)]);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
 
-        var result = await service.CreateAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAsync(input);
 
         AssertEx.NotNull(result);
-        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -206,8 +206,8 @@ public sealed class AgentDefinitionServiceTests
         var service = CreateService(out var store);
         var input = CreateInput(kind: AgentDefinitionKind.Orchestrator, orchestrationTopologyJson: null);
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -216,8 +216,8 @@ public sealed class AgentDefinitionServiceTests
         var service = CreateService(out var store);
         var input = CreateInput(kind: AgentDefinitionKind.Orchestrator, orchestrationTopologyJson: "{ not valid json ");
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -230,8 +230,8 @@ public sealed class AgentDefinitionServiceTests
         var json = $$"""{"version":99,"triageAgentDefinitionId":"{{triage}}","participantAgentDefinitionIds":["{{triage}}","{{specialist}}"],"handoffs":[]}""";
         var input = CreateInput(kind: AgentDefinitionKind.Orchestrator, orchestrationTopologyJson: json);
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -242,8 +242,8 @@ public sealed class AgentDefinitionServiceTests
         var input = CreateInput(kind: AgentDefinitionKind.Orchestrator,
             orchestrationTopologyJson: TopologyJson(triage, [triage]));
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -254,8 +254,8 @@ public sealed class AgentDefinitionServiceTests
         var input = CreateInput(kind: AgentDefinitionKind.Orchestrator,
             orchestrationTopologyJson: TopologyJson(triage, [Guid.NewGuid(), Guid.NewGuid()]));
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -276,8 +276,8 @@ public sealed class AgentDefinitionServiceTests
                     }
                 ]));
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -294,10 +294,10 @@ public sealed class AgentDefinitionServiceTests
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([StoredRecord(triage)]);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
 
-        var result = await service.CreateAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAsync(input);
 
         AssertEx.NotNull(result);
-        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -308,8 +308,8 @@ public sealed class AgentDefinitionServiceTests
         var input = CreateInput(kind: AgentDefinitionKind.Single,
             orchestrationTopologyJson: TopologyJson(Guid.NewGuid(), [Guid.NewGuid(), Guid.NewGuid()]));
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -324,10 +324,10 @@ public sealed class AgentDefinitionServiceTests
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([StoredRecord(triage), StoredRecord(specialist)]);
         store.UpdateAsync(id, input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
 
-        var result = await service.UpdateAsync(id, input).ConfigureAwait(false);
+        var result = await service.UpdateAsync(id, input);
 
         AssertEx.NotNull(result);
-        await store.Received(1).UpdateAsync(id, input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).UpdateAsync(id, input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -338,8 +338,8 @@ public sealed class AgentDefinitionServiceTests
         var input = CreateInput(kind: AgentDefinitionKind.Orchestrator,
             orchestrationTopologyJson: TopologyJson(triage, [Guid.NewGuid(), Guid.NewGuid()]));
 
-        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.UpdateAsync(Guid.NewGuid(), input)).ConfigureAwait(false);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.UpdateAsync(Guid.NewGuid(), input));
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>());
     }
 
     private static AgentDefinitionService CreateService(out IAgentDefinitionStore store, IReadOnlyList<string>? knownTools = null)

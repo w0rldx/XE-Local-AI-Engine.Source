@@ -37,7 +37,7 @@ public sealed class ToolCallCleanupService : BackgroundService
         {
             try
             {
-                await Task.Delay(cleanupInterval, linkedToken).ConfigureAwait(false);
+                await Task.Delay(cleanupInterval, linkedToken);
             }
             catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
             {
@@ -46,7 +46,7 @@ public sealed class ToolCallCleanupService : BackgroundService
 
             try
             {
-                var maxPendingToolCallAgeMinutes = await _runtimeSettings.GetMaxPendingToolCallAgeMinutesAsync(linkedToken).ConfigureAwait(false);
+                var maxPendingToolCallAgeMinutes = await _runtimeSettings.GetMaxPendingToolCallAgeMinutesAsync(linkedToken);
                 var maxAge = TimeSpan.FromMinutes(maxPendingToolCallAgeMinutes);
                 _invocationRunner.CleanupStaleToolCalls(maxAge);
             }
@@ -59,8 +59,8 @@ public sealed class ToolCallCleanupService : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _shutdownSignal.CancelAsync().ConfigureAwait(false);
-        await base.StopAsync(cancellationToken).ConfigureAwait(false);
+        await _shutdownSignal.CancelAsync();
+        await base.StopAsync(cancellationToken);
     }
 
     public override void Dispose()

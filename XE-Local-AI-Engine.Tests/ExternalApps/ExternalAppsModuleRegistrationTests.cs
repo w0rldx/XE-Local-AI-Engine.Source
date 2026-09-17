@@ -112,12 +112,12 @@ public sealed class ExternalAppsModuleRegistrationTests
 
         foreach (var service in hosted)
         {
-            await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
-            await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            await service.StartAsync(CancellationToken.None);
+            await service.StopAsync(CancellationToken.None);
         }
 
         AssertEx.Equal(ExternalAppReconcileSummary.Nothing,
-            await host.Services.GetRequiredService<IExternalAppStartupReconciler>().ReconcileAsync().ConfigureAwait(false));
+            await host.Services.GetRequiredService<IExternalAppStartupReconciler>().ReconcileAsync());
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ public sealed class ExternalAppsModuleRegistrationTests
         {
             _ = host.Services.GetRequiredService<IOptions<ExternalAppsOptions>>().Value;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Contains(string.Join(" ", exception.Failures), "not-absolute");
     }

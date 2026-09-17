@@ -41,7 +41,7 @@ public sealed class NodeSettingsAdministrationServiceTests
             DefaultModelName = " new ",
             EnableTools = false,
             ChatCacheReuse = 512
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated, "a valid agentic patch must be saved.");
         AssertEx.Equal(expected: 1, store.WriteCount, "an uncontended patch writes exactly once.");
@@ -91,7 +91,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             ChatCacheReuse = 512
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal(expected: 512, store.Current.ChatCacheReuse, "the patched field still lands.");
@@ -137,7 +137,7 @@ public sealed class NodeSettingsAdministrationServiceTests
             ChatCacheReuse = 512,
             ToolCapableModels = record.ToolCapableModels,
             DefaultModelName = record.DefaultModelName
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal(expected: 512, store.Current.ChatCacheReuse, "the field the request changed still lands.");
@@ -172,7 +172,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             KeepModelWarmEnabled = true
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated, "a save that never validated the record it would land on must not report success.");
         AssertEx.True(result.Conflicted, "and the caller must be able to tell a conflict from a rejection.");
@@ -216,7 +216,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             KeepModelWarmEnabled = true
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated, "the re-validation against the write-time record must refuse the patch.");
         AssertEx.Equal(expected: 1, result.ValidationErrors.Count);
@@ -259,12 +259,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             DefaultModelName = "patched-model"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("patched-model", store.Current.DefaultModelName);
-        await cloudResolver.Received(1).IsCloudModelAsync("sibling-picked-model", Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await cloudResolver.DidNotReceive().IsCloudModelAsync("snapshot-model", Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await cloudResolver.Received(1).IsCloudModelAsync("sibling-picked-model", Arg.Any<CancellationToken>());
+        await cloudResolver.DidNotReceive().IsCloudModelAsync("snapshot-model", Arg.Any<CancellationToken>());
         // The no-op write from the attempt that found the record moved, then the write the re-validated attempt made.
         AssertEx.Equal(expected: 2, store.WriteCount);
     }
@@ -286,7 +286,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             ToolCapableModels = ["  not-yet-normalized  "]
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal(expected: 1, result.Settings.ToolCapableModels!.Count);
@@ -329,12 +329,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             AutoEffortFastModelName = "ext:studio/qwen3-1.7b"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -348,7 +348,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             AutoEffortFastModelName = "gpt-5.6-terra"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
@@ -367,12 +367,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             AutoEffortFastModelName = "gpt-4o-mini"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -389,12 +389,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             AutoEffortFastModelName = "qwen3:1.7b"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -409,12 +409,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         {
             AutoEffortFastModelName = "qwen3-1.7b",
             LlamaMaxLoadedProcesses = 1
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.LlamaMaxLoadedProcesses, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -433,11 +433,11 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             ChatCacheReuse = 512
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
-        await trustResolver.DidNotReceiveWithAnyArgs().ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await trustResolver.DidNotReceiveWithAnyArgs().ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -458,11 +458,11 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             ChatCacheReuse = 512
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated, "an unrelated patch must not be rejected over a stored fast model.");
         AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
-        await store.Received(1).UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -483,11 +483,11 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.SaveTrustedMergedAsync(_ => stored with
         {
             ChatCacheReuse = 512
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("qwen3-1.7b", result.Settings.AutoEffortFastModelName);
-        await store.Received(1).UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -504,7 +504,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
             ChatCacheReuse = 512
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("abc", result.Settings.MachineKey);
@@ -513,7 +513,7 @@ public sealed class NodeSettingsAdministrationServiceTests
                 {
                     MachineKey = "abc"
                 }).MachineKey == "abc"),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -532,7 +532,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
             ChatCacheReuse = 512
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("large-v3-turbo", AssertEx.NotNull(result.Settings.TranscriptionSelectedModelId));
@@ -557,7 +557,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
             ChatCacheReuse = 512
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("minted-while-the-save-was-validating", store.Current.MachineKey);
@@ -579,12 +579,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
         {
             AutoEffortFastModelName = "ext:studio/qwen3-1.7b"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.AutoEffortFastModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -597,12 +597,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         {
             KeepModelWarmEnabled = true,
             KeepModelWarmModelName = " "
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.KeepModelWarmModelName, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -615,12 +615,12 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             ChatCacheReuse = StoredNodeSettings.MaxChatCacheReuse + 1
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(NodeSettingsField.ChatCacheReuse, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await reporter.DidNotReceive().ReportToApiAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+        await reporter.DidNotReceive().ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -632,11 +632,11 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             ToolCapableModels = []
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(NodeSettingsField.ToolCapableModels, result.ValidationErrors[0].Field);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -654,7 +654,7 @@ public sealed class NodeSettingsAdministrationServiceTests
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
         {
             DefaultModelName = "local-model"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(result.Updated);
         AssertEx.Equal("local-model", result.Settings.DefaultModelName);

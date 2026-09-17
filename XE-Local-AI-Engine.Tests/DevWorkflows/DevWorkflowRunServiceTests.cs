@@ -48,10 +48,9 @@ public sealed class DevWorkflowRunServiceTests
         // A private host: WasSignalled DRAINS the dispatcher's signal channel, so a concurrent sibling's drain
         // could take this run's signal before this test reads it.
         await using var harness = new DevWorkflowHarness();
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly, "Explain the inference path.").ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly, "Explain the inference path.");
 
-        var detail = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, """{"depth":"deep"}""", Guid.NewGuid()))
-                                  .ConfigureAwait(false);
+        var detail = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, """{"depth":"deep"}""", Guid.NewGuid()));
 
         AssertEx.Equal(DevWorkflowRunStatus.Pending, detail.Run.Status, "a run is Pending until the runtime has accepted it; anything else would claim work nothing is doing.");
         AssertEx.Equal(expected: 1, detail.NodeRuns.Count);
@@ -62,8 +61,8 @@ public sealed class DevWorkflowRunServiceTests
         AssertEx.Contains(AssertEx.NotNull(entry.InputJson), "depth", message: "the caller's seed reaches the entry node run rather than being dropped.");
         AssertEx.Contains(AssertEx.NotNull(entry.InputJson), "deep");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(detail.Run.Id).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(detail.Run.Id).ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(detail.Run.Id);
+        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(detail.Run.Id)).Status);
     }
 
     /// <summary>A repeated start is the same start: it answers with the run it already created, not with a second one.</summary>
@@ -72,14 +71,14 @@ public sealed class DevWorkflowRunServiceTests
     {
         // A private host: the run count is the whole database's, so a sibling's run would be counted here.
         await using var harness = new DevWorkflowHarness();
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
         var operationId = Guid.NewGuid();
 
-        var first = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, operationId)).ConfigureAwait(false);
-        var replay = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, operationId)).ConfigureAwait(false);
+        var first = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, operationId));
+        var replay = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, operationId));
 
         AssertEx.Equal(first.Run.Id, replay.Run.Id);
-        AssertEx.Equal(expected: 1, (await harness.ListRunIdsAsync().ConfigureAwait(false)).Count);
+        AssertEx.Equal(expected: 1, (await harness.ListRunIdsAsync()).Count);
         AssertEx.Equal(expected: 1, replay.NodeRuns.Count, "the replay must not materialize a second set of rows either.");
     }
 
@@ -88,13 +87,12 @@ public sealed class DevWorkflowRunServiceTests
     public async Task StartingASecondLiveRunOnOneWorkItem_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()));
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() =>
                                   harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())),
-                              "Its own conflict type, because the operator's next move differs from any other invalid transition: wait for the live run, or cancel it.")
-                          .ConfigureAwait(false);
+                              "Its own conflict type, because the operator's next move differs from any other invalid transition: wait for the live run, or cancel it.");
     }
 
     /// <summary>
@@ -119,15 +117,13 @@ public sealed class DevWorkflowRunServiceTests
                                                                                "nodes": [{ "nodeKey": "validate", "nodeType": "{{nodeType}}" }],
                                                                                "edges": []
                                                                              }
-                                                                             """)
-                                                      .ConfigureAwait(false);
+                                                                             """);
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowValidationException>(() =>
-                                        harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())))
-                                    .ConfigureAwait(false);
+                                        harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())));
 
         AssertEx.Contains(refusal.Message, "validate", message: "the refusal names the nodes that need the project, not merely that one is missing.");
-        AssertEx.Empty(await harness.ListRunIdsAsync().ConfigureAwait(false), "a refused start leaves no run behind.");
+        AssertEx.Empty(await harness.ListRunIdsAsync(), "a refused start leaves no run behind.");
     }
 
     /// <summary>An archived template is hidden from new runs; the runs that already used it are unaffected.</summary>
@@ -135,12 +131,11 @@ public sealed class DevWorkflowRunServiceTests
     public async Task StartingFromAnArchivedDefinition_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        await harness.ArchiveDefinitionAsync(definitionId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        await harness.ArchiveDefinitionAsync(definitionId);
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowValidationException>(() =>
-                                        harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())))
-                                    .ConfigureAwait(false);
+                                        harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())));
 
         AssertEx.Contains(refusal.Message, "archived");
     }
@@ -154,22 +149,22 @@ public sealed class DevWorkflowRunServiceTests
     {
         // A private host: WasSignalled drains the shared signal channel (see StartingARun_... above).
         await using var harness = new DevWorkflowHarness();
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var pausing = await harness.WithRunServiceAsync(service => service.PauseAsync(runId, Guid.NewGuid())).ConfigureAwait(false);
+        var pausing = await harness.WithRunServiceAsync(service => service.PauseAsync(runId, Guid.NewGuid()));
         AssertEx.Equal(DevWorkflowRunStatus.Pausing, pausing.Run.Status, "the command has not landed yet, and saying Paused would claim one that has not.");
         AssertEx.True(harness.WasSignalled(runId));
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var resumed = await harness.WithRunServiceAsync(service => service.ResumeAsync(runId, Guid.NewGuid())).ConfigureAwait(false);
+        var resumed = await harness.WithRunServiceAsync(service => service.ResumeAsync(runId, Guid.NewGuid()));
         AssertEx.Equal(DevWorkflowRunStatus.Running, resumed.Run.Status);
 
-        var cancelling = await harness.WithRunServiceAsync(service => service.CancelAsync(runId, Guid.NewGuid())).ConfigureAwait(false);
+        var cancelling = await harness.WithRunServiceAsync(service => service.CancelAsync(runId, Guid.NewGuid()));
         AssertEx.Equal(DevWorkflowRunStatus.Cancelling, cancelling.Run.Status);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>A command the run's status forbids is a conflict, not a silent no-op.</summary>
@@ -177,12 +172,11 @@ public sealed class DevWorkflowRunServiceTests
     public async Task ResumingARunThatIsNotPaused_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => harness.WithRunServiceAsync(service => service.ResumeAsync(runId, Guid.NewGuid())))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => harness.WithRunServiceAsync(service => service.ResumeAsync(runId, Guid.NewGuid())));
     }
 
     /// <summary>
@@ -193,10 +187,10 @@ public sealed class DevWorkflowRunServiceTests
     public async Task DecidingAGate_RecordsTheSubjectAndReplaysTheSameDecision()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
         var operationId = Guid.NewGuid();
 
         var decided = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
@@ -205,8 +199,7 @@ public sealed class DevWorkflowRunServiceTests
                                        DevWorkflowDecisionKind.Approve,
                                        "Looks right.",
                                        payloadJson: null,
-                                       "operator@localhost.test"))
-                                   .ConfigureAwait(false);
+                                       "operator@localhost.test"));
 
         AssertEx.Equal(DevWorkflowDecisionKind.Approve, decided.Decision.Decision);
         AssertEx.Equal("operator@localhost.test", decided.Decision.DecidedBySubject, "the audit has to say who approved, not only that someone did.");
@@ -214,19 +207,18 @@ public sealed class DevWorkflowRunServiceTests
 
         // The run moves on, and the replay still answers with the decision rather than complaining about where the row
         // has got to since.
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         var replay = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
                                       nodeRunId,
                                       operationId,
                                       DevWorkflowDecisionKind.Approve,
                                       "Looks right.",
                                       payloadJson: null,
-                                      "operator@localhost.test"))
-                                  .ConfigureAwait(false);
+                                      "operator@localhost.test"));
 
         AssertEx.Equal(decided.Decision.Id, replay.Decision.Id);
         AssertEx.Equal(DevWorkflowRunStatus.Completed, replay.Detail.Run.Status);
-        AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"));
+        AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "gate.decided"));
     }
 
     /// <summary>
@@ -238,10 +230,10 @@ public sealed class DevWorkflowRunServiceTests
     public async Task DecidingAnAlreadyAnsweredGateUnderANewOperationId_IsRefusedWithTheStandingDecision()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
 
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
                              nodeRunId,
@@ -249,8 +241,7 @@ public sealed class DevWorkflowRunServiceTests
                              DevWorkflowDecisionKind.RequestChanges,
                              comment: null,
                              payloadJson: null,
-                             "operator@localhost.test"))
-                         .ConfigureAwait(false);
+                             "operator@localhost.test"));
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowGateAlreadyDecidedException>(() =>
                                         harness.WithRunServiceAsync(service => service.DecideAsync(runId,
@@ -259,11 +250,10 @@ public sealed class DevWorkflowRunServiceTests
                                             DevWorkflowDecisionKind.Approve,
                                             comment: null,
                                             payloadJson: null,
-                                            "operator@localhost.test")))
-                                    .ConfigureAwait(false);
+                                            "operator@localhost.test")));
 
         AssertEx.Equal(DevWorkflowDecisionKind.RequestChanges, refusal.StandingDecision);
-        AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"));
+        AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "gate.decided"));
     }
 
     /// <summary>A node run nobody is waiting on has nothing to decide, and saying so is a conflict.</summary>
@@ -271,8 +261,8 @@ public sealed class DevWorkflowRunServiceTests
     public async Task DecidingANodeRunThatIsNotWaiting_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var detail = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var detail = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()));
         var nodeRunId = detail.NodeRuns.Single().Id;
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
@@ -282,8 +272,7 @@ public sealed class DevWorkflowRunServiceTests
                                             DevWorkflowDecisionKind.Approve,
                                             comment: null,
                                             payloadJson: null,
-                                            decidedBySubject: null)))
-                                    .ConfigureAwait(false);
+                                            decidedBySubject: null)));
 
         AssertEx.Contains(refusal.Message, "nothing to decide");
     }
@@ -296,10 +285,10 @@ public sealed class DevWorkflowRunServiceTests
     public async Task RetryingAnUnansweredGate_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
 
         // A gate has no failed attempt to re-run, so Retry is not one of the answers it can take.
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
@@ -309,8 +298,7 @@ public sealed class DevWorkflowRunServiceTests
                                   DevWorkflowDecisionKind.Retry,
                                   comment: null,
                                   payloadJson: null,
-                                  decidedBySubject: null)))
-                          .ConfigureAwait(false);
+                                  decidedBySubject: null)));
     }
 
     /// <summary>
@@ -322,10 +310,10 @@ public sealed class DevWorkflowRunServiceTests
     public async Task SkippingAnOpenGate_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "approve");
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, nodeRun.Status, "the gate has to be open for this to be the case under test.");
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
@@ -335,15 +323,14 @@ public sealed class DevWorkflowRunServiceTests
                                             DevWorkflowDecisionKind.Skip,
                                             comment: null,
                                             payloadJson: null,
-                                            "operator@localhost.test")))
-                                    .ConfigureAwait(false);
+                                            "operator@localhost.test")));
 
         AssertEx.Contains(refusal.Message, "cannot be answered Skip");
         AssertEx.Equal(expected: 0,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "gate.decided"),
             "a refused answer is not recorded — there is no decision row for the runtime to settle later.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval,
-            (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "approve")).Status,
             "and the gate is left exactly where it was.");
     }
 
@@ -358,24 +345,23 @@ public sealed class DevWorkflowRunServiceTests
     public async Task SkippingABlockedNodeRun_SettlesTheRun()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked);
 
-        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
         var detail = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
                                       nodeRunId,
                                       Guid.NewGuid(),
                                       DevWorkflowDecisionKind.Skip,
                                       comment: null,
                                       payloadJson: null,
-                                      "operator@localhost.test"))
-                                  .ConfigureAwait(false);
+                                      "operator@localhost.test"));
 
         AssertEx.Equal(expected: 1, detail.Detail.PendingDecisionCount, "the answer is recorded; the runtime has not acted on it yet.");
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -386,14 +372,13 @@ public sealed class DevWorkflowRunServiceTests
     public async Task ReplayingAStartWithADifferentWorkItem_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var (otherWorkItemId, _) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var (otherWorkItemId, _) = await harness.SeedDefinitionAsync(GateOnly);
         var operationId = Guid.NewGuid();
-        _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, operationId)).ConfigureAwait(false);
+        _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, operationId));
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                        harness.WithRunServiceAsync(service => service.StartAsync(otherWorkItemId, definitionId, inputsJson: null, operationId)))
-                                    .ConfigureAwait(false);
+                                        harness.WithRunServiceAsync(service => service.StartAsync(otherWorkItemId, definitionId, inputsJson: null, operationId)));
 
         AssertEx.Contains(refusal.Message, "already started a different run");
     }
@@ -409,17 +394,17 @@ public sealed class DevWorkflowRunServiceTests
         // A private host: OnDeleting is a switch on the container's single fake agent, so setting it would fire
         // on a sibling's deletes too.
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var workItemId = (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Id;
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var workItemId = (await harness.ReadWorkItemAsync(runId)).Id;
 
         bool? rowsGoneWhenReleased = null;
-        harness.Agent.OnDeleting = async _ => rowsGoneWhenReleased = !await harness.WorkItemExistsAsync(workItemId).ConfigureAwait(false);
+        harness.Agent.OnDeleting = async _ => rowsGoneWhenReleased = !await harness.WorkItemExistsAsync(workItemId);
 
-        await harness.WithRunServiceAsync(service => service.DeleteWorkItemAsync(workItemId)).ConfigureAwait(false);
+        await harness.WithRunServiceAsync(service => service.DeleteWorkItemAsync(workItemId));
 
         AssertEx.True(rowsGoneWhenReleased is true,
             "the session was released while the work item still existed, so a delete refused a moment later would already have destroyed it.");
@@ -433,17 +418,16 @@ public sealed class DevWorkflowRunServiceTests
     {
         // A private host: "no delete happened at all" is an assertion about every call the shared fake recorded.
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
-        var workItemId = (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Id;
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
+        var workItemId = (await harness.ReadWorkItemAsync(runId)).Id;
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => harness.WithRunServiceAsync(service => service.DeleteWorkItemAsync(workItemId)))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => harness.WithRunServiceAsync(service => service.DeleteWorkItemAsync(workItemId)));
 
         AssertEx.False(harness.Agent.Calls.Any(static call => call.Verb == "delete"), "a refusal must not have released the live run's work session.");
-        AssertEx.True(await harness.WorkItemExistsAsync(workItemId).ConfigureAwait(false));
-        AssertEx.Equal(sessionId, await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false), "and the node run still owns it.");
+        AssertEx.True(await harness.WorkItemExistsAsync(workItemId));
+        AssertEx.Equal(sessionId, await harness.ReadSessionIdAsync(runId, "research"), "and the node run still owns it.");
     }
 
     /// <summary>
@@ -457,28 +441,27 @@ public sealed class DevWorkflowRunServiceTests
     {
         // A private host: the run-wide attempt budget is pinned for this test alone.
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         // The first Retry spends the run's one re-attempt, which is what the second is then judged against.
-        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked).ConfigureAwait(false);
-        var blocked = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked);
+        var blocked = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
                              blocked,
                              Guid.NewGuid(),
                              DevWorkflowDecisionKind.Retry,
                              comment: null,
                              payloadJson: null,
-                             "operator@localhost.test"))
-                         .ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+                             "operator@localhost.test"));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(expected: 2,
-            (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Attempt,
+            (await harness.ReadNodeRunAsync(runId, "approve")).Attempt,
             "the re-attempt landed, so the run's budget of one is now spent.");
 
-        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked).ConfigureAwait(false);
-        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
                                         harness.WithRunServiceAsync(service => service.DecideAsync(runId,
@@ -487,14 +470,13 @@ public sealed class DevWorkflowRunServiceTests
                                             DevWorkflowDecisionKind.Retry,
                                             comment: null,
                                             payloadJson: null,
-                                            "operator@localhost.test")))
-                                    .ConfigureAwait(false);
+                                            "operator@localhost.test")));
 
         AssertEx.Contains(refusal.Message,
             "as many re-attempts as this run allows",
             message: "this copy ships verbatim to the intervention panel, so it has to name the RUN's budget — the node's own cap is what a human Retry overrides.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
-            (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "approve")).Status,
             "the node run is left exactly where it was.");
 
         // And the other interventions still work, which is the whole reason the refusal comes before the record.
@@ -505,10 +487,9 @@ public sealed class DevWorkflowRunServiceTests
                              DevWorkflowDecisionKind.Skip,
                              comment: null,
                              payloadJson: null,
-                             "operator@localhost.test"))
-                         .ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+                             "operator@localhost.test"));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -520,25 +501,25 @@ public sealed class DevWorkflowRunServiceTests
     public async Task ReplayingACancelAfterTheRunHasDrained_AnswersWithTheRunRatherThanAConflict()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         var operationId = Guid.NewGuid();
 
-        _ = await harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "the drain has finished by the time the retry arrives, which is what used to make it a conflict.");
 
         // Counted rather than named: the ASK and the settled terminal both record run.cancelled, so what a replay must
         // not do is add to the trail at all.
-        var before = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count;
+        var before = (await harness.ReadEventsAsync(runId)).Count;
 
-        var replay = await harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)).ConfigureAwait(false);
+        var replay = await harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId));
 
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, replay.Run.Status);
-        AssertEx.Equal(before, (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count, "and the replay wrote nothing.");
+        AssertEx.Equal(before, (await harness.ReadEventsAsync(runId)).Count, "and the replay wrote nothing.");
     }
 
     /// <summary>
@@ -549,20 +530,20 @@ public sealed class DevWorkflowRunServiceTests
     public async Task ReplayingAResumeAfterTheRunIsRunningAgain_AnswersWithTheRunRatherThanAConflict()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.WithRunServiceAsync(service => service.PauseAsync(runId, Guid.NewGuid())).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.WithRunServiceAsync(service => service.PauseAsync(runId, Guid.NewGuid()));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         var operationId = Guid.NewGuid();
-        _ = await harness.WithRunServiceAsync(service => service.ResumeAsync(runId, operationId)).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.WithRunServiceAsync(service => service.ResumeAsync(runId, operationId));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var replay = await harness.WithRunServiceAsync(service => service.ResumeAsync(runId, operationId)).ConfigureAwait(false);
+        var replay = await harness.WithRunServiceAsync(service => service.ResumeAsync(runId, operationId));
 
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "run.resumed"),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "run.resumed"),
             "the replay resumed nothing a second time.");
         AssertEx.True(replay.Run.Status is DevWorkflowRunStatus.Running or DevWorkflowRunStatus.WaitingForApproval,
             "and it answered with where the run actually stands.");
@@ -576,22 +557,21 @@ public sealed class DevWorkflowRunServiceTests
     public async Task ReusingALifecycleOperationIdOnADifferentVerb_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         var operationId = Guid.NewGuid();
 
-        _ = await harness.WithRunServiceAsync(service => service.PauseAsync(runId, operationId)).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        _ = await harness.WithRunServiceAsync(service => service.PauseAsync(runId, operationId));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId)).Status);
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                                        harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)))
-                                    .ConfigureAwait(false);
+                                        harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)));
 
         AssertEx.Contains(refusal.Message, "run.paused", message: "the refusal says what that operation id actually did.");
         AssertEx.Equal(DevWorkflowRunStatus.Paused,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "and nothing was cancelled — the failure this closes reported success while the run stood still.");
     }
 
@@ -604,10 +584,10 @@ public sealed class DevWorkflowRunServiceTests
     public async Task ReusingADecisionOperationIdForADifferentAct_IsRefused()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve")).Id;
         var operationId = Guid.NewGuid();
 
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
@@ -616,8 +596,7 @@ public sealed class DevWorkflowRunServiceTests
                              DevWorkflowDecisionKind.Approve,
                              comment: null,
                              payloadJson: null,
-                             "operator@localhost.test"))
-                         .ConfigureAwait(false);
+                             "operator@localhost.test"));
 
         var differentAnswer = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
                                                 harness.WithRunServiceAsync(service => service.DecideAsync(runId,
@@ -626,8 +605,7 @@ public sealed class DevWorkflowRunServiceTests
                                                     DevWorkflowDecisionKind.Reject,
                                                     comment: null,
                                                     payloadJson: null,
-                                                    "operator@localhost.test")))
-                                            .ConfigureAwait(false);
+                                                    "operator@localhost.test")));
         AssertEx.Contains(differentAnswer.Message, "already recorded a different decision");
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
@@ -638,11 +616,10 @@ public sealed class DevWorkflowRunServiceTests
                                       comment: null,
                                       payloadJson: null,
                                       "someone-else@localhost.test")),
-                              "and the same answer attributed to a different person is a different act too.")
-                          .ConfigureAwait(false);
+                              "and the same answer attributed to a different person is a different act too.");
 
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "gate.decided"),
             "neither refusal recorded anything.");
     }
 
@@ -654,20 +631,20 @@ public sealed class DevWorkflowRunServiceTests
     public async Task TheDetailAndTheListRow_NameTheSameBlockingNodeRun()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         // Blocked, not WaitingForApproval: the narrower reading of "blocking" answered null here while the list row
         // named the row, which is the disagreement this pins shut.
-        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked);
 
-        var detail = await harness.WithRunServiceAsync(service => service.GetAsync(runId)).ConfigureAwait(false);
-        var row = await harness.ReadWorkItemRowAsync(workItemId).ConfigureAwait(false);
+        var detail = await harness.WithRunServiceAsync(service => service.GetAsync(runId));
+        var row = await harness.ReadWorkItemRowAsync(workItemId);
 
         AssertEx.Equal(row.LatestRunNodes.PendingDecisionCount, detail.PendingDecisionCount);
         AssertEx.Equal(row.LatestRunNodes.BlockingGateNodeRunId, detail.BlockingGateNodeRunId);
-        AssertEx.Equal((await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id, detail.BlockingGateNodeRunId);
+        AssertEx.Equal((await harness.ReadNodeRunAsync(runId, "approve")).Id, detail.BlockingGateNodeRunId);
     }
 
     /// <summary>The composed detail answers "what is this run waiting on" without a caller re-deriving it.</summary>
@@ -675,14 +652,14 @@ public sealed class DevWorkflowRunServiceTests
     public async Task TheComposedDetail_NamesWhatTheRunIsWaitingOn()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
-        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid()))).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var detail = await harness.WithRunServiceAsync(service => service.GetAsync(runId)).ConfigureAwait(false);
+        var detail = await harness.WithRunServiceAsync(service => service.GetAsync(runId));
 
         AssertEx.Equal(expected: 1, detail.PendingDecisionCount);
-        AssertEx.Equal((await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id, detail.BlockingGateNodeRunId);
+        AssertEx.Equal((await harness.ReadNodeRunAsync(runId, "approve")).Id, detail.BlockingGateNodeRunId);
     }
 
     /// <summary>
@@ -748,7 +725,7 @@ public sealed class DevWorkflowRunServiceTests
             Options.Create(new DevWorkflowOptions()),
             NullLogger<DevWorkflowRunService>.Instance);
 
-        await service.DeleteWorkItemAsync(workItemId, request.Token).ConfigureAwait(false);
+        await service.DeleteWorkItemAsync(workItemId, request.Token);
 
         AssertEx.Equal(string.Join(", ", new[]
             {
@@ -847,8 +824,7 @@ public sealed class DevWorkflowRunServiceTests
                               DevWorkflowDecisionKind.Retry,
                               "Try it again.",
                               payloadJson: null,
-                              "operator@localhost.test"))
-                          .ConfigureAwait(false);
+                              "operator@localhost.test"));
 
         var command = AssertEx.NotNull(written);
         AssertEx.Equal(blocked.Attempt, command.ExpectedAttempt, "the answer names the attempt it was judged against, or the store cannot tell a moved row from a fresh one.");

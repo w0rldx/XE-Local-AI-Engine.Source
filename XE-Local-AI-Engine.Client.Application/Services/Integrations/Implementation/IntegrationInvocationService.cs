@@ -68,14 +68,14 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         // 1. The credential and the trigger, in that order. A key row that is gone or revoked answers the SAME generic
         //    401 the authentication handler writes; anything trigger-shaped — unknown, disabled, or outside this key's
         //    allowlist — answers one 404, because a distinct code for "exists but not yours" would confirm the name.
-        var key = await _keyStore.GetByPrefixAsync(request.KeyPrefix, cancellationToken).ConfigureAwait(false);
+        var key = await _keyStore.GetByPrefixAsync(request.KeyPrefix, cancellationToken);
         if (key is null || key.RevokedAtUtc is not null)
         {
             return Rejected(IntegrationAcceptOutcome.Unauthorized, "Invalid integration API key.");
         }
 
         var triggerName = IIntegrationTriggerService.NormalizeName(request.TriggerName);
-        var trigger = await _triggers.GetByNameAsync(triggerName, cancellationToken).ConfigureAwait(false);
+        var trigger = await _triggers.GetByNameAsync(triggerName, cancellationToken);
 
         // The allowlist is parsed and scanned BEFORE the combined decision, never short-circuited behind the trigger
         // lookup. A `trigger is null || !Allows(...)` reads identically and behaves identically, but it does strictly
@@ -97,7 +97,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         //    else can name a session that does not exist yet.
         var caller = new IntegrationCallerIdentity(key.PrincipalId, request.KeyPrefix);
         var gateLease = request.SessionId is { } gatedSessionId
-            ? await _sessionGate.EnterAsync(gatedSessionId, cancellationToken).ConfigureAwait(false)
+            ? await _sessionGate.EnterAsync(gatedSessionId, cancellationToken)
             : null;
         try
         {
@@ -112,13 +112,13 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             //    hiding the execution id the caller was retrying to learn. Nothing here needs the session: the
             //    fingerprint covers the principal, the trigger name, the requested session id and the raw body.
             var fingerprint = IntegrationRequestFingerprint.Compute(key.PrincipalId, triggerName, request.SessionId, request.RawBody.Span);
-            var duplicate = await ResolveDuplicateAsync(key.PrincipalId, request.RequestId, fingerprint, cancellationToken).ConfigureAwait(false);
+            var duplicate = await ResolveDuplicateAsync(key.PrincipalId, request.RequestId, fingerprint, cancellationToken);
             if (duplicate is not null)
             {
                 return duplicate;
             }
 
-            var gate = await _sessions.ResolveForInvocationAsync(request.SessionId, trigger, caller, cancellationToken).ConfigureAwait(false);
+            var gate = await _sessions.ResolveForInvocationAsync(request.SessionId, trigger, caller, cancellationToken);
             if (gate.Outcome != IntegrationAcceptOutcome.Accepted)
             {
                 return Rejected(gate.Outcome, gate.Message);
@@ -137,7 +137,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                 return Rejected(IntegrationAcceptOutcome.InputsRejected, "The composed request is larger than this node accepts.");
             }
 
-            return await AdmitAsync(request, key.PrincipalId, trigger, gate.Existing, seed, fingerprint, cancellationToken).ConfigureAwait(false);
+            return await AdmitAsync(request, key.PrincipalId, trigger, gate.Existing, seed, fingerprint, cancellationToken);
         }
         finally
         {
@@ -202,8 +202,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             bool committed;
             try
             {
-                committed = await _executions.AcceptAsync(command, _options.MaxQueuedExecutions, _options.MaxQueuedExecutionsPerPrincipal, cancellationToken)
-                                             .ConfigureAwait(false);
+                committed = await _executions.AcceptAsync(command, _options.MaxQueuedExecutions, _options.MaxQueuedExecutionsPerPrincipal, cancellationToken);
             }
             catch (IntegrationQueueFullException)
             {
@@ -225,7 +224,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                 // AcceptAsync is raw ADO under BEGIN IMMEDIATE with no SaveChanges anywhere, so the unique index
                 // surfaces as SqliteException, NOT as the EF-only DbUpdateException. Both are caught: the EF type
                 // stays for a future store that does go through a DbContext.
-                var raced = await ResolveDuplicateAsync(principalId, request.RequestId, fingerprint, cancellationToken).ConfigureAwait(false);
+                var raced = await ResolveDuplicateAsync(principalId, request.RequestId, fingerprint, cancellationToken);
                 return raced ?? Rejected(IntegrationAcceptOutcome.RequestConflict, "That request id was used with a different body.");
             }
 
@@ -264,14 +263,12 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                                               trigger.TargetAgentDefinitionId,
                                               NodeConversationKind.Integration,
                                               conversationId),
-                                          CancellationToken.None)
-                                      .ConfigureAwait(false);
+                                          CancellationToken.None);
             }
 
             // The seed message id IS the execution id, so a continuation can address the seed turn with no lookup and
             // no extra column. One execution owns exactly one seed, so the ids cannot collide.
-            _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, executionId, seed, receivedAtUtc), CancellationToken.None)
-                                  .ConfigureAwait(false);
+            _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, executionId, seed, receivedAtUtc), CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -291,7 +288,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         {
             try
             {
-                await TerminalizeQueueFullAsync(executionId, sessionId).ConfigureAwait(false);
+                await TerminalizeQueueFullAsync(executionId, sessionId);
             }
             catch (Exception exception)
             {
@@ -335,8 +332,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                                                         IntegrationFailureCategories.QueueFull,
                                                         QueueFullSummary,
                                                         payload.GetRawText()),
-                                                    CancellationToken.None)
-                                                .ConfigureAwait(false);
+                                                    CancellationToken.None);
 
             if (terminalized)
             {
@@ -367,7 +363,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         byte[] fingerprint,
         CancellationToken cancellationToken)
     {
-        var existing = await _executions.GetByRequestIdAsync(principalId, requestId, cancellationToken).ConfigureAwait(false);
+        var existing = await _executions.GetByRequestIdAsync(principalId, requestId, cancellationToken);
         if (existing is null)
         {
             return null;

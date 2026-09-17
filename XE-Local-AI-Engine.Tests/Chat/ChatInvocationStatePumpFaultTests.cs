@@ -34,11 +34,11 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
     [Test]
     public async Task PumpAsync_WhenFlushFaultsMidStream_TerminalizesRowFailedAndRethrows()
     {
-        await using var provider = await BuildProviderAsync("pump-fault-flush.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("pump-fault-flush.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
         var conversationId = Guid.NewGuid();
-        var (correlation, assistantMessageId) = await SeedStreamingRowAsync(persistence, conversationId).ConfigureAwait(false);
+        var (correlation, assistantMessageId) = await SeedStreamingRowAsync(persistence, conversationId);
 
         // The pump's first partial flush throws — the terminalize path stays real so the fault handler can persist Failed.
         var faultingPump = new FlushFailingPump(ChatPumpTestFactory.Create(persistence));
@@ -74,13 +74,12 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
                           sequence,
                           new NodeChatPartAccumulator(),
                           onTerminal: null,
-                          CancellationToken.None))
-                      .ConfigureAwait(false);
+                          CancellationToken.None));
 
-        await collector.ConfigureAwait(false);
+        await collector;
 
         // The row is terminalized Failed rather than left streaming until restart recovery.
-        var conversation = AssertEx.NotNull(await persistence.GetConversationAsync(conversationId).ConfigureAwait(false));
+        var conversation = AssertEx.NotNull(await persistence.GetConversationAsync(conversationId));
         var row = conversation.Messages.Single(message => message.MessageId == assistantMessageId);
         AssertEx.Equal(NodeChatMessageStatusValues.Failed, row.Status);
 
@@ -91,19 +90,18 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
     [Test]
     public async Task PumpAsync_WhenFaultRacesACommittedCompletedTerminal_LeavesCompletedIntact()
     {
-        await using var provider = await BuildProviderAsync("pump-fault-idempotent.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("pump-fault-idempotent.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
         var conversationId = Guid.NewGuid();
-        var (correlation, assistantMessageId) = await SeedStreamingRowAsync(persistence, conversationId).ConfigureAwait(false);
+        var (correlation, assistantMessageId) = await SeedStreamingRowAsync(persistence, conversationId);
 
         // The row already reached a genuine Completed terminal before the fault handler runs.
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                              NodeChatMessageStatusValues.Completed,
                              NowMs(),
                              "the real answer",
-                             Model: "model-x"))
-                         .ConfigureAwait(false);
+                             Model: "model-x"));
 
         var faultingPump = new FlushFailingPump(ChatPumpTestFactory.Create(persistence));
         var pump = new ChatInvocationStatePump(faultingPump, TimeProvider.System);
@@ -137,14 +135,13 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
                           sequence,
                           new NodeChatPartAccumulator(),
                           onTerminal: null,
-                          CancellationToken.None))
-                      .ConfigureAwait(false);
+                          CancellationToken.None));
 
-        await collector.ConfigureAwait(false);
+        await collector;
 
         // The fault-terminalize's Failed write is a no-op over the committed Completed row (the transition guard rejects
         // it), so the authoritative Completed content survives.
-        var conversation = AssertEx.NotNull(await persistence.GetConversationAsync(conversationId).ConfigureAwait(false));
+        var conversation = AssertEx.NotNull(await persistence.GetConversationAsync(conversationId));
         var row = conversation.Messages.Single(message => message.MessageId == assistantMessageId);
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, row.Status);
         AssertEx.Equal("the real answer", row.Content);
@@ -155,16 +152,15 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 
     private static async Task<(NodeChatMessageCorrelation Correlation, Guid AssistantMessageId)> SeedStreamingRowAsync(NodeChatPersistenceService persistence, Guid conversationId)
     {
-        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId, "Pump fault", "node", CreatedAtUtc: 10, NodeChatOriginValues.Local)).ConfigureAwait(false);
-        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "hello", CreatedAtUtc: 11)).ConfigureAwait(false);
+        await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId, "Pump fault", "node", CreatedAtUtc: 10, NodeChatOriginValues.Local));
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "hello", CreatedAtUtc: 11));
 
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversationId, assistantMessageId, requestId);
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, assistantMessageId, requestId, CreatedAtUtc: 12, "model-x"))
-                         .ConfigureAwait(false);
-        await persistence.MarkAssistantQueuedAsync(correlation, NowMs()).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, NowMs()).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, assistantMessageId, requestId, CreatedAtUtc: 12, "model-x"));
+        await persistence.MarkAssistantQueuedAsync(correlation, NowMs());
+        await persistence.MarkAssistantStreamingAsync(correlation, NowMs());
         return (correlation, assistantMessageId);
     }
 
@@ -185,8 +181,8 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }

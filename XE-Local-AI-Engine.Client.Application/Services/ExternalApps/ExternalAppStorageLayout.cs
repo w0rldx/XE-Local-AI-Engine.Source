@@ -90,7 +90,7 @@ internal sealed class ExternalAppStorageLayout
 
             foreach (var file in service.Files)
             {
-                await MaterializeAsync(paths, service.Name, file, cancellationToken).ConfigureAwait(false);
+                await MaterializeAsync(paths, service.Name, file, cancellationToken);
             }
         }
 
@@ -271,18 +271,18 @@ internal sealed class ExternalAppStorageLayout
             // then be handed to the daemon as a read-only bind source pointing outside the instance directory.
             EnsureNotALink(target);
 
-            if (string.Equals(await HashFileAsync(target, cancellationToken).ConfigureAwait(false), expected, StringComparison.Ordinal))
+            if (string.Equals(await HashFileAsync(target, cancellationToken), expected, StringComparison.Ordinal))
             {
                 return;
             }
         }
 
-        await WriteThroughTempFileAsync(target, content, expected, cancellationToken).ConfigureAwait(false);
+        await WriteThroughTempFileAsync(target, content, expected, cancellationToken);
     }
 
     private async Task WriteThroughTempFileAsync(string target, byte[] content, string expected, CancellationToken cancellationToken)
     {
-        var temporary = await CreateTempFileAsync(target, content, cancellationToken).ConfigureAwait(false);
+        var temporary = await CreateTempFileAsync(target, content, cancellationToken);
         try
         {
             EnsureNoLinksOnPath(target);
@@ -297,7 +297,7 @@ internal sealed class ExternalAppStorageLayout
             TryDeleteTempFile(temporary);
         }
 
-        if (!string.Equals(await HashFileAsync(target, cancellationToken).ConfigureAwait(false), expected, StringComparison.Ordinal))
+        if (!string.Equals(await HashFileAsync(target, cancellationToken), expected, StringComparison.Ordinal))
         {
             throw new ExternalAppStorageException($"The catalog asset written to '{target}' does not hash to the value the manifest declares.");
         }
@@ -313,7 +313,7 @@ internal sealed class ExternalAppStorageLayout
                 // CreateNew + FileShare.None is what keeps the write from following a link someone else planted.
                 await using (var stream = new FileStream(candidate, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
-                    await stream.WriteAsync(content, cancellationToken).ConfigureAwait(false);
+                    await stream.WriteAsync(content, cancellationToken);
                 }
 
                 SecureFilePermissions.Apply(candidate);
@@ -351,7 +351,7 @@ internal sealed class ExternalAppStorageLayout
         try
         {
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

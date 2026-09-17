@@ -25,7 +25,7 @@ public sealed class NodeSqliteHealthCheckTests
         {
             var dbPath = Path.Combine(dir, "node.db");
             var options = BuildOptions(dbPath);
-            await CreateSchemaAsync(options).ConfigureAwait(false);
+            await CreateSchemaAsync(options);
 
             using var keyHolder = new NullNodeSqliteKeyHolder();
             await using var dbContext = new NodeChatDbContext(options, keyHolder);
@@ -51,7 +51,7 @@ public sealed class NodeSqliteHealthCheckTests
         try
         {
             var options = BuildOptions(dbPath);
-            await CreateSchemaAsync(options).ConfigureAwait(false);
+            await CreateSchemaAsync(options);
 
             // Existing, schema-present, readable database that the process cannot write: the write-lock probe must fail
             // even though read and schema checks pass. Pooling is disabled so the probe opens a fresh handle that
@@ -97,7 +97,7 @@ public sealed class NodeSqliteHealthCheckTests
             var dbPath = Path.Combine(dir, "node.db");
             var connectionString = $"Data Source={dbPath}";
             var options = BuildOptions(dbPath, pooling: true);
-            await CreateSchemaAsync(options).ConfigureAwait(false);
+            await CreateSchemaAsync(options);
 
             // Collides with the probe's own DDL, so BEGIN IMMEDIATE succeeds and the write inside it fails.
             await using (var seed = new SqliteConnection(connectionString))
@@ -204,7 +204,7 @@ public sealed class NodeSqliteHealthCheckTests
     {
         using var keyHolder = new NullNodeSqliteKeyHolder();
         await using var dbContext = new NodeChatDbContext(options, keyHolder);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureCreatedAsync();
     }
 
     private static string CreateTempDir()

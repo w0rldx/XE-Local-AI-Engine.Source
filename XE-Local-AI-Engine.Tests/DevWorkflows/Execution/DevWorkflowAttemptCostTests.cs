@@ -64,14 +64,14 @@ public sealed class DevWorkflowAttemptCostTests
     public async Task ReAttempt_WritesPerAttemptDetail()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await SeedStepCostAsync(harness, runId, "research", providerCalls: 3, estimatedInputTokens: 900, toolCalls: 2, toolSchemaTokens: 250).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await SeedStepCostAsync(harness, runId, "research", providerCalls: 3, estimatedInputTokens: 900, toolCalls: 2, toolSchemaTokens: 250);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var scheduled = await ReadRetryDetailAsync(harness, runId, index: 0).ConfigureAwait(false);
+        var scheduled = await ReadRetryDetailAsync(harness, runId, index: 0);
 
         AssertEx.Equal(expected: 1, scheduled["attempt"]?.GetValue<int>(), "The retry policy's own members are untouched.");
         AssertEx.Equal(DevWorkflowFailureClasses.ProviderError, scheduled["failureClass"]?.GetValue<string>());
@@ -93,7 +93,7 @@ public sealed class DevWorkflowAttemptCostTests
         AssertEx.Equal(expected: 2, scheduled["toolCalls"]?.GetValue<int>());
         AssertEx.Equal(expected: 250L, scheduled["toolSchemaTokens"]?.GetValue<long>());
 
-        var reset = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var reset = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(expected: 2, reset.Attempt, "The next attempt is under way.");
         AssertEx.Null(reset.ProviderCalls, "And the row it runs on was emptied, which is exactly why the event above had to be written.");
         AssertEx.Null(reset.EstimatedInputTokens);
@@ -134,8 +134,7 @@ public sealed class DevWorkflowAttemptCostTests
                            DevWorkflowNodeRunStatus.Pending,
                            DetailJson: RawDetail,
                            IncrementAttempt: true,
-                           ClearWorkSession: true))
-                       .ConfigureAwait(false);
+                           ClearWorkSession: true));
 
         _ = await inner.Received(1)
                        .TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(forwarded => forwarded.DetailJson == RawDetail),
@@ -152,29 +151,29 @@ public sealed class DevWorkflowAttemptCostTests
     public async Task FailFailSuccess_TotalsEqualTheSumOfThreeAttempts()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await SeedStepCostAsync(harness, runId, "research", providerCalls: 2, estimatedInputTokens: 100, toolCalls: 1, toolSchemaTokens: 10).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await SeedStepCostAsync(harness, runId, "research", providerCalls: 2, estimatedInputTokens: 100, toolCalls: 1, toolSchemaTokens: 10);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await SeedStepCostAsync(harness, runId, "research", providerCalls: 4, estimatedInputTokens: 200, toolCalls: 3, toolSchemaTokens: 20).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await SeedStepCostAsync(harness, runId, "research", providerCalls: 4, estimatedInputTokens: 200, toolCalls: 3, toolSchemaTokens: 20);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await SeedStepCostAsync(harness, runId, "research", providerCalls: 8, estimatedInputTokens: 400, toolCalls: 5, toolSchemaTokens: 30).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await SeedStepCostAsync(harness, runId, "research", providerCalls: 8, estimatedInputTokens: 400, toolCalls: 5, toolSchemaTokens: 30);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var row = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var row = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, row.Status);
         AssertEx.Equal(expected: 3, row.Attempt);
         AssertEx.Equal(expected: 8, row.ProviderCalls, "The row is the LAST attempt, and nothing else.");
         AssertEx.Equal(expected: 400L, row.EstimatedInputTokens);
 
-        var first = await ReadRetryDetailAsync(harness, runId, index: 0).ConfigureAwait(false);
-        var second = await ReadRetryDetailAsync(harness, runId, index: 1).ConfigureAwait(false);
+        var first = await ReadRetryDetailAsync(harness, runId, index: 0);
+        var second = await ReadRetryDetailAsync(harness, runId, index: 1);
         AssertEx.Equal(expected: 1, first["attempt"]?.GetValue<int>());
         AssertEx.Equal(expected: 2, second["attempt"]?.GetValue<int>());
 
@@ -210,17 +209,17 @@ public sealed class DevWorkflowAttemptCostTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing());
         harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoop, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoop, developmentProjectId: Guid.NewGuid());
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await SeedStepCostAsync(harness, runId, "implement", providerCalls: 6, estimatedInputTokens: 512, toolCalls: 4, toolSchemaTokens: 64).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await SeedStepCostAsync(harness, runId, "implement", providerCalls: 6, estimatedInputTokens: 512, toolCalls: 4, toolSchemaTokens: 64);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var implement = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implement = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(expected: 2, implement.Attempt, "The fix loop re-ran the node the failing check was judging.");
 
-        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        var events = await harness.ReadEventsAsync(runId);
         var reset = events.Where(entry => entry.EventType == DevWorkflowEventTypes.NodeRetryScheduled && entry.NodeRunId == implement.Id)
                           .Select(entry => AssertEx.NotNull(JsonNode.Parse(AssertEx.NotNull(entry.DetailJson)) as JsonObject))
                           .Last();
@@ -274,7 +273,7 @@ public sealed class DevWorkflowAttemptCostTests
 
     private static async Task<JsonObject> ReadRetryDetailAsync(DevWorkflowHarness harness, Guid runId, int index)
     {
-        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        var events = await harness.ReadEventsAsync(runId);
         var retries = events.Where(static entry => entry.EventType == DevWorkflowEventTypes.NodeRetryScheduled).ToList();
         AssertEx.True(retries.Count > index, $"Expected at least {index + 1} retry event(s); the run wrote {retries.Count}.");
         return AssertEx.NotNull(JsonNode.Parse(AssertEx.NotNull(retries[index].DetailJson)) as JsonObject,

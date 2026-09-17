@@ -29,9 +29,8 @@ public sealed class CreateComparisonEndpoint(IComparisonReportService comparison
                                                 req.BaseBenchmarkRunId,
                                                 req.TunedBenchmarkRunId,
                                                 req.TrainingRunId),
-                                            ct)
-                                        .ConfigureAwait(false);
-        await Send.OkAsync(created.ToResponse(), ct).ConfigureAwait(false);
+                                            ct);
+        await Send.OkAsync(created.ToResponse(), ct);
     }
 }
 
@@ -47,11 +46,11 @@ public sealed class ListComparisonsEndpoint(IComparisonReportService comparisons
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var items = await _comparisons.ListAsync(ct).ConfigureAwait(false);
+        var items = await _comparisons.ListAsync(ct);
         await Send.OkAsync(new ListComparisonsResponse
         {
             Items = items.Select(item => item.ToResponse()).ToArray()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -67,14 +66,14 @@ public sealed class GetComparisonEndpoint(IComparisonReportService comparisons) 
 
     public override async Task HandleAsync(ComparisonByIdRequest req, CancellationToken ct)
     {
-        var report = await _comparisons.GetAsync(req.ComparisonId, ct).ConfigureAwait(false);
+        var report = await _comparisons.GetAsync(req.ComparisonId, ct);
         if (report is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(report.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(report.ToResponse(), ct);
     }
 }
 
@@ -93,8 +92,8 @@ public sealed class DeleteComparisonEndpoint(IComparisonReportService comparison
 
     public override async Task HandleAsync(DeleteComparisonRequest req, CancellationToken ct)
     {
-        await _comparisons.DeleteAsync(req.ComparisonId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _comparisons.DeleteAsync(req.ComparisonId, req.ExpectedVersion, ct);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -118,7 +117,7 @@ public sealed class SuggestComparisonEndpoint(IComparisonReportService compariso
 
     public override async Task HandleAsync(SuggestComparisonRequest req, CancellationToken ct)
     {
-        var suggestion = await _comparisons.SuggestAsync(req.TrainingRunId, ct).ConfigureAwait(false);
-        await Send.OkAsync(suggestion.ToResponse(), ct).ConfigureAwait(false);
+        var suggestion = await _comparisons.SuggestAsync(req.TrainingRunId, ct);
+        await Send.OkAsync(suggestion.ToResponse(), ct);
     }
 }

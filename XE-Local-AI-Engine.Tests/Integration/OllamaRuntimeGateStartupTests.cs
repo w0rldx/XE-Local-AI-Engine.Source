@@ -36,7 +36,7 @@ public sealed class OllamaRuntimeGateStartupTests
             "ICapabilityReporter must resolve with XE_OLLAMA_RUNTIME_ENABLED=false; the no-op capability client is what keeps the host buildable.");
 
         var prober = factory.Services.GetRequiredService<ModelCapabilityProber>();
-        var status = await prober.DetectOllamaRuntimeAsync(CancellationToken.None).ConfigureAwait(false);
+        var status = await prober.DetectOllamaRuntimeAsync(CancellationToken.None);
 
         AssertEx.False(status.Reachable, "With the Ollama runtime gated off the node must report the runtime unreachable, not throw.");
         AssertEx.Null(status.Version, "An unreachable runtime reports no version.");
@@ -50,12 +50,12 @@ public sealed class OllamaRuntimeGateStartupTests
         var client = new UnavailableModelCapabilityClient();
         var cancellationToken = CancellationToken.None;
 
-        AssertEx.False(await client.IsRuntimeReachableAsync(cancellationToken).ConfigureAwait(false), "The absent runtime is never reachable.");
-        AssertEx.Null(await client.GetRuntimeVersionAsync(cancellationToken).ConfigureAwait(false), "The absent runtime reports no version.");
-        AssertEx.Empty(await client.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false), "The absent runtime has no installed models.");
-        AssertEx.Empty(await client.ListRunningModelsAsync(cancellationToken).ConfigureAwait(false), "The absent runtime has no running models.");
+        AssertEx.False(await client.IsRuntimeReachableAsync(cancellationToken), "The absent runtime is never reachable.");
+        AssertEx.Null(await client.GetRuntimeVersionAsync(cancellationToken), "The absent runtime reports no version.");
+        AssertEx.Empty(await client.ListInstalledModelsAsync(cancellationToken), "The absent runtime has no installed models.");
+        AssertEx.Empty(await client.ListRunningModelsAsync(cancellationToken), "The absent runtime has no running models.");
 
-        var detail = await client.GetModelDetailAsync("any-model", cancellationToken).ConfigureAwait(false);
+        var detail = await client.GetModelDetailAsync("any-model", cancellationToken);
         AssertEx.Null(detail.MaxContextTokens, "The absent runtime cannot report a max context length.");
     }
 
@@ -65,15 +65,14 @@ public sealed class OllamaRuntimeGateStartupTests
         var service = new UnavailableOllamaModelService();
         var cancellationToken = CancellationToken.None;
 
-        AssertEx.False(await service.IsAvailableAsync(cancellationToken).ConfigureAwait(false), "The absent daemon is never available.");
-        AssertEx.Empty(await service.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false), "The absent daemon holds no installed models.");
-        AssertEx.Empty(await service.ListRunningModelsAsync(cancellationToken).ConfigureAwait(false), "The absent daemon holds no running models.");
+        AssertEx.False(await service.IsAvailableAsync(cancellationToken), "The absent daemon is never available.");
+        AssertEx.Empty(await service.ListLocalModelsAsync(cancellationToken), "The absent daemon holds no installed models.");
+        AssertEx.Empty(await service.ListRunningModelsAsync(cancellationToken), "The absent daemon holds no running models.");
 
         // HttpRequestException with no StatusCode is exactly what a refused connection raises, and it is what
         // UnloadLocalModelEndpoint's `when (exception.StatusCode is null)` filter absorbs as "nothing was resident".
         var exception = await AssertEx.ThrowsAsync<HttpRequestException>(() => service.UnloadModelAsync("any-model", cancellationToken),
-                                          "Unloading against a disabled runtime must fail the way an absent daemon fails.")
-                                      .ConfigureAwait(false);
+                                          "Unloading against a disabled runtime must fail the way an absent daemon fails.");
 
         AssertEx.Null(exception.StatusCode, "A transport failure carries no status code; a status would escape the endpoint's filter.");
         AssertEx.Contains(exception.Message, OllamaRuntimeGate.RuntimeEnabledConfigurationKey,

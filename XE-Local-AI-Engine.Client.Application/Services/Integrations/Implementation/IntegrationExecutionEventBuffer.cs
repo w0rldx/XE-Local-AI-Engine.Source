@@ -314,7 +314,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
                 continue;
             }
 
-            await appended.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await appended.WaitAsync(cancellationToken);
         }
     }
 
@@ -386,7 +386,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
     {
         try
         {
-            while (await _sweepTimer.WaitForNextTickAsync(_sweepCancellation.Token).ConfigureAwait(false))
+            while (await _sweepTimer.WaitForNextTickAsync(_sweepCancellation.Token))
             {
                 _ = Sweep();
             }

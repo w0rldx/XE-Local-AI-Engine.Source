@@ -29,7 +29,7 @@ public sealed class ScheduledJobRunEventStore(NodeChatDbContext dbContext, TimeP
         };
 
         _ = _dbContext.ScheduledJobRunEvents.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -40,8 +40,7 @@ public sealed class ScheduledJobRunEventStore(NodeChatDbContext dbContext, TimeP
                                        .AsNoTracking()
                                        .Where(runEvent => runEvent.RunId == runId)
                                        .OrderBy(runEvent => runEvent.Sequence)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

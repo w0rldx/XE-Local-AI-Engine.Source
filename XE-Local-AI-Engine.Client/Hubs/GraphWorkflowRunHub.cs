@@ -69,7 +69,7 @@ public sealed class GraphWorkflowRunHub(IGraphWorkflowRunService runs, IOptions<
         GraphWorkflowRunDetail detail;
         try
         {
-            detail = await _runs.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+            detail = await _runs.GetRunAsync(runId, cancellationToken);
         }
         catch (GraphWorkflowNotFoundException)
         {
@@ -79,14 +79,14 @@ public sealed class GraphWorkflowRunHub(IGraphWorkflowRunService runs, IOptions<
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
         // and the join reaches nobody. The overlap this creates is harmless — every push is an idempotent notification
         // keyed by sequence.
-        await Groups.AddToGroupAsync(Context.ConnectionId, GraphWorkflowHubGroups.Run(runId), cancellationToken).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, GraphWorkflowHubGroups.Run(runId), cancellationToken);
 
         // The same paged read the event endpoint answers with, capped at the same configured window and carrying the
         // same watermark: a client can move between a subscription and the feed without a gap or a repeat, because
         // neither side owns a copy of that arithmetic. The watermark is the last row actually HANDED over — never the
         // run's own sequence, which on a truncated page is past events this snapshot did not carry and nothing ever
         // replays again.
-        var replay = await _runs.ListEventsAsync(runId, afterSeq, cancellationToken).ConfigureAwait(false);
+        var replay = await _runs.ListEventsAsync(runId, afterSeq, cancellationToken);
         return new GraphWorkflowRunSubscriptionSnapshot(runId,
             detail.Run.Status.ToString(),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued),

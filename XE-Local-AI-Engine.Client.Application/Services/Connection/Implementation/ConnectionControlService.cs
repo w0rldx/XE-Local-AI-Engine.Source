@@ -19,23 +19,23 @@ public sealed class ConnectionControlService(
 
     public async Task<ConnectionControlStatus> ConnectAsync(CancellationToken cancellationToken = default)
     {
-        await _workerHubConnection.ConnectAsync(cancellationToken).ConfigureAwait(false);
+        await _workerHubConnection.ConnectAsync(cancellationToken);
         return BuildStatus();
     }
 
     public async Task<ConnectionControlStatus> DisconnectAsync(CancellationToken cancellationToken = default)
     {
-        await _workerHubConnection.DisconnectAsync(cancellationToken).ConfigureAwait(false);
+        await _workerHubConnection.DisconnectAsync(cancellationToken);
         return BuildStatus();
     }
 
     public async Task<ConnectionControlStatus> SetAutoConnectAsync(bool enabled, CancellationToken cancellationToken = default)
     {
-        await _tokenStore.SetAutoConnectOnStartAsync(enabled).ConfigureAwait(false);
+        await _tokenStore.SetAutoConnectOnStartAsync(enabled);
 
         if (!enabled && _connectionState.Current != WorkerConnectionState.Disconnected)
         {
-            await _workerHubConnection.DisconnectAsync(cancellationToken).ConfigureAwait(false);
+            await _workerHubConnection.DisconnectAsync(cancellationToken);
         }
 
         return BuildStatus();

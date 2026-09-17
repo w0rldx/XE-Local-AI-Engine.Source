@@ -27,7 +27,7 @@ public sealed class EvalModelIdentityResolverTests
         registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Entry(sha256: "abc123"));
         var resolver = CreateResolver(registry, Substitute.For<IModelClassificationStore>());
 
-        var identity = await resolver.ResolveAsync(ModelName).ConfigureAwait(false);
+        var identity = await resolver.ResolveAsync(ModelName);
 
         AssertEx.True(identity.IsVerified, "an installed GGUF with a content hash is a verified identity");
         AssertEx.Equal("gguf-sha256:abc123", identity.Token);
@@ -41,9 +41,9 @@ public sealed class EvalModelIdentityResolverTests
         var resolver = CreateResolver(registry, Substitute.For<IModelClassificationStore>());
 
         registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Entry(sha256: "before"));
-        var before = await resolver.ResolveAsync(ModelName).ConfigureAwait(false);
+        var before = await resolver.ResolveAsync(ModelName);
         registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Entry(sha256: "after"));
-        var after = await resolver.ResolveAsync(ModelName).ConfigureAwait(false);
+        var after = await resolver.ResolveAsync(ModelName);
 
         AssertEx.NotEqual(before.Token, after.Token);
     }
@@ -58,7 +58,7 @@ public sealed class EvalModelIdentityResolverTests
                 .Returns(Entry(sha256: null, sizeBytes: 4096, revision: "rev-1", downloadedAt: DateTimeOffset.FromUnixTimeMilliseconds(1_700_000_000_000)));
         var resolver = CreateResolver(registry, Substitute.For<IModelClassificationStore>());
 
-        var identity = await resolver.ResolveAsync(ModelName).ConfigureAwait(false);
+        var identity = await resolver.ResolveAsync(ModelName);
 
         AssertEx.True(identity.IsVerified);
         AssertEx.Equal("gguf-rev:rev-1:size:4096:dl:1700000000000", identity.Token);
@@ -73,7 +73,7 @@ public sealed class EvalModelIdentityResolverTests
         classification.GetByNameAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Classification(digest: "sha256:deadbeef"));
         var resolver = CreateResolver(registry, classification);
 
-        var identity = await resolver.ResolveAsync(ModelName).ConfigureAwait(false);
+        var identity = await resolver.ResolveAsync(ModelName);
 
         AssertEx.True(identity.IsVerified, "an Ollama model with a cached content digest is a verified identity");
         AssertEx.Equal("ollama-digest:sha256:deadbeef", identity.Token);
@@ -88,7 +88,7 @@ public sealed class EvalModelIdentityResolverTests
         classification.GetByNameAsync(ModelName, Arg.Any<CancellationToken>()).Returns((ModelClassificationRecord?)null);
         var resolver = CreateResolver(registry, classification);
 
-        var identity = await resolver.ResolveAsync(ModelName).ConfigureAwait(false);
+        var identity = await resolver.ResolveAsync(ModelName);
 
         AssertEx.False(identity.IsVerified, "no resolvable identity must not be treated as verified");
         AssertEx.Equal(EvalModelIdentity.UnverifiedToken, identity.Token);
@@ -104,7 +104,7 @@ public sealed class EvalModelIdentityResolverTests
         classification.GetByNameAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Classification(digest: null));
         var resolver = CreateResolver(registry, classification);
 
-        var identity = await resolver.ResolveAsync(ModelName).ConfigureAwait(false);
+        var identity = await resolver.ResolveAsync(ModelName);
 
         AssertEx.False(identity.IsVerified);
         AssertEx.Equal(EvalModelIdentity.UnverifiedToken, identity.Token);
@@ -117,12 +117,12 @@ public sealed class EvalModelIdentityResolverTests
         var classification = Substitute.For<IModelClassificationStore>();
         var resolver = CreateResolver(registry, classification);
 
-        var identity = await resolver.ResolveAsync("   ").ConfigureAwait(false);
+        var identity = await resolver.ResolveAsync("   ");
 
         AssertEx.False(identity.IsVerified);
         AssertEx.Equal(EvalModelIdentity.UnverifiedToken, identity.Token);
-        await registry.DidNotReceive().FindAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await classification.DidNotReceive().GetByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await registry.DidNotReceive().FindAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await classification.DidNotReceive().GetByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -135,7 +135,7 @@ public sealed class EvalModelIdentityResolverTests
         classification.GetByNameAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Classification(digest: "sha256:cafe"));
         var resolver = CreateResolver(registry, classification);
 
-        var identity = await resolver.ResolveAsync(ModelName).ConfigureAwait(false);
+        var identity = await resolver.ResolveAsync(ModelName);
 
         AssertEx.True(identity.IsVerified);
         AssertEx.Equal("ollama-digest:sha256:cafe", identity.Token);

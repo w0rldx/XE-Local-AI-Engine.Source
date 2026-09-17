@@ -21,7 +21,7 @@ public sealed class TranscriptionFeatureGateTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/transcription/runtime");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -38,7 +38,7 @@ public sealed class TranscriptionFeatureGateTests
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, route);
             factory.AddNodeBearerToken(request);
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
+            using var response = await client.SendAsync(request);
 
             AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode,
                 $"'{route}' must answer 404 while the feature is off, even for an operator.");
@@ -55,7 +55,7 @@ public sealed class TranscriptionFeatureGateTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/transcription/runtime");
         factory.AddNonOperatorBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -69,7 +69,7 @@ public sealed class TranscriptionFeatureGateTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/transcription/runtime");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.NotEqual(HttpStatusCode.NotFound, response.StatusCode,
             "With the feature on, the runtime route must be reachable — otherwise the disabled-case 404 proves nothing.");

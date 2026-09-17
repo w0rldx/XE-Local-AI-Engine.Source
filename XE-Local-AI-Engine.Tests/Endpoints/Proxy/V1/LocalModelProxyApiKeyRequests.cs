@@ -28,6 +28,6 @@ internal static class LocalModelProxyApiKeyRequests
 
         using var request = new HttpRequestMessage(method, Route);
         authenticate?.Invoke(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 }

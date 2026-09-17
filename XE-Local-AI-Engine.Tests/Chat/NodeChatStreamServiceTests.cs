@@ -80,7 +80,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             events.Add(streamEvent);
         }
@@ -132,7 +132,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             events.Add(streamEvent);
         }
@@ -188,7 +188,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             events.Add(streamEvent);
         }
@@ -251,7 +251,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           ReasoningEffort: "low")).ConfigureAwait(false))
+                           ReasoningEffort: "low")))
         {
             drained++;
         }
@@ -305,7 +305,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           IsWorkSessionTurn: isWorkSessionTurn)).ConfigureAwait(false))
+                           IsWorkSessionTurn: isWorkSessionTurn)))
         {
             drained++;
         }
@@ -353,7 +353,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -409,7 +409,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           SamplingOptions: sampling)).ConfigureAwait(false))
+                           SamplingOptions: sampling)))
         {
             drained++;
         }
@@ -459,7 +459,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -513,7 +513,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -577,7 +577,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            UseLocalTools: true,
-                           SuppressAskUser: true)).ConfigureAwait(false))
+                           SuppressAskUser: true)))
         {
             drained++;
         }
@@ -637,7 +637,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -699,7 +699,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -733,8 +733,7 @@ public sealed class NodeChatStreamServiceTests
 
         // The early answer, taken while the definition is still narrow — the pre-session check the workflow lane makes.
         var early = await new WorkSessionWriteDeclarationGuard(resolver, offerProvider, CreateNodeSettingsStore(), CreateLocalDefaultChatModelResolver())
-                          .InspectAsync(agentDefinitionId, WriteDeclarationModel, CancellationToken.None)
-                          .ConfigureAwait(false);
+                          .InspectAsync(agentDefinitionId, WriteDeclarationModel, CancellationToken.None);
         AssertEx.Null(early, "The definition carries nothing that writes when the early check reads it.");
 
         var refusal = await AssertEx.ThrowsAsync<WorkSessionUndeclaredWriteException>(async () =>
@@ -746,11 +745,11 @@ public sealed class NodeChatStreamServiceTests
                                Model: WriteDeclarationModel,
                                UseLocalTools: true,
                                AgentDefinitionId: agentDefinitionId,
-                               RefuseUndeclaredWrites: true)).ConfigureAwait(false))
+                               RefuseUndeclaredWrites: true)))
             {
                 // The refusal lands before the first tool-bearing event; nothing here is expected to run.
             }
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Contains(refusal.Message, WriteDeclarationToolName, StringComparison.Ordinal);
         AssertEx.Contains(refusal.Message, "GRAPH-C4-2", StringComparison.Ordinal);
@@ -778,8 +777,7 @@ public sealed class NodeChatStreamServiceTests
 
         // Burn the narrow first answer so this send resolves the widened definition, exactly as the refusing test does.
         _ = await resolver.ResolveAsync(agentDefinitionId, WriteDeclarationModel, retrievalQuery: null, supportsTools: true, honorModelProfile: false,
-                              activeModelIsCloud: false, CancellationToken.None)
-                          .ConfigureAwait(false);
+                              activeModelIsCloud: false, CancellationToken.None);
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -788,7 +786,7 @@ public sealed class NodeChatStreamServiceTests
                            RequestId: requestId,
                            Model: WriteDeclarationModel,
                            UseLocalTools: true,
-                           AgentDefinitionId: agentDefinitionId)).ConfigureAwait(false))
+                           AgentDefinitionId: agentDefinitionId)))
         {
             drained++;
         }
@@ -912,7 +910,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             // Drain the stream so the turn completes; the assertion below is on the stager interaction.
         }
@@ -980,7 +978,7 @@ public sealed class NodeChatStreamServiceTests
                            "read the workspace",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             // Drain the stream so the invocation, pump, and invocation-scope teardown all complete.
         }
@@ -1047,7 +1045,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             // Drain the stream so the turn completes; the assertion below is on the stager interaction.
         }
@@ -1104,7 +1102,7 @@ public sealed class NodeChatStreamServiceTests
                            "summarize the attachment",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             // Drain the stream so the turn completes; the assertion below is on the injected context.
         }
@@ -1140,7 +1138,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             events.Add(streamEvent);
         }
@@ -1174,7 +1172,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             // Drain the failure stream so terminalization completes.
         }
@@ -1202,7 +1200,7 @@ public sealed class NodeChatStreamServiceTests
 
         var exception = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(async () =>
         {
-            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello")).ConfigureAwait(false))
+            await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello")))
             {
                 // Nothing is ever yielded: the read fails before the user turn is persisted.
             }
@@ -1238,7 +1236,7 @@ public sealed class NodeChatStreamServiceTests
                                "hello",
                                MessageId: assistantMessageId,
                                RequestId: requestId,
-                               UseLocalTools: true)).ConfigureAwait(false))
+                               UseLocalTools: true)))
             {
                 // Drain until the expected package-build exception is observed.
             }
@@ -1280,11 +1278,11 @@ public sealed class NodeChatStreamServiceTests
                                        MessageId: assistantMessageId,
                                        RequestId: requestId,
                                        UseLocalTools: true),
-                                   clientCancellation.Token).ConfigureAwait(false))
+                                   clientCancellation.Token))
                 {
                     if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta)
                     {
-                        await clientCancellation.CancelAsync().ConfigureAwait(false);
+                        await clientCancellation.CancelAsync();
                         disconnected.TrySetResult();
                     }
                 }
@@ -1299,11 +1297,11 @@ public sealed class NodeChatStreamServiceTests
         // first delta this wait never completes and the whole batch deadlocks instead of failing (a null from an
         // unstubbed GetConversationForTurnAsync did exactly that, for 26 minutes, because the catch below only covers
         // OperationCanceledException). Race the signal against the task so a fault surfaces as a normal failure.
-        await Task.WhenAny(disconnected.Task, enumerationTask).ConfigureAwait(false);
+        await Task.WhenAny(disconnected.Task, enumerationTask);
         if (enumerationTask.IsCompleted)
         {
             // Rethrows whatever the enumeration actually failed with; completing early is itself a failure here.
-            await enumerationTask.ConfigureAwait(false);
+            await enumerationTask;
             AssertEx.True(condition: false, "The enumeration ended before the stream produced its first delta.");
         }
 
@@ -1311,7 +1309,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.False(enumerationTask.IsCompleted, "The disconnected stream must await the detached run before releasing its workspace.");
 
         releaseRunner.SetResult();
-        await enumerationTask.ConfigureAwait(false);
+        await enumerationTask;
         AssertEx.Equal(expected: 1, lease.DisposeCount);
         AssertEx.Equal(expected: 1, lease.AmbientScopeEnterCount);
         AssertEx.Equal(expected: 1, lease.AmbientScopeDisposeCount);
@@ -1364,7 +1362,7 @@ public sealed class NodeChatStreamServiceTests
                            "what is the launch code?",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+                           AttachmentFileIds: [fileId])))
         {
             drained++;
         }
@@ -1378,7 +1376,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenModelIsVisionCapable_AttachesImagePartsToContext()
     {
-        var captured = await RunImageAttachmentAsync(supportsVision: true).ConfigureAwait(false);
+        var captured = await RunImageAttachmentAsync(supportsVision: true);
 
         var imageMessage = captured.SingleOrDefault(message => message.Images is { Count: > 0 });
         AssertEx.NotNull(imageMessage);
@@ -1398,7 +1396,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenModelIsNotVisionCapable_OmitsImageParts()
     {
-        var captured = await RunImageAttachmentAsync(supportsVision: false).ConfigureAwait(false);
+        var captured = await RunImageAttachmentAsync(supportsVision: false);
 
         AssertEx.False(captured.Any(message => message.Images is { Count: > 0 }),
             "A non-vision model must never receive image parts.");
@@ -1409,7 +1407,7 @@ public sealed class NodeChatStreamServiceTests
     {
         // The tool/agent branch stages only TEXT for the file tools; images must still reach a vision model, so image
         // parts are composed independently of that branch (regression: they were dropped when tools were enabled).
-        var captured = await RunImageAttachmentAsync(supportsVision: true, supportsTools: true, useLocalTools: true).ConfigureAwait(false);
+        var captured = await RunImageAttachmentAsync(supportsVision: true, supportsTools: true, useLocalTools: true);
 
         var imageMessage = captured.SingleOrDefault(message => message.Images is { Count: > 0 });
         AssertEx.NotNull(imageMessage);
@@ -1425,7 +1423,7 @@ public sealed class NodeChatStreamServiceTests
         {
             MaxImageAttachments = 3
         };
-        var captured = await RunImageAttachmentAsync(supportsVision: true, imageCount: 10, options: options).ConfigureAwait(false);
+        var captured = await RunImageAttachmentAsync(supportsVision: true, imageCount: 10, options: options);
 
         var imageMessage = captured.SingleOrDefault(message => message.Images is { Count: > 0 });
         AssertEx.NotNull(imageMessage);
@@ -1512,7 +1510,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            UseLocalTools: useLocalTools,
-                           AttachmentFileIds: fileIds)).ConfigureAwait(false))
+                           AttachmentFileIds: fileIds)))
         {
             drained++;
         }
@@ -1543,7 +1541,7 @@ public sealed class NodeChatStreamServiceTests
                            "how do I restart the service?",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseKnowledgeBase: true)).ConfigureAwait(false))
+                           UseKnowledgeBase: true)))
         {
             drained++;
         }
@@ -1577,7 +1575,7 @@ public sealed class NodeChatStreamServiceTests
                            "an unrelated question",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseKnowledgeBase: true)).ConfigureAwait(false))
+                           UseKnowledgeBase: true)))
         {
             drained++;
         }
@@ -1609,7 +1607,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            Model: "gpt-5.5",
-                           UseKnowledgeBase: true)).ConfigureAwait(false))
+                           UseKnowledgeBase: true)))
         {
             events.Add(streamEvent);
         }
@@ -1705,7 +1703,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            Model: cloudModel,
-                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+                           AttachmentFileIds: [fileId])))
         {
             events.Add(streamEvent);
         }
@@ -1761,7 +1759,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            UseLocalTools: true,
-                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+                           AttachmentFileIds: [fileId])))
         {
             drained++;
         }
@@ -1817,7 +1815,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: false)).ConfigureAwait(false))
+                           UseLocalTools: false)))
         {
             drained++;
         }
@@ -1875,7 +1873,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -1934,7 +1932,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -1985,7 +1983,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta)
             {
@@ -1994,7 +1992,7 @@ public sealed class NodeChatStreamServiceTests
             }
         }
 
-        await AssertEx.EventuallyAsync(() => terminalRequest is not null, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => terminalRequest is not null, TimeSpan.FromSeconds(5));
         AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, terminalRequest!.Status);
         AssertEx.Equal(conversationId, terminalRequest.Correlation.ConversationId);
         AssertEx.Equal(assistantMessageId, terminalRequest.Correlation.MessageId);
@@ -2041,7 +2039,7 @@ public sealed class NodeChatStreamServiceTests
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
-        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId)).ConfigureAwait(false))
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId)))
         {
             events.Add(streamEvent);
         }
@@ -2100,7 +2098,7 @@ public sealed class NodeChatStreamServiceTests
                                    "hello",
                                    MessageId: assistantMessageId,
                                    RequestId: requestId),
-                               clientCancellation.Token).ConfigureAwait(false))
+                               clientCancellation.Token))
             {
                 events.Add(streamEvent);
 
@@ -2109,7 +2107,7 @@ public sealed class NodeChatStreamServiceTests
                 if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta && !clientDisconnected)
                 {
                     clientDisconnected = true;
-                    await clientCancellation.CancelAsync().ConfigureAwait(false);
+                    await clientCancellation.CancelAsync();
                     releaseRunner.SetResult();
                 }
             }
@@ -2172,7 +2170,7 @@ public sealed class NodeChatStreamServiceTests
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
         // The blocked GetEnableToolsAsync is released as a cancellation when the client disconnects.
-        await using var gateRegistration = clientCancellation.Token.Register(() => enableToolsGate.TrySetCanceled()).ConfigureAwait(false);
+        await using var gateRegistration = clientCancellation.Token.Register(() => enableToolsGate.TrySetCanceled());
         var reachedQueued = false;
 
         try
@@ -2181,14 +2179,14 @@ public sealed class NodeChatStreamServiceTests
                                    "hello",
                                    MessageId: assistantMessageId,
                                    RequestId: requestId),
-                               clientCancellation.Token).ConfigureAwait(false))
+                               clientCancellation.Token))
             {
                 if (streamEvent.Type == ChatStreamEventTypes.AssistantQueued)
                 {
                     // The row is now persisted Queued; the next MoveNextAsync blocks at GetEnableToolsAsync. Disconnect
                     // now so the teardown happens before run ownership is established.
                     reachedQueued = true;
-                    await clientCancellation.CancelAsync().ConfigureAwait(false);
+                    await clientCancellation.CancelAsync();
                 }
             }
         }
@@ -2254,7 +2252,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -2269,8 +2267,7 @@ public sealed class NodeChatStreamServiceTests
         // The just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
         // not just any string, the actual turn content drives which playbook actions are injected.
         await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(),
-                          Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+                          Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -2319,7 +2316,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -2375,7 +2372,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -2384,8 +2381,7 @@ public sealed class NodeChatStreamServiceTests
         // Retrieval still happens — the definition was resolved with the user turn as the relevance query, so existing
         // memory rides the resolved prompt.
         await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(),
-                          Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+                          Arg.Any<CancellationToken>());
         // …but no NEW candidates are mined: extraction is never dispatched.
         extractionDispatcher.DidNotReceive().Dispatch(Arg.Any<MemoryExtractionDispatchContext>(), Arg.Any<MemoryExtractionRunInput>());
     }
@@ -2444,7 +2440,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -2509,7 +2505,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           SuppressAskUser: true)).ConfigureAwait(false))
+                           SuppressAskUser: true)))
         {
             drained++;
         }
@@ -2530,8 +2526,7 @@ public sealed class NodeChatStreamServiceTests
         // only in a server log, so the operator saw an ordinary answer and no hint the team never ran.
         var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Orchestrator,
                 OrchestrationResolution.Degraded(OrchestrationDegradationReason.TooFewCapableParticipants,
-                    "only 1 of its agents can call tools, and at least 2 are required"))
-            .ConfigureAwait(false);
+                    "only 1 of its agents can call tools, and at least 2 are required"));
 
         AssertEx.ContainsSingle(events,
             streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded),
@@ -2547,8 +2542,7 @@ public sealed class NodeChatStreamServiceTests
         // A Single-kind agent never asked for orchestration, so it must stay silent even with an orchestration resolver
         // primed to degrade — the chat-turn resolver short-circuits before it is ever consulted.
         var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Single,
-                OrchestrationResolution.Degraded(OrchestrationDegradationReason.TopologyInvalid, "its handoff topology is missing or invalid"))
-            .ConfigureAwait(false);
+                OrchestrationResolution.Degraded(OrchestrationDegradationReason.TopologyInvalid, "its handoff topology is missing or invalid"));
 
         AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.OrchestrationDegraded)),
             "a single-agent definition must never raise the orchestration-degraded notice");
@@ -2583,8 +2577,7 @@ public sealed class NodeChatStreamServiceTests
             orchestrationResolver);
 
         var events = new List<ChatStreamEvent>();
-        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId))
-                                                 .ConfigureAwait(false))
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId)))
         {
             events.Add(streamEvent);
         }
@@ -2693,7 +2686,7 @@ public sealed class NodeChatStreamServiceTests
                            "summarize the attachment",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+                           AttachmentFileIds: [fileId])))
         {
             events.Add(streamEvent);
         }
@@ -2745,7 +2738,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             streamed.Add(streamEvent);
         }
@@ -2811,7 +2804,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -2819,8 +2812,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.Equal(expected: 1, runner.LastAgentDefinitionVersion);
         AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
-        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -2868,16 +2860,14 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           AgentDefinitionId: requestAgentId)).ConfigureAwait(false))
+                           AgentDefinitionId: requestAgentId)))
         {
             drained++;
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
-        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -2923,14 +2913,13 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -2977,7 +2966,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -3033,7 +3022,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             events.Add(streamEvent);
         }
@@ -3105,7 +3094,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            Model: dropdownModel,
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -3125,8 +3114,7 @@ public sealed class NodeChatStreamServiceTests
                           Arg.Any<bool>(),
                           Arg.Is<bool>(honor => !honor),
                           Arg.Any<bool>(),
-                          Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+                          Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -3182,7 +3170,7 @@ public sealed class NodeChatStreamServiceTests
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                            "hello",
                            MessageId: assistantMessageId,
-                           RequestId: requestId)).ConfigureAwait(false))
+                           RequestId: requestId)))
         {
             drained++;
         }
@@ -3199,8 +3187,7 @@ public sealed class NodeChatStreamServiceTests
                           Arg.Any<bool>(),
                           Arg.Is<bool>(honor => honor),
                           Arg.Any<bool>(),
-                          Arg.Any<CancellationToken>())
-                      .ConfigureAwait(false);
+                          Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -3283,7 +3270,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -3391,7 +3378,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -3491,7 +3478,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -3545,7 +3532,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -3620,7 +3607,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -3678,7 +3665,7 @@ public sealed class NodeChatStreamServiceTests
                            "hello",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -3739,7 +3726,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            Model: "gpt-5.5",
-                           UseLocalTools: true)).ConfigureAwait(false))
+                           UseLocalTools: true)))
         {
             drained++;
         }
@@ -4230,7 +4217,7 @@ public sealed class NodeChatStreamServiceTests
             olderVariantId,
             newerVariantId,
             selectedPath,
-            requestSelection: null).ConfigureAwait(false);
+            requestSelection: null);
 
         var assistantContents = runner.CapturedContext
                                       .Where(message => message.Role == MessageRole.Assistant)
@@ -4253,7 +4240,7 @@ public sealed class NodeChatStreamServiceTests
             olderVariantId,
             newerVariantId,
             persistedSelection: null,
-            requestSelection: null).ConfigureAwait(false);
+            requestSelection: null);
 
         var assistantContents = runner.CapturedContext
                                       .Where(message => message.Role == MessageRole.Assistant)
@@ -4282,7 +4269,7 @@ public sealed class NodeChatStreamServiceTests
             olderVariantId,
             newerVariantId,
             persistedSelection: null,
-            requestSelection).ConfigureAwait(false);
+            requestSelection);
 
         var assistantContents = runner.CapturedContext
                                       .Where(message => message.Role == MessageRole.Assistant)
@@ -4307,7 +4294,7 @@ public sealed class NodeChatStreamServiceTests
             persistedSelection: null,
             requestSelection: null,
             compactionSummary: "SYNOPSIS",
-            compactionCoversToSequence: 2).ConfigureAwait(false);
+            compactionCoversToSequence: 2);
 
         // ONE synthetic synopsis leads the context, followed only by the new user turn (sequence 3) the synopsis
         // does not cover.
@@ -4339,7 +4326,7 @@ public sealed class NodeChatStreamServiceTests
                 [variantGroupId] = olderVariantId
             },
             compactionSummary: "SYNOPSIS",
-            compactionCoversToSequence: 2).ConfigureAwait(false);
+            compactionCoversToSequence: 2);
 
         AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains("SYNOPSIS", StringComparison.Ordinal)),
             "The selection switch cleared the synopsis, so the turn must not send it.");
@@ -4382,7 +4369,7 @@ public sealed class NodeChatStreamServiceTests
                 [variantGroupId] = lateSiblingId
             },
             requestSelection: null,
-            conversationMessages: messages).ConfigureAwait(false);
+            conversationMessages: messages);
 
         var contents = runner.CapturedContext.Select(message => message.Content).ToArray();
         AssertEx.Equal(expected: 7, contents.Length);
@@ -4473,7 +4460,7 @@ public sealed class NodeChatStreamServiceTests
                            "follow up",
                            MessageId: assistantMessageId,
                            RequestId: requestId,
-                           SelectedPath: requestSelection)).ConfigureAwait(false))
+                           SelectedPath: requestSelection)))
         {
             drained++;
         }
@@ -4734,8 +4721,8 @@ public sealed class NodeChatStreamServiceTests
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
-            await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking").ConfigureAwait(false);
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking");
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -4785,9 +4772,9 @@ public sealed class NodeChatStreamServiceTests
         {
             // Emit a delta so the consumer can disconnect, then block until released to report the real Completed
             // terminal. This reproduces a client disconnecting while the shared runner is still working.
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await release.ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await release;
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -4846,8 +4833,8 @@ public sealed class NodeChatStreamServiceTests
         {
             CapturedContext = context.Package.ConversationContext;
             CaptureObserved = true;
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -4895,9 +4882,9 @@ public sealed class NodeChatStreamServiceTests
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking");
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -4954,10 +4941,9 @@ public sealed class NodeChatStreamServiceTests
                                          {
                                              Path = "src/a.txt"
                                          },
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, ReadResult).ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId).ConfigureAwait(false);
+                                         cancellationToken);
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, ReadResult);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
@@ -5023,8 +5009,8 @@ public sealed class NodeChatStreamServiceTests
             LastAllowedTools = context.Package.AllowedTools;
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
             LastTimeouts = context.Package.Timeouts;
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -5094,8 +5080,8 @@ public sealed class NodeChatStreamServiceTests
             LastSamplingOptions = context.Package.SamplingOptions;
             LastAllowAutoModelSwap = context.Package.AllowAutoModelSwap;
             CaptureObserved = true;
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -5151,7 +5137,7 @@ public sealed class NodeChatStreamServiceTests
                 Phase = ToolCallLifecyclePhase.Requested,
                 Arguments = "{\"city\":\"berlin\"}",
                 RequiresApproval = false
-            }).ConfigureAwait(false);
+            });
             await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
                 InvocationId = context.Package.InvocationId,
@@ -5160,9 +5146,9 @@ public sealed class NodeChatStreamServiceTests
                 Phase = ToolCallLifecyclePhase.Completed,
                 Result = "sunny",
                 IsError = false
-            }).ConfigureAwait(false);
-            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
+            });
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)

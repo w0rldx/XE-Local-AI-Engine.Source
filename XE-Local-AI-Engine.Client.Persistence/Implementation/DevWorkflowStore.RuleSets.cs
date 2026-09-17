@@ -37,7 +37,7 @@ internal sealed partial class DevWorkflowStore
         _dbContext.DevWorkflowRuleSets.Add(ruleSet);
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
         {
@@ -55,7 +55,7 @@ internal sealed partial class DevWorkflowStore
         EnsureNotBlank(command.Body, nameof(command.Body));
         EnsureNotBlank(command.ScopeJson, nameof(command.ScopeJson));
 
-        var ruleSet = await LoadRuleSetAsync(command.RuleSetId, cancellationToken).ConfigureAwait(false);
+        var ruleSet = await LoadRuleSetAsync(command.RuleSetId, cancellationToken);
         if (ruleSet.Version != command.ExpectedVersion)
         {
             throw new DevWorkflowConcurrencyException($"The rule set version is stale (expected {command.ExpectedVersion}, current {ruleSet.Version}).");
@@ -72,7 +72,7 @@ internal sealed partial class DevWorkflowStore
         ruleSet.UpdatedAtUtc = Now();
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -87,20 +87,19 @@ internal sealed partial class DevWorkflowStore
     }
 
     public async Task<IReadOnlyList<DevWorkflowRuleSetSummary>> ListRuleSetsAsync(CancellationToken cancellationToken = default) =>
-        await SummariesAsync(_dbContext.DevWorkflowRuleSets.AsNoTracking(), cancellationToken).ConfigureAwait(false);
+        await SummariesAsync(_dbContext.DevWorkflowRuleSets.AsNoTracking(), cancellationToken);
 
     public async Task<DevWorkflowRuleSetSnapshot> GetRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken = default)
     {
         var ruleSet = await _dbContext.DevWorkflowRuleSets.AsNoTracking()
                                       .SingleOrDefaultAsync(entity => entity.Id == ruleSetId, cancellationToken)
-                                      .ConfigureAwait(false)
                       ?? throw new DevWorkflowNotFoundException($"Development workflow rule set '{ruleSetId}' was not found.");
         return RuleSetSnapshot(ruleSet);
     }
 
     public async Task DeleteRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken = default)
     {
-        var removed = await _dbContext.DevWorkflowRuleSets.Where(entity => entity.Id == ruleSetId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        var removed = await _dbContext.DevWorkflowRuleSets.Where(entity => entity.Id == ruleSetId).ExecuteDeleteAsync(cancellationToken);
         if (removed == 0)
         {
             throw new DevWorkflowNotFoundException($"Development workflow rule set '{ruleSetId}' was not found.");
@@ -118,8 +117,7 @@ internal sealed partial class DevWorkflowStore
                                        .Where(entity => entity.Enabled)
                                        .OrderBy(entity => entity.Name)
                                        .ThenBy(entity => entity.Id)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return [.. ruleSets.Select(RuleSetSnapshot)];
     }
 
@@ -139,11 +137,10 @@ internal sealed partial class DevWorkflowStore
                        entity.Version,
                        entity.CreatedAtUtc,
                        entity.UpdatedAtUtc))
-                   .ToListAsync(cancellationToken)
-                   .ConfigureAwait(false);
+                   .ToListAsync(cancellationToken);
 
     private async Task<DevWorkflowRuleSet> LoadRuleSetAsync(Guid ruleSetId, CancellationToken cancellationToken) =>
-        await _dbContext.DevWorkflowRuleSets.SingleOrDefaultAsync(entity => entity.Id == ruleSetId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.DevWorkflowRuleSets.SingleOrDefaultAsync(entity => entity.Id == ruleSetId, cancellationToken)
         ?? throw new DevWorkflowNotFoundException($"Development workflow rule set '{ruleSetId}' was not found.");
 
     private static DevWorkflowRuleSetSnapshot RuleSetSnapshot(DevWorkflowRuleSet ruleSet) =>

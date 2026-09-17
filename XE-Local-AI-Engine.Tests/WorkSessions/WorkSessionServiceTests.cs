@@ -26,36 +26,34 @@ public sealed class WorkSessionServiceTests
     {
         // Private host: the step budget it asserts on IS a host-level config override.
         await using var factory = NewFactory(("WorkSessions:MaxStepsPerRun", "9"));
-        var agentId = await SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "tool-capable-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
-        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("Runtime research", "Explain the inference path.", AgentWorkSessionKind.Research, agentId))
-                                   .ConfigureAwait(false);
+        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("Runtime research", "Explain the inference path.", AgentWorkSessionKind.Research, agentId));
 
         AssertEx.Equal(AgentWorkSessionStatus.Draft, created.Status);
         AssertEx.Equal(expected: 9, created.MaxStepsPerRun, "The step budget is the node's effective option, so the page can render 'step N of M'.");
-        AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>().GetConversationAsync(created.ConversationId).ConfigureAwait(false),
+        AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>().GetConversationAsync(created.ConversationId),
             "A session owns a real conversation from the moment it exists.");
-        AssertEx.Contains(await service.ListAsync().ConfigureAwait(false), summary => summary.Id == created.Id);
+        AssertEx.Contains(await service.ListAsync(), summary => summary.Id == created.Id);
     }
 
     [Test]
     public async Task Create_StampsTheOwnedConversationAsAWorkSessionAndKeepsItOutOfTheChatList()
     {
-        var agentId = await SeedAgentAsync(Host.Factory, "tool-capable-model").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(Host.Factory, "tool-capable-model");
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         var chat = scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
 
-        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("Kind check", "Prove the discriminator.", AgentWorkSessionKind.Research, agentId))
-                                   .ConfigureAwait(false);
+        var created = await service.CreateAsync(new CreateWorkSessionRequestModel("Kind check", "Prove the discriminator.", AgentWorkSessionKind.Research, agentId));
 
-        AssertEx.NotNull(await chat.GetConversationAsync(created.ConversationId).ConfigureAwait(false),
+        AssertEx.NotNull(await chat.GetConversationAsync(created.ConversationId),
             "A by-id read stays unfiltered — the session's own transcript reader depends on it.");
 
-        var listed = (await chat.ListConversationsAsync(new NodeChatListConversationsRequest(IncludeArchived: true)).ConfigureAwait(false))
+        var listed = (await chat.ListConversationsAsync(new NodeChatListConversationsRequest(IncludeArchived: true)))
                      .Select(static summary => summary.ConversationId)
                      .ToArray();
         AssertEx.False(listed.Contains(created.ConversationId),
@@ -70,8 +68,8 @@ public sealed class WorkSessionServiceTests
     public async Task Create_WithAModelOverride_JudgesTheOverrideRatherThanTheAgentsOwnPin()
     {
         var factory = Host.Factory;
-        var listed = await SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
-        var unlisted = await SeedAgentAsync(factory, "a-model-nobody-listed").ConfigureAwait(false);
+        var listed = await SeedAgentAsync(factory, "tool-capable-model");
+        var unlisted = await SeedAgentAsync(factory, "a-model-nobody-listed");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
@@ -81,8 +79,7 @@ public sealed class WorkSessionServiceTests
                                               "o",
                                               AgentWorkSessionKind.General,
                                               listed,
-                                              new WorkSessionRuntimeOverride("a-model-nobody-listed", ReasoningEffort: null))))
-                                      .ConfigureAwait(false);
+                                              new WorkSessionRuntimeOverride("a-model-nobody-listed", ReasoningEffort: null))));
 
         // The refusal names the model the session would have run on, not the agent's own.
         AssertEx.Contains(rejection.Message, "a-model-nobody-listed");
@@ -91,8 +88,7 @@ public sealed class WorkSessionServiceTests
                                        "o",
                                        AgentWorkSessionKind.General,
                                        unlisted,
-                                       new WorkSessionRuntimeOverride("tool-capable-model", "high")))
-                                   .ConfigureAwait(false);
+                                       new WorkSessionRuntimeOverride("tool-capable-model", "high")));
 
         AssertEx.Equal(AgentWorkSessionStatus.Draft, created.Status, "an override onto a listed model admits a session the agent's own pin would have been refused for.");
     }
@@ -105,8 +101,7 @@ public sealed class WorkSessionServiceTests
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
 
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
-                                          service.CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, Guid.NewGuid())))
-                                      .ConfigureAwait(false);
+                                          service.CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, Guid.NewGuid())));
 
         AssertEx.Contains(rejection.Message, "could not be found");
     }
@@ -117,13 +112,12 @@ public sealed class WorkSessionServiceTests
         // A session on a non-tool-capable model can never call a state tool: it would run its whole step budget writing
         // nothing at all.
         var factory = Host.Factory;
-        var agentId = await SeedAgentAsync(factory, "a-model-without-tools").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "a-model-without-tools");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                                           scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                               .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, agentId)))
-                                      .ConfigureAwait(false);
+                                               .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, agentId)));
 
         AssertEx.Contains(rejection.Message, "cannot call tools");
     }
@@ -136,13 +130,12 @@ public sealed class WorkSessionServiceTests
         // session would be created, every state-tool call would come back "Requested function ... not found", and the
         // run would spend its whole step budget writing nothing.
         var factory = Host.Factory;
-        var agentId = await SeedAgentAsync(factory, "a-model-nobody-listed").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "a-model-nobody-listed");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                                           scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                               .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, agentId)))
-                                      .ConfigureAwait(false);
+                                               .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, agentId)));
 
         AssertEx.Contains(rejection.Message, "tool-capable model list");
         // The operator has to be told WHICH model to add, not merely that one is missing.
@@ -152,7 +145,7 @@ public sealed class WorkSessionServiceTests
 
         // Scoped to this test's own agent rather than asserting an empty list: the host — and so the session table — is
         // shared with every sibling in this class.
-        AssertEx.False((await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListAsync().ConfigureAwait(false))
+        AssertEx.False((await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListAsync())
             .Any(summary => summary.AgentDefinitionId == agentId),
             "The refused create persisted no session.");
     }
@@ -162,22 +155,21 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var seeded = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        var unlistedAgentId = await SeedAgentAsync(factory, "a-model-nobody-listed").ConfigureAwait(false);
-        var listedAgentId = await SeedAgentAsync(factory, "another-local-model").ConfigureAwait(false);
+        var seeded = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var unlistedAgentId = await SeedAgentAsync(factory, "a-model-nobody-listed");
+        var listedAgentId = await SeedAgentAsync(factory, "another-local-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
-                                          service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, unlistedAgentId)))
-                                      .ConfigureAwait(false);
+                                          service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, unlistedAgentId)));
 
         AssertEx.Contains(rejection.Message, "tool-capable model list");
         AssertEx.Equal(seeded.AgentDefinitionId,
-            (await service.GetAsync(sessionId).ConfigureAwait(false)).AgentDefinitionId,
+            (await service.GetAsync(sessionId)).AgentDefinitionId,
             "The refused repoint left the session on the agent it had.");
 
-        var repointed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, listedAgentId)).ConfigureAwait(false);
+        var repointed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, listedAgentId));
         AssertEx.Equal(listedAgentId, repointed.AgentDefinitionId, "A listed model still repoints.");
     }
 
@@ -185,13 +177,12 @@ public sealed class WorkSessionServiceTests
     public async Task Create_WhenTheKindIsDevelopment_IsRejected()
     {
         var factory = Host.Factory;
-        var agentId = await SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "tool-capable-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                               scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                   .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.Development, agentId)))
-                          .ConfigureAwait(false);
+                                   .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.Development, agentId)));
     }
 
     [Test]
@@ -202,12 +193,12 @@ public sealed class WorkSessionServiceTests
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         var unknown = Guid.NewGuid();
 
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetAsync(unknown)).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.UpdateAsync(unknown, new UpdateWorkSessionRequestModel("t", null, null))).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.DeleteAsync(unknown)).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.StartAsync(unknown)).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.PostFollowUpAsync(unknown, "hello")).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(unknown, Guid.NewGuid())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetAsync(unknown));
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.UpdateAsync(unknown, new UpdateWorkSessionRequestModel("t", null, null)));
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.DeleteAsync(unknown));
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.StartAsync(unknown));
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.PostFollowUpAsync(unknown, "hello"));
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(unknown, Guid.NewGuid()));
     }
 
     [Test]
@@ -215,17 +206,16 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running)).ConfigureAwait(false);
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
 
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
-                              service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, "A different objective", null)))
-                          .ConfigureAwait(false);
+                              service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, "A different objective", null)));
 
-        var renamed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel("Renamed mid-run", null, null)).ConfigureAwait(false);
+        var renamed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel("Renamed mid-run", null, null));
         AssertEx.Equal("Renamed mid-run", renamed.Title, "A title never changes what the running step sees.");
     }
 
@@ -234,15 +224,13 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running))
-                       .ConfigureAwait(false);
+                       .TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
 
         _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
-                              scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ResumeAsync(sessionId))
-                          .ConfigureAwait(false);
+                              scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ResumeAsync(sessionId));
     }
 
     [Test]
@@ -250,15 +238,13 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running))
-                       .ConfigureAwait(false);
+                       .TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
 
         var refusal = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
-                                        scope.ServiceProvider.GetRequiredService<IWorkSessionService>().DeleteAsync(sessionId))
-                                    .ConfigureAwait(false);
+                                        scope.ServiceProvider.GetRequiredService<IWorkSessionService>().DeleteAsync(sessionId));
 
         AssertEx.Contains(refusal.Message, "Cancel the work session before deleting it");
     }
@@ -268,14 +254,13 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().DeleteAsync(sessionId).ConfigureAwait(false);
+        await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().DeleteAsync(sessionId);
 
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId))
-                          .ConfigureAwait(false);
-        var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>().GetConversationAsync(session.ConversationId).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId));
+        var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>().GetConversationAsync(session.ConversationId);
         AssertEx.True(conversation is null || conversation.Purged, "A session's conversation exists only to carry it, so nothing may orphan.");
     }
 
@@ -286,19 +271,17 @@ public sealed class WorkSessionServiceTests
         // anything downstream could inspect it.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var cap = scope.ServiceProvider.GetRequiredService<IOptions<SecurityOptions>>().Value.MaxMessageSizeKb;
         var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                                         scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                             .PostFollowUpAsync(sessionId, new string('x', (cap * 1024) + 1)))
-                                    .ConfigureAwait(false);
+                                             .PostFollowUpAsync(sessionId, new string('x', (cap * 1024) + 1)));
 
         AssertEx.Contains(refusal.Message, "too large");
         var conversation = AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
-                                                       .GetConversationAsync(session.ConversationId)
-                                                       .ConfigureAwait(false),
+                                                       .GetConversationAsync(session.ConversationId),
             "The conversation still exists.");
         AssertEx.Empty(conversation.Messages);
     }
@@ -320,23 +303,22 @@ public sealed class WorkSessionServiceTests
             },
             configuration: ("WorkSessions:MaxStepsPerRun", "1"));
 
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        await PauseAsync(factory, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await PauseAsync(factory, sessionId);
         _ = factory.Services.GetRequiredService<INodeChatStreamService>();
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            _ = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().PostFollowUpAsync(sessionId, "Also check the ADR.").ConfigureAwait(false);
+            _ = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().PostFollowUpAsync(sessionId, "Also check the ADR.");
         }
 
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
         AssertEx.NotNull(stream, "The auto-resume must have driven a step.");
         AssertEx.NotEmpty(stream!.Requests, "A paused session picks a follow-up up by resuming, which is what the composer implies.");
 
         await using var read = factory.Services.CreateAsyncScope();
         var conversation = AssertEx.NotNull(await read.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
-                                                      .GetConversationAsync(session.ConversationId)
-                                                      .ConfigureAwait(false),
+                                                      .GetConversationAsync(session.ConversationId),
             "The conversation carries the follow-up.");
         AssertEx.Contains(conversation.Messages, message => message.Content == "Also check the ADR.");
     }
@@ -348,17 +330,16 @@ public sealed class WorkSessionServiceTests
         // a follow-up queues for the next step rather than starting one.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running))
-                                 .ConfigureAwait(false);
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, AgentWorkSessionStatus.WaitingForInput)).ConfigureAwait(false);
+        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, AgentWorkSessionStatus.WaitingForInput));
 
-        _ = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().PostFollowUpAsync(sessionId, "One more thing.").ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().PostFollowUpAsync(sessionId, "One more thing.");
 
-        AssertEx.Equal(AgentWorkSessionStatus.WaitingForInput, (await store.GetAsync(sessionId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(AgentWorkSessionStatus.WaitingForInput, (await store.GetAsync(sessionId)).Status);
     }
 
     [Test]
@@ -366,11 +347,11 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, Guid.NewGuid())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, Guid.NewGuid()));
 
         // A row whose bytes were never written: the blob read fails, and the node refuses to hand over content it cannot
         // vouch for rather than returning something plausible.
@@ -385,10 +366,9 @@ public sealed class WorkSessionServiceTests
                            "text/plain",
                            new string('a', 64),
                            SizeBytes: 4,
-                           "work-session-artifact:phantom"))
-                       .ConfigureAwait(false);
+                           "work-session-artifact:phantom"));
 
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, artifactId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, artifactId));
     }
 
     [Test]
@@ -396,9 +376,9 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var otherSessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, otherSessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, otherSessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
@@ -412,20 +392,19 @@ public sealed class WorkSessionServiceTests
                            "text/markdown",
                            new string('b', 64),
                            SizeBytes: 12,
-                           "work-session-artifact:report"))
-                       .ConfigureAwait(false);
+                           "work-session-artifact:report"));
 
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
 
         // The row alone — the bytes were never written, and the metadata read must not need them (this is what the
         // content endpoint's size ceiling is checked against, before any blob is opened).
-        var artifact = await service.GetArtifactAsync(sessionId, artifactId).ConfigureAwait(false);
+        var artifact = await service.GetArtifactAsync(sessionId, artifactId);
         AssertEx.Equal("report.md", artifact.Name);
         AssertEx.Equal(expected: 12L, artifact.SizeBytes);
 
         // Asked through another session's route, the artifact reads as absent — an id is not an authorization.
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetArtifactAsync(otherSessionId, artifactId)).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetArtifactAsync(sessionId, Guid.NewGuid())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetArtifactAsync(otherSessionId, artifactId));
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetArtifactAsync(sessionId, Guid.NewGuid()));
     }
 
     [Test]
@@ -433,15 +412,14 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var operationId = Guid.NewGuid();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
-                       .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, WorkSessionVersions.Any, "tool.completed", operationId))
-                       .ConfigureAwait(false);
+                       .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, WorkSessionVersions.Any, "tool.completed", operationId));
 
-        var events = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListEventsAsync(sessionId, sinceSequence: 0, limit: 100_000).ConfigureAwait(false);
+        var events = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListEventsAsync(sessionId, sinceSequence: 0, limit: 100_000);
 
         AssertEx.True(events.Count <= 500, "A caller cannot ask the node for an unbounded page.");
 
@@ -462,14 +440,14 @@ public sealed class WorkSessionServiceTests
             }
         };
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
-        var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() => service.StartAsync(sessionId)).ConfigureAwait(false);
+        var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() => service.StartAsync(sessionId));
 
         AssertEx.Contains(refusal.Message, "disabled on this node");
-        AssertEx.NotNull(await service.GetAsync(sessionId).ConfigureAwait(false), "Reads keep working so the page can explain itself.");
+        AssertEx.NotNull(await service.GetAsync(sessionId), "Reads keep working so the page can explain itself.");
     }
 
     internal static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration) =>
@@ -505,8 +483,7 @@ public sealed class WorkSessionServiceTests
                                         AgentDefinitionKind.Single,
                                         [],
                                         new Dictionary<string, bool>(StringComparer.Ordinal),
-                                        OrchestrationTopologyJson: null))
-                                    .ConfigureAwait(false);
+                                        OrchestrationTopologyJson: null));
         return definition.Id;
     }
 
@@ -514,10 +491,9 @@ public sealed class WorkSessionServiceTests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var session = await store.GetAsync(sessionId).ConfigureAwait(false);
-        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running))
-                                 .ConfigureAwait(false);
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, AgentWorkSessionStatus.Paused)).ConfigureAwait(false);
+        var session = await store.GetAsync(sessionId);
+        var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running));
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, running.Version, AgentWorkSessionStatus.Paused));
     }
 
     /// <summary>Tool-capable unless the model's name says otherwise; cloud only for the explicitly cloud-named ones.</summary>

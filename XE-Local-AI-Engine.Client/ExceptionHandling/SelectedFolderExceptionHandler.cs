@@ -31,11 +31,11 @@ public sealed class SelectedFolderExceptionHandler : IExceptionHandler
                 return true;
 
             case SelectedFolderConflictException:
-                await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status409Conflict, cancellationToken).ConfigureAwait(false);
+                await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status409Conflict, cancellationToken);
                 return true;
 
             case SelectedFolderValidationException:
-                await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status400BadRequest, cancellationToken).ConfigureAwait(false);
+                await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status400BadRequest, cancellationToken);
                 return true;
 
             default:

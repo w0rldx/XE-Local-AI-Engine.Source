@@ -27,7 +27,7 @@ public sealed class InvocationAgentContext : IAsyncDisposable
     {
         if (Session is IAsyncDisposable asyncDisposable)
         {
-            await asyncDisposable.DisposeAsync();
+            await asyncDisposable.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

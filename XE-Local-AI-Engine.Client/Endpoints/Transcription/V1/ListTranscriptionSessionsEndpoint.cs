@@ -32,14 +32,13 @@ public sealed class ListTranscriptionSessionsEndpoint(ITranscriptionService sess
 
         var page = await _sessions.ListSessionsAsync(Math.Clamp(req.Limit ?? DefaultLimit, min: 1, ListTranscriptionSessionsRequestValidator.MaxLimit),
                                       Math.Max(req.Offset ?? 0, val2: 0),
-                                      ct)
-                                  .ConfigureAwait(false);
+                                      ct);
 
         await Send.OkAsync(new ListTranscriptionSessionsResponse
             {
                 Items = [.. page.Items.Select(static session => session.ToResponse())],
                 TotalCount = page.TotalCount
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

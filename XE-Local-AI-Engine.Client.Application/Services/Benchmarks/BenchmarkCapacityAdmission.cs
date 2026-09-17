@@ -88,10 +88,10 @@ internal static class BenchmarkCapacityAdmission
                 // A fresh decision re-probes live free VRAM under the admission gate, so the wait is a re-measurement,
                 // not a spin on a stale reading.
                 budget.Consume();
-                await Task.Delay(budget.Interval, ct).ConfigureAwait(false);
+                await Task.Delay(budget.Interval, ct);
             }
 
-            var decision = await capacity.DecideAsync(request, ct).ConfigureAwait(false);
+            var decision = await capacity.DecideAsync(request, ct);
             logger.LogInformation("Benchmark capacity admission: run {RunId} phase {Phase} model {ModelName}, requested context {RequestedContextTokens}, "
                                   + "frozen runtime context {FrozenContextTokens}, KV cache {KvCacheType}, attempt {Attempt} of {TotalAttempts} -> {Verdict} ({Reason}).",
                 context.RunId,
@@ -164,12 +164,12 @@ internal static class BenchmarkExclusiveSpawn
                 // The refusal is a point-in-time read of the model's leases, so the wait is a re-measurement of who is
                 // using it, not a spin on a stale answer.
                 budget.Consume();
-                await Task.Delay(budget.Interval, ct).ConfigureAwait(false);
+                await Task.Delay(budget.Interval, ct);
             }
 
             try
             {
-                return await spawn(ct).ConfigureAwait(false);
+                return await spawn(ct);
             }
             catch (LlamaServerProfilingRefusedException refusal)
             {

@@ -68,7 +68,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default)
     {
-        var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
+        var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken);
         EnsureRunnable(snapshot);
         var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -77,7 +77,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
 
         try
         {
-            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token).ConfigureAwait(false);
+            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token);
             var maxOutputTokens = Math.Min(snapshot.MaxTokens ?? _options.MaxOutputTokens, _options.MaxOutputTokens);
             var liveProgress = _liveBroker is null
                 ? null
@@ -92,10 +92,10 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             // Every attempt on a task is a fresh conversation against ONE preserved workspace, so what an earlier
             // attempt left behind is invisible to this one unless the prompt says so. Read before the model runs, and
             // the same set decides both what the coder is told and what ValidateSubmission will forgive.
-            var carriedFiles = await _patchEvidence.ListChangedPathsAsync(session, timeout.Token).ConfigureAwait(false);
+            var carriedFiles = await _patchEvidence.ListChangedPathsAsync(session, timeout.Token);
             var prompt = BuildPrompt(snapshot, session, profile, carriedFiles);
-            await PersistPromptAsync(snapshot, prompt, session, repository, profile).ConfigureAwait(false);
-            var cloudContext = await CreateCloudContextAsync(snapshot, tools, timeout.Token).ConfigureAwait(false);
+            await PersistPromptAsync(snapshot, prompt, session, repository, profile);
+            var cloudContext = await CreateCloudContextAsync(snapshot, tools, timeout.Token);
             var model = await _coderModel.RunAsync(snapshot.ModelId,
                 prompt,
                 tools,
@@ -103,8 +103,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 _options.MaxToolCalls,
                 liveProgress,
                 cloudContext?.Route,
-                timeout.Token).ConfigureAwait(false);
-            var evidence = await _patchEvidence.ExportAsync(session, timeout.Token).ConfigureAwait(false);
+                timeout.Token);
+            var evidence = await _patchEvidence.ExportAsync(session, timeout.Token);
             liveProgress?.PatchObserved(evidence.ChangedFiles.Select(static item => item.Path).ToArray(),
                 evidence.PatchBytes.LongLength,
                 evidence.SubjectHash);
@@ -116,7 +116,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 tools.CommandEvidence,
                 cloudContext?.ArtifactId,
                 profile,
-                timeout.Token).ConfigureAwait(false);
+                timeout.Token);
 
             _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
                                     Guid.NewGuid(),
@@ -124,8 +124,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                                     snapshot.AttemptVersion,
                                     InputTokens: model.InputTokens,
                                     OutputTokens: model.OutputTokens),
-                                CancellationToken.None)
-                            .ConfigureAwait(false);
+                                CancellationToken.None);
             return new DevelopmentCoderAttemptResult(snapshot.AttemptId,
                 evidence.BaseCommit,
                 evidence.SubjectHash,
@@ -143,8 +142,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                                         status,
                                         snapshot.AttemptVersion,
                                         SanitizedReason(exception)),
-                                    CancellationToken.None)
-                                .ConfigureAwait(false);
+                                    CancellationToken.None);
             }
             catch (DevelopmentInvalidTransitionException)
             {
@@ -173,21 +171,21 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             evidence,
             inputIds: cloudContextInputs,
             profileDigest,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var manifestId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.ChangedFilesManifest,
             evidence.ManifestBytes,
             evidence,
             inputIds: cloudContextInputs,
             profileDigest,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var commandId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.CommandResult,
             JsonSerializer.SerializeToUtf8Bytes(commands, JsonOptions),
             evidence,
             [patchId, manifestId],
             profileDigest,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var workspaceId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.WorkspaceManifest,
             JsonSerializer.SerializeToUtf8Bytes(new
@@ -209,14 +207,14 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             evidence,
             [patchId, manifestId, commandId],
             profileDigest,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         _ = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.CoderSubmission,
             JsonSerializer.SerializeToUtf8Bytes(submission, JsonOptions),
             evidence,
             [patchId, manifestId, commandId, workspaceId],
             profileDigest,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     /// <summary>
@@ -260,7 +258,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 manifestHash: null,
                 inputIds: null,
                 profile.ComputeDigest(),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -299,7 +297,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         CancellationToken cancellationToken)
     {
         var artifactId = Guid.NewGuid();
-        var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken).ConfigureAwait(false);
+        var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken);
         _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
                                 snapshot.ProjectId,
                                 snapshot.TaskId,
@@ -316,8 +314,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                                 InputArtifactIdsJson: inputIds is null ? null : JsonSerializer.SerializeToUtf8Bytes(inputIds, JsonOptions),
                                 CommandProfileVersion: DevelopmentWorkspaceTools.ProfileVersion,
                                 CommandProfileDigest: profileDigest),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+                            cancellationToken);
         return artifactId;
     }
 
@@ -330,14 +327,14 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             return null;
         }
 
-        var files = await tools.ListFilesAsync(path: null, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var currentDiff = await tools.GetDiffAsync(cancellationToken).ConfigureAwait(false);
+        var files = await tools.ListFilesAsync(path: null, cancellationToken: cancellationToken);
+        var currentDiff = await tools.GetDiffAsync(cancellationToken);
         return await _cloudContext.CreateAsync(snapshot,
             [
                 new DevelopmentCloudContextExcerpt("workspace-files.txt", files),
                 new DevelopmentCloudContextExcerpt("workspace-diff.patch", currentDiff)
             ],
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken);
     }
 
     private static void EnsureRunnable(DevelopmentExecutionSnapshot snapshot)

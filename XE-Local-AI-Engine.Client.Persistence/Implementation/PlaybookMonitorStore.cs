@@ -22,11 +22,11 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
     public async Task<CohortComparison> GetCohortComparisonAsync(Guid agentDefinitionId, long enabledAtUtc, string? toolScope, CancellationToken cancellationToken = default)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         return toolScope is null
-            ? await ReadOverallAsync(connection, agentDefinitionId, enabledAtUtc, cancellationToken).ConfigureAwait(false)
-            : await ReadByToolAsync(connection, agentDefinitionId, enabledAtUtc, toolScope, cancellationToken).ConfigureAwait(false);
+            ? await ReadOverallAsync(connection, agentDefinitionId, enabledAtUtc, cancellationToken)
+            : await ReadByToolAsync(connection, agentDefinitionId, enabledAtUtc, toolScope, cancellationToken);
     }
 
     private static async Task<CohortComparison> ReadOverallAsync(DbConnection connection, Guid agentDefinitionId, long enabledAtUtc, CancellationToken cancellationToken)
@@ -48,7 +48,7 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
         AddParameter(command, "$enabled_at", enabledAtUtc);
         AddParameter(command, "$down", RatingDown);
 
-        return await ReadComparisonAsync(command, cancellationToken).ConfigureAwait(false);
+        return await ReadComparisonAsync(command, cancellationToken);
     }
 
     private static async Task<CohortComparison> ReadByToolAsync(DbConnection connection, Guid agentDefinitionId, long enabledAtUtc, string toolScope, CancellationToken cancellationToken)
@@ -73,13 +73,13 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
         AddParameter(command, "$down", RatingDown);
         AddParameter(command, "$tool_name", toolScope);
 
-        return await ReadComparisonAsync(command, cancellationToken).ConfigureAwait(false);
+        return await ReadComparisonAsync(command, cancellationToken);
     }
 
     private static async Task<CohortComparison> ReadComparisonAsync(DbCommand command, CancellationToken cancellationToken)
     {
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
         {
             return new CohortComparison(BeforeTotal: 0, BeforeDown: 0, AfterTotal: 0, AfterDown: 0);
         }

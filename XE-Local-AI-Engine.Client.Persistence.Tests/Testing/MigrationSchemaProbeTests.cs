@@ -18,10 +18,8 @@ public sealed class MigrationSchemaProbeTests
                                     {
                                         await using var probe = await MigrationSchemaProbe
                                                                       .CreateAsync(rootPath, "undeclared.sqlite",
-                                                                          path => MigratedDatabaseTemplate.CopyChatAtAsync(path, undeclared))
-                                                                      .ConfigureAwait(false);
-                                    })
-                                    .ConfigureAwait(false);
+                                                                          path => MigratedDatabaseTemplate.CopyChatAtAsync(path, undeclared));
+                                    });
 
         AssertEx.True(failure.Message.Contains(undeclared, StringComparison.Ordinal),
             "The cleanup must not swallow or replace the failure that caused it.");

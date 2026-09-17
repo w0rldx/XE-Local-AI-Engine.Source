@@ -20,14 +20,14 @@ public sealed class ExternalAppBridgeTokenVerifierTests
     public async Task Install_MintsATokenTheVerifierAccepts()
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
-        var admitted = await harness.Service.InstallAsync(InstallCommandFor(manifest)).ConfigureAwait(false);
-        await harness.WaitUntilIdleAsync(admitted.Id).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var admitted = await harness.Service.InstallAsync(InstallCommandFor(manifest));
+        await harness.WaitUntilIdleAsync(admitted.Id);
 
-        var token = AssertEx.NotNull(AssertEx.NotNull(await harness.ReadAsync(admitted.Id).ConfigureAwait(false)).BridgeToken,
+        var token = AssertEx.NotNull(AssertEx.NotNull(await harness.ReadAsync(admitted.Id)).BridgeToken,
             "Every install must mint a bridge token; a container with none can never reach the node's inference surface.");
 
-        var caller = AssertEx.NotNull(await harness.VerifyBridgeTokenAsync(token).ConfigureAwait(false));
+        var caller = AssertEx.NotNull(await harness.VerifyBridgeTokenAsync(token));
 
         AssertEx.Equal(admitted.Id, caller.InstanceId, "A verified token identifies the instance it was minted for.");
     }
@@ -36,12 +36,12 @@ public sealed class ExternalAppBridgeTokenVerifierTests
     public async Task Verifier_RefusesAWrongSecretForARealInstance()
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
-        var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
 
         var forged = $"{row.Id:N}.Zm9yZ2VkLXNlY3JldC1tYXRlcmlhbA";
 
-        AssertEx.Null(await harness.VerifyBridgeTokenAsync(forged).ConfigureAwait(false),
+        AssertEx.Null(await harness.VerifyBridgeTokenAsync(forged),
             "Naming a real instance is not knowing its secret.");
     }
 
@@ -53,14 +53,14 @@ public sealed class ExternalAppBridgeTokenVerifierTests
     public async Task Verifier_RefusesOneInstancesSecretPresentedUnderAnothersId()
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
-        var victim = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
-        var attacker = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var victim = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
+        var attacker = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
 
         var victimToken = AssertEx.NotNull(victim.BridgeToken);
         var secret = victimToken[(victimToken.IndexOf('.', StringComparison.Ordinal) + 1)..];
 
-        AssertEx.Null(await harness.VerifyBridgeTokenAsync($"{attacker.Id:N}.{secret}").ConfigureAwait(false),
+        AssertEx.Null(await harness.VerifyBridgeTokenAsync($"{attacker.Id:N}.{secret}"),
             "One instance's secret must not become another's by rewriting the id in front of it.");
     }
 
@@ -68,9 +68,9 @@ public sealed class ExternalAppBridgeTokenVerifierTests
     public async Task Verifier_RefusesATokenForAnInstanceThatDoesNotExist()
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        AssertEx.Null(await harness.VerifyBridgeTokenAsync(ContainerBridgeToken.Mint(Guid.NewGuid())).ConfigureAwait(false),
+        AssertEx.Null(await harness.VerifyBridgeTokenAsync(ContainerBridgeToken.Mint(Guid.NewGuid())),
             "A well-formed token for an uninstalled instance names nothing.");
     }
 
@@ -81,9 +81,9 @@ public sealed class ExternalAppBridgeTokenVerifierTests
     public async Task Verifier_RefusesAMalformedTokenWithoutReadingTheStore(string presented)
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        AssertEx.Null(await harness.VerifyBridgeTokenAsync(presented).ConfigureAwait(false));
+        AssertEx.Null(await harness.VerifyBridgeTokenAsync(presented));
     }
 
     /// <summary>
@@ -95,15 +95,15 @@ public sealed class ExternalAppBridgeTokenVerifierTests
     public async Task Uninstall_RevokesTheTokenByDeletingTheRowThatCarriesIt()
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
-        var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped);
         var token = AssertEx.NotNull(row.BridgeToken);
 
-        AssertEx.NotNull(await harness.VerifyBridgeTokenAsync(token).ConfigureAwait(false), "The seeded instance's token must verify before the row is removed.");
+        AssertEx.NotNull(await harness.VerifyBridgeTokenAsync(token), "The seeded instance's token must verify before the row is removed.");
 
-        await harness.DeleteRowAsync(row.Id, row.Version).ConfigureAwait(false);
+        await harness.DeleteRowAsync(row.Id, row.Version);
 
-        AssertEx.Null(await harness.VerifyBridgeTokenAsync(token).ConfigureAwait(false),
+        AssertEx.Null(await harness.VerifyBridgeTokenAsync(token),
             "The row's deletion IS the revoke; nothing else revokes a bridge token.");
     }
 

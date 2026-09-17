@@ -50,7 +50,7 @@ internal static class LoopbackPort
         {
             var candidate = Reserve();
             tried.Add(candidate);
-            if (await attempt(candidate).ConfigureAwait(false) is { } bound)
+            if (await attempt(candidate) is { } bound)
             {
                 return bound;
             }

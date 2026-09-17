@@ -28,12 +28,12 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
     public async Task PreflightAsync_CompatibleDataset_IsReadOnlyAndCompatible()
     {
         var databasePath = GetDatabasePath("compatible.sqlite");
-        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-A", "hash-a").ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-B", "hash-b").ConfigureAwait(false);
+        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath);
+        await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-A", "hash-a");
+        await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-B", "hash-b");
 
         var service = serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>();
-        var result = await service.PreflightAsync().ConfigureAwait(false);
+        var result = await service.PreflightAsync();
 
         AssertEx.True(result.CollectionMigrationApplied);
         AssertEx.True(result.IsCompatible);
@@ -41,7 +41,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         AssertEx.Equal(0, result.ConflictingDocumentCount);
         AssertEx.Equal(0, result.MinimumDocumentsToRemove);
         AssertEx.Empty(result.Conflicts);
-        AssertEx.Equal(2L, await CountDocumentsAsync(databasePath).ConfigureAwait(false),
+        AssertEx.Equal(2L, await CountDocumentsAsync(databasePath),
             "A preflight must not modify compatible data.");
     }
 
@@ -49,17 +49,17 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
     public async Task PreflightAsync_ConflictingDataset_ReturnsDeterministicOpaqueIdentifiersWithoutContentMetadata()
     {
         var databasePath = GetDatabasePath("conflicts.sqlite");
-        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath).ConfigureAwait(false);
+        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath);
         var first = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var second = Guid.Parse("22222222-2222-2222-2222-222222222222");
         var third = Guid.Parse("33333333-3333-3333-3333-333333333333");
-        await SeedDocumentAsync(databasePath, first, "COLLECTION-A", "sensitive-content-hash", "secret-a.txt").ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, second, "COLLECTION-B", "sensitive-content-hash", "secret-b.txt").ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, third, "COLLECTION-C", "sensitive-content-hash", "secret-c.txt").ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, first, "COLLECTION-A", "sensitive-content-hash", "secret-a.txt");
+        await SeedDocumentAsync(databasePath, second, "COLLECTION-B", "sensitive-content-hash", "secret-b.txt");
+        await SeedDocumentAsync(databasePath, third, "COLLECTION-C", "sensitive-content-hash", "secret-c.txt");
 
         var service = serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>();
-        var firstResult = await service.PreflightAsync().ConfigureAwait(false);
-        var secondResult = await service.PreflightAsync().ConfigureAwait(false);
+        var firstResult = await service.PreflightAsync();
+        var secondResult = await service.PreflightAsync();
 
         AssertEx.False(firstResult.IsCompatible);
         AssertEx.Equal(1, firstResult.ConflictGroupCount);
@@ -78,7 +78,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         AssertEx.False(serializedSurface.Contains("sensitive-content-hash", StringComparison.Ordinal));
         AssertEx.False(serializedSurface.Contains("secret-", StringComparison.Ordinal));
         AssertEx.False(serializedSurface.Contains(first.ToString(), StringComparison.OrdinalIgnoreCase));
-        AssertEx.Equal(3L, await CountDocumentsAsync(databasePath).ConfigureAwait(false),
+        AssertEx.Equal(3L, await CountDocumentsAsync(databasePath),
             "A conflicting preflight must report only; it must not resolve or delete data.");
     }
 
@@ -87,13 +87,12 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
     {
         var databasePath = GetDatabasePath("export.sqlite");
         var clock = new FixedTimeProvider(new DateTimeOffset(2026, 8, 13, 12, 34, 56, TimeSpan.Zero));
-        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath, clock).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-A", "duplicate").ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-B", "duplicate").ConfigureAwait(false);
+        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath, clock);
+        await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-A", "duplicate");
+        await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-B", "duplicate");
 
         var result = await serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>()
-                                          .ExportAsync()
-                                          .ConfigureAwait(false);
+                                          .ExportAsync();
 
         var expectedDirectory = Path.Combine(_rootPath, "backups", "knowledge-downgrade");
         AssertEx.Equal(Path.Combine(expectedDirectory, "node-chat-before-knowledge-downgrade-20260813T123456000Z.sqlite"),
@@ -103,15 +102,15 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         AssertEx.Equal(64, result.ArtifactSha256.Length);
         AssertEx.False(result.Preflight.IsCompatible,
             "Export is a safety artifact, not destructive conflict resolution, so it must still report the block.");
-        AssertEx.Equal(2L, await CountDocumentsAsync(result.ArtifactPath).ConfigureAwait(false));
-        AssertEx.Equal(2L, await CountDocumentsAsync(databasePath).ConfigureAwait(false));
+        AssertEx.Equal(2L, await CountDocumentsAsync(result.ArtifactPath));
+        AssertEx.Equal(2L, await CountDocumentsAsync(databasePath));
     }
 
     [Test]
     public async Task ExportAsync_WhenBackupDirectoryIsSymlink_RejectsPathWithoutWritingOutsideRoot()
     {
         var databasePath = GetDatabasePath("symlink.sqlite");
-        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath).ConfigureAwait(false);
+        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath);
         var outside = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(outside);
         try
@@ -128,8 +127,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         try
         {
             _ = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
-                                  serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync())
-                              .ConfigureAwait(false);
+                                  serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync());
             AssertEx.Empty(Directory.EnumerateFileSystemEntries(outside),
                 "A symlinked backup directory must not redirect an export outside the node data root.");
         }
@@ -144,13 +142,12 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
     public async Task ExportAsync_WhenAlreadyCancelled_DoesNotCreateBackupDirectory()
     {
         var databasePath = GetDatabasePath("cancelled.sqlite");
-        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath).ConfigureAwait(false);
+        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath);
         using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync().ConfigureAwait(false);
+        await cancellation.CancelAsync();
 
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
-                              serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync(cancellation.Token))
-                          .ConfigureAwait(false);
+                              serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync(cancellation.Token));
 
         AssertEx.False(Directory.Exists(Path.Combine(_rootPath, "backups")),
             "Cancellation before work begins must not leave an export directory or partial artifact.");
@@ -160,12 +157,11 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
     public async Task ExportAsync_WhenBackupPathCollidesWithFile_PropagatesFailure()
     {
         var databasePath = GetDatabasePath("failure.sqlite");
-        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath).ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_rootPath, "backups"), "collision").ConfigureAwait(false);
+        await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath);
+        await File.WriteAllTextAsync(Path.Combine(_rootPath, "backups"), "collision");
 
         _ = await AssertEx.ThrowsAsync<IOException>(() =>
-                              serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync())
-                          .ConfigureAwait(false);
+                              serviceProvider.GetRequiredService<IKnowledgeDowngradeSafetyService>().ExportAsync());
     }
 
     private async Task<ServiceProvider> BuildMigratedServiceProviderAsync(string databasePath, TimeProvider? timeProvider = null)
@@ -188,7 +184,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
 
         // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises the
         // downgrade-safety service over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         return services.BuildServiceProvider(true);
     }
@@ -206,7 +202,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         string fileName = "document.txt")
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               INSERT INTO knowledge_documents
@@ -220,16 +216,16 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         command.Parameters.AddWithValue("$hash", contentHash);
         command.Parameters.AddWithValue("$path", fileName);
         command.Parameters.AddWithValue("$collection", collectionId);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<long> CountDocumentsAsync(string databasePath)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM knowledge_documents;";
-        return Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false));
+        return Convert.ToInt64(await command.ExecuteScalarAsync());
     }
 
     private sealed class FixedNodeDataDirectory(string root) : INodeDataDirectory

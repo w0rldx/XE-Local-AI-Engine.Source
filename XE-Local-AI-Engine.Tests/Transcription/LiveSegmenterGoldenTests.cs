@@ -51,7 +51,7 @@ public sealed class LiveSegmenterGoldenTests
     [Test]
     public async Task JfkPushedInTwoSecondChunks_CommitsTheSingleShotTranscriptWithinOneWordPerForcedBoundary()
     {
-        var (transcriber, commits) = await ReplayAsync().ConfigureAwait(false);
+        var (transcriber, commits) = await ReplayAsync();
 
         var committed = Normalize(string.Join(' ', commits.Select(commit => commit.Text)));
         var singleShot = Normalize(transcriber.SingleShotText);
@@ -82,7 +82,7 @@ public sealed class LiveSegmenterGoldenTests
     [Test]
     public async Task CommittedSegmentsNeverRepeatTheTrailingWordsOfThePrevious()
     {
-        var (_, commits) = await ReplayAsync().ConfigureAwait(false);
+        var (_, commits) = await ReplayAsync();
 
         AssertEx.True(commits.Count > 1, "The clip is long enough to commit more than one segment, or this proves nothing.");
 
@@ -102,7 +102,7 @@ public sealed class LiveSegmenterGoldenTests
     public async Task CommittedSpanMatchesTheClipDurationWithinOneSecond()
     {
         var fixture = RecordedWhisperTranscriber.ReadFixture(RecordedWhisperTranscriber.FixturePath(FixtureFileName));
-        var (_, commits) = await ReplayAsync().ConfigureAwait(false);
+        var (_, commits) = await ReplayAsync();
 
         var clipMs = fixture.Windows[^1].EndMs;
         var committedMs = commits[^1].EndMs - commits[0].StartMs;
@@ -117,7 +117,7 @@ public sealed class LiveSegmenterGoldenTests
     {
         var transcriber = RecordedWhisperTranscriber.FromFixture(FixtureFileName);
         var fixture = transcriber.Fixture;
-        var pcm = WavPayload.Read(await File.ReadAllBytesAsync(RecordedWhisperTranscriber.FixturePath(fixture.Clip)).ConfigureAwait(false));
+        var pcm = WavPayload.Read(await File.ReadAllBytesAsync(RecordedWhisperTranscriber.FixturePath(fixture.Clip)));
 
         var segmenter = new LiveTranscriptionSegmenter(transcriber,
             TranscriptChannel.Mono,
@@ -135,12 +135,11 @@ public sealed class LiveSegmenterGoldenTests
         var frameBytes = fixture.PushMs * WavPcm16.BytesPerMillisecond;
         for (var offset = 0; offset < pcm.Length; offset += frameBytes)
         {
-            var tick = await segmenter.PushAsync(pcm.Slice(offset, Math.Min(frameBytes, pcm.Length - offset)), CancellationToken.None)
-                                      .ConfigureAwait(false);
+            var tick = await segmenter.PushAsync(pcm.Slice(offset, Math.Min(frameBytes, pcm.Length - offset)), CancellationToken.None);
             commits.AddRange(tick.Commits);
         }
 
-        commits.AddRange((await segmenter.FlushAsync(CancellationToken.None).ConfigureAwait(false)).Commits);
+        commits.AddRange((await segmenter.FlushAsync(CancellationToken.None)).Commits);
         return (transcriber, commits);
     }
 

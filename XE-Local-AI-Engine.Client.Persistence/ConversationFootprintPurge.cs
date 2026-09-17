@@ -43,16 +43,16 @@ public static class ConversationFootprintPurge
     {
         ArgumentNullException.ThrowIfNull(dbContext);
 
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM message_feedback WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM messages WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM tool_events WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversation_uploaded_files WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM message_feedback WHERE conversation_id = {0};", [conversationId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM messages WHERE conversation_id = {0};", [conversationId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM tool_events WHERE conversation_id = {0};", [conversationId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversation_uploaded_files WHERE conversation_id = {0};", [conversationId], cancellationToken);
         // Execution-log telemetry carries plaintext conversation/message correlation ids (both the adaptive-memory
         // diagnostics rows and the durable run envelopes). Without this delete those correlations would survive an
         // immediate conversation purge for the separate execution-log retention period — a privacy gap. Covers both
         // record kinds by deleting on conversation_id.
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_execution_logs WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM purged_tombstones WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_execution_logs WHERE conversation_id = {0};", [conversationId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM purged_tombstones WHERE conversation_id = {0};", [conversationId], cancellationToken);
 
         // A work session owns its conversation, so purging the conversation takes the session and its whole subtree with
         // it: the objective, the plan, the findings and the checkpoints are all conversation-derived encrypted content,
@@ -65,27 +65,22 @@ public static class ConversationFootprintPurge
         // does not remove those files or upload blobs; the caller owns both teardown paths.
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_events WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
                            [conversationId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM agent_work_session_checkpoints WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
                            [conversationId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM agent_work_session_artifacts WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
                            [conversationId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM agent_work_session_findings WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
                            [conversationId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_tasks WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
                            [conversationId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
 
         // An integration session owns its conversation on the same terms, so purging the conversation takes the
         // session, its executions and their events with it. Only integration_sessions carries conversation_id, so
@@ -97,16 +92,14 @@ public static class ConversationFootprintPurge
                        .ExecuteSqlRawAsync(
                            "DELETE FROM integration_execution_events WHERE execution_id IN (SELECT e.id FROM integration_executions e JOIN integration_sessions s ON s.id = e.session_id WHERE s.conversation_id = {0});",
                            [conversationId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM integration_executions WHERE session_id IN (SELECT id FROM integration_sessions WHERE conversation_id = {0});",
                            [conversationId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM integration_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
+                           cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM integration_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken);
 
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [conversationId], cancellationToken);
     }
 }

@@ -53,7 +53,7 @@ public sealed class BenchmarkEndpointTests
             });
         }
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -74,8 +74,8 @@ public sealed class BenchmarkEndpointTests
                    ScorableItemCount: 3));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/cells");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"cellKey\":\"cell:c:1\"", StringComparison.Ordinal);
@@ -93,7 +93,7 @@ public sealed class BenchmarkEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/cells");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -106,8 +106,8 @@ public sealed class BenchmarkEndpointTests
         context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(1);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"runCount\":1", StringComparison.Ordinal);
@@ -122,8 +122,8 @@ public sealed class BenchmarkEndpointTests
         context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(output: "[{\"type\":\"text\",\"text\":\"ok\"}]"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"outputParts\"", StringComparison.Ordinal);
@@ -145,8 +145,8 @@ public sealed class BenchmarkEndpointTests
                        GenerationTokens: 89, GenerationMs: 1011.5, CachedPromptTokens: 7, SegmentCount: 2)));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -169,8 +169,8 @@ public sealed class BenchmarkEndpointTests
         context.Store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(Run(BenchmarkPrimaryStatus.Succeeded));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -209,8 +209,8 @@ public sealed class BenchmarkEndpointTests
                    BenchmarkJudgeAttemptStatus.Succeeded, stored, 80, null, 0, null, null, 1));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -237,8 +237,8 @@ public sealed class BenchmarkEndpointTests
                 modelName = "model",
                 expectedProjectVersion = 4
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         AssertEx.Contains(body, "\"modelContentFingerprint\":\"v1:aggregate\"", StringComparison.Ordinal);
@@ -267,8 +267,8 @@ public sealed class BenchmarkEndpointTests
                 repeatCount = 3,
                 warmup = true
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -310,8 +310,8 @@ public sealed class BenchmarkEndpointTests
                     }
                 }
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -345,7 +345,7 @@ public sealed class BenchmarkEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch", BatchBody("model-a", "model-b"));
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expected: 2, scopes.Count);
@@ -374,8 +374,8 @@ public sealed class BenchmarkEndpointTests
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
             BatchBody("model-a", "model-b", "model-c"));
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -422,8 +422,8 @@ public sealed class BenchmarkEndpointTests
                     }
                 }
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         // Per-item, not all-or-nothing: one ineligible model must not cost the operator the rest of the matrix. The
         // refused cell did NOT consume a project version, so the next one still presents 4.
@@ -454,8 +454,8 @@ public sealed class BenchmarkEndpointTests
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
             BatchBody("old-snapshot", "current"));
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -492,8 +492,8 @@ public sealed class BenchmarkEndpointTests
                     }
                 }
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         // A stale version is a fact about the batch: every remaining cell would fail identically, so it is one 409
         // rather than N identical rejections buried in a 200.
@@ -537,8 +537,8 @@ public sealed class BenchmarkEndpointTests
                     }
                 }
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         // Runs are already queued: a top-level 409 carries no body, so it would discard their ids — the operator could
         // not find them and a retry would enqueue duplicates. The started cell survives, the conflicting cell and every
@@ -589,8 +589,8 @@ public sealed class BenchmarkEndpointTests
                     }
                 }
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         // A blank name used to reach the freeze and come back as an ArgumentException — a 500 for one operator typo in
         // one cell. It is the same per-cell verdict an ineligible model gets, and the rest of the matrix still starts.
@@ -618,7 +618,7 @@ public sealed class BenchmarkEndpointTests
                 expectedProjectVersion = 4,
                 items = Array.Empty<object>()
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(default!, default, default);
@@ -639,7 +639,7 @@ public sealed class BenchmarkEndpointTests
                 expectedProjectVersion = 4,
                 kvCacheType = "  Q8_0  "
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         _ = context.RunFreeze.Received(1).StartAsync(new BenchmarkRunStartRequest(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, 1, false),
@@ -659,8 +659,8 @@ public sealed class BenchmarkEndpointTests
                 expectedProjectVersion = 4,
                 kvCacheType = "q3_k"
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.BadRequest, BenchmarkErrorCode.InvalidRequest, "The requested KV-cache type is not supported.");
         _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(default!, default, default);
@@ -682,8 +682,8 @@ public sealed class BenchmarkEndpointTests
                 expectedProjectVersion = 4,
                 kvCacheType = "q4_0"
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType,
             "A q4_0 KV cache needs a GPU llama.cpp build.");
@@ -709,8 +709,8 @@ public sealed class BenchmarkEndpointTests
                 modelName = "model",
                 expectedProjectVersion = 4
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.IneligibleModel,
             "The selected model could not be verified against its installed registry entry.");
@@ -731,8 +731,8 @@ public sealed class BenchmarkEndpointTests
             expectedProjectVersion = 4
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.NotFound, BenchmarkErrorCode.NotFound,
             "The requested benchmark resource was not found.");
@@ -761,8 +761,8 @@ public sealed class BenchmarkEndpointTests
                        BenchmarkKvCacheType.SourceAuto)));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -793,12 +793,12 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         using var client = context.Factory.CreateClient();
-        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         var responses = document.RootElement
                                 .GetProperty("paths")
                                 .GetProperty($"{Api}/projects/{{projectId}}/runs")
@@ -819,8 +819,8 @@ public sealed class BenchmarkEndpointTests
                    rankExclusionReason: BenchmarkRunJudgeStates.ReasonTruncated));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -842,11 +842,11 @@ public sealed class BenchmarkEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var getRequest = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
-        var getBody = await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
+        var getBody = await getResponse.Content.ReadAsStringAsync();
         using var createRequest = Authorized(context.Factory, HttpMethod.Post, Api + "/projects",
             ProjectMutation(maxOutputTokens: 1024, invocationTimeoutSeconds: 1200));
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         using var document = JsonDocument.Parse(getBody);
@@ -864,8 +864,8 @@ public sealed class BenchmarkEndpointTests
                .Returns<Task<BenchmarkProjectRecord>>(_ => throw new BenchmarkEligibilityException("The selected agent is not eligible."));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + "/projects", ProjectMutation());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.IneligibleAgent, "The selected agent is not eligible.");
     }
@@ -878,8 +878,8 @@ public sealed class BenchmarkEndpointTests
                .Returns<Task<BenchmarkProjectRecord>>(_ => throw new BenchmarkConflictException("ProjectFrozen"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Put, Api + $"/projects/{ProjectId}", ProjectMutation(expectedVersion: 4));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.ProjectFrozen, "The benchmark project has runs and is frozen.");
     }
@@ -896,8 +896,8 @@ public sealed class BenchmarkEndpointTests
             score = 6,
             expectedVersion = 3
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.BadRequest, BenchmarkErrorCode.InvalidRequest, "Score must be between 1 and 5.");
     }
@@ -912,8 +912,8 @@ public sealed class BenchmarkEndpointTests
         ArrangeOutdatedJudgePolicy(context);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -930,8 +930,8 @@ public sealed class BenchmarkEndpointTests
         ArrangeOutdatedJudgePolicy(context, promptVersion: BenchmarkJudgePolicyVersions.PromptVersion);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -965,8 +965,8 @@ public sealed class BenchmarkEndpointTests
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false, fidelity: true));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -990,8 +990,8 @@ public sealed class BenchmarkEndpointTests
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         using var document = JsonDocument.Parse(body);
         AssertEx.False(document.RootElement.GetProperty("fidelityEnabled").GetBoolean());
@@ -1006,8 +1006,8 @@ public sealed class BenchmarkEndpointTests
         context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: false, fidelity: true)]);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(body.Contains("fidelity", StringComparison.OrdinalIgnoreCase));
@@ -1037,8 +1037,8 @@ public sealed class BenchmarkEndpointTests
                 fidelityKldEnabled = false,
                 measureExisting = true
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -1058,8 +1058,8 @@ public sealed class BenchmarkEndpointTests
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns((BenchmarkProjectRecord?)null);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.NotFound, BenchmarkErrorCode.NotFound, "The requested benchmark resource was not found.");
     }
@@ -1080,8 +1080,8 @@ public sealed class BenchmarkEndpointTests
                 target = "Primary",
                 expectedVersion = 3
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.InvalidLifecycleTransition,
             "The benchmark lifecycle transition is not allowed.");
@@ -1099,8 +1099,8 @@ public sealed class BenchmarkEndpointTests
                .Returns([new BenchmarkEligibleModel("model", 8192, null, LocalModelOrigin.Imported, "v1:aggregate", true)]);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/eligible-models");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"origin\":\"imported\"", StringComparison.Ordinal);
@@ -1216,7 +1216,7 @@ public sealed class BenchmarkEndpointTests
         {
             expectedVersion = 3
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         _ = context.Store.DidNotReceive().SetUserScoreAsync(Arg.Any<Guid>(), Arg.Any<int?>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
@@ -1233,12 +1233,12 @@ public sealed class BenchmarkEndpointTests
             score = 0,
             expectedVersion = 3
         });
-        using var scoreResponse = await client.SendAsync(scoreRequest).ConfigureAwait(false);
+        using var scoreResponse = await client.SendAsync(scoreRequest);
         using var clearRequest = Authorized(context.Factory, HttpMethod.Delete, Api + $"/runs/{RunId}/score", new
         {
             expectedVersion = 3
         });
-        using var clearResponse = await client.SendAsync(clearRequest).ConfigureAwait(false);
+        using var clearResponse = await client.SendAsync(clearRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, scoreResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, clearResponse.StatusCode);
@@ -1269,14 +1269,14 @@ public sealed class BenchmarkEndpointTests
             score = 42,
             expectedVersion = 3
         });
-        using var scoreResponse = await client.SendAsync(scoreRequest).ConfigureAwait(false);
-        var scored = await scoreResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var scoreResponse = await client.SendAsync(scoreRequest);
+        var scored = await scoreResponse.Content.ReadAsStringAsync();
         using var clearRequest = Authorized(context.Factory, HttpMethod.Delete, Api + $"/runs/{RunId}/score", new
         {
             expectedVersion = 3
         });
-        using var clearResponse = await client.SendAsync(clearRequest).ConfigureAwait(false);
-        var cleared = await clearResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var clearResponse = await client.SendAsync(clearRequest);
+        var cleared = await clearResponse.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, scoreResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, clearResponse.StatusCode);
@@ -1310,8 +1310,8 @@ public sealed class BenchmarkEndpointTests
             expectedVersion = 4,
             confirmRejudge = false
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.RejudgeRequired,
             "Changing the judge re-scores every run of this project. Confirm the re-judge to continue.");
@@ -1350,8 +1350,8 @@ public sealed class BenchmarkEndpointTests
             expectedVersion = 4,
             confirmRejudge = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -1371,8 +1371,8 @@ public sealed class BenchmarkEndpointTests
         {
             expectedVersion = 4
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.JudgeAttemptsActive,
             "A judging of this project is still running. Wait for it or cancel it first.");
@@ -1390,8 +1390,8 @@ public sealed class BenchmarkEndpointTests
             expectedVersion = 3,
             force = false
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.JudgeDisabled,
             "This project has no judge policy to judge under.");
@@ -1403,8 +1403,8 @@ public sealed class BenchmarkEndpointTests
         await using var context = CreateContext();
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/rubric-presets");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -1449,8 +1449,8 @@ public sealed class BenchmarkEndpointTests
                    new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 2)));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/runs?page=1&pageSize=50");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);

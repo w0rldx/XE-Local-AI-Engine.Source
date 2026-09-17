@@ -48,9 +48,9 @@ internal sealed class McpAgenticToolAdapter(
             var auditSucceeded = false;
             try
             {
-                await auditRecorder.RecordAsync(requestId, Name, category, keyPrefix, cancellationToken).ConfigureAwait(false);
+                await auditRecorder.RecordAsync(requestId, Name, category, keyPrefix, cancellationToken);
                 auditSucceeded = true;
-                return await InnerFunction.InvokeAsync(arguments, cancellationToken).ConfigureAwait(false);
+                return await InnerFunction.InvokeAsync(arguments, cancellationToken);
             }
             finally
             {

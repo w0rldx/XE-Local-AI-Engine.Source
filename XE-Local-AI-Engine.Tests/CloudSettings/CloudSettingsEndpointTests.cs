@@ -25,8 +25,8 @@ public sealed class CloudSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/cloud-settings");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var settings = Deserialize<CloudSettingsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -62,8 +62,8 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var settings = Deserialize<CloudSettingsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -102,7 +102,7 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
@@ -119,8 +119,8 @@ public sealed class CloudSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Delete, "/api/local/v1/cloud-settings");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var settings = await ReadJsonAsync<CloudSettingsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var settings = await ReadJsonAsync<CloudSettingsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("None", settings.ProviderName);
@@ -149,8 +149,8 @@ public sealed class CloudSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/cloud-settings");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var settings = Deserialize<CloudSettingsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -280,8 +280,8 @@ public sealed class CloudSettingsEndpointTests
                 IsSecret = true
             }
         ]));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.False(body.Contains("stored-secret", StringComparison.Ordinal));
@@ -298,8 +298,8 @@ public sealed class CloudSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/cloud-settings");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var settings = Deserialize<CloudSettingsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -339,8 +339,8 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var settings = Deserialize<CloudSettingsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -390,7 +390,7 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
@@ -427,8 +427,8 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(body.Contains("entra-client-secret-value", StringComparison.Ordinal));
@@ -468,7 +468,7 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
@@ -503,7 +503,7 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
@@ -534,8 +534,8 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var settings = Deserialize<CloudSettingsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -568,7 +568,7 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
@@ -598,7 +598,7 @@ public sealed class CloudSettingsEndpointTests
                 }
             ]
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
@@ -652,7 +652,7 @@ public sealed class CloudSettingsEndpointTests
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
         request.Content = JsonContent.Create(CreateSaveRequest(headers));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
@@ -667,10 +667,10 @@ public sealed class CloudSettingsEndpointTests
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
         request.Content = JsonContent.Create(CreateSaveRequest(headers));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        return await response.Content.ReadAsStringAsync();
     }
 
     private static SaveCloudSettingsRequest CreateSaveRequest(IReadOnlyList<SaveAzureFoundryHeaderRequest> headers)
@@ -768,7 +768,7 @@ public sealed class CloudSettingsEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 }

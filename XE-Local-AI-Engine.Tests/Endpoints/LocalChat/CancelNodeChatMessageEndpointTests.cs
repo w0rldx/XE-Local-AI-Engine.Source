@@ -22,7 +22,7 @@ public sealed class CancelNodeChatMessageEndpointTests
     [Test]
     public async Task Cancel_WhenTheServiceThrowsAnUnrelatedInvalidOperation_IsNoLongerReportedAsNotFound()
     {
-        var response = await CancelAsync(new InvalidOperationException("the chat writer is misconfigured")).ConfigureAwait(false);
+        var response = await CancelAsync(new InvalidOperationException("the chat writer is misconfigured"));
 
         AssertEx.Equal(HttpStatusCode.InternalServerError, response,
             "an unrelated fault must reach the 500 handler instead of being flattened into 'the message is not there'.");
@@ -31,8 +31,7 @@ public sealed class CancelNodeChatMessageEndpointTests
     [Test]
     public async Task Cancel_WhenTheCorrelationNamesNoMessage_StillAnswersNotFound()
     {
-        var response = await CancelAsync(new NodeChatMessageCorrelationNotFoundException("The correlated node chat message was not found."))
-            .ConfigureAwait(false);
+        var response = await CancelAsync(new NodeChatMessageCorrelationNotFoundException("The correlated node chat message was not found."));
 
         AssertEx.Equal(HttpStatusCode.NotFound, response);
     }
@@ -66,7 +65,7 @@ public sealed class CancelNodeChatMessageEndpointTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         return response.StatusCode;
     }
 }

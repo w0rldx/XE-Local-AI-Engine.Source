@@ -36,16 +36,15 @@ public sealed class DeleteExternalProviderConnectionEndpoint(IExternalProviderAd
     public override async Task HandleAsync(DeleteExternalProviderConnectionRequest req, CancellationToken ct)
     {
         var result = await _administrationService
-                           .DeleteConnectionAsync(req.ConnectionId ?? string.Empty, req.ExpectedRevision, ct)
-                           .ConfigureAwait(false);
+                           .DeleteConnectionAsync(req.ConnectionId ?? string.Empty, req.ExpectedRevision, ct);
 
         switch (result)
         {
             case ExternalProviderWriteResult.Committed committed:
-                await Send.OkAsync(committed.Config.ToResponse(), ct).ConfigureAwait(false);
+                await Send.OkAsync(committed.Config.ToResponse(), ct);
                 return;
             case ExternalProviderWriteResult.Superseded superseded:
-                await Send.ResultAsync(Results.Conflict(superseded.Current.ToResponse())).ConfigureAwait(false);
+                await Send.ResultAsync(Results.Conflict(superseded.Current.ToResponse()));
                 return;
             default:
                 throw new InvalidOperationException($"Unknown external provider write result: {result.GetType().Name}.");

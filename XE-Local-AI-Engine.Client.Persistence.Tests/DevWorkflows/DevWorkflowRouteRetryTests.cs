@@ -26,13 +26,13 @@ public sealed class DevWorkflowRouteRetryTests
     public async Task ARoute_CommitsItsEventAndEveryResetTogether()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var seed = await SeedRoundOneAsync(store).ConfigureAwait(false);
+        var seed = await SeedRoundOneAsync(store);
 
-        _ = await store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, IntegrateId, FullValidateId])).ConfigureAwait(false);
+        _ = await store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, IntegrateId, FullValidateId]));
 
-        var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
+        var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
         foreach (var key in new[]
                  {
                      "verify",
@@ -45,7 +45,7 @@ public sealed class DevWorkflowRouteRetryTests
             AssertEx.Null(nodeRuns[key].TerminalReason, $"'{key}' is about to run again, so it must not still report the last round's outcome.");
         }
 
-        var events = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
+        var events = await store.ListEventsAsync(seed.RunId);
         AssertEx.Equal(expected: 1, events.Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryRouted), "The decision is recorded exactly once.");
         AssertEx.Equal(DevWorkflowEventTypes.NodeRetryRouted,
             events.Where(item => item.EventType is DevWorkflowEventTypes.NodeRetryRouted or DevWorkflowEventTypes.NodeRetryScheduled)
@@ -64,23 +64,22 @@ public sealed class DevWorkflowRouteRetryTests
     public async Task ARouteThatFailsPartWayThrough_LeavesNoResetAndNoEvent()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var seed = await SeedRoundOneAsync(store).ConfigureAwait(false);
+        var seed = await SeedRoundOneAsync(store);
 
         // The second reset names a node run this run has none of, so the cascade throws AFTER the first row was
         // written into the transaction and BEFORE the rest were.
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() =>
-                              store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])))
-                          .ConfigureAwait(false);
+                              store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])));
 
-        var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
+        var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRuns["verify"].Status, "The first reset must roll back with the rest: a lone Pending row is re-dispatched as if fresh.");
         AssertEx.Equal(expected: 1, nodeRuns["verify"].Attempt, "And it must not have spent an attempt on a round that never started.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRuns["integrate"].Status);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Failed, nodeRuns["fullvalidate"].Status, "The failure stays recorded, which is what the next dispatcher sweep re-derives the route from.");
 
-        AssertEx.Empty((await store.ListEventsAsync(seed.RunId).ConfigureAwait(false)).Where(static item => item.EventType == DevWorkflowEventTypes.NodeRetryRouted));
+        AssertEx.Empty((await store.ListEventsAsync(seed.RunId)).Where(static item => item.EventType == DevWorkflowEventTypes.NodeRetryRouted));
     }
 
     /// <summary>
@@ -91,21 +90,21 @@ public sealed class DevWorkflowRouteRetryTests
     public async Task AReplayedRoute_AnswersTheRecordedResultAndWritesNothingAgain()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var seed = await SeedRoundOneAsync(store).ConfigureAwait(false);
+        var seed = await SeedRoundOneAsync(store);
         var operationId = Guid.NewGuid();
 
-        var first = await store.RouteRetryAsync(RouteFrom(seed.RunId, operationId, [VerifyId, IntegrateId, FullValidateId])).ConfigureAwait(false);
-        var replay = await store.RouteRetryAsync(RouteFrom(seed.RunId, operationId, [VerifyId, IntegrateId, FullValidateId])).ConfigureAwait(false);
+        var first = await store.RouteRetryAsync(RouteFrom(seed.RunId, operationId, [VerifyId, IntegrateId, FullValidateId]));
+        var replay = await store.RouteRetryAsync(RouteFrom(seed.RunId, operationId, [VerifyId, IntegrateId, FullValidateId]));
 
         AssertEx.Equal(first.Sequence, replay.Sequence, "A replay answers what the first call answered.");
         AssertEx.Equal(first.Version, replay.Version);
         AssertEx.Equal(expected: 2,
-            (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Max(static row => row.Attempt),
+            (await store.ListNodeRunsAsync(seed.RunId)).Max(static row => row.Attempt),
             "A replayed route must not spend a second attempt on the rows it already reset.");
         AssertEx.Equal(expected: 1,
-            (await store.ListEventsAsync(seed.RunId).ConfigureAwait(false)).Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryRouted));
+            (await store.ListEventsAsync(seed.RunId)).Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryRouted));
     }
 
     /// <summary>
@@ -122,18 +121,17 @@ public sealed class DevWorkflowRouteRetryTests
     public async Task ARouteAskedAgainOnTheStoreThatJustFailed_AppliesEachResetExactlyOnce()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var seed = await SeedRoundOneAsync(store).ConfigureAwait(false);
+        var seed = await SeedRoundOneAsync(store);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() =>
-                              store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])))
-                          .ConfigureAwait(false);
+                              store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, Guid.NewGuid(), FullValidateId])));
 
         // The SAME store instance, as the retry policy uses it: one scoped store, asked twice inside one tick.
-        _ = await store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, IntegrateId, FullValidateId])).ConfigureAwait(false);
+        _ = await store.RouteRetryAsync(RouteFrom(seed.RunId, Guid.NewGuid(), [VerifyId, IntegrateId, FullValidateId]));
 
-        var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
+        var nodeRuns = (await store.ListNodeRunsAsync(seed.RunId)).ToDictionary(row => row.NodeKey, StringComparer.Ordinal);
         foreach (var key in new[]
                  {
                      "verify",
@@ -145,7 +143,7 @@ public sealed class DevWorkflowRouteRetryTests
             AssertEx.Equal(expected: 2, nodeRuns[key].Attempt, $"'{key}' spends ONE attempt across both asks; a tracker the failure left dirty would have spent two.");
         }
 
-        var events = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
+        var events = await store.ListEventsAsync(seed.RunId);
         AssertEx.Equal(expected: 1, events.Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryRouted), "The ask that failed left no event behind for the one that worked.");
         AssertEx.Equal(expected: 3,
             events.Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryScheduled),
@@ -155,10 +153,10 @@ public sealed class DevWorkflowRouteRetryTests
     /// <summary>Where round one leaves the tail: a verification, the apply past the gate, and the full check that failed.</summary>
     private static async Task<DevWorkflowSeed> SeedRoundOneAsync(DevWorkflowStore store)
     {
-        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
-        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, VerifyId, "verify", seed.RunVersion).ConfigureAwait(false);
-        version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, IntegrateId, "integrate", version, DevWorkflowNodeType.Tool).ConfigureAwait(false);
-        _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, FullValidateId, "fullvalidate", version, DevWorkflowNodeType.Tool).ConfigureAwait(false);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, VerifyId, "verify", seed.RunVersion);
+        version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, IntegrateId, "integrate", version, DevWorkflowNodeType.Tool);
+        _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, FullValidateId, "fullvalidate", version, DevWorkflowNodeType.Tool);
 
         foreach (var nodeRunId in new[]
                  {
@@ -169,8 +167,7 @@ public sealed class DevWorkflowRouteRetryTests
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
                                nodeRunId,
                                DevWorkflowVersions.Any,
-                               DevWorkflowNodeRunStatus.Succeeded))
-                           .ConfigureAwait(false);
+                               DevWorkflowNodeRunStatus.Succeeded));
         }
 
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
@@ -178,8 +175,7 @@ public sealed class DevWorkflowRouteRetryTests
                            DevWorkflowVersions.Any,
                            DevWorkflowNodeRunStatus.Failed,
                            FailureClass: "ToolCommandFailed",
-                           TerminalReason: "the integrated result does not build"))
-                       .ConfigureAwait(false);
+                           TerminalReason: "the integrated result does not build"));
         return seed;
     }
 

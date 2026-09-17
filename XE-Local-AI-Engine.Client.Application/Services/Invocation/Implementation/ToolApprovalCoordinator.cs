@@ -179,7 +179,7 @@ public sealed class ToolApprovalCoordinator
                 approvalToolName,
                 UnattendedApprovalDecision,
                 approvalRequestedTimestamp,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             throw new ApprovalUnavailableException(reason);
         }
 
@@ -193,7 +193,7 @@ public sealed class ToolApprovalCoordinator
                 approvalToolName,
                 SessionScopeApprovalDecision,
                 approvalRequestedTimestamp,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             return true;
         }
 
@@ -233,10 +233,10 @@ public sealed class ToolApprovalCoordinator
             // the whole turn instead of rendering the approval card the operator answers.
             if (!InvocationRunner.IsLocalLoopbackInvocation(package))
             {
-                await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
+                await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken);
             }
 
-            await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
+            await dispatcher.ReportApprovalRequestedAsync(approvalPayload);
 
             // Surface the pending approval on the LOCAL chat stream. The CallId is derived through the SAME
             // helper the streaming tool-call-requested lifecycle uses (CallId, falling back to the tool name when it is
@@ -258,7 +258,7 @@ public sealed class ToolApprovalCoordinator
                 // offered the button for run_skill_script and imported skills, where the click silently degraded to
                 // "Once".
                 SessionScopeEligible = sessionApprovalKey is not null
-            }).ConfigureAwait(false);
+            });
 
             using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
@@ -267,7 +267,7 @@ public sealed class ToolApprovalCoordinator
             setInvocationDeadline(true);
             try
             {
-                approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+                approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token);
             }
             finally
             {
@@ -278,7 +278,7 @@ public sealed class ToolApprovalCoordinator
                 approvalToolName,
                 approved ? ApprovalDecisions.Approve : ApprovalDecisions.Deny,
                 approvalRequestedTimestamp,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             return approved;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -290,7 +290,7 @@ public sealed class ToolApprovalCoordinator
                 approvalToolName,
                 ApprovalDecisions.Timeout,
                 approvalRequestedTimestamp,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             throw;
         }
         finally
@@ -379,7 +379,7 @@ public sealed class ToolApprovalCoordinator
                 CallId = callId,
                 ToolName = AskUserTool.ToolName,
                 Questions = questions
-            }).ConfigureAwait(false);
+            });
 
             // The hard cap on any human wait. Linked to the invocation token so a user cancel or shutdown still ends
             // the wait promptly; SetInvocationDeadline below is what stops the invocation's own (shorter) budget from
@@ -391,7 +391,7 @@ public sealed class ToolApprovalCoordinator
             setInvocationDeadline(true);
             try
             {
-                answers = await questionCompletion.Task.WaitAsync(questionTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+                answers = await questionCompletion.Task.WaitAsync(questionTimeoutCancellationTokenSource.Token);
             }
             finally
             {
@@ -627,7 +627,7 @@ public sealed class ToolApprovalCoordinator
             decision,
             source,
             latencyMs,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     // The offered tool's declared risk category, matched by name against the package offer (AllowedToolDto.Category) —

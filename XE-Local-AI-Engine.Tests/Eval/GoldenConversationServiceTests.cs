@@ -27,7 +27,7 @@ public sealed class GoldenConversationServiceTests
             Assertion: null,
             "The answer must be helpful.");
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
 
     [Test]
@@ -40,7 +40,7 @@ public sealed class GoldenConversationServiceTests
             Assertion: null,
             "The answer must be helpful.");
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
 
     [Test]
@@ -53,9 +53,9 @@ public sealed class GoldenConversationServiceTests
             Assertion: null,
             "The answer must be helpful.");
 
-        _ = await service.CreateAsync(input).ConfigureAwait(false);
+        _ = await service.CreateAsync(input);
 
-        await store.Received(1).AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -68,7 +68,7 @@ public sealed class GoldenConversationServiceTests
             Assertion: null,
             "The answer must be helpful.");
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
 
     [Test]
@@ -81,7 +81,7 @@ public sealed class GoldenConversationServiceTests
             Assertion: null,
             "The answer must be helpful.");
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
 
     [Test]
@@ -96,7 +96,7 @@ public sealed class GoldenConversationServiceTests
             Assertion: null,
             "The answer must be helpful.");
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
 
     [Test]
@@ -110,7 +110,7 @@ public sealed class GoldenConversationServiceTests
             Assertion: null,
             "The answer must be helpful.");
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
 
     [Test]
@@ -125,7 +125,7 @@ public sealed class GoldenConversationServiceTests
             Assertion: """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
             Rubric: null);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
     }
 
     [Test]
@@ -139,9 +139,9 @@ public sealed class GoldenConversationServiceTests
             Assertion: """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
             "The answer must be helpful.");
 
-        _ = await service.CreateAsync(input).ConfigureAwait(false);
+        _ = await service.CreateAsync(input);
 
-        await store.Received(1).AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -158,8 +158,8 @@ public sealed class GoldenConversationServiceTests
             Assertion: """{"requiredPhrase":["must appear"]}""",
             "The answer must be helpful.");
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>());
     }
 
     private static GoldenConversationService CreateService(out IGoldenConversationStore store)

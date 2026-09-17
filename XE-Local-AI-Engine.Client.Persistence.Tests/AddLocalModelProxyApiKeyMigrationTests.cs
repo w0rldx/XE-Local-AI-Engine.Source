@@ -12,12 +12,12 @@ public sealed class AddLocalModelProxyApiKeyMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesLocalModelProxyApiKeysWithHashOnly()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("local-model-proxy-api-key.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("local-model-proxy-api-key.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("local_model_proxy_api_keys").ConfigureAwait(false),
+        AssertEx.True(await probe.TableExistsAsync("local_model_proxy_api_keys"),
             "local_model_proxy_api_keys must exist.");
 
-        var columns = await probe.ColumnsAsync("local_model_proxy_api_keys").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("local_model_proxy_api_keys");
         AssertEx.True(columns.IsSupersetOf(new[]
         {
             "id",

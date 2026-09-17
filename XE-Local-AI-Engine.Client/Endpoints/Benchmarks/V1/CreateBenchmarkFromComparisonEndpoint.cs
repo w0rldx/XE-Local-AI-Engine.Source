@@ -41,8 +41,7 @@ public sealed class CreateBenchmarkFromComparisonEndpoint(IComparisonBenchmarkHa
                                             req.KvCacheType,
                                             req.RepeatCount,
                                             req.Warmup),
-                                        ct)
-                                    .ConfigureAwait(false);
+                                        ct);
 
         // 202, like every other run start: the runs are queued, not finished.
         await Send.ResultAsync(Results.Accepted(value: new CreateBenchmarkFromComparisonResponse
@@ -52,6 +51,6 @@ public sealed class CreateBenchmarkFromComparisonEndpoint(IComparisonBenchmarkHa
             TunedModelName = created.TunedModelName,
             BaseRunIds = created.BaseRunIds,
             TunedRunIds = created.TunedRunIds
-        })).ConfigureAwait(false);
+        }));
     }
 }

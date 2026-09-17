@@ -37,7 +37,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(nextCalled, "A container reaching the bridge through one of this host's own addresses must pass.");
     }
@@ -53,7 +53,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(nextCalled, "The engine's own calls to its bridge arrive over loopback.");
     }
@@ -75,7 +75,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
         AssertEx.False(nextCalled, $"A peer at {remote} is not this computer and must never reach anything behind the guard.");
@@ -101,8 +101,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
         using var watcher = CreateWatcher();
         await new ContainerBridgePeerGuardMiddleware(Endpoints(), watcher, logger)
-              .InvokeAsync(context, static _ => Task.CompletedTask)
-              .ConfigureAwait(false);
+              .InvokeAsync(context, static _ => Task.CompletedTask);
 
         AssertEx.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode, "The diagnosis must not change the verdict.");
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "rootful"),
@@ -119,8 +118,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
         using var watcher = CreateWatcher();
         await new ContainerBridgePeerGuardMiddleware(Endpoints(), watcher, logger)
-              .InvokeAsync(context, static _ => Task.CompletedTask)
-              .ConfigureAwait(false);
+              .InvokeAsync(context, static _ => Task.CompletedTask);
 
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "accepts this computer's own addresses only"), "The refusal is still reported.");
         AssertEx.False(logger.HasEntry(LogLevel.Warning, "rootful"), "A routable public peer is another machine; naming the daemon would be a wrong diagnosis.");
@@ -155,7 +153,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
         AssertEx.False(nextCalled, "A connection with no peer address is not one the bridge can vouch for.");
@@ -176,7 +174,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(nextCalled, "A request that did not arrive on the bridge port belongs to the main pipeline, which owns its own peer checks.");
         AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
@@ -199,7 +197,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
         {
             nextCalled = true;
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(nextCalled, "A connection accepted on the node's own listener is the node's own, whatever port it shares with the bridge.");
         AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
@@ -220,8 +218,7 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
               {
                   nextCalled = true;
                   return Task.CompletedTask;
-              })
-              .ConfigureAwait(false);
+              });
 
         AssertEx.True(nextCalled, "With no resolved bridge there is no bridge connection to refuse, and the node's own pipeline owns the request.");
     }

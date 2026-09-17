@@ -298,7 +298,7 @@ public sealed class CodexToolCallingWireTests
         {
             if (request.Content is not null)
             {
-                RequestBody = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                RequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
             }
 
             const string CannedResponse =

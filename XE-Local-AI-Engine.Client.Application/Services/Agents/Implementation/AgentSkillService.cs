@@ -47,18 +47,18 @@ internal sealed class AgentSkillService : IAgentSkillService
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        await ValidateAsync(input, existingId: null, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, existingId: null, cancellationToken);
 
-        return await _store.CreateAsync(input, cancellationToken).ConfigureAwait(false);
+        return await _store.CreateAsync(input, cancellationToken);
     }
 
     public async Task<AgentSkillRecord?> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        await ValidateAsync(input, id, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, id, cancellationToken);
 
-        return await _store.UpdateAsync(id, input, cancellationToken).ConfigureAwait(false);
+        return await _store.UpdateAsync(id, input, cancellationToken);
     }
 
     public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -121,7 +121,7 @@ internal sealed class AgentSkillService : IAgentSkillService
 
         ValidateFrontmatter(input);
 
-        await EnsureNameIsUniqueAsync(name, existingId, cancellationToken).ConfigureAwait(false);
+        await EnsureNameIsUniqueAsync(name, existingId, cancellationToken);
     }
 
     /// <summary>
@@ -175,7 +175,7 @@ internal sealed class AgentSkillService : IAgentSkillService
     {
         // NOCASE uniqueness: the persistence index is case-insensitive, so a duplicate name (any casing) other than
         // this skill itself is rejected up front rather than surfacing a downstream unique-constraint failure.
-        var existing = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var existing = await _store.ListAsync(cancellationToken);
         var clash = existing.Any(skill =>
             (existingId is null || skill.Id != existingId.Value)
             && string.Equals(skill.Name, name, StringComparison.OrdinalIgnoreCase));

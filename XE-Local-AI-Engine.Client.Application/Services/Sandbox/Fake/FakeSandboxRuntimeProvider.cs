@@ -153,13 +153,12 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         await using var registration = cancellationToken
                                        .Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(CancellationToken.None),
-                                           inFlight)
-                                       .ConfigureAwait(false);
+                                           inFlight);
 
         bool completedNormally;
         try
         {
-            completedNormally = await inFlight.Completion.Task.ConfigureAwait(false);
+            completedNormally = await inFlight.Completion.Task;
         }
         finally
         {
@@ -230,7 +229,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
-        var content = await ReadFileAsync(handle, sandboxPath, cancellationToken).ConfigureAwait(false);
+        var content = await ReadFileAsync(handle, sandboxPath, cancellationToken);
         if (Encoding.UTF8.GetByteCount(content) > maxBytes)
         {
             throw new InvalidDataException("The sandbox file exceeds the requested read bound.");

@@ -53,7 +53,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                                             | SandboxProviderCapabilities.SupportsNetworkPolicy
                                             | SandboxProviderCapabilities.SupportsKill);
 
-        _ = await PrepareAsync(sandbox).ConfigureAwait(false);
+        _ = await PrepareAsync(sandbox);
 
         AssertEx.Equal(expected: 1, sandbox.Created.Count);
         AssertEx.Equal(SandboxNetworkPolicy.None, sandbox.Created[0].NetworkPolicy);
@@ -71,7 +71,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         var sandbox = new CapabilitySandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
                                             | SandboxProviderCapabilities.SupportsKill);
 
-        _ = await PrepareAsync(sandbox).ConfigureAwait(false);
+        _ = await PrepareAsync(sandbox);
 
         AssertEx.Equal(expected: 1, sandbox.Created.Count);
         AssertEx.Equal(SandboxNetworkPolicy.Unrestricted, sandbox.Created[0].NetworkPolicy);
@@ -89,7 +89,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                                             | SandboxProviderCapabilities.SupportsNetworkPolicy
                                             | SandboxProviderCapabilities.SupportsKill);
 
-        _ = await PrepareAsync(sandbox, requireEgressDenial: true).ConfigureAwait(false);
+        _ = await PrepareAsync(sandbox, requireEgressDenial: true);
 
         AssertEx.Equal(expected: 1, sandbox.Created.Count);
         AssertEx.Equal(SandboxNetworkPolicy.None, sandbox.Created[0].NetworkPolicy);
@@ -108,7 +108,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                                             | SandboxProviderCapabilities.SupportsKill);
 
         var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
-            await PrepareAsync(sandbox, requireEgressDenial: true).ConfigureAwait(false)).ConfigureAwait(false);
+            await PrepareAsync(sandbox, requireEgressDenial: true));
 
         AssertEx.Contains(exception.Message, SandboxEgressPolicy.DevelopmentOptionKey);
         AssertEx.Contains(exception.Message, SandboxWorkloads.DevelopmentModeHostToolchain.Workload);
@@ -127,7 +127,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                                             | SandboxProviderCapabilities.SupportsResourceLimits
                                             | SandboxProviderCapabilities.SupportsKill);
 
-        _ = await PrepareAsync(sandbox).ConfigureAwait(false);
+        _ = await PrepareAsync(sandbox);
 
         AssertEx.Equal(SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain, sandbox.Capabilities, new ComputeOptions(), new LocalContainerOptions()),
             sandbox.Created[0].ResourceLimits);
@@ -156,7 +156,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
             return;
         }
 
-        if (!await NuGetIsReachableAsync().ConfigureAwait(false))
+        if (!await NuGetIsReachableAsync())
         {
             Skip("this box cannot reach api.nuget.org, so a warm restore has nothing to warm FROM and the comparison is vacuous.");
             return;
@@ -164,7 +164,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
 
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "solution");
-        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: true).ConfigureAwait(false);
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: true);
 
         // The shared fixture is deliberately OFFLINE — it clears package sources and declares the host package cache
         // as a fallback folder, so its restore succeeds with no network by construction. That is right for every other
@@ -172,23 +172,22 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         // Removing the file puts the repository back on the machine's real sources, which is the shape of an actual
         // registered repository and the only shape in which "the warm is what made this work" is falsifiable.
         File.Delete(Path.Combine(repository, "NuGet.config"));
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "rm", "--quiet", "--", "NuGet.config").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "restore from the machine's real package sources").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "rm", "--quiet", "--", "NuGet.config");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "restore from the machine's real package sources");
 
         var worktree = Path.Combine(_root, "worktree");
-        await CloneDetachedAsync(repository, worktree).ConfigureAwait(false);
+        await CloneDetachedAsync(repository, worktree);
 
         // The fixture's committed baseline deliberately FAILS its own test, so that every coder attempt produces a
         // non-empty diff. This test is about egress, not about the gate's verdict, so it stands in for the coder by
         // writing the passing implementation — otherwise `dotnet test` would exit non-zero for a reason that has
         // nothing to do with the network.
         await File.WriteAllTextAsync(Path.Combine(worktree, DevelopmentSyntheticSolutionRepository.LibrarySourcePath.Replace('/', Path.DirectorySeparatorChar)),
-                      DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
-                  .ConfigureAwait(false);
+                      DevelopmentSyntheticSolutionRepository.PassingLibrarySource);
 
         var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx,
             DevelopmentSyntheticSolutionRepository.SolutionPath);
-        var head = await ReadGitOutputAsync(worktree, "rev-parse", "--verify", "HEAD^{commit}").ConfigureAwait(false);
+        var head = await ReadGitOutputAsync(worktree, "rev-parse", "--verify", "HEAD^{commit}");
 
         // COLD: a per-task package root with nothing in it, and a sandbox with no egress. The restore has to fail —
         // if it does not, this host resolves packages from somewhere the test did not control and every other
@@ -200,8 +199,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 head,
                 profile,
                 SandboxNetworkPolicy.None,
-                DevelopmentCommandIds.DotnetRestore)
-            .ConfigureAwait(false);
+                DevelopmentCommandIds.DotnetRestore);
         AssertEx.NotEqual(notExpected: 0,
             coldEvidence[^1].ExitCode,
             "a cold restore inside a sandbox with no egress must FAIL; it apparently reached packages from somewhere: "
@@ -216,8 +214,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 head,
                 profile,
                 SandboxNetworkPolicy.Unrestricted,
-                DevelopmentCommandIds.DotnetRestore)
-            .ConfigureAwait(false);
+                DevelopmentCommandIds.DotnetRestore);
         AssertEx.Equal(expected: 0, warmEvidence[^1].ExitCode, warmEvidence[^1].StandardOutput + warmEvidence[^1].StandardError);
 
         // AGENT-FACING: the whole validation profile, denied egress, against the cache the warm left behind.
@@ -227,8 +224,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 head,
                 profile,
                 SandboxNetworkPolicy.None,
-                [.. profile.ValidationCommandIds])
-            .ConfigureAwait(false);
+                [.. profile.ValidationCommandIds]);
         foreach (var command in validated)
         {
             AssertEx.Equal(expected: 0,
@@ -250,7 +246,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         {
             using var client = new TcpClient();
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-            await client.ConnectAsync("api.nuget.org", 443, timeout.Token).ConfigureAwait(false);
+            await client.ConnectAsync("api.nuget.org", 443, timeout.Token);
             return true;
         }
         catch (Exception exception) when (exception is SocketException or OperationCanceledException)
@@ -326,7 +322,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                     ReadOnly = false
                 })
             ]
-        }).ConfigureAwait(false);
+        });
 
         try
         {
@@ -341,14 +337,14 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
             var tools = new DevelopmentWorkspaceTools(sandbox, session, Options.Create(OptionsValue()), profile);
             foreach (var commandId in commandIds)
             {
-                _ = await tools.RunCommandAsync(commandId).ConfigureAwait(false);
+                _ = await tools.RunCommandAsync(commandId);
             }
 
             return [.. tools.CommandEvidence];
         }
         finally
         {
-            await sandbox.KillAsync(handle).ConfigureAwait(false);
+            await sandbox.KillAsync(handle);
         }
     }
 
@@ -357,12 +353,12 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-egress@example.invalid").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Egress Test").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-egress@example.invalid");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Egress Test");
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
 
         var data = Path.Combine(_root, "d-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(data);
@@ -383,17 +379,16 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                                      snapshot.SelectedFolderId!.Value,
                                      "repository",
                                      repository,
-                                     identity))
-                             .ConfigureAwait(false);
+                                     identity));
     }
 
     private static async Task CloneDetachedAsync(string repository, string worktree)
     {
         Directory.CreateDirectory(worktree);
-        await DevelopmentMountBrokerTests.RunGitAsync(Path.GetDirectoryName(worktree)!, "clone", "--no-hardlinks", repository, worktree).ConfigureAwait(false);
-        var head = await ReadGitOutputAsync(worktree, "rev-parse", "--verify", "HEAD^{commit}").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(worktree, "checkout", "--detach", head).ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(worktree, "remote", "remove", "origin").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(Path.GetDirectoryName(worktree)!, "clone", "--no-hardlinks", repository, worktree);
+        var head = await ReadGitOutputAsync(worktree, "rev-parse", "--verify", "HEAD^{commit}");
+        await DevelopmentMountBrokerTests.RunGitAsync(worktree, "checkout", "--detach", head);
+        await DevelopmentMountBrokerTests.RunGitAsync(worktree, "remote", "remove", "origin");
     }
 
     private static async Task<string> ReadGitOutputAsync(string workingDirectory, params string[] arguments)
@@ -417,9 +412,9 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         };
         process.Start();
         var error = process.StandardError.ReadToEndAsync();
-        var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        AssertEx.Equal(expected: 0, process.ExitCode, await error.ConfigureAwait(false));
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        AssertEx.Equal(expected: 0, process.ExitCode, await error);
         return output.Trim();
     }
 

@@ -13,13 +13,13 @@ public sealed class AddModelFitTablesMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesSnapshotBenchmarkAndRecommendationTables()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("model-fit-tables.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("model-fit-tables.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("model_fit_snapshots").ConfigureAwait(false), "model_fit_snapshots must exist.");
-        AssertEx.True(await probe.TableExistsAsync("model_fit_benchmarks").ConfigureAwait(false), "model_fit_benchmarks must exist.");
-        AssertEx.True(await probe.TableExistsAsync("model_fit_recommendations").ConfigureAwait(false), "model_fit_recommendations must exist.");
+        AssertEx.True(await probe.TableExistsAsync("model_fit_snapshots"), "model_fit_snapshots must exist.");
+        AssertEx.True(await probe.TableExistsAsync("model_fit_benchmarks"), "model_fit_benchmarks must exist.");
+        AssertEx.True(await probe.TableExistsAsync("model_fit_recommendations"), "model_fit_recommendations must exist.");
 
-        AssertEx.True((await probe.ColumnsAsync("model_fit_snapshots").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("model_fit_snapshots")).IsSupersetOf(new[]
         {
             "id",
             "operation",
@@ -32,7 +32,7 @@ public sealed class AddModelFitTablesMigrationTests
             "created_at_utc"
         }), "model_fit_snapshots must expose the mapped columns.");
 
-        AssertEx.True((await probe.ColumnsAsync("model_fit_recommendations").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("model_fit_recommendations")).IsSupersetOf(new[]
         {
             "id",
             "snapshot_id",
@@ -45,9 +45,9 @@ public sealed class AddModelFitTablesMigrationTests
             "context_tokens"
         }), "model_fit_recommendations must expose the mapped columns.");
 
-        AssertEx.True(await probe.ForeignKeyExistsAsync("model_fit_benchmarks", "snapshot_id", "model_fit_snapshots").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("model_fit_benchmarks", "snapshot_id", "model_fit_snapshots"),
             "Benchmarks must hang off their snapshot.");
-        AssertEx.True(await probe.ForeignKeyExistsAsync("model_fit_recommendations", "snapshot_id", "model_fit_snapshots").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("model_fit_recommendations", "snapshot_id", "model_fit_snapshots"),
             "Recommendations must hang off their snapshot.");
 
         // The advisor reads the ranked list in rank order for one snapshot, and resolves "the current answer" through
@@ -56,7 +56,7 @@ public sealed class AddModelFitTablesMigrationTests
                 "IX_model_fit_recommendations_snapshot_id_rank",
                 unique: false,
                 "snapshot_id",
-                "rank").ConfigureAwait(false),
+                "rank"),
             "The ranked-recommendation lookup must be indexed on (snapshot_id, rank).");
 
         AssertEx.True(await probe.IndexExistsAsync("model_fit_snapshots",
@@ -66,7 +66,7 @@ public sealed class AddModelFitTablesMigrationTests
                 "use_case",
                 "provider_name",
                 "model_name",
-                "is_latest_successful").ConfigureAwait(false),
+                "is_latest_successful"),
             "The latest-successful snapshot lookup must be indexed.");
     }
 }

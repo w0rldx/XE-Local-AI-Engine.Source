@@ -54,7 +54,7 @@ public sealed class CodexSessionService(
     /// <summary>Reports the current session and login state. Returns no token material.</summary>
     public async Task<CodexSessionStatus> GetStatusAsync(CancellationToken cancellationToken = default)
     {
-        var session = await _tokenStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var session = await _tokenStore.LoadAsync(cancellationToken);
         var loginPending = _loginCoordinator.GetStatus().State == CodexLoginState.Pending;
 
         return session is null
@@ -70,7 +70,7 @@ public sealed class CodexSessionService(
     /// <summary>Clears the stored Codex OAuth session so the next chat send routes back to Azure-or-local.</summary>
     public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {
-        await _tokenStore.ClearAsync(cancellationToken).ConfigureAwait(false);
+        await _tokenStore.ClearAsync(cancellationToken);
 
         // Invalidate the selector's snapshot so the very next send reverts to Azure/local without waiting for the TTL.
         _activeCloudFactory.InvalidateSelectionCache();

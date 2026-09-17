@@ -17,9 +17,9 @@ internal static class InferenceBenchmarkHttpProtocol
         IReadOnlyList<string> inputs,
         CancellationToken ct)
     {
-        using var response = await client.PostAsJsonAsync(endpoint, new EmbeddingRequest(modelName, inputs), SerializerOptions, ct).ConfigureAwait(false);
+        using var response = await client.PostAsJsonAsync(endpoint, new EmbeddingRequest(modelName, inputs), SerializerOptions, ct);
         response.EnsureSuccessStatusCode();
-        var payload = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(SerializerOptions, ct).ConfigureAwait(false);
+        var payload = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(SerializerOptions, ct);
         if (payload?.Data is null || payload.Data.Count != inputs.Count)
         {
             throw new InvalidDataException("Embedding response did not contain one vector per input.");
@@ -40,9 +40,9 @@ internal static class InferenceBenchmarkHttpProtocol
         IReadOnlyList<string> documents,
         CancellationToken ct)
     {
-        using var response = await client.PostAsJsonAsync(endpoint, new RerankRequest(query, documents), SerializerOptions, ct).ConfigureAwait(false);
+        using var response = await client.PostAsJsonAsync(endpoint, new RerankRequest(query, documents), SerializerOptions, ct);
         response.EnsureSuccessStatusCode();
-        var payload = await response.Content.ReadFromJsonAsync<RerankResponse>(SerializerOptions, ct).ConfigureAwait(false);
+        var payload = await response.Content.ReadFromJsonAsync<RerankResponse>(SerializerOptions, ct);
         if (payload?.Results is null || payload.Results.Count != documents.Count)
         {
             throw new InvalidDataException("Reranker response did not contain one score per document.");

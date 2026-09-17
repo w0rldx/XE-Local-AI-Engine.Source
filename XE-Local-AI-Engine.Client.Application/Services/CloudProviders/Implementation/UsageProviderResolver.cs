@@ -74,7 +74,7 @@ internal sealed class UsageProviderResolver : IUsageProviderResolver
         {
             using var timeoutSource = new CancellationTokenSource(ResolutionTimeout, _timeProvider);
             using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
-            localProviderName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, linkedSource.Token).ConfigureAwait(false);
+            localProviderName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, linkedSource.Token);
         }
         catch (Exception exception)
         {

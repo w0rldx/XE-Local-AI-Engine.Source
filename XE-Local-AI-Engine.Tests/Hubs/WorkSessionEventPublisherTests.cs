@@ -26,7 +26,7 @@ public sealed class WorkSessionEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new WorkSessionEventPublisher(hubContext);
 
-        await publisher.PublishAsync(sessionId, sequence: 42, kind).ConfigureAwait(false);
+        await publisher.PublishAsync(sessionId, sequence: 42, kind);
 
         // Asserted against the literal, not against kind.ToString(): the client switches on these strings, so a
         // capitalised name would match no arm and silently stop updating the pane — and nothing else would catch it.
@@ -50,7 +50,7 @@ public sealed class WorkSessionEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new WorkSessionEventPublisher(hubContext);
 
-        await publisher.PublishAsync(sessionId, sequence: 1, WorkSessionChangeKind.Status).ConfigureAwait(false);
+        await publisher.PublishAsync(sessionId, sequence: 1, WorkSessionChangeKind.Status);
 
         _ = clients.Received(1).Group($"work-session-{sessionId:N}");
         AssertEx.Equal(1, clients.ReceivedCalls().Count());

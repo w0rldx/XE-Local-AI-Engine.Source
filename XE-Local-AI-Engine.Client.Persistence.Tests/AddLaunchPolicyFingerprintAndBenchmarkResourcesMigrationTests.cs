@@ -22,7 +22,7 @@ public sealed class AddLaunchPolicyFingerprintAndBenchmarkResourcesMigrationTest
     [Test]
     public async Task Migrate_OverAFrozenProfile_MarksItStaleAndUnbindsItsBenchmark()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("launch-policy-fingerprint.sqlite", PreFingerprintMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("launch-policy-fingerprint.sqlite", PreFingerprintMigrationId);
 
         var profileId = Guid.NewGuid().ToString();
         await probe.ExecuteAsync("""
@@ -37,26 +37,26 @@ public sealed class AddLaunchPolicyFingerprintAndBenchmarkResourcesMigrationTest
             {
                 command.Parameters.AddWithValue("$id", profileId);
                 command.Parameters.AddWithValue("$snapshot_id", Guid.NewGuid().ToString());
-            }).ConfigureAwait(false);
+            });
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
         AssertEx.Equal(StaleStatus,
             (await probe.LongsAsync("SELECT status FROM inference_profiles WHERE id = $id;",
-                command => command.Parameters.AddWithValue("$id", profileId)).ConfigureAwait(false)).Single(),
+                command => command.Parameters.AddWithValue("$id", profileId))).Single(),
             "A profile frozen without a launch-policy fingerprint must be invalidated, never replayed as still-frozen.");
 
         AssertEx.Null(await probe.ScalarAsync("SELECT benchmark_snapshot_id FROM inference_profiles WHERE id = $id;",
-                command => command.Parameters.AddWithValue("$id", profileId)).ConfigureAwait(false),
+                command => command.Parameters.AddWithValue("$id", profileId)),
             "The benchmark that justified the old freeze must be unbound along with it.");
     }
 
     [Test]
     public async Task Migrate_ToThisMigration_ReplacesTheSingleFreeVramFigureWithTheDeviceAndProcessPair()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("launch-policy-columns.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("launch-policy-columns.sqlite", ThisMigrationId);
 
-        var profileColumns = await probe.ColumnsAsync("inference_profiles").ConfigureAwait(false);
+        var profileColumns = await probe.ColumnsAsync("inference_profiles");
 
         AssertEx.False(profileColumns.Contains("free_vram_at_freeze_bytes"),
             "The ambiguous single free-VRAM column must be gone — keeping it alongside the pair invites reading the wrong one.");
@@ -68,7 +68,7 @@ public sealed class AddLaunchPolicyFingerprintAndBenchmarkResourcesMigrationTest
             "process_budget_vram_at_freeze_bytes"
         }), "inference_profiles must carry the fingerprint and both freeze-time VRAM figures.");
 
-        AssertEx.True((await probe.ColumnsAsync("model_fit_benchmarks").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("model_fit_benchmarks")).IsSupersetOf(new[]
         {
             "external_pressure_detected",
             "global_free_vram_after_bytes",
@@ -84,6 +84,6 @@ public sealed class AddLaunchPolicyFingerprintAndBenchmarkResourcesMigrationTest
 
         // A run taken while something else was competing for the device is not comparable to a clean one, so the flag
         // has to default to "no pressure detected" rather than to null-means-maybe.
-        AssertEx.Equal("0", await probe.ColumnDefaultAsync("model_fit_benchmarks", "external_pressure_detected").ConfigureAwait(false));
+        AssertEx.Equal("0", await probe.ColumnDefaultAsync("model_fit_benchmarks", "external_pressure_detected"));
     }
 }

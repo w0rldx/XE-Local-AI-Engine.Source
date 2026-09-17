@@ -21,7 +21,7 @@ public sealed class GetLocalModelProxyApiKeyEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await LocalModelProxyApiKeyRequests.AnonymousAsync(client, HttpMethod.Get).ConfigureAwait(false);
+        using var response = await LocalModelProxyApiKeyRequests.AnonymousAsync(client, HttpMethod.Get);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -31,7 +31,7 @@ public sealed class GetLocalModelProxyApiKeyEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await LocalModelProxyApiKeyRequests.AsNonOperatorAsync(Factory, client, HttpMethod.Get).ConfigureAwait(false);
+        using var response = await LocalModelProxyApiKeyRequests.AsNonOperatorAsync(Factory, client, HttpMethod.Get);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -41,11 +41,11 @@ public sealed class GetLocalModelProxyApiKeyEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Get).ConfigureAwait(false);
+        using var response = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Get);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var status = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<LocalModelProxyApiKeyStatusResponse>().ConfigureAwait(false));
+        var status = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<LocalModelProxyApiKeyStatusResponse>());
         AssertEx.False(status.Configured, "A node with no minted credential must report configured=false, not 404.");
         AssertEx.Null(status.ApiKey);
         AssertEx.Contains(status.EndpointUrl, "/api/local/v1/proxy/v1", StringComparison.Ordinal);

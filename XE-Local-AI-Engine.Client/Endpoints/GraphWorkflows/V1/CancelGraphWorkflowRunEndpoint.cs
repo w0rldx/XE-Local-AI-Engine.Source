@@ -28,7 +28,7 @@ public sealed class CancelGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var detail = await _runs.CancelAsync(req.RunId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: detail.ToResponse())).ConfigureAwait(false);
+        var detail = await _runs.CancelAsync(req.RunId, ct);
+        await Send.ResultAsync(Results.Accepted(value: detail.ToResponse()));
     }
 }

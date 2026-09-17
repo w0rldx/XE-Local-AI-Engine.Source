@@ -84,11 +84,11 @@ public sealed class ExternalAppRealDaemonTests
     [Test]
     public async Task RealDaemon_TwoServiceApplication_InstallsStartsStopsResetsAndUninstalls()
     {
-        await using var box = await NewBoxAsync().ConfigureAwait(false);
-        await box.AssertNothingOfOursIsOnTheDaemonAsync("before the install").ConfigureAwait(false);
+        await using var box = await NewBoxAsync();
+        await box.AssertNothingOfOursIsOnTheDaemonAsync("before the install");
 
-        var installed = await box.InstallAsync().ConfigureAwait(false);
-        var detail = await box.Service.GetAsync(installed).ConfigureAwait(false);
+        var installed = await box.InstallAsync();
+        var detail = await box.Service.GetAsync(installed);
 
         // Exactly one published port, and it is the ui service's.
         AssertEx.Equal(expected: 1, detail.PublishedPorts.Count, "A two-service application with one ui port must publish exactly one.");
@@ -97,47 +97,44 @@ public sealed class ExternalAppRealDaemonTests
         AssertEx.Equal(UiContainerPort, published.ContainerPort);
 
         // The binding is genuinely reachable from this process, which is the one thing an inspect can never say.
-        AssertEx.Contains(await RealDaemonBox.FetchAsync(published.HostPort).ConfigureAwait(false), "xe-external-apps");
+        AssertEx.Contains(await RealDaemonBox.FetchAsync(published.HostPort), "xe-external-apps");
 
         // Both services exist, on one network, and the dependency is there too.
-        var byService = await box.ListByServiceAsync().ConfigureAwait(false);
+        var byService = await box.ListByServiceAsync();
         AssertEx.Equal(expected: 2, byService.Count);
         AssertEx.True(byService.ContainsKey(DependencyService), "The dependency service's container is missing.");
 
         // Stop keeps the containers and the network: it is not a teardown.
         var stopped = await box.RunAsync(ExternalAppInstanceStatus.Stopped,
-                                   (service, id, version) => service.StopAsync(id, version))
-                               .ConfigureAwait(false);
+                                   (service, id, version) => service.StopAsync(id, version));
         AssertEx.Equal(ExternalAppDesiredState.Stopped, stopped.DesiredState);
-        AssertEx.Equal(expected: 2, (await box.ListByServiceAsync().ConfigureAwait(false)).Count, "Stop removed containers; it must only stop them.");
+        AssertEx.Equal(expected: 2, (await box.ListByServiceAsync()).Count, "Stop removed containers; it must only stop them.");
 
         // Start again: the same host port comes back, because the containers are reused rather than rebuilt.
         var started = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                                   (service, id, version) => service.StartAsync(id, version))
-                               .ConfigureAwait(false);
+                                   (service, id, version) => service.StartAsync(id, version));
         AssertEx.Equal(ExternalAppDesiredState.Running, started.DesiredState);
 
-        var afterRestart = await box.Service.GetAsync(installed).ConfigureAwait(false);
+        var afterRestart = await box.Service.GetAsync(installed);
         AssertEx.Equal(published.HostPort, afterRestart.PublishedPorts[0].HostPort, "A stop and start must not move the port the user bookmarked.");
-        AssertEx.Contains(await RealDaemonBox.FetchAsync(afterRestart.PublishedPorts[0].HostPort).ConfigureAwait(false), "xe-external-apps");
+        AssertEx.Contains(await RealDaemonBox.FetchAsync(afterRestart.PublishedPorts[0].HostPort), "xe-external-apps");
 
         // Reset wipes the writable volume and rebuilds, restoring the desired state it found.
         var marker = Path.Combine(box.VolumePathFor(UiService, "data"), "written-by-the-test");
-        await File.WriteAllTextAsync(marker, "gone after a reset").ConfigureAwait(false);
+        await File.WriteAllTextAsync(marker, "gone after a reset");
 
         var reset = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                                 (service, id, version) => service.ResetAsync(id, version))
-                             .ConfigureAwait(false);
+                                 (service, id, version) => service.ResetAsync(id, version));
         AssertEx.Equal(ExternalAppDesiredState.Running, reset.DesiredState, "Reset restores the desired state it found, and the instance was running.");
         AssertEx.False(File.Exists(marker), "Reset must wipe the instance's writable volume.");
 
         // Uninstall takes the rows, the containers, the network and the directory.
         var storagePath = reset.StoragePath;
-        _ = await box.Service.UninstallAsync(installed, reset.Version).ConfigureAwait(false);
-        await box.SettleUninstalledAsync(installed).ConfigureAwait(false);
+        _ = await box.Service.UninstallAsync(installed, reset.Version);
+        await box.SettleUninstalledAsync(installed);
 
         AssertEx.False(Directory.Exists(storagePath), $"The instance directory '{storagePath}' survived the uninstall.");
-        await box.AssertNothingOfOursIsOnTheDaemonAsync("after the uninstall").ConfigureAwait(false);
+        await box.AssertNothingOfOursIsOnTheDaemonAsync("after the uninstall");
     }
 
     /// <summary>
@@ -148,13 +145,13 @@ public sealed class ExternalAppRealDaemonTests
     [Test]
     public async Task RealDaemon_Install_PublishesOnLoopbackOnlyAndAppliesTheHardeningContract()
     {
-        await using var box = await NewBoxAsync().ConfigureAwait(false);
+        await using var box = await NewBoxAsync();
 
-        var installed = await box.InstallAsync().ConfigureAwait(false);
-        await using var runtime = await box.CreateRuntimeAsync().ConfigureAwait(false);
+        var installed = await box.InstallAsync();
+        await using var runtime = await box.CreateRuntimeAsync();
 
-        var byService = await box.ListByServiceAsync().ConfigureAwait(false);
-        var inspection = await runtime.InspectAsync(byService[UiService]).ConfigureAwait(false);
+        var byService = await box.ListByServiceAsync();
+        var inspection = await runtime.InspectAsync(byService[UiService]);
 
         AssertEx.Equal(expected: 1, inspection.PublishedPorts.Count);
         AssertEx.Equal("127.0.0.1", inspection.PublishedPorts[0].HostIp,
@@ -173,7 +170,7 @@ public sealed class ExternalAppRealDaemonTests
         AssertEx.Contains(inspection.Mounts, mount => mount.Destination == "/data" && !mount.ReadOnly);
         AssertEx.Contains(inspection.Mounts, mount => mount.Destination == "/srv/index.html" && mount.ReadOnly);
 
-        var detail = await box.Service.GetAsync(installed).ConfigureAwait(false);
+        var detail = await box.Service.GetAsync(installed);
         AssertEx.Equal(expected: 1, detail.PublishedPorts.Count);
     }
 
@@ -203,12 +200,12 @@ public sealed class ExternalAppRealDaemonTests
             return;
         }
 
-        await using var box = await NewBoxAsync(RealDaemonBox.PrivateDataManifest()).ConfigureAwait(false);
-        await box.AssertNothingOfOursIsOnTheDaemonAsync("before the install").ConfigureAwait(false);
+        await using var box = await NewBoxAsync(RealDaemonBox.PrivateDataManifest());
+        await box.AssertNothingOfOursIsOnTheDaemonAsync("before the install");
 
-        var installed = await box.InstallAsync().ConfigureAwait(false);
+        var installed = await box.InstallAsync();
         var privateDirectory = Path.Combine(box.VolumePathFor(PrivateService, PrivateVolume), PrivateDirectoryName);
-        await AwaitPrivateDirectoryAsync(privateDirectory).ConfigureAwait(false);
+        await AwaitPrivateDirectoryAsync(privateDirectory);
 
         // The premise, asserted rather than assumed: this process cannot remove it, so an engine that only deleted
         // host-side would fail here. Without this the rest proves only that a deletable directory gets deleted.
@@ -222,23 +219,22 @@ public sealed class ExternalAppRealDaemonTests
         // that cannot unlink another uid's entries leaves 'config' behind, the emptiness re-check refuses, and the
         // reset below settles Failed instead.
         var marker = Path.Combine(box.VolumePathFor(PrivateService, PrivateVolume), "written-by-the-test");
-        await File.WriteAllTextAsync(marker, "gone after a reset").ConfigureAwait(false);
+        await File.WriteAllTextAsync(marker, "gone after a reset");
 
         // Reset: the wipe goes through the helper, and the rebuilt container recreates the same directory.
         var reset = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                                 (service, id, version) => service.ResetAsync(id, version))
-                             .ConfigureAwait(false);
+                                 (service, id, version) => service.ResetAsync(id, version));
 
         AssertEx.False(File.Exists(marker), "The reset did not wipe the volumes directory the 0700 subtree lives in.");
-        await AwaitPrivateDirectoryAsync(privateDirectory).ConfigureAwait(false);
+        await AwaitPrivateDirectoryAsync(privateDirectory);
 
         // Uninstall: the rows, the containers, the network AND the whole instance directory, 0700 subtree included.
-        _ = await box.Service.UninstallAsync(installed, reset.Version).ConfigureAwait(false);
-        await box.SettleUninstalledAsync(installed).ConfigureAwait(false);
+        _ = await box.Service.UninstallAsync(installed, reset.Version);
+        await box.SettleUninstalledAsync(installed);
 
         AssertEx.False(Directory.Exists(reset.StoragePath),
             $"The instance directory '{reset.StoragePath}' survived the uninstall, which is the defect the helper exists to fix.");
-        await box.AssertNothingOfOursIsOnTheDaemonAsync("after the uninstall").ConfigureAwait(false);
+        await box.AssertNothingOfOursIsOnTheDaemonAsync("after the uninstall");
     }
 
     /// <summary>
@@ -250,13 +246,12 @@ public sealed class ExternalAppRealDaemonTests
     {
         await AssertEx.EventuallyAsync(() => Directory.Exists(privateDirectory),
             TimeSpan.FromSeconds(60),
-            $"The fixture application never created '{privateDirectory}', so there is no unreadable directory to test against.").ConfigureAwait(false);
+            $"The fixture application never created '{privateDirectory}', so there is no unreadable directory to test against.");
     }
 
     private static async Task<RealDaemonBox> NewBoxAsync(ApplicationManifest? manifest = null)
     {
-        return await RealDaemonBox.CreateAsync(await DaemonGate.Value.ConfigureAwait(false), manifest ?? RealDaemonBox.Manifest())
-                                  .ConfigureAwait(false);
+        return await RealDaemonBox.CreateAsync(await DaemonGate.Value, manifest ?? RealDaemonBox.Manifest());
     }
 
     /// <summary>
@@ -313,7 +308,7 @@ public sealed class ExternalAppRealDaemonTests
             {
                 try
                 {
-                    identity = await client.ProbeAsync().ConfigureAwait(false);
+                    identity = await client.ProbeAsync();
                 }
                 catch (DockerRuntimeException exception)
                 {
@@ -328,7 +323,7 @@ public sealed class ExternalAppRealDaemonTests
                                   + "Bind storage and loopback port publishing mean something different there and cannot be verified.");
             }
 
-            await EnsureImageAsync(candidate).ConfigureAwait(false);
+            await EnsureImageAsync(candidate);
             return candidate;
         }
 
@@ -344,14 +339,14 @@ public sealed class ExternalAppRealDaemonTests
     {
         await using var runtime = RealDaemonBox.BuildRuntime(options);
 
-        if (await runtime.ImageExistsAsync(ContainerRuntimeTestImages.Busybox).ConfigureAwait(false))
+        if (await runtime.ImageExistsAsync(ContainerRuntimeTestImages.Busybox))
         {
             return;
         }
 
         try
         {
-            await runtime.PullImageAsync(ContainerRuntimeTestImages.Busybox, progress: null).ConfigureAwait(false);
+            await runtime.PullImageAsync(ContainerRuntimeTestImages.Busybox, progress: null);
         }
         catch (DockerRuntimeException exception)
         {
@@ -491,7 +486,7 @@ public sealed class ExternalAppRealDaemonTests
             var provider = services.BuildServiceProvider(validateScopes: true);
             await using (var scope = provider.CreateAsyncScope())
             {
-                await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.EnsureCreatedAsync().ConfigureAwait(false);
+                await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.EnsureCreatedAsync();
             }
 
             var layout = new ExternalAppStorageLayout(dataDirectory, appOptions);
@@ -541,11 +536,10 @@ public sealed class ExternalAppRealDaemonTests
                                                 _manifest.ManifestVersion,
                                                 _manifest.ManifestSha256,
                                                 new Dictionary<string, string>(StringComparer.Ordinal),
-                                                AcceptPermissions: true))
-                                            .ConfigureAwait(false);
+                                                AcceptPermissions: true));
 
                 InstanceId = admitted.Id;
-                var row = await SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+                var row = await SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running, ExternalAppInstanceStatus.Failed);
                 if (row.Status == ExternalAppInstanceStatus.Running)
                 {
                     return admitted.Id;
@@ -560,8 +554,8 @@ public sealed class ExternalAppRealDaemonTests
 
                 // Another process took the port between the probe and the create. Clean the attempt away and try
                 // once more; the pipeline already replanned once inside itself.
-                _ = await Service.UninstallAsync(admitted.Id, row.Version).ConfigureAwait(false);
-                await SettleUninstalledAsync(admitted.Id).ConfigureAwait(false);
+                _ = await Service.UninstallAsync(admitted.Id, row.Version);
+                await SettleUninstalledAsync(admitted.Id);
             }
         }
 
@@ -569,11 +563,11 @@ public sealed class ExternalAppRealDaemonTests
         public async Task<ExternalAppInstanceSnapshot> RunAsync(ExternalAppInstanceStatus expected,
             Func<ExternalAppService, Guid, long, Task<ExternalAppInstanceSummary>> command)
         {
-            var row = await ReadAsync(InstanceId).ConfigureAwait(false)
+            var row = await ReadAsync(InstanceId)
                       ?? throw new AssertionException($"Instance {InstanceId:N} is gone before the command could be issued.");
 
-            _ = await command(Service, InstanceId, row.Version).ConfigureAwait(false);
-            var settled = await SettleAsync(InstanceId, expected, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+            _ = await command(Service, InstanceId, row.Version);
+            var settled = await SettleAsync(InstanceId, expected, ExternalAppInstanceStatus.Failed);
 
             return settled.Status == expected
                 ? settled
@@ -583,7 +577,7 @@ public sealed class ExternalAppRealDaemonTests
         public async Task<ExternalAppInstanceSnapshot?> ReadAsync(Guid instanceId)
         {
             await using var scope = _provider.CreateAsyncScope();
-            return await scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>().GetAsync(instanceId).ConfigureAwait(false);
+            return await scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>().GetAsync(instanceId);
         }
 
         public async Task<ExternalAppInstanceSnapshot> SettleAsync(Guid instanceId, params ExternalAppInstanceStatus[] expected)
@@ -595,7 +589,7 @@ public sealed class ExternalAppRealDaemonTests
                     return row is not null && Array.IndexOf(expected, row.Status) >= 0;
                 },
                 TimeSpan.FromMinutes(3),
-                $"Instance {instanceId:N} never reached {string.Join(" or ", expected)}.").ConfigureAwait(false);
+                $"Instance {instanceId:N} never reached {string.Join(" or ", expected)}.");
 
             return row!;
         }
@@ -604,16 +598,16 @@ public sealed class ExternalAppRealDaemonTests
         {
             await AssertEx.EventuallyAsync(() => ReadAsync(instanceId).GetAwaiter().GetResult() is null,
                 TimeSpan.FromMinutes(3),
-                $"Instance {instanceId:N} was never removed.").ConfigureAwait(false);
+                $"Instance {instanceId:N} was never removed.");
         }
 
         /// <summary>This installation's containers, keyed by the service label each one carries.</summary>
         public async Task<Dictionary<string, string>> ListByServiceAsync()
         {
-            await using var runtime = await CreateRuntimeAsync().ConfigureAwait(false);
+            await using var runtime = await CreateRuntimeAsync();
             var byService = new Dictionary<string, string>(StringComparer.Ordinal);
 
-            foreach (var container in await runtime.ListContainersDetailedAsync(Labels).ConfigureAwait(false))
+            foreach (var container in await runtime.ListContainersDetailedAsync(Labels))
             {
                 if (container.Labels.TryGetValue(ExternalAppLabels.Service, out var serviceName))
                 {
@@ -654,20 +648,20 @@ public sealed class ExternalAppRealDaemonTests
                     }
                 },
                 TimeSpan.FromSeconds(30),
-                $"Nothing answered on the published binding 127.0.0.1:{hostPort}.").ConfigureAwait(false);
+                $"Nothing answered on the published binding 127.0.0.1:{hostPort}.");
 
             using var answered = response;
-            return await answered.Content.ReadAsStringAsync().ConfigureAwait(false);
+            return await answered.Content.ReadAsStringAsync();
         }
 
         /// <summary>The label-scoped emptiness check the operator would run by hand: nothing of ours on the daemon.</summary>
         public async Task AssertNothingOfOursIsOnTheDaemonAsync(string when)
         {
-            await using var runtime = await CreateRuntimeAsync().ConfigureAwait(false);
+            await using var runtime = await CreateRuntimeAsync();
 
-            AssertEx.Empty(await runtime.ListContainersDetailedAsync(Labels).ConfigureAwait(false),
+            AssertEx.Empty(await runtime.ListContainersDetailedAsync(Labels),
                 $"Containers carrying this installation's labels exist {when}.");
-            AssertEx.Empty(await runtime.ListNetworksAsync(Labels).ConfigureAwait(false),
+            AssertEx.Empty(await runtime.ListNetworksAsync(Labels),
                 $"Networks carrying this installation's labels exist {when}.");
         }
 
@@ -679,14 +673,14 @@ public sealed class ExternalAppRealDaemonTests
             {
                 await using var runtime = BuildRuntime(_options);
 
-                foreach (var container in await runtime.ListContainersDetailedAsync(Labels).ConfigureAwait(false))
+                foreach (var container in await runtime.ListContainersDetailedAsync(Labels))
                 {
-                    await runtime.RemoveContainerAsync(container.Id).ConfigureAwait(false);
+                    await runtime.RemoveContainerAsync(container.Id);
                 }
 
-                foreach (var network in await runtime.ListNetworksAsync(Labels).ConfigureAwait(false))
+                foreach (var network in await runtime.ListNetworksAsync(Labels))
                 {
-                    await runtime.RemoveNetworkAsync(network).ConfigureAwait(false);
+                    await runtime.RemoveNetworkAsync(network);
                 }
             }
             catch (DockerRuntimeException)
@@ -695,7 +689,7 @@ public sealed class ExternalAppRealDaemonTests
             }
 
             _lifetimeHandle.Dispose();
-            await _provider.DisposeAsync().ConfigureAwait(false);
+            await _provider.DisposeAsync();
 
             if (!Directory.Exists(Root))
             {

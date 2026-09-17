@@ -152,7 +152,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         return await _sandbox.ReadFileAsync(_session.SandboxHandle,
             confined.SandboxPath,
             _options.MaxCommandOutputBytes,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     /// <summary>
@@ -253,14 +253,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         Directory.CreateDirectory(Path.GetDirectoryName(tempPath)!);
         try
         {
-            await File.WriteAllBytesAsync(tempPath, bytes, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(tempPath, bytes, cancellationToken);
             await _sandbox.CopyIntoAsync(_session.SandboxHandle,
                 new SandboxCopyRequest
                 {
                     SourcePath = tempPath,
                     DestinationPath = confined.SandboxPath
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
         finally
         {
@@ -296,7 +296,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             var confined = RequirePath(path, allowRoot: false);
             try
             {
-                _ = await _sandbox.ReadFileAsync(_session.SandboxHandle, confined.SandboxPath, cancellationToken).ConfigureAwait(false);
+                _ = await _sandbox.ReadFileAsync(_session.SandboxHandle, confined.SandboxPath, cancellationToken);
             }
             catch (FileNotFoundException)
             {
@@ -309,14 +309,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             AgentHomeGit.Arguments("apply", "--check", "--whitespace=error-all", "-"),
             "/",
             patch,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureCompleted(check, "apply_patch check");
         var apply = await ExecuteAsync("tool_apply_patch",
             AgentHomeGit.Executable,
             AgentHomeGit.Arguments("apply", "--whitespace=error-all", "-"),
             "/",
             patch,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureCompleted(apply, "apply_patch");
         foreach (var path in paths)
         {
@@ -328,7 +328,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 
     public async Task<string> GetStatusAsync(CancellationToken cancellationToken = default)
     {
-        var result = await ExecuteCatalogAsync(DevelopmentCommandIds.GitStatus, cancellationToken).ConfigureAwait(false);
+        var result = await ExecuteCatalogAsync(DevelopmentCommandIds.GitStatus, cancellationToken);
         return result.StandardOutput;
     }
 
@@ -346,14 +346,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             AgentHomeGit.Arguments("diff", "--binary", "HEAD", "--", "."),
             "/",
             standardInput: null,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureCompleted(result, "git diff");
         return result.StandardOutput;
     }
 
     public async Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default)
     {
-        var result = await ExecuteCatalogAsync(commandId, cancellationToken).ConfigureAwait(false);
+        var result = await ExecuteCatalogAsync(commandId, cancellationToken);
         return $"{commandId}: exit={result.ExitCode}, completed={result.Completed}\n{result.StandardOutput}\n{result.StandardError}";
     }
 
@@ -375,14 +375,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             "/",
             standardInput: null,
             ResolveTimeout(command.TimeoutSeconds),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var testOutcome = DevelopmentTestResultAdapters.Resolve(_profile, commandId)
                                                        ?.Parse(raw.StandardOutput,
                                                            raw.StandardError,
                                                            raw.StandardOutputTruncated || raw.StandardErrorTruncated);
 
         var result = TruncateForEvidence(raw);
-        await EnsureWorkspaceInvariantAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureWorkspaceInvariantAsync(cancellationToken);
         var evidence = new DevelopmentCommandEvidence(commandId,
             result.ExitCode,
             result.Completed,
@@ -403,7 +403,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             AgentHomeGit.Arguments("rev-parse", "--verify", "HEAD^{commit}"),
             "/",
             standardInput: null,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureCompleted(head, "verify Development worktree HEAD");
         if (!string.Equals(head.StandardOutput.Trim(), _session.BaseCommit, StringComparison.OrdinalIgnoreCase))
         {
@@ -415,7 +415,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             AgentHomeGit.Arguments("symbolic-ref", "--quiet", "HEAD"),
             "/",
             standardInput: null,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (!branch.Completed || branch.ExitCode is not (0 or 1))
         {
             throw new InvalidOperationException("The managed Development worktree branch state could not be verified.");
@@ -487,7 +487,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             workingDirectory,
             standardInput,
             timeout,
-            cancellationToken).ConfigureAwait(false));
+            cancellationToken));
 
     /// <summary>
     ///     Runs a command and returns its output as the sandbox produced it, capped only by the sandbox's own stream

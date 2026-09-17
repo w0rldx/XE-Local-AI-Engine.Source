@@ -407,7 +407,7 @@ public sealed class ContainerRuntimeRealDaemonTests
 
         while (true)
         {
-            last = await read().ConfigureAwait(false);
+            last = await read();
             if (reached(last))
             {
                 return last;
@@ -415,7 +415,7 @@ public sealed class ContainerRuntimeRealDaemonTests
 
             try
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(200), deadline.Token).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(200), deadline.Token);
             }
             catch (OperationCanceledException)
             {
@@ -433,7 +433,7 @@ public sealed class ContainerRuntimeRealDaemonTests
 
     private static async Task<ContainerRuntimeOptions> RequireDaemonAsync()
     {
-        return await DaemonGate.Value.ConfigureAwait(false);
+        return await DaemonGate.Value;
     }
 
     private static async Task<ContainerRuntimeOptions> ResolveUsableDaemonAsync()

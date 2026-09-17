@@ -24,32 +24,29 @@ public sealed class StartTrainingRuntimeInstallEndpoint(TrainingRuntimeOrchestra
     {
         if (!OperatingSystem.IsLinux())
         {
-            await BlockAsync("not-linux", "The Python training runtime is available on Linux only.", prerequisites: null).ConfigureAwait(false);
+            await BlockAsync("not-linux", "The Python training runtime is available on Linux only.", prerequisites: null);
             return;
         }
 
         try
         {
-            var result = await runtime.InstallAsync(ct).ConfigureAwait(false);
+            var result = await runtime.InstallAsync(ct);
             switch (result.Outcome)
             {
                 case TrainingRuntimeInstallOutcome.AlreadyRunning:
                     await BlockAsync(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
                             "A training runtime install is already in progress.",
-                            prerequisites: null)
-                        .ConfigureAwait(false);
+                            prerequisites: null);
                     return;
                 case TrainingRuntimeInstallOutcome.InsufficientDisk:
                     await BlockAsync("disk",
                             "There is not enough free disk space to install the training runtime.",
-                            result.Prerequisites?.ToResponse())
-                        .ConfigureAwait(false);
+                            result.Prerequisites?.ToResponse());
                     return;
                 case TrainingRuntimeInstallOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
                             "One or more training runtime prerequisites are missing; resolve the checklist before installing.",
-                            result.Prerequisites?.ToResponse())
-                        .ConfigureAwait(false);
+                            result.Prerequisites?.ToResponse());
                     return;
                 case TrainingRuntimeInstallOutcome.Started:
                     break;
@@ -61,12 +58,12 @@ public sealed class StartTrainingRuntimeInstallEndpoint(TrainingRuntimeOrchestra
             {
                 Started = true,
                 Status = runtime.GetStatus().ToResponse()
-            }, ct).ConfigureAwait(false);
+            }, ct);
         }
         catch (TrainingRuntimeException exception)
         {
             // TrainingRuntimeException messages are user-safe by contract, so this surfaces verbatim.
-            await BlockAsync("prerequisites", exception.Message, prerequisites: null).ConfigureAwait(false);
+            await BlockAsync("prerequisites", exception.Message, prerequisites: null);
         }
     }
 

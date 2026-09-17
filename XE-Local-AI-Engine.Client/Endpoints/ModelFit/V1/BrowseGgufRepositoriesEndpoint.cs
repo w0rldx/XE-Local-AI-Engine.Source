@@ -46,12 +46,12 @@ public sealed class BrowseGgufRepositoriesEndpoint(
 
         try
         {
-            var repos = await _discovery.SearchAsync(query, ct).ConfigureAwait(false);
+            var repos = await _discovery.SearchAsync(query, ct);
             await Send.OkAsync(new BrowseGgufRepositoriesResponse
                 {
                     Items = [.. repos.Select(static repo => repo.ToResponse())]
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -67,7 +67,7 @@ public sealed class BrowseGgufRepositoriesEndpoint(
                 {
                     Items = []
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
     }
 

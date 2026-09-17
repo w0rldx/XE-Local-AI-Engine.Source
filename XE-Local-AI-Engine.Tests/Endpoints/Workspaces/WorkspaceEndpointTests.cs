@@ -28,9 +28,9 @@ public sealed class WorkspaceEndpointTests
         {
             alias = "repo",
             hostPath = HostPath("trusted", "repo")
-        }).ConfigureAwait(false);
-        using var get = await client.GetAsync(Route).ConfigureAwait(false);
-        using var delete = await client.DeleteAsync($"{Route}/{Guid.NewGuid()}").ConfigureAwait(false);
+        });
+        using var get = await client.GetAsync(Route);
+        using var delete = await client.DeleteAsync($"{Route}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, post.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, get.StatusCode);
@@ -52,10 +52,10 @@ public sealed class WorkspaceEndpointTests
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", McpKey);
 
-        using var postResponse = await client.SendAsync(request).ConfigureAwait(false);
+        using var postResponse = await client.SendAsync(request);
         using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, $"{Route}/{Guid.NewGuid()}");
         deleteRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", McpKey);
-        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, postResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, deleteResponse.StatusCode);
@@ -73,8 +73,8 @@ public sealed class WorkspaceEndpointTests
             alias = "Repo One",
             hostPath = secretPath
         });
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
-        var createJson = await createResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
+        var createJson = await createResponse.Content.ReadAsStringAsync();
         var created = AssertEx.NotNull(JsonSerializer.Deserialize<WorkspaceBody>(createJson, JsonOptions));
 
         AssertEx.Equal(HttpStatusCode.OK, createResponse.StatusCode);
@@ -84,8 +84,8 @@ public sealed class WorkspaceEndpointTests
         AssertEx.False(createJson.Contains(secretPath, StringComparison.Ordinal), "The create response must never expose the host path.");
 
         using var listRequest = OperatorRequest(factory, HttpMethod.Get, Route);
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
-        var listJson = await listResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var listResponse = await client.SendAsync(listRequest);
+        var listJson = await listResponse.Content.ReadAsStringAsync();
         var list = AssertEx.NotNull(JsonSerializer.Deserialize<WorkspaceListBody>(listJson, JsonOptions));
 
         AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
@@ -105,7 +105,7 @@ public sealed class WorkspaceEndpointTests
             alias = "repo-one",
             hostPath = HostPath("trusted", "repo")
         });
-        using var first = await client.SendAsync(firstRequest).ConfigureAwait(false);
+        using var first = await client.SendAsync(firstRequest);
 
         // Same alias after normalization, different host path: a collision, not a malformed request.
         using var duplicateRequest = OperatorRequest(factory, HttpMethod.Post, Route, new
@@ -113,7 +113,7 @@ public sealed class WorkspaceEndpointTests
             alias = "Repo One",
             hostPath = HostPath("trusted", "other")
         });
-        using var duplicate = await client.SendAsync(duplicateRequest).ConfigureAwait(false);
+        using var duplicate = await client.SendAsync(duplicateRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, first.StatusCode);
         AssertEx.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
@@ -132,7 +132,7 @@ public sealed class WorkspaceEndpointTests
             hostPath = "relative/path"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -144,7 +144,7 @@ public sealed class WorkspaceEndpointTests
         using var client = factory.CreateClient();
         using var request = OperatorRequest(factory, HttpMethod.Delete, $"{Route}/not-a-guid");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -159,15 +159,15 @@ public sealed class WorkspaceEndpointTests
             alias = "repo",
             hostPath = HostPath("trusted", "repo")
         });
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
-        var created = AssertEx.NotNull(await createResponse.Content.ReadFromJsonAsync<WorkspaceBody>(JsonOptions).ConfigureAwait(false));
+        using var createResponse = await client.SendAsync(createRequest);
+        var created = AssertEx.NotNull(await createResponse.Content.ReadFromJsonAsync<WorkspaceBody>(JsonOptions));
 
         using var firstRequest = OperatorRequest(factory, HttpMethod.Delete, $"{Route}/{created.WorkspaceId}");
-        using var first = await client.SendAsync(firstRequest).ConfigureAwait(false);
+        using var first = await client.SendAsync(firstRequest);
         using var secondRequest = OperatorRequest(factory, HttpMethod.Delete, $"{Route}/{created.WorkspaceId}");
-        using var second = await client.SendAsync(secondRequest).ConfigureAwait(false);
+        using var second = await client.SendAsync(secondRequest);
         using var unknownRequest = OperatorRequest(factory, HttpMethod.Delete, $"{Route}/{Guid.NewGuid()}");
-        using var unknown = await client.SendAsync(unknownRequest).ConfigureAwait(false);
+        using var unknown = await client.SendAsync(unknownRequest);
 
         AssertEx.Equal(HttpStatusCode.NoContent, first.StatusCode);
         AssertEx.Equal(HttpStatusCode.NoContent, second.StatusCode);
@@ -176,8 +176,8 @@ public sealed class WorkspaceEndpointTests
             Arg.Any<CancellationToken>());
 
         using var listRequest = OperatorRequest(factory, HttpMethod.Get, Route);
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
-        var list = AssertEx.NotNull(await listResponse.Content.ReadFromJsonAsync<WorkspaceListBody>(JsonOptions).ConfigureAwait(false));
+        using var listResponse = await client.SendAsync(listRequest);
+        var list = AssertEx.NotNull(await listResponse.Content.ReadFromJsonAsync<WorkspaceListBody>(JsonOptions));
         AssertEx.Equal(expected: 0, list.Items.Count);
     }
 
@@ -193,18 +193,18 @@ public sealed class WorkspaceEndpointTests
             alias = "repo",
             hostPath = HostPath("trusted", "repo")
         });
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
-        var created = AssertEx.NotNull(await createResponse.Content.ReadFromJsonAsync<WorkspaceBody>(JsonOptions).ConfigureAwait(false));
+        using var createResponse = await client.SendAsync(createRequest);
+        var created = AssertEx.NotNull(await createResponse.Content.ReadFromJsonAsync<WorkspaceBody>(JsonOptions));
 
         using var deleteRequest = OperatorRequest(factory, HttpMethod.Delete, $"{Route}/{created.WorkspaceId}");
-        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
 
         AssertEx.True(deleteResponse.StatusCode is not HttpStatusCode.NoContent,
             "The endpoint must not advertise a successful revoke when workspace clear fails.");
 
         using var listRequest = OperatorRequest(factory, HttpMethod.Get, Route);
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
-        var list = AssertEx.NotNull(await listResponse.Content.ReadFromJsonAsync<WorkspaceListBody>(JsonOptions).ConfigureAwait(false));
+        using var listResponse = await client.SendAsync(listRequest);
+        var list = AssertEx.NotNull(await listResponse.Content.ReadFromJsonAsync<WorkspaceListBody>(JsonOptions));
         AssertEx.Equal(expected: 1, list.Items.Count);
         AssertEx.Equal(created.WorkspaceId, list.Items[0].WorkspaceId);
     }
@@ -223,8 +223,8 @@ public sealed class WorkspaceEndpointTests
         using var client = factory.CreateClient();
         using var request = OperatorRequest(factory, HttpMethod.Delete, $"{Route}/{Guid.NewGuid()}");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<WorkspaceConflictBody>(JsonOptions).ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<WorkspaceConflictBody>(JsonOptions));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.ContentType?.ToString(), "problem+json", StringComparison.OrdinalIgnoreCase);

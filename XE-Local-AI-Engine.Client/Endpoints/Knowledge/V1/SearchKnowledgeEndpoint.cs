@@ -31,14 +31,14 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
         if (validation == KnowledgeQueryValidation.Empty)
         {
             AddError("A search query is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (validation == KnowledgeQueryValidation.TooLong)
         {
             AddError($"The search query must be {KnowledgeQueryLimits.MaxQueryLength} characters or fewer.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -46,18 +46,18 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
         if (!KnowledgeCollectionScope.TryNormalize(req.CollectionId, out var collectionId))
         {
             AddError("The collection id is invalid.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var request = new KnowledgeSearchRequest(normalizedQuery, limit, req.DocumentId, req.ExpandNeighbors, collectionId);
-        var result = await _searchService.SearchAsync(request, ct).ConfigureAwait(false);
+        var result = await _searchService.SearchAsync(request, ct);
 
         await Send.OkAsync(new SearchKnowledgeResponse
             {
                 Results = [.. result.Results.Select(ToResponse)]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 
     private static KnowledgeSearchHitResponse ToResponse(KnowledgeSearchHit hit)

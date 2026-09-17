@@ -47,7 +47,7 @@ internal sealed class LocalModelDetailsResolver(
         // so those stay null. An id whose registration is gone is a clean 404, exactly like a stale GGUF map row.
         if (ExternalModelId.HasExternalScheme(modelName))
         {
-            var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, cancellationToken).ConfigureAwait(false);
+            var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, cancellationToken);
             return registration is null
                 ? new LocalModelDetailsResolution.NoLocalDetails()
                 : new LocalModelDetailsResolution.External(registration);
@@ -56,7 +56,7 @@ internal sealed class LocalModelDetailsResolver(
         // An Azure Foundry deployment id is likewise NOT a local Ollama model: model details (context window, template,
         // license) are local-runtime concepts an Azure deployment has no equivalent of, and probing /api/show for it
         // would 500. No local details, matching the Codex branch above.
-        if (await _cloudModelResolver.IsAzureFoundryDeploymentAsync(modelName, cancellationToken).ConfigureAwait(false))
+        if (await _cloudModelResolver.IsAzureFoundryDeploymentAsync(modelName, cancellationToken))
         {
             return new LocalModelDetailsResolution.NoLocalDetails();
         }
@@ -65,15 +65,15 @@ internal sealed class LocalModelDetailsResolver(
         // details come from the GGUF store, not the Ollama daemon. This also means a GGUF selection never touches Ollama
         // — in desktop mode (no Ollama daemon) that avoids both the connect stall and the 404 the old Ollama-only path
         // returned. Provider resolution runs on the DECODED name so "validated/resolved name == probed name".
-        var providerName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var providerName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, cancellationToken);
         if (string.Equals(providerName, LlamaCppProviderName, StringComparison.OrdinalIgnoreCase))
         {
-            return await ResolveGgufAsync(modelName, cancellationToken).ConfigureAwait(false);
+            return await ResolveGgufAsync(modelName, cancellationToken);
         }
 
         try
         {
-            return new LocalModelDetailsResolution.Ollama(await _modelService.ShowModelDetailsAsync(modelName, cancellationToken).ConfigureAwait(false));
+            return new LocalModelDetailsResolution.Ollama(await _modelService.ShowModelDetailsAsync(modelName, cancellationToken));
         }
         catch (HttpRequestException exception)
         {
@@ -91,14 +91,14 @@ internal sealed class LocalModelDetailsResolver(
     // details, matching Ollama's "no entry".
     private async Task<LocalModelDetailsResolution> ResolveGgufAsync(string modelName, CancellationToken cancellationToken)
     {
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
         var descriptor = installed.FirstOrDefault(model => string.Equals(model.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
         if (descriptor is null)
         {
             return new LocalModelDetailsResolution.NoLocalDetails();
         }
 
-        var effectiveContextTokens = await TryResolveEffectiveContextAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var effectiveContextTokens = await TryResolveEffectiveContextAsync(modelName, cancellationToken);
         return new LocalModelDetailsResolution.Gguf(descriptor, effectiveContextTokens);
     }
 
@@ -109,7 +109,7 @@ internal sealed class LocalModelDetailsResolver(
         try
         {
             var provider = _providerResolver.ResolveProvider(LlamaCppProviderName);
-            var runtimeInfo = await provider.GetRuntimeInfoAsync(modelName, cancellationToken).ConfigureAwait(false);
+            var runtimeInfo = await provider.GetRuntimeInfoAsync(modelName, cancellationToken);
             return runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -57,14 +57,14 @@ internal sealed class DevWorkflowArtifactPromotion
         ArgumentNullException.ThrowIfNull(nodeRun);
 
         var promoted = 0;
-        foreach (var artifact in await _sessions.ListArtifactsAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false))
+        foreach (var artifact in await _sessions.ListArtifactsAsync(sessionId, sinceSequence: 0, cancellationToken))
         {
             if (!artifact.IsValid)
             {
                 continue;
             }
 
-            var read = await _sessionBlobs.ReadAsync(sessionId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken).ConfigureAwait(false);
+            var read = await _sessionBlobs.ReadAsync(sessionId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken);
             if (read.Status != WorkSessionArtifactReadStatus.Found)
             {
                 // Skipped rather than failed: the node did its work, and one unreadable artifact must not throw away
@@ -77,7 +77,7 @@ internal sealed class DevWorkflowArtifactPromotion
             }
 
             var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"artifact:{artifact.Name}");
-            var write = await _runBlobs.WriteAsync(run.Id, artifactId, read.Content, cancellationToken).ConfigureAwait(false);
+            var write = await _runBlobs.WriteAsync(run.Id, artifactId, read.Content, cancellationToken);
             var result = await _store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(run.Id,
                                              artifactId,
                                              nodeRun.Id,
@@ -89,8 +89,7 @@ internal sealed class DevWorkflowArtifactPromotion
                                              write.ContentHash,
                                              write.ByteCount,
                                              write.OpaqueReference),
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
+                                         cancellationToken);
             promoted++;
 
             if (result.SupersededArtifactId is not { } superseded)
@@ -106,8 +105,7 @@ internal sealed class DevWorkflowArtifactPromotion
                                     artifactId,
                                     DevWorkflowVersions.Any,
                                     DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"stale:{artifact.Name}")),
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                                cancellationToken);
         }
 
         return promoted;

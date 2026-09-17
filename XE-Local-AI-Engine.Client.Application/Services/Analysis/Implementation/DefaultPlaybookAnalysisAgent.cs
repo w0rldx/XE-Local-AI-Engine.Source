@@ -34,7 +34,7 @@ internal sealed class DefaultPlaybookAnalysisAgent(
         // Route the configured analysis model to the runtime that serves it (persisted map, else the configured
         // default provider = ollama, so an un-repointed model behaves exactly as before). Node-local only — never the
         // cloud singleton.
-        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken).ConfigureAwait(false);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken);
         var selection = new LocalModelSelection
         {
             ModelName = _options.ModelName,
@@ -56,8 +56,7 @@ internal sealed class DefaultPlaybookAnalysisAgent(
         };
 
         var response = await chatClient
-                             .GetResponseAsync<AnalysisEnvelope>(messages, chatOptions, cancellationToken: cancellationToken)
-                             .ConfigureAwait(false);
+                             .GetResponseAsync<AnalysisEnvelope>(messages, chatOptions, cancellationToken: cancellationToken);
 
         if (!response.TryGetResult(out var envelope) || envelope?.Proposals is null)
         {

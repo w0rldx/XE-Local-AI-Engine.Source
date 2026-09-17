@@ -44,23 +44,23 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     public async Task ApprovingThePause_RunsTheToolAndCarriesItsAnswerToTheEnd()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await StartRunAsync().ConfigureAwait(false);
+        var runId = await StartRunAsync();
 
-        await AdvanceUntilRunStatusAsync(harness, runId, "WaitingForApproval").ConfigureAwait(false);
+        await AdvanceUntilRunStatusAsync(harness, runId, "WaitingForApproval");
 
-        var waiting = await EventTypesAsync(runId).ConfigureAwait(false);
+        var waiting = await EventTypesAsync(runId);
         AssertEx.Contains(waiting, GraphWorkflowEventTypes.GateRequested, message: "a parked pause asks for a person by name.");
         AssertEx.Contains(waiting, GraphWorkflowEventTypes.RunWaiting, message: "and the run says it is waiting, so a list view can show it without opening it.");
-        using (var parked = await RunAsync(runId).ConfigureAwait(false))
+        using (var parked = await RunAsync(runId))
         {
             AssertEx.Equal("WaitingForApproval", NodeRunSummary(parked, "review").GetProperty("status").GetString());
         }
 
         var body = DecisionBody(Guid.NewGuid(), "Approve", comment: "go ahead");
-        using var first = await SendAsync("POST", DecideRoute(runId, "review"), body).ConfigureAwait(false);
-        var firstBody = await first.Content.ReadAsStringAsync().ConfigureAwait(false);
-        using var repeat = await SendAsync("POST", DecideRoute(runId, "review"), body).ConfigureAwait(false);
-        var repeatBody = await repeat.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var first = await SendAsync("POST", DecideRoute(runId, "review"), body);
+        var firstBody = await first.Content.ReadAsStringAsync();
+        using var repeat = await SendAsync("POST", DecideRoute(runId, "review"), body);
+        var repeatBody = await repeat.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, first.StatusCode, firstBody);
         AssertEx.Equal(HttpStatusCode.OK, repeat.StatusCode, "a byte-identical repeat is the same act answered again, not a conflict.");
@@ -73,18 +73,18 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
         }
 
         AssertEx.Equal(expected: 1,
-            (await EventTypesAsync(runId).ConfigureAwait(false)).Count(type => string.Equals(type, GraphWorkflowEventTypes.GateDecided, StringComparison.Ordinal)),
+            (await EventTypesAsync(runId)).Count(type => string.Equals(type, GraphWorkflowEventTypes.GateDecided, StringComparison.Ordinal)),
             "the replay wrote nothing: one human act, one gate.decided.");
 
-        await AdvanceUntilRunStatusAsync(harness, runId, "Completed").ConfigureAwait(false);
+        await AdvanceUntilRunStatusAsync(harness, runId, "Completed");
 
-        using var lookup = await NodeRunAsync(runId, "lookup").ConfigureAwait(false);
+        using var lookup = await NodeRunAsync(runId, "lookup");
         var result = AssertEx.NotNull(lookup.RootElement.GetProperty("output").GetProperty("output").GetProperty("result").GetString(),
             "the Tool node's answer lands as a string under output.result.");
         AssertEx.NotEmpty(result, "and a tool that answered nothing at all would be an empty one.");
         AssertEx.Contains(result, "UTC time:", message: "and it is the real built-in's own text, not a fake's.");
 
-        using var done = await NodeRunAsync(runId, "done").ConfigureAwait(false);
+        using var done = await NodeRunAsync(runId, "done");
         AssertEx.Equal(result,
             done.RootElement.GetProperty("output")
                 .GetProperty("output")
@@ -95,7 +95,7 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
                 .GetString(),
             "the End node's result is its input document, so the tool's answer is what the run finished carrying.");
 
-        using var run = await RunAsync(runId).ConfigureAwait(false);
+        using var run = await RunAsync(runId);
         AssertEx.Equal("Completed", run.RootElement.GetProperty("run").GetProperty("status").GetString());
         AssertSucceededInOrder(run, "start", "review", "lookup", "done");
     }
@@ -108,16 +108,16 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     public async Task RejectingThePause_TakesTheRejectEdgeAndSkipsTheTool()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await StartRunAsync().ConfigureAwait(false);
+        var runId = await StartRunAsync();
 
-        await AdvanceUntilRunStatusAsync(harness, runId, "WaitingForApproval").ConfigureAwait(false);
+        await AdvanceUntilRunStatusAsync(harness, runId, "WaitingForApproval");
 
-        using var decided = await SendAsync("POST", DecideRoute(runId, "review"), DecisionBody(Guid.NewGuid(), "Reject")).ConfigureAwait(false);
-        AssertEx.Equal(HttpStatusCode.OK, decided.StatusCode, await decided.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var decided = await SendAsync("POST", DecideRoute(runId, "review"), DecisionBody(Guid.NewGuid(), "Reject"));
+        AssertEx.Equal(HttpStatusCode.OK, decided.StatusCode, await decided.Content.ReadAsStringAsync());
 
-        await AdvanceUntilRunStatusAsync(harness, runId, "Completed").ConfigureAwait(false);
+        await AdvanceUntilRunStatusAsync(harness, runId, "Completed");
 
-        using var run = await RunAsync(runId).ConfigureAwait(false);
+        using var run = await RunAsync(runId);
         AssertEx.Equal("Succeeded", NodeRunSummary(run, "review").GetProperty("status").GetString());
         AssertEx.Equal("Skipped", NodeRunSummary(run, "lookup").GetProperty("status").GetString(), "the approving edge is dead, so the tool never runs at all.");
         AssertEx.Equal("Succeeded", NodeRunSummary(run, "done").GetProperty("status").GetString(), "and the reject edge still reaches the End node.");
@@ -130,8 +130,8 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     [Test]
     public async Task ThePickerFeed_OffersTheToolThisGraphInvokes()
     {
-        using var response = await SendAsync("GET", $"{Root}/tools", body: null).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync("GET", $"{Root}/tools", body: null);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, body);
         using var document = JsonDocument.Parse(body);
@@ -149,7 +149,7 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     public async Task TheHub_AnnouncesTheGateWhenItParksAndAgainWhenItIsDecided()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await StartRunAsync().ConfigureAwait(false);
+        var runId = await StartRunAsync();
 
         var gates = new ConcurrentQueue<GraphWorkflowChanged>();
         await using var connection = new HubConnectionBuilder()
@@ -170,18 +170,17 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
             }
         });
 
-        await connection.StartAsync().ConfigureAwait(false);
-        var snapshot = await connection.InvokeAsync<GraphWorkflowRunSubscriptionSnapshot>("SubscribeRun", runId, 0L).ConfigureAwait(false);
+        await connection.StartAsync();
+        var snapshot = await connection.InvokeAsync<GraphWorkflowRunSubscriptionSnapshot>("SubscribeRun", runId, 0L);
         AssertEx.Equal(expected: 0, snapshot.PendingDecisionCount, "the run has not reached its pause yet, so nobody is being asked for anything.");
 
-        await AdvanceUntilRunStatusAsync(harness, runId, "WaitingForApproval").ConfigureAwait(false);
-        await AssertEx.EventuallyAsync(() => !gates.IsEmpty, TestBudgets.Contended, "parking on a pause must announce a gate to whoever is watching.").ConfigureAwait(false);
+        await AdvanceUntilRunStatusAsync(harness, runId, "WaitingForApproval");
+        await AssertEx.EventuallyAsync(() => !gates.IsEmpty, TestBudgets.Contended, "parking on a pause must announce a gate to whoever is watching.");
 
-        using var decided = await SendAsync("POST", DecideRoute(runId, "review"), DecisionBody(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
-        AssertEx.Equal(HttpStatusCode.OK, decided.StatusCode, await decided.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var decided = await SendAsync("POST", DecideRoute(runId, "review"), DecisionBody(Guid.NewGuid(), "Approve"));
+        AssertEx.Equal(HttpStatusCode.OK, decided.StatusCode, await decided.Content.ReadAsStringAsync());
 
-        await AssertEx.EventuallyAsync(() => gates.Count >= 2, TestBudgets.Contended, "and answering it must announce a second one: that is what clears the badge.")
-                      .ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => gates.Count >= 2, TestBudgets.Contended, "and answering it must announce a second one: that is what clears the badge.");
     }
 
     /// <summary>A definition saved and a run started, both through the routes the SPA calls.</summary>
@@ -189,18 +188,16 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     {
         using var created = await SendAsync("POST",
                 $"{Root}/definitions",
-                $$"""{"name":"Pause then tool {{Guid.NewGuid():N}}","description":"The slice gate.","graph":{{GraphWorkflowGraphs.PauseThenToolEndToEnd}}}""")
-            .ConfigureAwait(false);
-        var createdBody = await created.Content.ReadAsStringAsync().ConfigureAwait(false);
+                $$"""{"name":"Pause then tool {{Guid.NewGuid():N}}","description":"The slice gate.","graph":{{GraphWorkflowGraphs.PauseThenToolEndToEnd}}}""");
+        var createdBody = await created.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Created, created.StatusCode, createdBody);
         using var definition = JsonDocument.Parse(createdBody);
         var definitionId = definition.RootElement.GetProperty("id").GetGuid();
 
         using var started = await SendAsync("POST",
                 $"{Root}/definitions/{definitionId}/runs",
-                $$"""{"requestId":"{{Guid.NewGuid()}}"}""")
-            .ConfigureAwait(false);
-        var startedBody = await started.Content.ReadAsStringAsync().ConfigureAwait(false);
+                $$"""{"requestId":"{{Guid.NewGuid()}}"}""");
+        var startedBody = await started.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Accepted, started.StatusCode, startedBody);
         using var run = JsonDocument.Parse(startedBody);
         return run.RootElement.GetProperty("runId").GetGuid();
@@ -217,11 +214,10 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
         await harness.AdvanceUntilAsync(runId,
                          async () =>
                          {
-                             using var run = await RunAsync(runId).ConfigureAwait(false);
+                             using var run = await RunAsync(runId);
                              return string.Equals(run.RootElement.GetProperty("run").GetProperty("status").GetString(), status, StringComparison.Ordinal);
                          },
-                         $"Run {runId} never reached {status} over the wire")
-                     .ConfigureAwait(false);
+                         $"Run {runId} never reached {status} over the wire");
 
     /// <summary>Every named node succeeded, and finished no earlier than the one before it.</summary>
     private static void AssertSucceededInOrder(JsonDocument run, params string[] nodeKeys)
@@ -246,21 +242,21 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
             : throw new AssertionException($"The run carries no node run for '{nodeKey}'.");
 
     private async Task<JsonDocument> RunAsync(Guid runId) =>
-        await ReadJsonAsync("GET", $"{Root}/runs/{runId}").ConfigureAwait(false);
+        await ReadJsonAsync("GET", $"{Root}/runs/{runId}");
 
     private async Task<JsonDocument> NodeRunAsync(Guid runId, string nodeKey) =>
-        await ReadJsonAsync("GET", $"{Root}/runs/{runId}/nodes/{nodeKey}").ConfigureAwait(false);
+        await ReadJsonAsync("GET", $"{Root}/runs/{runId}/nodes/{nodeKey}");
 
     private async Task<IReadOnlyList<string>> EventTypesAsync(Guid runId)
     {
-        using var document = await ReadJsonAsync("GET", $"{Root}/runs/{runId}/events?afterSeq=0").ConfigureAwait(false);
+        using var document = await ReadJsonAsync("GET", $"{Root}/runs/{runId}/events?afterSeq=0");
         return [.. document.RootElement.GetProperty("events").EnumerateArray().Select(static entry => entry.GetProperty("eventType").GetString() ?? string.Empty)];
     }
 
     private async Task<JsonDocument> ReadJsonAsync(string method, string route)
     {
-        using var response = await SendAsync(method, route, body: null).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(method, route, body: null);
+        var body = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, $"{method} {route} answered {(int)response.StatusCode}: {body}");
         return JsonDocument.Parse(body);
     }
@@ -286,6 +282,6 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
         }
 
         Host.Factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 }

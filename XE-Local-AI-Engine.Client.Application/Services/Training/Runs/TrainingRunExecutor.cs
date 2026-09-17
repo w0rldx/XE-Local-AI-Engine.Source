@@ -85,8 +85,7 @@ public sealed class TrainingRunExecutor(
         if (claim.Run is not { } run)
         {
             // An evaluation target lives in a table this executor does not own; terminalize rather than strand it.
-            _ = await _store.CompleteRunAsync(claim.TargetId, TrainingWorkStatus.Failed, "Unsupported work kind.", CancellationToken.None)
-                            .ConfigureAwait(false);
+            _ = await _store.CompleteRunAsync(claim.TargetId, TrainingWorkStatus.Failed, "Unsupported work kind.", CancellationToken.None);
             return;
         }
 
@@ -99,27 +98,27 @@ public sealed class TrainingRunExecutor(
             var freeze = Read<TrainingRunFreezeV1>(run.FreezeJson);
             if (freeze is null)
             {
-                await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The run's frozen dataset record could not be read.").ConfigureAwait(false);
+                await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The run's frozen dataset record could not be read.");
                 return;
             }
 
             // Reserved HERE rather than inside the preparation below: assigning the handle from a returned value
             // would lose it if anything after the reservation threw, and the ledger would hold those bytes for the
             // lifetime of the process — starving every later spawn decision on the node.
-            var estimate = await _defaults.EstimateAsync(run.BaseArtifactId, runOptions, stoppingToken).ConfigureAwait(false);
-            reservation = await _capacity.ReserveAsync(estimate, stoppingToken).ConfigureAwait(false);
+            var estimate = await _defaults.EstimateAsync(run.BaseArtifactId, runOptions, stoppingToken);
+            reservation = await _capacity.ReserveAsync(estimate, stoppingToken);
             if (!reservation.Granted)
             {
-                await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, reservation.Reason).ConfigureAwait(false);
+                await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, reservation.Reason);
                 return;
             }
 
-            await PrepareAndRunAsync(run, runOptions, freeze, cancellation, stoppingToken).ConfigureAwait(false);
+            await PrepareAndRunAsync(run, runOptions, freeze, cancellation, stoppingToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.LogError(exception, "The training run {RunId} failed before it could report its own outcome.", run.Id);
-            await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The training run failed to start.").ConfigureAwait(false);
+            await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The training run failed to start.");
         }
         finally
         {
@@ -137,20 +136,20 @@ public sealed class TrainingRunExecutor(
         CancellationTokenSource cancellation,
         CancellationToken stoppingToken)
     {
-        var version = await TransitionAsync(run.Id, run.Version, TrainingRunStatus.Preparing, stoppingToken).ConfigureAwait(false);
+        var version = await TransitionAsync(run.Id, run.Version, TrainingRunStatus.Preparing, stoppingToken);
 
         var interpreter = _runtime.ResolveInterpreterPath();
         if (interpreter is null || _runtime.GetStatus().Phase != TrainingRuntimePhase.Ready)
         {
-            await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The Python training runtime is not installed.").ConfigureAwait(false);
+            await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The Python training runtime is not installed.");
             return;
         }
 
-        var datasetPath = await _workspace.MaterializeWorkCopyAsync(run.DatasetId, freeze.FreezeId, run.Id, stoppingToken).ConfigureAwait(false);
-        var jobPath = await WriteJobConfigAsync(run, runOptions, freeze, datasetPath, stoppingToken).ConfigureAwait(false);
+        var datasetPath = await _workspace.MaterializeWorkCopyAsync(run.DatasetId, freeze.FreezeId, run.Id, stoppingToken);
+        var jobPath = await WriteJobConfigAsync(run, runOptions, freeze, datasetPath, stoppingToken);
 
-        _ = await TransitionAsync(run.Id, version, TrainingRunStatus.Training, stoppingToken).ConfigureAwait(false);
-        await RunTrainerAsync(run, interpreter, jobPath, cancellation, stoppingToken).ConfigureAwait(false);
+        _ = await TransitionAsync(run.Id, version, TrainingRunStatus.Training, stoppingToken);
+        await RunTrainerAsync(run, interpreter, jobPath, cancellation, stoppingToken);
     }
 
     private async Task RunTrainerAsync(TrainingRunRecord run,
@@ -162,7 +161,7 @@ public sealed class TrainingRunExecutor(
         var scriptPath = Path.Combine(TrainingScripts.ResolveDirectory(), TrainingScripts.TrainScriptName);
         if (!File.Exists(scriptPath))
         {
-            await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The trainer script is missing from this installation.").ConfigureAwait(false);
+            await TerminalizeAsync(run.Id, TrainingWorkStatus.Failed, "The trainer script is missing from this installation.");
             return;
         }
 
@@ -173,7 +172,7 @@ public sealed class TrainingRunExecutor(
 
         // Durable BEFORE the first line is read: a host that dies now must still be able to prove which process is
         // this run's and reap it on the next boot.
-        await _store.SetLaunchReceiptAsync(run.Id, Serialize(ToPersisted(handle.Receipt)), CancellationToken.None).ConfigureAwait(false);
+        await _store.SetLaunchReceiptAsync(run.Id, Serialize(ToPersisted(handle.Receipt)), CancellationToken.None);
 
         var state = new StreamState(_timeProvider.GetUtcNow());
         // The registration is disposed before the handle is: an operator cancel that lands after the stream has closed
@@ -187,31 +186,31 @@ public sealed class TrainingRunExecutor(
         try
         {
             watchdog = WatchdogAsync(handle.KillGroup, state, watchdogStop.Token);
-            await ConsumeAsync(run.Id, handle, state, stoppingToken).ConfigureAwait(false);
+            await ConsumeAsync(run.Id, handle, state, stoppingToken);
         }
         finally
         {
             // The watchdog holds the handle, so it is joined here rather than on the happy path only: a throwing
             // consume must not leave it running against a process this method is about to dispose.
             state.Finished = true;
-            await watchdogStop.CancelAsync().ConfigureAwait(false);
+            await watchdogStop.CancelAsync();
             if (watchdog is not null)
             {
-                await watchdog.ConfigureAwait(false);
+                await watchdog;
             }
 
-            await stopOnCancel.DisposeAsync().ConfigureAwait(false);
+            await stopOnCancel.DisposeAsync();
         }
 
-        var exitCode = await WaitForExitOrEscalateAsync(handle, state).ConfigureAwait(false);
-        await FlushAsync(run.Id, state, force: true).ConfigureAwait(false);
-        await CompleteAsync(run.Id, state, exitCode, cancellation.IsCancellationRequested).ConfigureAwait(false);
+        var exitCode = await WaitForExitOrEscalateAsync(handle, state);
+        await FlushAsync(run.Id, state, force: true);
+        await CompleteAsync(run.Id, state, exitCode, cancellation.IsCancellationRequested);
     }
 
     /// <summary>Consumes the trainer's merged stdout/stderr, folding protocol lines into state and the rest into the log tail.</summary>
     private async Task ConsumeAsync(Guid runId, ITrainingProcessHandle handle, StreamState state, CancellationToken stoppingToken)
     {
-        await foreach (var line in handle.ReadOutputAsync(stoppingToken).ConfigureAwait(false))
+        await foreach (var line in handle.ReadOutputAsync(stoppingToken))
         {
             _ = state.Log.AppendLine(line);
             var parsed = TrainingRunStdioParser.TryParse(line);
@@ -219,16 +218,16 @@ public sealed class TrainingRunExecutor(
             {
                 // Banner or warning text. Kept in the log tail, but deliberately NOT treated as liveness: a library
                 // that spams warnings while the trainer is wedged would otherwise hold the watchdog off forever.
-                await FlushAsync(runId, state, force: false).ConfigureAwait(false);
+                await FlushAsync(runId, state, force: false);
                 continue;
             }
 
             state.LastEventAt = _timeProvider.GetUtcNow();
             Apply(runId, state, parsed);
-            await FlushAsync(runId, state, force: parsed.Kind is TrainingStdioEventKind.Phase or TrainingStdioEventKind.Error).ConfigureAwait(false);
+            await FlushAsync(runId, state, force: parsed.Kind is TrainingStdioEventKind.Phase or TrainingStdioEventKind.Error);
             if (parsed.Kind == TrainingStdioEventKind.Artifact)
             {
-                await RecordArtifactAsync(runId, parsed).ConfigureAwait(false);
+                await RecordArtifactAsync(runId, parsed);
             }
         }
     }
@@ -312,7 +311,7 @@ public sealed class TrainingRunExecutor(
         using var exitGrace = new CancellationTokenSource(_options.ExitGracePeriod, _timeProvider);
         try
         {
-            return await handle.WaitForExitAsync(exitGrace.Token).ConfigureAwait(false);
+            return await handle.WaitForExitAsync(exitGrace.Token);
         }
         catch (OperationCanceledException)
         {
@@ -329,7 +328,7 @@ public sealed class TrainingRunExecutor(
         {
             try
             {
-                await Task.Delay(WatchdogInterval(_options.InactivityTimeout), _timeProvider, stoppingToken).ConfigureAwait(false);
+                await Task.Delay(WatchdogInterval(_options.InactivityTimeout), _timeProvider, stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -384,7 +383,7 @@ public sealed class TrainingRunExecutor(
             return;
         }
 
-        _ = await _store.CreateArtifactAsync(new TrainingArtifactInput(runId, kind, full), CancellationToken.None).ConfigureAwait(false);
+        _ = await _store.CreateArtifactAsync(new TrainingArtifactInput(runId, kind, full), CancellationToken.None);
         _ = _events.Append(runId, TrainingRunEventKind.Artifact, new TrainingRunPayload(Message: kind.ToString()));
     }
 
@@ -401,7 +400,7 @@ public sealed class TrainingRunExecutor(
         {
             var chunk = state.Log.ToString();
             _ = state.Log.Clear();
-            await _store.AppendLogTailAsync(runId, chunk, CancellationToken.None).ConfigureAwait(false);
+            await _store.AppendLogTailAsync(runId, chunk, CancellationToken.None);
         }
 
         await _store.UpdateProgressAsync(runId,
@@ -409,8 +408,7 @@ public sealed class TrainingRunExecutor(
                         {
                             UpdatedAtUtc = now.ToUnixTimeMilliseconds()
                         }),
-                        CancellationToken.None)
-                    .ConfigureAwait(false);
+                        CancellationToken.None);
     }
 
     private async Task CompleteAsync(Guid runId, StreamState state, int exitCode, bool cancelRequested)
@@ -425,12 +423,12 @@ public sealed class TrainingRunExecutor(
             _ => (TrainingWorkStatus.Failed, $"The trainer exited with status {exitCode}.")
         };
 
-        await TerminalizeAsync(runId, status, message).ConfigureAwait(false);
+        await TerminalizeAsync(runId, status, message);
     }
 
     private async Task TerminalizeAsync(Guid runId, TrainingWorkStatus status, string? message)
     {
-        var run = await _store.CompleteRunAsync(runId, status, message, CancellationToken.None).ConfigureAwait(false);
+        var run = await _store.CompleteRunAsync(runId, status, message, CancellationToken.None);
         _ = _events.Append(runId,
             TrainingRunEventKind.State,
             new TrainingRunPayload(State: run.Status.ToString(), Message: message, RunVersion: run.Version));
@@ -438,7 +436,7 @@ public sealed class TrainingRunExecutor(
 
     private async Task<long> TransitionAsync(Guid runId, long expectedVersion, TrainingRunStatus status, CancellationToken cancellationToken)
     {
-        var run = await _store.TransitionAsync(runId, expectedVersion, status, cancellationToken).ConfigureAwait(false);
+        var run = await _store.TransitionAsync(runId, expectedVersion, status, cancellationToken);
         _ = _events.Append(runId, TrainingRunEventKind.State, new TrainingRunPayload(State: run.Status.ToString(), RunVersion: run.Version));
         return run.Version;
     }
@@ -463,7 +461,7 @@ public sealed class TrainingRunExecutor(
             Options = options
         };
         var path = _workspace.JobConfigPath(run.Id);
-        await File.WriteAllBytesAsync(path, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(path, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), cancellationToken);
         return path;
     }
 

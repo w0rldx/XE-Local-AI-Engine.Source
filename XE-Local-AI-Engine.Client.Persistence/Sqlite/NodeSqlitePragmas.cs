@@ -53,8 +53,8 @@ public static class NodeSqlitePragmas
             return;
         }
 
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await ApplyAsync(connection, _settings, logger: null, cancellationToken).ConfigureAwait(false);
+        await connection.OpenAsync(cancellationToken);
+        await ApplyAsync(connection, _settings, logger: null, cancellationToken);
     }
 
     /// <summary>Applies the pragmas to an already-open connection (synchronous path — EF may open synchronously).</summary>
@@ -109,8 +109,8 @@ public static class NodeSqlitePragmas
         {
             await using var command = connection.CreateCommand();
             command.CommandText = BusyTimeoutSql(settings);
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }).ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        });
 
         if (!ShouldApplyWal(connection, settings))
         {
@@ -121,16 +121,16 @@ public static class NodeSqlitePragmas
         {
             await using var command = connection.CreateCommand();
             command.CommandText = "PRAGMA journal_mode=WAL;";
-            var mode = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
+            var mode = await command.ExecuteScalarAsync(cancellationToken) as string;
             WarnIfNotWal(logger, mode);
-        }).ConfigureAwait(false);
+        });
 
         await TryExecuteAsync(logger, "synchronous", async () =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText = SynchronousSql(settings);
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }).ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        });
     }
 
     private static string BusyTimeoutSql(NodeSqlitePragmaSettings settings)
@@ -197,7 +197,7 @@ public static class NodeSqlitePragmas
     {
         try
         {
-            await execute().ConfigureAwait(false);
+            await execute();
         }
         catch (SqliteException exception)
         {

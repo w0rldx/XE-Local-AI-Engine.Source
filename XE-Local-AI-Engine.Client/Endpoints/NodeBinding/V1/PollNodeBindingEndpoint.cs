@@ -19,8 +19,8 @@ public sealed class PollNodeBindingEndpoint(INodeBindingService nodeBindingServi
     {
         try
         {
-            var result = await _nodeBindingService.PollUntilTerminalAsync(req.ToSession(), ct).ConfigureAwait(false);
-            await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
+            var result = await _nodeBindingService.PollUntilTerminalAsync(req.ToSession(), ct);
+            await Send.OkAsync(result.ToResponse(), ct);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -29,7 +29,7 @@ public sealed class PollNodeBindingEndpoint(INodeBindingService nodeBindingServi
                 Status = "cancelled",
                 IntervalSeconds = req.IntervalSeconds,
                 ExpiresAt = req.ExpiresAt
-            }, CancellationToken.None).ConfigureAwait(false);
+            }, CancellationToken.None);
         }
     }
 }

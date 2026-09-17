@@ -8,18 +8,16 @@ internal sealed partial class DevWorkflowStore
 {
     public async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        await EnsureRunExistsAsync(runId, cancellationToken).ConfigureAwait(false);
+        await EnsureRunExistsAsync(runId, cancellationToken);
 
         // No sinceSequence filter: a node-run's sequence is its insert order, so filtering on it would hide every
         // status change the caller actually came for.
         var nodeRuns = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
                                        .Where(entity => entity.RunId == runId)
                                        .OrderBy(entity => entity.Sequence)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         var available = await LoadAvailableWorkSessionsAsync([.. nodeRuns.Where(entity => entity.WorkSessionId is not null).Select(entity => entity.WorkSessionId!.Value)],
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         return [.. nodeRuns.Select(entity => NodeRunSnapshot(entity, available))];
     }
 
@@ -28,8 +26,7 @@ internal sealed partial class DevWorkflowStore
                         .Where(entity => entity.WorkSessionId != null)
                         .Select(entity => entity.WorkSessionId!.Value)
                         .Distinct()
-                        .ToListAsync(cancellationToken)
-                        .ConfigureAwait(false);
+                        .ToListAsync(cancellationToken);
 
     /// <summary>
     ///     Latest wins, and latest is the node run created last; the id breaks a tie inside one materialization's
@@ -41,8 +38,7 @@ internal sealed partial class DevWorkflowStore
                         .OrderByDescending(entity => entity.CreatedAtUtc)
                         .ThenByDescending(entity => entity.Id)
                         .Select(entity => (Guid?)entity.RunId)
-                        .FirstOrDefaultAsync(cancellationToken)
-                        .ConfigureAwait(false);
+                        .FirstOrDefaultAsync(cancellationToken);
 
     /// <summary>
     ///     The batch form, and the same "latest wins" rule: one query returns every (task, run) pointer for the ids
@@ -63,8 +59,7 @@ internal sealed partial class DevWorkflowStore
                                    .OrderByDescending(entity => entity.CreatedAtUtc)
                                    .ThenByDescending(entity => entity.Id)
                                    .Select(entity => new DevelopmentTaskRunRow(entity.DevelopmentTaskId!.Value, entity.RunId))
-                                   .ToListAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToListAsync(cancellationToken);
 
         return rows.GroupBy(static row => row.DevelopmentTaskId)
                    .ToDictionary(static group => group.Key, static group => group.First().RunId);
@@ -72,15 +67,15 @@ internal sealed partial class DevWorkflowStore
 
     public async Task<DevWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid nodeRunId, CancellationToken cancellationToken = default)
     {
-        var nodeRun = await _dbContext.DevWorkflowNodeRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == nodeRunId, cancellationToken).ConfigureAwait(false)
+        var nodeRun = await _dbContext.DevWorkflowNodeRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == nodeRunId, cancellationToken)
                       ?? throw new DevWorkflowNotFoundException($"Development workflow node run '{nodeRunId}' was not found.");
-        var available = await LoadAvailableWorkSessionsAsync(nodeRun.WorkSessionId is { } sessionId ? [sessionId] : [], cancellationToken).ConfigureAwait(false);
+        var available = await LoadAvailableWorkSessionsAsync(nodeRun.WorkSessionId is { } sessionId ? [sessionId] : [], cancellationToken);
         return NodeRunSnapshot(nodeRun, available);
     }
 
     public async Task<IReadOnlyList<DevWorkflowArtifactSnapshot>> ListArtifactsAsync(Guid runId, long sinceSequence = 0, CancellationToken cancellationToken = default)
     {
-        await EnsureRunExistsAsync(runId, cancellationToken).ConfigureAwait(false);
+        await EnsureRunExistsAsync(runId, cancellationToken);
 
         // The artifact cursor is append-correct only. The sequence is allocated at insert and never re-stamped, so a
         // sinceSequence page returns every artifact that has APPEARED since — and no staleness flip that has happened
@@ -90,20 +85,18 @@ internal sealed partial class DevWorkflowStore
         var artifacts = await _dbContext.DevWorkflowArtifacts.AsNoTracking()
                                         .Where(entity => entity.RunId == runId)
                                         .OrderBy(entity => entity.Sequence)
-                                        .ToListAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ToListAsync(cancellationToken);
         var latest = LatestVersionPerLineage(artifacts);
         return [.. artifacts.Where(entity => entity.Sequence > sinceSequence).Select(entity => ArtifactSnapshot(entity, latest))];
     }
 
     public async Task<DevWorkflowArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default)
     {
-        var artifact = await _dbContext.DevWorkflowArtifacts.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == artifactId, cancellationToken).ConfigureAwait(false)
+        var artifact = await _dbContext.DevWorkflowArtifacts.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == artifactId, cancellationToken)
                        ?? throw new DevWorkflowNotFoundException($"Development workflow artifact '{artifactId}' was not found.");
         var highest = await _dbContext.DevWorkflowArtifacts.AsNoTracking()
                                       .Where(entity => entity.LineageId == artifact.LineageId)
-                                      .MaxAsync(entity => entity.Version, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .MaxAsync(entity => entity.Version, cancellationToken);
         return ArtifactSnapshot(artifact, new Dictionary<Guid, int>
         {
             [artifact.LineageId] = highest
@@ -118,27 +111,24 @@ internal sealed partial class DevWorkflowStore
                                .Where(entity => entity.NodeRunId == nodeRunId)
                                .OrderBy(entity => entity.RecordedSequence)
                                .Select(entity => entity.ArtifactId)
-                               .ToListAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<DevWorkflowDecisionSnapshot>> ListDecisionsAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        await EnsureRunExistsAsync(runId, cancellationToken).ConfigureAwait(false);
+        await EnsureRunExistsAsync(runId, cancellationToken);
 
         var decisions = await _dbContext.DevWorkflowDecisions.AsNoTracking()
                                         .Where(entity => entity.RunId == runId)
                                         .OrderBy(entity => entity.Sequence)
-                                        .ToListAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ToListAsync(cancellationToken);
         return [.. decisions.Select(DecisionSnapshot)];
     }
 
     public async Task<DevWorkflowDecisionSnapshot?> FindDecisionByOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default)
     {
         var decision = await _dbContext.DevWorkflowDecisions.AsNoTracking()
-                                       .SingleOrDefaultAsync(entity => entity.RunId == runId && entity.OperationId == operationId, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleOrDefaultAsync(entity => entity.RunId == runId && entity.OperationId == operationId, cancellationToken);
         return decision is null ? null : DecisionSnapshot(decision);
     }
 
@@ -152,15 +142,14 @@ internal sealed partial class DevWorkflowStore
             throw new ArgumentOutOfRangeException(nameof(limit), "An event page limit must be positive.");
         }
 
-        await EnsureRunExistsAsync(runId, cancellationToken).ConfigureAwait(false);
+        await EnsureRunExistsAsync(runId, cancellationToken);
 
         // Events are the append-only feed — never re-stamped — so their watermark is also their order.
         var events = await _dbContext.DevWorkflowRunEvents.AsNoTracking()
                                      .Where(entity => entity.RunId == runId && entity.Sequence > sinceSequence)
                                      .OrderBy(entity => entity.Sequence)
                                      .Take(limit)
-                                     .ToListAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .ToListAsync(cancellationToken);
         return
         [
             .. events.Select(entity => new DevWorkflowRunEventSnapshot(entity.Id,
@@ -177,7 +166,7 @@ internal sealed partial class DevWorkflowStore
 
     private async Task EnsureRunExistsAsync(Guid runId, CancellationToken cancellationToken)
     {
-        if (!await _dbContext.DevWorkflowRuns.AsNoTracking().AnyAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false))
+        if (!await _dbContext.DevWorkflowRuns.AsNoTracking().AnyAsync(entity => entity.Id == runId, cancellationToken))
         {
             throw new DevWorkflowNotFoundException($"Development workflow run '{runId}' was not found.");
         }
@@ -198,8 +187,7 @@ internal sealed partial class DevWorkflowStore
         var found = await _dbContext.AgentWorkSessions.AsNoTracking()
                                     .Where(entity => sessionIds.Contains(entity.Id))
                                     .Select(entity => entity.Id)
-                                    .ToListAsync(cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ToListAsync(cancellationToken);
         return [.. found];
     }
 

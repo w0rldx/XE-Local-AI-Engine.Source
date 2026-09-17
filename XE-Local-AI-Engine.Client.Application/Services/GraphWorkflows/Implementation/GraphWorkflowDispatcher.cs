@@ -121,12 +121,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _stopping.CancelAsync().ConfigureAwait(false);
+        await _stopping.CancelAsync();
         if (_loop is { } loop)
         {
             try
             {
-                await loop.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await loop.WaitAsync(cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -146,7 +146,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             return;
         }
 
-        await StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await StopAsync(CancellationToken.None);
         _stopping.Dispose();
         _advanceGate.Dispose();
     }
@@ -160,11 +160,11 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// </summary>
     internal async Task<int> AdvanceOnceAsync(Guid runId, CancellationToken cancellationToken)
     {
-        await _advanceGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _advanceGate.WaitAsync(cancellationToken);
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
-            return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), runId, cancellationToken).ConfigureAwait(false);
+            return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), runId, cancellationToken);
         }
         finally
         {
@@ -179,7 +179,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// </summary>
     private async Task<int> AdvanceCoreAsync(IGraphWorkflowStore store, Guid runId, CancellationToken cancellationToken)
     {
-        var run = await store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await store.GetRunAsync(runId, cancellationToken);
         if (GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
             Forget(runId);
@@ -188,7 +188,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
         if (run.Status == GraphWorkflowRunStatus.Pending)
         {
-            return await StartPendingRunAsync(store, run, cancellationToken).ConfigureAwait(false);
+            return await StartPendingRunAsync(store, run, cancellationToken);
         }
 
         GraphWorkflowGraph graph;
@@ -207,25 +207,25 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             // has left to do, and the poll it skips here has nothing to settle: an unparseable graph means this
             // dispatcher never dispatched the run, so no lane is driving any of its rows.
             return run.Status == GraphWorkflowRunStatus.Cancelling
-                ? await DrainAsync(store, run, cancellationToken).ConfigureAwait(false)
-                : await FailUnroutableAsync(store, run, exception, cancellationToken).ConfigureAwait(false);
+                ? await DrainAsync(store, run, cancellationToken)
+                : await FailUnroutableAsync(store, run, exception, cancellationToken);
         }
 
         // Settle what the lanes have landed FIRST, before anything reads the node runs for a decision: work that
         // finished between ticks has to be seen as finished, or the run judges its whole graph against a row that is
         // only still Running because nothing asked.
-        var written = await PollAsync(store, graph, run, cancellationToken).ConfigureAwait(false);
+        var written = await PollAsync(store, graph, run, cancellationToken);
 
         if (run.Status == GraphWorkflowRunStatus.Cancelling)
         {
             // A drain admits nothing: every terminal is reached through it or through the "nothing is live any more"
             // recomputation, because writing one over live node runs would strand them under a run no tick looks at.
-            return written + await DrainAsync(store, run, cancellationToken).ConfigureAwait(false);
+            return written + await DrainAsync(store, run, cancellationToken);
         }
 
-        written += await RetryFailedNodesAsync(store, graph, run, cancellationToken).ConfigureAwait(false);
-        written += await AdmitAsync(store, graph, run, cancellationToken).ConfigureAwait(false);
-        written += await RecomputeRunStatusAsync(store, graph, run, cancellationToken).ConfigureAwait(false);
+        written += await RetryFailedNodesAsync(store, graph, run, cancellationToken);
+        written += await AdmitAsync(store, graph, run, cancellationToken);
+        written += await RecomputeRunStatusAsync(store, graph, run, cancellationToken);
         return written;
     }
 
@@ -240,13 +240,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// </summary>
     private async Task<int> PollAsync(IGraphWorkflowStore store, GraphWorkflowGraph graph, GraphWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
-        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
 
         // Before anything is read off a lane: a retry can re-attempt a row a lane is driving without going through it,
         // and an answer belonging to the attempt before is not an answer about the one the row is on now.
         foreach (var executor in _executors)
         {
-            await executor.ForgetSupersededAsync(nodeRuns).ConfigureAwait(false);
+            await executor.ForgetSupersededAsync(nodeRuns);
         }
 
         var candidates = nodeRuns.Where(static nodeRun => nodeRun.Status is GraphWorkflowNodeRunStatus.Running or GraphWorkflowNodeRunStatus.Queued).ToList();
@@ -257,7 +257,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             // one that has since moved on is left alone.
             if (written > 0)
             {
-                nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+                nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
             }
 
             if (nodeRuns.FirstOrDefault(nodeRun => nodeRun.Id == candidate.Id) is not { Status: GraphWorkflowNodeRunStatus.Running or GraphWorkflowNodeRunStatus.Queued } current
@@ -271,12 +271,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             // drain admits nothing, so without this the run would wait on a row nothing would ever move again.
             var lane = ExecutorFor(node.Kind);
             var polled = lane is not null && (current.Status == GraphWorkflowNodeRunStatus.Running || lane.IsInFlight(current.Id))
-                ? await lane.PollAsync(store, run, graph, node, current, cancellationToken).ConfigureAwait(false)
+                ? await lane.PollAsync(store, run, graph, node, current, cancellationToken)
                 : 0;
 
             // Only a row its lane had nothing to say about. Work that landed inside its budget is settled off what it
             // actually came to, and expiring it as well would overwrite that answer with a coarser one.
-            written += polled > 0 ? polled : await ExpireAsync(store, graph, run, node, current, cancellationToken).ConfigureAwait(false);
+            written += polled > 0 ? polled : await ExpireAsync(store, graph, run, node, current, cancellationToken);
         }
 
         return written;
@@ -307,7 +307,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         // out of time — leaving the fresh attempt with nothing to poll it.
         if (ExecutorFor(node.Kind) is { } lane)
         {
-            await lane.DiscardAsync(nodeRun.Id).ConfigureAwait(false);
+            await lane.DiscardAsync(nodeRun.Id);
         }
 
         return await FailNodeAsync(store,
@@ -317,8 +317,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                 nodeRun,
                 GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Timeout, nodeRun.Attempt, node.MaxAttempts),
                 $"This node run did not finish within the {node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds} seconds its node allows.",
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     /// <summary>
@@ -341,7 +340,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         GraphWorkflowRunSnapshot run,
         CancellationToken cancellationToken)
     {
-        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
 
         // The same accounting the restart reconciler uses: attempts SPENT, so a run whose nodes are all on their first
         // try has spent none of it.
@@ -365,8 +364,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                    IncrementAttempt: true,
                                    EventType: GraphWorkflowEventTypes.NodeRetried,
                                    DetailJson: JsonSerializer.Serialize(new RetryDetail(nodeRun.FailureClass.ToString(), nodeRun.Attempt, nodeRun.Error), JsonOptions)),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             spent++;
             written++;
         }
@@ -384,7 +382,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// </summary>
     private async Task<int> AdmitAsync(IGraphWorkflowStore store, GraphWorkflowGraph graph, GraphWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
-        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
         var byKey = nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
         var written = 0;
 
@@ -401,14 +399,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                         nodeRun,
                         GraphWorkflowFailureClass.ValidationFailed,
                         $"The run's graph no longer declares node '{nodeRun.NodeKey}'.",
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
                 continue;
             }
 
             if (nodeRun.Status == GraphWorkflowNodeRunStatus.Queued)
             {
-                written += await DispatchAsync(store, graph, run, node, nodeRun, byKey, cancellationToken).ConfigureAwait(false);
+                written += await DispatchAsync(store, graph, run, node, nodeRun, byKey, cancellationToken);
                 continue;
             }
 
@@ -427,13 +424,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                            GraphWorkflowVersions.Any,
                                            GraphWorkflowNodeRunStatus.Skipped,
                                            TerminalReason: GraphWorkflowStateMachine.SkipReason(node, graph, byKey)),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                       cancellationToken);
                     written++;
                     continue;
 
                 default:
-                    written += await DispatchAsync(store, graph, run, node, nodeRun, byKey, cancellationToken).ConfigureAwait(false);
+                    written += await DispatchAsync(store, graph, run, node, nodeRun, byKey, cancellationToken);
                     continue;
             }
         }
@@ -460,12 +456,12 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     {
         if (ExecutorFor(node.Kind) is { } lane)
         {
-            return await lane.DispatchAsync(store, run, graph, node, nodeRun, cancellationToken).ConfigureAwait(false);
+            return await lane.DispatchAsync(store, run, graph, node, nodeRun, cancellationToken);
         }
 
         if (GraphWorkflowInlineExecutor.Owns(node.Kind))
         {
-            return await _inline.ExecuteAsync(store, run, graph, node, nodeRun, byKey, cancellationToken).ConfigureAwait(false);
+            return await _inline.ExecuteAsync(store, run, graph, node, nodeRun, byKey, cancellationToken);
         }
 
         return await FailNodeAsync(store,
@@ -475,8 +471,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                 nodeRun,
                 GraphWorkflowFailureClass.ValidationFailed,
                 $"Node '{node.NodeKey}' is a {node.Kind} node, and this build has no executor for that kind.",
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     /// <summary>
@@ -489,7 +484,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// </summary>
     private async Task<int> DrainAsync(IGraphWorkflowStore store, GraphWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
-        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
         var written = 0;
 
         foreach (var nodeRun in nodeRuns.Where(static nodeRun => GraphWorkflowStateMachine.IsLive(nodeRun.Status)))
@@ -499,7 +494,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                 // Asked, not settled, and counted as work only when it actually asked — the drain re-signals on a
                 // productive tick, so a lane answering yes to a stop it has already requested would spin the run for
                 // the whole duration of the work.
-                written += await lane.StopAsync(nodeRun.Id).ConfigureAwait(false) ? 1 : 0;
+                written += await lane.StopAsync(nodeRun.Id) ? 1 : 0;
                 continue;
             }
 
@@ -510,14 +505,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                    GraphWorkflowNodeRunStatus.Cancelled,
                                    FailureClass: GraphWorkflowFailureClass.Cancelled,
                                    TerminalReason: DrainedReason),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             written++;
         }
 
         // Re-read: the stops above may have settled every row already, and judging "is anything still live" off the
         // snapshot taken before them would cost a whole extra tick for a drain that is in fact finished.
-        nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
         if (nodeRuns.Any(static nodeRun => nodeRun.Status is GraphWorkflowNodeRunStatus.Queued or GraphWorkflowNodeRunStatus.Running))
         {
             // Still settling — a lane was asked to stop and has not answered yet. The command already committed its
@@ -529,12 +523,11 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         // reported class None would leave an operator reading a terminal run with no record of why it stopped.
         GraphWorkflowStateMachine.EnsureLegal(run.Status, GraphWorkflowRunStatus.Cancelled);
         _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id,
-                               await CurrentVersionAsync(store, run.Id, cancellationToken).ConfigureAwait(false),
+                               await CurrentVersionAsync(store, run.Id, cancellationToken),
                                GraphWorkflowRunStatus.Cancelled,
                                FailureClass: GraphWorkflowFailureClass.Cancelled,
                                SanitizedReason: DrainedReason),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         Forget(run.Id);
         return written + 1;
     }
@@ -551,8 +544,8 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         GraphWorkflowRunSnapshot run,
         CancellationToken cancellationToken)
     {
-        var current = await store.GetRunAsync(run.Id, cancellationToken).ConfigureAwait(false);
-        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        var current = await store.GetRunAsync(run.Id, cancellationToken);
+        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
         var outcome = GraphWorkflowStateMachine.Recompute(current.Status, graph, nodeRuns);
         if (outcome.Status == current.Status)
         {
@@ -570,8 +563,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                // End node that succeeded, and there is no earlier moment at which "the run's answer"
                                // is a thing that exists.
                                OutputJson: outcome.Status == GraphWorkflowRunStatus.Completed ? RunResult(graph, nodeRuns) : null),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
 
         if (GraphWorkflowStateMachine.IsTerminal(outcome.Status))
         {
@@ -606,10 +598,10 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         }
         catch (GraphWorkflowValidationException exception)
         {
-            return await FailUnroutableAsync(store, run, exception, cancellationToken).ConfigureAwait(false);
+            return await FailUnroutableAsync(store, run, exception, cancellationToken);
         }
 
-        if (await store.CountActiveRunsAsync(_options.MaxConcurrentRuns, cancellationToken).ConfigureAwait(false) >= _options.MaxConcurrentRuns)
+        if (await store.CountActiveRunsAsync(_options.MaxConcurrentRuns, cancellationToken) >= _options.MaxConcurrentRuns)
         {
             // Not refused — WAITING. The run keeps its rows and its place, and the next sweep offers it again; refusing
             // it would push a queue the node is perfectly able to work through back onto the person who started it.
@@ -618,7 +610,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
         if (BeforeRunWrite is { } hook)
         {
-            await hook().ConfigureAwait(false);
+            await hook();
         }
 
         GraphWorkflowStateMachine.EnsureLegal(run.Status, GraphWorkflowRunStatus.Running);
@@ -628,8 +620,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         // in between has bumped the version. Taking a fresh version here would make that cancel's own bump the number
         // this write passes with, and the run would go Running with a committed cancellation underneath it: the store
         // checks the version, never the source status.
-        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id, run.Version, GraphWorkflowRunStatus.Running), cancellationToken)
-                       .ConfigureAwait(false);
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(run.Id, run.Version, GraphWorkflowRunStatus.Running), cancellationToken);
         return 1;
     }
 
@@ -655,8 +646,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                GraphWorkflowRunStatus.Failed,
                                FailureClass: GraphWorkflowFailureClass.ValidationFailed,
                                SanitizedReason: exception.Message),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         Forget(run.Id);
         return 1;
     }
@@ -693,8 +683,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                    nodeRun.Id,
                                    GraphWorkflowVersions.Any,
                                    GraphWorkflowNodeRunStatus.Running),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Running
@@ -728,8 +717,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                                OutputJson: document,
                                FailureClass: failureClass,
                                TerminalReason: sanitizedReason),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return written + 1;
     }
 
@@ -760,7 +748,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     ///     </para>
     /// </summary>
     private static async Task<long> CurrentVersionAsync(IGraphWorkflowStore store, Guid runId, CancellationToken cancellationToken) =>
-        (await store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false)).Version;
+        (await store.GetRunAsync(runId, cancellationToken)).Version;
 
     /// <summary>
     ///     Two pumps, one advance. A signal is a latency hint and a sweep is the backstop, so they are independent — and
@@ -771,9 +759,9 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     {
         try
         {
-            await foreach (var runId in _signals.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var runId in _signals.Reader.ReadAllAsync(cancellationToken))
             {
-                await AdvanceSafelyAsync(runId, cancellationToken).ConfigureAwait(false);
+                await AdvanceSafelyAsync(runId, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -789,10 +777,10 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         using var sweep = new PeriodicTimer(TimeSpan.FromMilliseconds(_options.DispatchIntervalMilliseconds), _timeProvider);
         try
         {
-            await SweepAsync(cancellationToken).ConfigureAwait(false);
-            while (await sweep.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            await SweepAsync(cancellationToken);
+            while (await sweep.WaitForNextTickAsync(cancellationToken))
             {
-                await SweepAsync(cancellationToken).ConfigureAwait(false);
+                await SweepAsync(cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -810,7 +798,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
             foreach (var status in LiveRunStatuses)
             {
-                var runs = await store.ListRunsAsync(status, SweepPageSize, cancellationToken).ConfigureAwait(false);
+                var runs = await store.ListRunsAsync(status, SweepPageSize, cancellationToken);
                 runIds.UnionWith(runs.Select(static run => run.Id));
             }
         }
@@ -822,7 +810,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
         foreach (var runId in runIds)
         {
-            await AdvanceSafelyAsync(runId, cancellationToken).ConfigureAwait(false);
+            await AdvanceSafelyAsync(runId, cancellationToken);
         }
     }
 
@@ -834,7 +822,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     {
         try
         {
-            if (await AdvanceOnceAsync(runId, cancellationToken).ConfigureAwait(false) > 0)
+            if (await AdvanceOnceAsync(runId, cancellationToken) > 0)
             {
                 // A tick advances the graph by one layer, so a productive one almost always leaves more to do. Without
                 // this every hop would wait for the next sweep and a five-node run would take five intervals.

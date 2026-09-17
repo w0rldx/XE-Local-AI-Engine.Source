@@ -36,7 +36,7 @@ public sealed class GetImageModelCatalogEndpoint(
     public override async Task HandleAsync(CancellationToken ct)
     {
         var document = _catalog.GetDocument();
-        var installed = await _registry.ListAsync(ct).ConfigureAwait(false);
+        var installed = await _registry.ListAsync(ct);
         var installedNames = installed.Select(static entry => entry.ModelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // A failed hardware probe must not fail the catalog: the list is still useful without a fit badge, and the
@@ -44,7 +44,7 @@ public sealed class GetImageModelCatalogEndpoint(
         HardwareProfile? profile = null;
         try
         {
-            profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
+            profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -66,7 +66,7 @@ public sealed class GetImageModelCatalogEndpoint(
                 CatalogVersion = document.CatalogVersion,
                 Items = items
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 
     private static ImageModelCatalogEntryResponse ToResponse(ImageModelCatalogEntry entry, bool isInstalled, HardwareProfile? profile)

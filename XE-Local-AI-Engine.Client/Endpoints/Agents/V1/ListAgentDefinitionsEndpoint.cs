@@ -19,13 +19,13 @@ public sealed class ListAgentDefinitionsEndpoint(IAgentDefinitionService agentDe
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var records = await _agentDefinitionService.ListAsync(ct).ConfigureAwait(false);
+        var records = await _agentDefinitionService.ListAsync(ct);
         await Send.OkAsync(new ListAgentDefinitionsResponse
             {
                 // Lists stay lean: the AI-drafting provenance (brief, rationale, assumptions) is projected by the
                 // single-item reads only.
                 Items = [.. records.Select(static record => record.ToResponse(includeGenerationMetadata: false))]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

@@ -24,7 +24,7 @@ public sealed class ConnectConnectionEndpoint(IConnectionControlService connecti
         // is mapped to a 409 by ConflictExceptionHandler (with its user-safe message); any other fault becomes a clean
         // 500 ProblemDetails via DefaultExceptionHandler. The previous catch-all flattened every fault into a 400 and
         // leaked the raw exception message to the client regardless of environment.
-        var status = await _connectionControlService.ConnectAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(status.ToResponse(), ct).ConfigureAwait(false);
+        var status = await _connectionControlService.ConnectAsync(ct);
+        await Send.OkAsync(status.ToResponse(), ct);
     }
 }

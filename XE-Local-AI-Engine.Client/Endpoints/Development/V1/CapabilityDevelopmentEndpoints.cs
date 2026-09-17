@@ -67,13 +67,13 @@ public sealed class GetDevelopmentCapabilityEndpoint(
         var isolation = BuildIsolationSummary();
         if (!string.Equals(providerName, DockerSandboxRuntimeProvider.Name, StringComparison.Ordinal))
         {
-            await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, ContainerRuntime: null, isolation), ct).ConfigureAwait(false);
+            await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, ContainerRuntime: null, isolation), ct);
             return;
         }
 
-        var preflight = await _dockerDaemonPreflight.InspectAsync(ct).ConfigureAwait(false);
+        var preflight = await _dockerDaemonPreflight.InspectAsync(ct);
 
-        await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, preflight.ToResponse(), isolation), ct).ConfigureAwait(false);
+        await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, preflight.ToResponse(), isolation), ct);
     }
 
     // Reaches no daemon: the role providers are DI singletons resolved by the selector, and the container preflight
@@ -165,12 +165,12 @@ public sealed class ConfirmDevelopmentContainerRuntimeEndpoint(IDockerDaemonPref
         if (string.IsNullOrWhiteSpace(req.DaemonId))
         {
             AddError("A container runtime id is required so the confirmation approves the runtime you were shown.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var preflight = await _dockerDaemonPreflight.ConfirmAsync(req.DaemonId, ct).ConfigureAwait(false);
+        var preflight = await _dockerDaemonPreflight.ConfirmAsync(req.DaemonId, ct);
 
-        await Send.OkAsync(preflight.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(preflight.ToResponse(), ct);
     }
 }

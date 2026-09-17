@@ -40,8 +40,7 @@ internal sealed class MsalDelegatedTokenCredential : TokenCredential
         try
         {
             var result = await _confidentialClientApplication.AcquireTokenSilent(_scopes, _account)
-                                                             .ExecuteAsync(cancellationToken)
-                                                             .ConfigureAwait(false);
+                                                             .ExecuteAsync(cancellationToken);
             return new AccessToken(result.AccessToken, result.ExpiresOn);
         }
         catch (MsalUiRequiredException exception)

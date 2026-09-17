@@ -16,7 +16,7 @@ public sealed class FeedbackInsightsServiceTests
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(null));
 
-        var result = await service.GetAgentFeedbackInsightsAsync(agentId).ConfigureAwait(false);
+        var result = await service.GetAgentFeedbackInsightsAsync(agentId);
 
         AssertEx.Null(result, "A missing agent must surface as null (the endpoint maps it to 404).");
     }
@@ -29,14 +29,13 @@ public sealed class FeedbackInsightsServiceTests
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId, "Agent", UpCount: 0, DownCount: 0, [], [])));
 
-        var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId).ConfigureAwait(false), "Existing agent should produce a result.");
+        var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId), "Existing agent should produce a result.");
 
         AssertEx.Equal(expected: 4_242L, result.GeneratedAtUtc);
         AssertEx.Equal(FeedbackInsightsService.MinOccurrenceThreshold, result.MinOccurrenceThreshold);
         // The privacy cap is enforced by passing MaxExemplars to the store, not by trimming afterwards.
         await store.Received(1)
-                   .GetAgentFeedbackAggregateAsync(agentId, FeedbackInsightsService.MaxExemplars, Arg.Any<CancellationToken>())
-                   .ConfigureAwait(false);
+                   .GetAgentFeedbackAggregateAsync(agentId, FeedbackInsightsService.MaxExemplars, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -47,7 +46,7 @@ public sealed class FeedbackInsightsServiceTests
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId, "Agent", UpCount: 0, DownCount: 0, [], [])));
 
-        var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId).ConfigureAwait(false), "Existing agent should produce a result.");
+        var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId), "Existing agent should produce a result.");
 
         AssertEx.Equal(expected: 0, result.Overall.Total);
         AssertEx.Equal(expected: 0d, result.Overall.DownRate);
@@ -67,8 +66,8 @@ public sealed class FeedbackInsightsServiceTests
         store.GetAgentFeedbackAggregateAsync(meets, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(meets, "A", UpCount: 1, DownCount: 2, [], [])));
 
-        var belowResult = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(below).ConfigureAwait(false), "result");
-        var meetsResult = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(meets).ConfigureAwait(false), "result");
+        var belowResult = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(below), "result");
+        var meetsResult = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(meets), "result");
 
         AssertEx.Equal(expected: 2, belowResult.Overall.Total);
         AssertEx.False(belowResult.Overall.MeetsThreshold, "n=2 (< 3) is not yet a pattern.");
@@ -90,7 +89,7 @@ public sealed class FeedbackInsightsServiceTests
                  [new ToolFeedbackCount("search", UpCount: 2, DownCount: 2), new ToolFeedbackCount("calc", UpCount: 1, DownCount: 0)],
                  [])));
 
-        var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId).ConfigureAwait(false), "result");
+        var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId), "result");
 
         AssertEx.Equal(expected: 2, result.ByTool.Count);
         AssertEx.Equal("search", result.ByTool[0].ToolName);
@@ -121,7 +120,7 @@ public sealed class FeedbackInsightsServiceTests
                      new FeedbackExemplar("down", ShortComment, Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 100)
                  ])));
 
-        var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId).ConfigureAwait(false), "result");
+        var result = AssertEx.NotNull(await service.GetAgentFeedbackInsightsAsync(agentId), "result");
 
         AssertEx.Equal(expected: 2, result.Exemplars.Count);
         AssertEx.True(result.Exemplars[0].Truncated, "An over-length comment must be flagged truncated.");

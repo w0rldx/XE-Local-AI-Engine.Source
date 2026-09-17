@@ -7,12 +7,12 @@ internal sealed partial class NodePatchApplyService
     private async Task LogAppliedAsync(string runId, IReadOnlyList<PatchApplyFileEntry> files, CancellationToken cancellationToken)
     {
         var detail = string.Join(separator: ';', files.Select(file => string.Create(CultureInfo.InvariantCulture, $"{file.Alias}/{file.RelativePath}")));
-        await AppendEventSafelyAsync(runId, "patch_applied", detail, cancellationToken).ConfigureAwait(false);
+        await AppendEventSafelyAsync(runId, "patch_applied", detail, cancellationToken);
     }
 
     private async Task LogRejectionAsync(string runId, IReadOnlyList<string> rejections, CancellationToken cancellationToken)
     {
-        await AppendEventSafelyAsync(runId, "patch_apply_rejected", string.Join(separator: ';', rejections), cancellationToken).ConfigureAwait(false);
+        await AppendEventSafelyAsync(runId, "patch_apply_rejected", string.Join(separator: ';', rejections), cancellationToken);
     }
 
     private async Task AppendEventSafelyAsync(string runId, string eventName, string? detail, CancellationToken cancellationToken)
@@ -30,7 +30,7 @@ internal sealed partial class NodePatchApplyService
 
             using var scope = _scopeFactory.CreateScope();
             var runLogger = scope.ServiceProvider.GetRequiredService<IAgentHomeRunLogger>();
-            var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+            var identity = await _identityProvider.GetAsync(cancellationToken);
             await runLogger.OpenAsync(new AgentHomeRunLogContext
                 {
                     RunId = runId,
@@ -39,8 +39,8 @@ internal sealed partial class NodePatchApplyService
                     OwnerUserId = identity.OwnerUserId,
                     ProviderName = ProviderName
                 },
-                cancellationToken).ConfigureAwait(false);
-            await runLogger.AppendEventAsync(eventName, detail, cancellationToken).ConfigureAwait(false);
+                cancellationToken);
+            await runLogger.AppendEventAsync(eventName, detail, cancellationToken);
         }
         catch (OperationCanceledException)
         {

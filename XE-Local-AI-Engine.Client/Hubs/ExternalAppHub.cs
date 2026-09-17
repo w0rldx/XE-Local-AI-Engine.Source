@@ -87,7 +87,7 @@ public sealed class ExternalAppHub(IExternalAppService apps, IOptions<ExternalAp
         ExternalAppInstanceDetail detail;
         try
         {
-            detail = await _apps.GetAsync(instanceId, cancellationToken).ConfigureAwait(false);
+            detail = await _apps.GetAsync(instanceId, cancellationToken);
         }
         catch (ExternalAppNotFoundException)
         {
@@ -97,12 +97,12 @@ public sealed class ExternalAppHub(IExternalAppService apps, IOptions<ExternalAp
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
         // and the join reaches nobody. The overlap this creates is harmless — every push is an idempotent notification
         // keyed by sequence.
-        await Groups.AddToGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), cancellationToken).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), cancellationToken);
 
         try
         {
             // One over the cap, so "there is more" is observed rather than inferred from a full page.
-            var events = await _apps.ListEventsAsync(instanceId, afterSequence, ReplayCap + 1, cancellationToken).ConfigureAwait(false);
+            var events = await _apps.ListEventsAsync(instanceId, afterSequence, ReplayCap + 1, cancellationToken);
 
             return new ExternalAppSubscriptionSnapshot(instanceId,
                 detail.Summary.Status.ToString(),
@@ -116,12 +116,12 @@ public sealed class ExternalAppHub(IExternalAppService apps, IOptions<ExternalAp
         {
             // The instance was deleted between the two reads. The caller is told what it would have been told had the
             // first read noticed — a generic hub failure would make a routine race look like a node fault.
-            await LeaveAfterFailedSubscribeAsync(instanceId).ConfigureAwait(false);
+            await LeaveAfterFailedSubscribeAsync(instanceId);
             throw new HubException(InstanceNotFoundMessage);
         }
         catch
         {
-            await LeaveAfterFailedSubscribeAsync(instanceId).ConfigureAwait(false);
+            await LeaveAfterFailedSubscribeAsync(instanceId);
             throw;
         }
     }

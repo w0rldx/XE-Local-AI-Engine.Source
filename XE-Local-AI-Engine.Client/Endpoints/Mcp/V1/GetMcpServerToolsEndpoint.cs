@@ -32,10 +32,10 @@ public sealed class GetMcpServerToolsEndpoint(IMcpServerService mcpServerService
 
     public override async Task HandleAsync(GetMcpServerToolsRequest req, CancellationToken ct)
     {
-        var record = await _mcpServerService.GetByIdAsync(req.McpServerId, ct).ConfigureAwait(false);
+        var record = await _mcpServerService.GetByIdAsync(req.McpServerId, ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -48,7 +48,7 @@ public sealed class GetMcpServerToolsEndpoint(IMcpServerService mcpServerService
                     Error = null,
                     Tools = []
                 },
-                ct).ConfigureAwait(false);
+                ct);
             return;
         }
 
@@ -63,7 +63,7 @@ public sealed class GetMcpServerToolsEndpoint(IMcpServerService mcpServerService
                     Error = null,
                     Tools = ProjectDiscoveredTools(status)
                 },
-                ct).ConfigureAwait(false);
+                ct);
             return;
         }
 
@@ -80,7 +80,7 @@ public sealed class GetMcpServerToolsEndpoint(IMcpServerService mcpServerService
                     Error = recordedError,
                     Tools = []
                 },
-                ct).ConfigureAwait(false);
+                ct);
             return;
         }
 
@@ -90,7 +90,7 @@ public sealed class GetMcpServerToolsEndpoint(IMcpServerService mcpServerService
                 Error = null,
                 Tools = []
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 
     // The connection manager owns the per-server discovered tools (it lists them on the status). The qualified name

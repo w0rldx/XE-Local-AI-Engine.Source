@@ -165,7 +165,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
             workspace,
             maxOutputTokens: 64,
             maxToolCalls: 4,
-            cloudRoute: route).ConfigureAwait(false);
+            cloudRoute: route);
 
         AssertEx.Equal("diff --git a/src/New.cs b/src/New.cs", workspace.AppliedPatch);
         AssertEx.Equal(expected: 2, chat.ToolNames.Count);
@@ -190,7 +190,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
             new CapturingWorkspaceTools(),
             maxOutputTokens: 64,
             maxToolCalls: 4,
-            cloudRoute: route).ConfigureAwait(false);
+            cloudRoute: route);
 
         AssertEx.Equal(DevelopmentReviewDisposition.Approved, result.Submission.Disposition);
         AssertEx.Equal(expected: 2, chat.ToolNames.Count);
@@ -204,7 +204,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
     public async Task AttemptContext_WhenCloudScoped_PersistsTheExactBundleBeforeCreatingRoute()
     {
         var snapshot = CloudSnapshot(DevelopmentAttemptRole.Coder);
-        var created = await CreateContextAsync(snapshot).ConfigureAwait(false);
+        var created = await CreateContextAsync(snapshot);
 
         AssertEx.Equal("fake-cloud", created.Context.Route.ProviderName);
         AssertEx.Equal("cloud-model", created.Context.Route.ModelId);
@@ -230,8 +230,8 @@ public sealed class DevelopmentCloudScopedSecurityTests
     [Arguments(DevelopmentAttemptRole.Reviewer)]
     public async Task AttemptContext_WhenAWorkflowPolicyIsSnapshotted_CarriesItInTheProviderVisibleBundle(DevelopmentAttemptRole role)
     {
-        var governed = await CreateContextAsync(CloudSnapshot(role, WorkflowPolicy)).ConfigureAwait(false);
-        var ungoverned = await CreateContextAsync(CloudSnapshot(role)).ConfigureAwait(false);
+        var governed = await CreateContextAsync(CloudSnapshot(role, WorkflowPolicy));
+        var ungoverned = await CreateContextAsync(CloudSnapshot(role));
         var governedBundle = AssertEx.NotNull(governed.Bundle);
         var ungovernedBundle = AssertEx.NotNull(ungoverned.Bundle);
 
@@ -273,7 +273,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
             new FixedTimeProvider(Now));
 
         var context = await service.CreateAsync(snapshot,
-            [new DevelopmentCloudContextExcerpt("src/Feature.cs", "sealed class Feature { }")]).ConfigureAwait(false);
+            [new DevelopmentCloudContextExcerpt("src/Feature.cs", "sealed class Feature { }")]);
         return new CreatedContext(context, builder.Built, store);
     }
 
@@ -461,7 +461,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
                     ["disposition"] = "Approved",
                     ["summary"] = "Approved exact evidence.",
                     ["findings"] = Array.Empty<DevelopmentReviewFinding>()
-                }, cancellationToken).ConfigureAwait(false);
+                }, cancellationToken);
             }
             else
             {
@@ -474,7 +474,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
                         "src/New.cs"
                     },
                     ["notes"] = null
-                }, cancellationToken).ConfigureAwait(false);
+                }, cancellationToken);
             }
 
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, "done"))
@@ -493,7 +493,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            var response = await GetResponseAsync(messages, options, cancellationToken);
             foreach (var update in response.ToChatResponseUpdates())
             {
                 yield return update;

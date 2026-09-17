@@ -116,20 +116,20 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
                 "--use-fake-ui-for-media-stream",
                 $"--use-file-for-fake-audio-capture={_wavPath}"
             ]
-        }).ConfigureAwait(false);
+        });
 
-        _fakeAudioContext = await _fakeAudioBrowser.NewContextAsync(ContextOptions(context)).ConfigureAwait(false);
+        _fakeAudioContext = await _fakeAudioBrowser.NewContextAsync(ContextOptions(context));
         await _fakeAudioContext.Tracing.StartAsync(new TracingStartOptions
         {
             Screenshots = true,
             Snapshots = true,
             Sources = true,
             Title = $"{GetType().Name}.{context.Metadata.TestName}.fake-audio"
-        }).ConfigureAwait(false);
+        });
         _fakeAudioTracing = true;
 
-        _fakeAudioPage = await _fakeAudioContext.NewPageAsync().ConfigureAwait(false);
-        await SignInWithFormAsync(_fakeAudioPage, NodeAppUrl).ConfigureAwait(false);
+        _fakeAudioPage = await _fakeAudioContext.NewPageAsync();
+        await SignInWithFormAsync(_fakeAudioPage, NodeAppUrl);
     }
 
     /// <summary>
@@ -152,11 +152,11 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
                 {
                     Path = Path.Combine(traceDirectory,
                         $"{GetType().Name}_{context.Metadata.TestName}_fake-audio_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip")
-                }).ConfigureAwait(false);
+                });
             }
             else
             {
-                await _fakeAudioContext.Tracing.StopAsync(new TracingStopOptions()).ConfigureAwait(false);
+                await _fakeAudioContext.Tracing.StopAsync(new TracingStopOptions());
             }
 
             _fakeAudioTracing = false;
@@ -166,13 +166,13 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
 
         if (_fakeAudioContext is not null)
         {
-            await _fakeAudioContext.CloseAsync().ConfigureAwait(false);
+            await _fakeAudioContext.CloseAsync();
             _fakeAudioContext = null;
         }
 
         if (_fakeAudioBrowser is not null)
         {
-            await _fakeAudioBrowser.CloseAsync().ConfigureAwait(false);
+            await _fakeAudioBrowser.CloseAsync();
             _fakeAudioBrowser = null;
         }
     }
@@ -185,10 +185,10 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
     protected static async Task RecordDiagnosticAsync(string line)
     {
         var stamped = $"[DIAG] {DateTimeOffset.UtcNow:O} {line}";
-        await Console.Out.WriteLineAsync(stamped).ConfigureAwait(false);
+        await Console.Out.WriteLineAsync(stamped);
         var directory = Path.Combine(AppContext.BaseDirectory, "test-results");
         Directory.CreateDirectory(directory);
-        await File.AppendAllTextAsync(Path.Combine(directory, "live-transcription-diag.log"), stamped + Environment.NewLine).ConfigureAwait(false);
+        await File.AppendAllTextAsync(Path.Combine(directory, "live-transcription-diag.log"), stamped + Environment.NewLine);
     }
 
     /// <summary>
@@ -201,10 +201,10 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
         await FakeAudioPage.GotoAsync($"{NodeAppUrl}/transcription", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
-        }).ConfigureAwait(false);
+        });
 
-        await FakeAudioPage.GetByTestId("transcription-create").ClickAsync().ConfigureAwait(false);
-        await Expect(FakeAudioPage.GetByTestId("new-transcription-session-dialog")).ToBeVisibleAsync().ConfigureAwait(false);
+        await FakeAudioPage.GetByTestId("transcription-create").ClickAsync();
+        await Expect(FakeAudioPage.GetByTestId("new-transcription-session-dialog")).ToBeVisibleAsync();
 
         // Mantine's SegmentedControl keeps its radio inputs visually hidden and paints the label, so Playwright's
         // actionability check refuses the input ("element is not visible"); the label is what a person clicks.
@@ -214,13 +214,13 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
                            {
                                Exact = true
                            })
-                           .ClickAsync().ConfigureAwait(false);
+                           .ClickAsync();
 
-        await FakeAudioPage.GetByTestId("new-transcription-session-submit").ClickAsync().ConfigureAwait(false);
+        await FakeAudioPage.GetByTestId("new-transcription-session-submit").ClickAsync();
 
         // Submitting navigates to /transcription/{sessionId}; capture starts from the session page, not the dialog.
-        await FakeAudioPage.WaitForURLAsync($"{NodeAppUrl}/transcription/*").ConfigureAwait(false);
-        await FakeAudioPage.GetByTestId("transcription-capture-start").ClickAsync().ConfigureAwait(false);
+        await FakeAudioPage.WaitForURLAsync($"{NodeAppUrl}/transcription/*");
+        await FakeAudioPage.GetByTestId("transcription-capture-start").ClickAsync();
     }
 }
 #pragma warning restore S101

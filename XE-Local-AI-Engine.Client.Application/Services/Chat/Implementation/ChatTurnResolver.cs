@@ -57,7 +57,7 @@ public sealed class ChatTurnResolver(
         var capabilityModel = activeModel;
         if (activeModel is null && !userPickedConcreteModel && effectiveAgentId is { } pinnedDefinitionId)
         {
-            var pinnedDefinition = await agentDefinitionStore.GetByIdAsync(pinnedDefinitionId, cancellationToken).ConfigureAwait(false);
+            var pinnedDefinition = await agentDefinitionStore.GetByIdAsync(pinnedDefinitionId, cancellationToken);
             if (!string.IsNullOrWhiteSpace(pinnedDefinition?.ModelProfile))
             {
                 capabilityModel = pinnedDefinition.ModelProfile;
@@ -68,7 +68,7 @@ public sealed class ChatTurnResolver(
         ModelCapabilitySnapshot capabilities;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_capabilities"))
         {
-            capabilities = await modelCapabilityResolver.ResolveAsync(capabilityModel, cancellationToken).ConfigureAwait(false);
+            capabilities = await modelCapabilityResolver.ResolveAsync(capabilityModel, cancellationToken);
         }
 
         var supportsThinking = capabilities.SupportsThinking;
@@ -88,8 +88,7 @@ public sealed class ChatTurnResolver(
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_agent"))
         {
             resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud,
-                                                        cancellationToken)
-                                                    .ConfigureAwait(false);
+                                                        cancellationToken);
         }
 
         var agentMs = Stopwatch.GetElapsedTime(agentStart).TotalMilliseconds;
@@ -103,7 +102,7 @@ public sealed class ChatTurnResolver(
         OrchestrationResolution orchestration;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_orchestration"))
         {
-            orchestration = await ResolveOrchestrationAsync(effectiveAgentId, resolved, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+            orchestration = await ResolveOrchestrationAsync(effectiveAgentId, resolved, activeModel, retrievalQuery, supportsTools, cancellationToken);
         }
 
         var orchestrationMs = Stopwatch.GetElapsedTime(orchestrationStart).TotalMilliseconds;
@@ -134,7 +133,7 @@ public sealed class ChatTurnResolver(
         var reasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable;
         if (!string.Equals(effectiveModel, capabilityModel, StringComparison.Ordinal))
         {
-            var effectiveCapabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
+            var effectiveCapabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
             reasoningBudgetEnforceable = effectiveCapabilities.ReasoningBudgetEnforceable;
         }
 
@@ -196,7 +195,7 @@ public sealed class ChatTurnResolver(
             return OrchestrationResolution.NotOrchestrated;
         }
 
-        var definition = await agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken);
         if (definition is null || definition.Kind != AgentDefinitionKind.Orchestrator)
         {
             return OrchestrationResolution.NotOrchestrated;
@@ -204,6 +203,6 @@ public sealed class ChatTurnResolver(
 
         // Orchestration resolves each participant's knowledge-tool locality from its own effective model internally, so
         // no turn-level cloud flag is threaded here.
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken);
     }
 }

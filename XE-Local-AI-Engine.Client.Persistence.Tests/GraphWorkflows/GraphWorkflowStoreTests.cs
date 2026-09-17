@@ -19,11 +19,10 @@ public sealed class GraphWorkflowStoreTests
         using var fixture = new GraphWorkflowTestFixture();
         Guid definitionId;
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = GraphWorkflowTestFixture.StoreFor(context);
-            var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "Triage", GraphWorkflowTestFixture.SampleGraph, nodeCount: 2, "Reads the inbox")
-                                                        .ConfigureAwait(false);
+            var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "Triage", GraphWorkflowTestFixture.SampleGraph, nodeCount: 2, "Reads the inbox");
             definitionId = created.Id;
 
             AssertEx.Equal(expected: 1, created.Version, "A fresh definition starts at version 1.");
@@ -33,7 +32,7 @@ public sealed class GraphWorkflowStoreTests
         await using (var readContext = fixture.CreateContext())
         {
             var store = GraphWorkflowTestFixture.StoreFor(readContext);
-            var read = await store.GetDefinitionAsync(definitionId).ConfigureAwait(false);
+            var read = await store.GetDefinitionAsync(definitionId);
 
             AssertEx.Equal("Triage", read.Name);
             AssertEx.Equal("Reads the inbox", read.Description);
@@ -53,20 +52,19 @@ public sealed class GraphWorkflowStoreTests
         using var fixture = new GraphWorkflowTestFixture();
         Guid definitionId;
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = GraphWorkflowTestFixture.StoreFor(context);
-            definitionId = (await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "Triage").ConfigureAwait(false)).Id;
+            definitionId = (await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "Triage")).Id;
         }
 
         await fixture.RawExecuteAsync("UPDATE graph_workflow_definitions SET graph_json = zeroblob(64) WHERE id = $id;",
-                         command => command.Parameters.AddWithValue("$id", definitionId))
-                     .ConfigureAwait(false);
+                         command => command.Parameters.AddWithValue("$id", definitionId));
 
         await using var readContext = fixture.CreateContext();
         var readStore = GraphWorkflowTestFixture.StoreFor(readContext);
 
-        var listed = await readStore.ListDefinitionsAsync().ConfigureAwait(false);
+        var listed = await readStore.ListDefinitionsAsync();
         AssertEx.Equal(expected: 1, listed.Count, "The list must answer without decrypting a graph.");
         AssertEx.Equal("Triage", listed[0].Name);
         AssertEx.Equal(expected: 2, listed[0].NodeCount, "The node count is a column, so the list reports it without a parse.");
@@ -79,19 +77,18 @@ public sealed class GraphWorkflowStoreTests
     public async Task UpdateDefinition_WithAStaleVersion_Conflicts()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = GraphWorkflowTestFixture.StoreFor(context);
-        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
+        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
 
-        var updated = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, "Renamed")).ConfigureAwait(false);
+        var updated = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, "Renamed"));
         AssertEx.Equal(created.Version + 1, updated.Version, "An accepted edit bumps the version.");
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(
                               () => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, "Renamed again")),
-                              "A writer holding the pre-edit version must lose.")
-                          .ConfigureAwait(false);
+                              "A writer holding the pre-edit version must lose.");
 
-        var stillThere = await store.GetDefinitionAsync(created.Id).ConfigureAwait(false);
+        var stillThere = await store.GetDefinitionAsync(created.Id);
         AssertEx.Equal("Renamed", stillThere.Name, "The refused edit must not have landed.");
     }
 
@@ -107,9 +104,9 @@ public sealed class GraphWorkflowStoreTests
         Guid definitionId;
         int version;
 
-        await using (var seedContext = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var seedContext = await fixture.CreateSchemaAsync())
         {
-            var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(GraphWorkflowTestFixture.StoreFor(seedContext)).ConfigureAwait(false);
+            var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(GraphWorkflowTestFixture.StoreFor(seedContext));
             definitionId = created.Id;
             version = created.Version;
         }
@@ -122,20 +119,19 @@ public sealed class GraphWorkflowStoreTests
         // Both TRACK the row at version N before either writes, which is what makes this a race rather than a stale
         // PUT. Tracked, not AsNoTracking: the store's own load then resolves to this instance through the identity map
         // and still sees version N after the winner has committed N+1 — exactly the state a second request holds.
-        _ = await winnerContext.GraphWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId).ConfigureAwait(false);
-        _ = await loserContext.GraphWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId).ConfigureAwait(false);
+        _ = await winnerContext.GraphWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId);
+        _ = await loserContext.GraphWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId);
 
-        _ = await winner.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, version, "Winner")).ConfigureAwait(false);
+        _ = await winner.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, version, "Winner"));
 
         var rejection = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(
                                           () => loser.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(definitionId, version, "Loser")),
-                                          "The second writer still holds version N, so the row's token must refuse it.")
-                                      .ConfigureAwait(false);
+                                          "The second writer still holds version N, so the row's token must refuse it.");
         AssertEx.True(rejection.Message.Contains("changed by another writer", StringComparison.Ordinal),
             $"and it must be the TOKEN that refused it — the pre-save version check passes here, because this writer's view still says N: {rejection.Message}");
 
         await using var readContext = fixture.CreateContext();
-        var read = await GraphWorkflowTestFixture.StoreFor(readContext).GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        var read = await GraphWorkflowTestFixture.StoreFor(readContext).GetDefinitionAsync(definitionId);
         AssertEx.Equal("Winner", read.Name, "The winner's write must survive the loser's refusal.");
         AssertEx.Equal(version + 1, read.Version, "and the version must have moved exactly once.");
     }
@@ -144,11 +140,11 @@ public sealed class GraphWorkflowStoreTests
     public async Task UpdateDefinition_WithoutAGraph_LeavesTheStoredOneAlone()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = GraphWorkflowTestFixture.StoreFor(context);
-        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
+        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
 
-        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, "Renamed")).ConfigureAwait(false);
+        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, "Renamed"));
 
         AssertEx.Equal(created.GraphJson, renamed.GraphJson, "A rename must not rewrite the graph.");
         AssertEx.Equal(created.GraphHash, renamed.GraphHash, "and it must not rewrite the hash that names the graph.");
@@ -168,19 +164,18 @@ public sealed class GraphWorkflowStoreTests
             """{"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"work","kind":"Agent"},{"key":"done","kind":"End"}],"edges":[]}""";
 
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = GraphWorkflowTestFixture.StoreFor(context);
-        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
+        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
 
         var refusal = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
                                             created.Version,
                                             GraphJson: ReplacementGraph)),
-                                        "A graph without its node count must be refused rather than written.")
-                                    .ConfigureAwait(false);
+                                        "A graph without its node count must be refused rather than written.");
 
         AssertEx.Equal(nameof(ArgumentException), refusal.GetType().Name, "and refused as an argument fault, not as a conflict or a not-found.");
 
-        var unchanged = await store.GetDefinitionAsync(created.Id).ConfigureAwait(false);
+        var unchanged = await store.GetDefinitionAsync(created.Id);
         AssertEx.Equal(created.GraphJson, unchanged.GraphJson, "The refused edit must not have rewritten the graph.");
         AssertEx.Equal(created.GraphHash, unchanged.GraphHash, "nor the hash that names it.");
         AssertEx.Equal(created.Version, unchanged.Version, "nor bumped the version.");
@@ -190,8 +185,7 @@ public sealed class GraphWorkflowStoreTests
         var replaced = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
                                       created.Version,
                                       GraphJson: ReplacementGraph,
-                                      NodeCount: 3))
-                                  .ConfigureAwait(false);
+                                      NodeCount: 3));
 
         AssertEx.Equal(expected: 3, replaced.NodeCount);
         AssertEx.Equal(ReplacementGraph, replaced.GraphJson);
@@ -208,25 +202,24 @@ public sealed class GraphWorkflowStoreTests
     public async Task UpdateDefinition_WithANodeCountButNoGraph_IsRefused()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = GraphWorkflowTestFixture.StoreFor(context);
-        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
+        var created = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
 
         var refusal = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id,
                                             created.Version,
                                             NodeCount: 99)),
-                                        "A node count without the graph it counts must be refused rather than written.")
-                                    .ConfigureAwait(false);
+                                        "A node count without the graph it counts must be refused rather than written.");
 
         AssertEx.Equal(nameof(ArgumentException), refusal.GetType().Name, "and refused as an argument fault, not as a conflict or a not-found.");
 
-        var unchanged = await store.GetDefinitionAsync(created.Id).ConfigureAwait(false);
+        var unchanged = await store.GetDefinitionAsync(created.Id);
         AssertEx.Equal(created.NodeCount, unchanged.NodeCount, "The refused edit must not have rewritten the count.");
         AssertEx.Equal(created.Version, unchanged.Version, "nor bumped the version.");
 
         // The negative control: the SAME edit with neither member is an ordinary rename, so the refusal above is about
         // the orphaned count and not about the command being rejected for some other reason.
-        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, Name: "Renamed")).ConfigureAwait(false);
+        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand(created.Id, created.Version, Name: "Renamed"));
 
         AssertEx.Equal("Renamed", renamed.Name);
         AssertEx.Equal(created.NodeCount, renamed.NodeCount, "and a rename leaves the count exactly where the graph put it.");
@@ -246,15 +239,14 @@ public sealed class GraphWorkflowStoreTests
     public async Task CreateDefinition_MapsOnlyTheDuplicateIdToAConflict()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var definitionId = Guid.NewGuid();
 
         _ = await GraphWorkflowTestFixture.StoreFor(context)
                                           .CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(definitionId,
                                               "Triage",
                                               GraphWorkflowTestFixture.SampleGraph,
-                                              NodeCount: 2))
-                                          .ConfigureAwait(false);
+                                              NodeCount: 2));
 
         await using var second = fixture.CreateContext();
         var store = GraphWorkflowTestFixture.StoreFor(second);
@@ -263,21 +255,19 @@ public sealed class GraphWorkflowStoreTests
                                   "Triage again",
                                   GraphWorkflowTestFixture.SampleGraph,
                                   NodeCount: 2)),
-                              "A second definition under one id is the unique index refusing it, which is a conflict.")
-                          .ConfigureAwait(false);
+                              "A second definition under one id is the unique index refusing it, which is a conflict.");
 
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions").ConfigureAwait(false), "and the refused row must not have landed.");
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions"), "and the refused row must not have landed.");
 
         // The negative control: with the table gone the write fails for a reason that is not a duplicate, and the
         // caller has to hear that rather than "it already exists".
-        await fixture.RawExecuteAsync("DROP TABLE graph_workflow_definitions;").ConfigureAwait(false);
+        await fixture.RawExecuteAsync("DROP TABLE graph_workflow_definitions;");
 
         var broken = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(),
                                            "Nowhere to go",
                                            GraphWorkflowTestFixture.SampleGraph,
                                            NodeCount: 2)),
-                                       "A write that failed for anything but a unique violation must travel as itself.")
-                                   .ConfigureAwait(false);
+                                       "A write that failed for anything but a unique violation must travel as itself.");
 
         _ = AssertEx.NotNull(broken.InnerException, "and it must still carry the SQLite fault that explains it.");
     }
@@ -286,16 +276,15 @@ public sealed class GraphWorkflowStoreTests
     public async Task DeleteDefinition_WhileARunPinsIt_ThrowsTheDefinitionConflict()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = GraphWorkflowTestFixture.StoreFor(context);
-        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
-        _ = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id, GraphWorkflowRunStatus.WaitingForApproval).ConfigureAwait(false);
+        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
+        _ = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id, GraphWorkflowRunStatus.WaitingForApproval);
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(() => store.DeleteDefinitionAsync(definition.Id),
-                              "A definition must not be deleted out from under the run still executing it.")
-                          .ConfigureAwait(false);
+                              "A definition must not be deleted out from under the run still executing it.");
 
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions").ConfigureAwait(false), "The refused delete must not have landed.");
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions"), "The refused delete must not have landed.");
     }
 
     /// <summary>
@@ -306,20 +295,19 @@ public sealed class GraphWorkflowStoreTests
     public async Task DeleteDefinition_WithOnlyTerminalRuns_Removes()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = GraphWorkflowTestFixture.StoreFor(context);
-        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
-        _ = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id, GraphWorkflowRunStatus.Completed).ConfigureAwait(false);
-        _ = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id, GraphWorkflowRunStatus.Cancelled).ConfigureAwait(false);
+        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
+        _ = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id, GraphWorkflowRunStatus.Completed);
+        _ = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id, GraphWorkflowRunStatus.Cancelled);
 
-        await store.DeleteDefinitionAsync(definition.Id).ConfigureAwait(false);
+        await store.DeleteDefinitionAsync(definition.Id);
 
-        AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync("graph_workflow_definitions").ConfigureAwait(false), "The definition row must be gone.");
-        AssertEx.Equal(expected: 2L, await fixture.RawTableCountAsync("graph_workflow_runs").ConfigureAwait(false),
+        AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync("graph_workflow_definitions"), "The definition row must be gone.");
+        AssertEx.Equal(expected: 2L, await fixture.RawTableCountAsync("graph_workflow_runs"),
             "and its terminal runs must stand: each pinned its own graph, so the history survives the definition.");
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowNotFoundException>(() => store.GetDefinitionAsync(definition.Id),
-                              "A deleted definition reads back as not found rather than as an empty row.")
-                          .ConfigureAwait(false);
+                              "A deleted definition reads back as not found rather than as an empty row.");
     }
 }

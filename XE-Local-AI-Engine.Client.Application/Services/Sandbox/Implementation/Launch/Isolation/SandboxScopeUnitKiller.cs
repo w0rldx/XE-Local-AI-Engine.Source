@@ -97,7 +97,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
         {
             using var timeout = new CancellationTokenSource(KillTimeout);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-            await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(linked.Token);
         }
         catch (OperationCanceledException)
         {

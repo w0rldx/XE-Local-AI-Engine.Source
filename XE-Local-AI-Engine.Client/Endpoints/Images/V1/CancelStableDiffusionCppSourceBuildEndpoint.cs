@@ -22,6 +22,6 @@ public sealed class CancelStableDiffusionCppSourceBuildEndpoint(ImageRuntimeOrch
     {
         ArgumentNullException.ThrowIfNull(request);
         _ = imageRuntime.Cancel();
-        await Send.OkAsync(imageRuntime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(imageRuntime.GetStatus().ToResponse(), ct);
     }
 }

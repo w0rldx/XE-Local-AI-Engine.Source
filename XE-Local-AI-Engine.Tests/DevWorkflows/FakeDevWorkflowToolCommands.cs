@@ -142,7 +142,7 @@ internal sealed class FakeDevWorkflowToolCommands : IDevWorkflowToolCommands
 
                 // WaitAsync rather than a token registration: a cancelled hold has to throw the same
                 // OperationCanceledException a cancelled sandbox command does, because that is what the lane reads.
-                await hold.Released.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await hold.Released.WaitAsync(cancellationToken);
             }
 
             return answer ?? Passing();

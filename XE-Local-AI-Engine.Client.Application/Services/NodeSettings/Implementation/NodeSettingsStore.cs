@@ -35,10 +35,10 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
 
     public async Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            return await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            return await LoadUnlockedAsync(cancellationToken);
         }
         finally
         {
@@ -49,10 +49,10 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     /// <inheritdoc />
     public async Task<StoredNodeSettings?> LoadStrictAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            return await ReadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            return await ReadUnlockedAsync(cancellationToken);
         }
         finally
         {
@@ -103,10 +103,10 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         ArgumentNullException.ThrowIfNull(settings);
         var normalizedSettings = Normalize(settings);
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            await SaveUnlockedAsync(normalizedSettings, cancellationToken).ConfigureAwait(false);
+            await SaveUnlockedAsync(normalizedSettings, cancellationToken);
         }
         finally
         {
@@ -122,14 +122,14 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         // ONE lock acquisition around load-mutate-save. Load and Save each take the lock on their own, so a caller
         // composing them holds it for neither of the gaps between — and this file is written whole, so a concurrent
         // writer's fields are lost in that gap rather than merged.
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             // STRICT, unlike LoadAsync: a read-modify-write over an unreadable file would mutate a DEFAULT record and
             // persist it as valid, healing corruption into a settings file that has silently lost every stored value —
             // the node's external-access posture included. Recovery is an explicit operator action, never an automatic
             // overwrite. Automatic callers (ExternalProviderStartupReconciler first) already swallow a startup failure.
-            var current = await ReadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            var current = await ReadUnlockedAsync(cancellationToken);
             if (current is null)
             {
                 _logger.LogError("Node settings at {SettingsPath} are present but unreadable; nothing was written. Repair or delete node-settings.json to recover.", _settingsPath);
@@ -137,7 +137,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             }
 
             var mutated = Normalize(mutate(current) ?? throw new InvalidOperationException("The node-settings mutation returned null."));
-            await SaveUnlockedAsync(mutated, cancellationToken).ConfigureAwait(false);
+            await SaveUnlockedAsync(mutated, cancellationToken);
             return mutated;
         }
         finally
@@ -152,7 +152,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     /// </summary>
     private async Task<StoredNodeSettings> LoadUnlockedAsync(CancellationToken cancellationToken)
     {
-        return await ReadUnlockedAsync(cancellationToken).ConfigureAwait(false) ?? new StoredNodeSettings();
+        return await ReadUnlockedAsync(cancellationToken) ?? new StoredNodeSettings();
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         try
         {
             await using var fileStream = File.OpenRead(_settingsPath);
-            var settings = await JsonSerializer.DeserializeAsync<StoredNodeSettings>(fileStream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            var settings = await JsonSerializer.DeserializeAsync<StoredNodeSettings>(fileStream, SerializerOptions, cancellationToken);
             return Normalize(settings ?? new StoredNodeSettings());
         }
         catch (JsonException exception)
@@ -209,7 +209,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             // data-directory ACL (UnixCreateMode is unsupported there).
             await using (var fileStream = CreateOwnerOnly(tempPath))
             {
-                await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken).ConfigureAwait(false);
+                await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken);
             }
 
             File.Move(tempPath, _settingsPath, overwrite: true);

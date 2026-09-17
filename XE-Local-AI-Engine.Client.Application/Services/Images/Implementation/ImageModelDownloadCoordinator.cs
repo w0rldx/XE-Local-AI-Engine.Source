@@ -103,7 +103,7 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
 
         try
         {
-            _ = await _modelStore.EnsureModelAsync(request, progress, ct).ConfigureAwait(false);
+            _ = await _modelStore.EnsureModelAsync(request, progress, ct);
 
             var last = _status.TryGetValue(modelName, out var snapshot) ? snapshot : null;
             _status[modelName] = new ImageModelDownloadStatus(modelName,

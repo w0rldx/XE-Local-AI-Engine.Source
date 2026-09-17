@@ -22,7 +22,7 @@ public sealed class ListExternalProviderConnectionsEndpoint(IExternalProviderSto
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var config = await _store.LoadAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(config.ToResponse(), ct).ConfigureAwait(false);
+        var config = await _store.LoadAsync(ct);
+        await Send.OkAsync(config.ToResponse(), ct);
     }
 }

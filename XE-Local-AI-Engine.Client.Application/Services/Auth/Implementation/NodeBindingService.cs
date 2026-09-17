@@ -31,7 +31,7 @@ public sealed class NodeBindingService : INodeBindingService
 
     public async Task<NodeBindingSession> StartBindingAsync(CancellationToken cancellationToken = default)
     {
-        await CancelAsync().ConfigureAwait(false);
+        await CancelAsync();
         _pollingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         var request = new StartNodeBindingRequest
@@ -44,15 +44,14 @@ public sealed class NodeBindingService : INodeBindingService
         using var response = await client.PostAsJsonAsync(_platformOptions.Value.DeviceBindingStartEndpoint,
             request,
             SerializerOptions,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            throw await CreateNodeBindingExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+            throw await CreateNodeBindingExceptionAsync(response, cancellationToken);
         }
 
         var startResponse = await response.Content.ReadFromJsonAsync<StartNodeBindingResponse>(SerializerOptions, cancellationToken)
-                                          .ConfigureAwait(false)
                             ?? throw new NodeBindingException("Central Platform returned an empty device binding response.");
 
         _logger.LogInformation("Started device binding for worker node {NodeName}.", request.NodeName);
@@ -78,7 +77,7 @@ public sealed class NodeBindingService : INodeBindingService
         while (true)
         {
             linkedToken.ThrowIfCancellationRequested();
-            var pollResponse = await PollOnceAsync(session.DeviceCode, linkedToken).ConfigureAwait(false);
+            var pollResponse = await PollOnceAsync(session.DeviceCode, linkedToken);
             var status = ParseStatus(pollResponse.Status);
 
             if (status is NodeBindingStatus.Approved)
@@ -94,7 +93,7 @@ public sealed class NodeBindingService : INodeBindingService
                         BindingMethod = "device-code",
                         AutoConnectOnStart = false,
                         LastKnownNodeName = _workerOptions.Value.NodeName
-                    }).ConfigureAwait(false);
+                    });
 
                 _logger.LogInformation("Device binding approved for worker node {NodeName} and credentials stored.", _workerOptions.Value.NodeName);
                 return pollResponse;
@@ -106,7 +105,7 @@ public sealed class NodeBindingService : INodeBindingService
             }
 
             var interval = NormalizeInterval(pollResponse.IntervalSeconds == 0 ? session.IntervalSeconds : pollResponse.IntervalSeconds);
-            await Task.Delay(interval, linkedToken).ConfigureAwait(false);
+            await Task.Delay(interval, linkedToken);
         }
     }
 
@@ -117,14 +116,14 @@ public sealed class NodeBindingService : INodeBindingService
             return;
         }
 
-        await _pollingCancellation.CancelAsync().ConfigureAwait(false);
+        await _pollingCancellation.CancelAsync();
         _pollingCancellation.Dispose();
         _pollingCancellation = null;
     }
 
     public async ValueTask DisposeAsync()
     {
-        await CancelAsync().ConfigureAwait(false);
+        await CancelAsync();
     }
 
     private async Task<PollNodeBindingResponse> PollOnceAsync(string deviceCode, CancellationToken cancellationToken)
@@ -136,15 +135,14 @@ public sealed class NodeBindingService : INodeBindingService
                 DeviceCode = deviceCode
             },
             SerializerOptions,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            throw await CreateNodeBindingExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+            throw await CreateNodeBindingExceptionAsync(response, cancellationToken);
         }
 
         return await response.Content.ReadFromJsonAsync<PollNodeBindingResponse>(SerializerOptions, cancellationToken)
-                             .ConfigureAwait(false)
                ?? throw new NodeBindingException("Central Platform returned an empty device binding poll response.");
     }
 
@@ -168,7 +166,7 @@ public sealed class NodeBindingService : INodeBindingService
 
     private static async Task<NodeBindingException> CreateNodeBindingExceptionAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        var errorBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
         var message = string.IsNullOrWhiteSpace(errorBody)
             ? $"Device binding failed with status code {(int)response.StatusCode}."
             : $"Device binding failed: {errorBody}";

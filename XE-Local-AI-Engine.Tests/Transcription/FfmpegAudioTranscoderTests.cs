@@ -111,12 +111,11 @@ public sealed class FfmpegAudioTranscoderTests
 
         await AssertEx.EventuallyAsync(() => ReadPid(pidPath) is not null,
                           TimeSpan.FromSeconds(30),
-                          "The controlled converter must start and report its process id.")
-                      .ConfigureAwait(false);
+                          "The controlled converter must start and report its process id.");
         var pid = ReadPid(pidPath) ?? -1;
         AssertEx.NotEqual(-1, pid, "The child's pid is the only handle this test has on it.");
 
-        await cancellation.CancelAsync().ConfigureAwait(false);
+        await cancellation.CancelAsync();
 
         var cancelledAsItMust = false;
         var stillPresentOnReturn = -1;
@@ -124,7 +123,7 @@ public sealed class FfmpegAudioTranscoderTests
         {
             // real-timer: a deadline so a wait that never ends reads as a failure instead of hanging the run. A green
             // run returns the moment the conversion unwinds, well inside it.
-            _ = await running.WaitAsync(TimeSpan.FromSeconds(60)).ConfigureAwait(false);
+            _ = await running.WaitAsync(TimeSpan.FromSeconds(60));
         }
         catch (OperationCanceledException)
         {
@@ -155,11 +154,10 @@ public sealed class FfmpegAudioTranscoderTests
 
         var transcoder = new FfmpegAudioTranscoder(NullLogger<FfmpegAudioTranscoder>.Instance, executable);
 
-        var produced = await transcoder.ToWav16kMonoAsync(Path.Combine(directory.Path, "in.ogg"), destination, CancellationToken.None)
-                                       .ConfigureAwait(false);
+        var produced = await transcoder.ToWav16kMonoAsync(Path.Combine(directory.Path, "in.ogg"), destination, CancellationToken.None);
 
         AssertEx.Equal(destination, produced);
-        AssertEx.Equal("RIFF", await File.ReadAllTextAsync(destination).ConfigureAwait(false),
+        AssertEx.Equal("RIFF", await File.ReadAllTextAsync(destination),
             "The converter's own output must reach the destination the caller named.");
     }
 

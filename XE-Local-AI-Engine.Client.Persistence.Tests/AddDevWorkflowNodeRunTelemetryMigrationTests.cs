@@ -52,15 +52,15 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("node-run-telemetry-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection);
 
         foreach (var column in TelemetryColumns)
         {
@@ -73,10 +73,10 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("node-run-telemetry-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection);
 
         foreach (var column in TelemetryColumns)
         {
@@ -89,15 +89,15 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("node-run-telemetry-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection);
 
         foreach (var column in TelemetryColumns)
         {
@@ -119,10 +119,10 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("node-run-telemetry-indexes.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var indexes = await GetIndexNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var indexes = await GetIndexNamesAsync(connection);
 
         string[] expected =
         [
@@ -157,7 +157,7 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -168,8 +168,8 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
         command.CommandText = "PRAGMA table_info(dev_workflow_node_runs);";
 
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             columns.Add(reader.GetString(reader.GetOrdinal("name")));
         }
@@ -183,8 +183,8 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'dev_workflow_node_runs' AND name NOT LIKE 'sqlite_%';";
 
         var indexes = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             indexes.Add(reader.GetString(ordinal: 0));
         }

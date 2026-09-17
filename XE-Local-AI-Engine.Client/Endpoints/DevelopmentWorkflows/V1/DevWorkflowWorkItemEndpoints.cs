@@ -29,8 +29,8 @@ public sealed class ListDevWorkflowWorkItemsEndpoint(DevWorkflowAuthoringService
 
         // Safe to parse rather than TryParse: the validator has already refused anything that is not a member.
         var status = req.Status is null ? (DevWorkflowWorkItemStatus?)null : Enum.Parse<DevWorkflowWorkItemStatus>(req.Status, ignoreCase: true);
-        var items = await _authoring.ListWorkItemsAsync(status, ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListDevWorkflowWorkItemsResponse([.. items.Select(DevWorkflowContractMapper.ToSummaryResponse)]), ct).ConfigureAwait(false);
+        var items = await _authoring.ListWorkItemsAsync(status, ct);
+        await Send.OkAsync(new ListDevWorkflowWorkItemsResponse([.. items.Select(DevWorkflowContractMapper.ToSummaryResponse)]), ct);
     }
 }
 
@@ -56,14 +56,13 @@ public sealed class CreateDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringServic
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var created = await _authoring.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), req.Title, req.Request, req.DevelopmentProjectId), ct)
-                                  .ConfigureAwait(false);
+        var created = await _authoring.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), req.Title, req.Request, req.DevelopmentProjectId), ct);
         await Send.CreatedAtAsync<GetDevWorkflowWorkItemEndpoint>(new
             {
                 workItemId = created.Id
             },
             created.ToResponse([]),
-            cancellation: ct).ConfigureAwait(false);
+            cancellation: ct);
     }
 }
 
@@ -84,12 +83,12 @@ public sealed class GetDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringService a
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var workItem = await _authoring.GetWorkItemAsync(req.WorkItemId, ct).ConfigureAwait(false);
+        var workItem = await _authoring.GetWorkItemAsync(req.WorkItemId, ct);
 
         // The detail embeds its runs rather than making the client follow a link: a work item's history is short, and
         // the run list is the first thing the detail page draws.
-        var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, cancellationToken: ct).ConfigureAwait(false);
-        await Send.OkAsync(workItem.ToResponse(runs), ct).ConfigureAwait(false);
+        var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, cancellationToken: ct);
+        await Send.OkAsync(workItem.ToResponse(runs), ct);
     }
 }
 
@@ -117,10 +116,9 @@ public sealed class UpdateDevWorkflowWorkItemEndpoint(DevWorkflowAuthoringServic
         // An omitted member is forwarded as null, which the store reads as "leave it alone" — a PATCH that only
         // renames must not blank the request it never mentioned. There is no expected version: the only other writer
         // to a work item is the runtime writing its STATUS, which this cannot collide with.
-        var updated = await _authoring.UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand(req.WorkItemId, DevWorkflowVersions.Any, req.Title, req.Request), ct)
-                                  .ConfigureAwait(false);
-        var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, cancellationToken: ct).ConfigureAwait(false);
-        await Send.OkAsync(updated.ToResponse(runs), ct).ConfigureAwait(false);
+        var updated = await _authoring.UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand(req.WorkItemId, DevWorkflowVersions.Any, req.Title, req.Request), ct);
+        var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, cancellationToken: ct);
+        await Send.OkAsync(updated.ToResponse(runs), ct);
     }
 }
 
@@ -146,7 +144,7 @@ public sealed class DeleteDevWorkflowWorkItemEndpoint(IDevWorkflowRunService run
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await _runs.DeleteWorkItemAsync(req.WorkItemId, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _runs.DeleteWorkItemAsync(req.WorkItemId, ct);
+        await Send.NoContentAsync(ct);
     }
 }

@@ -39,7 +39,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         };
 
         _ = _dbContext.AgentExecutionLogs.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -70,7 +70,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         };
 
         _ = _dbContext.AgentExecutionLogs.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task AddIntegrationInvocationAsync(IntegrationInvocationAuditInput input, CancellationToken cancellationToken = default)
@@ -78,7 +78,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         ArgumentNullException.ThrowIfNull(input);
 
         _ = _dbContext.AgentExecutionLogs.Add(BuildIntegrationInvocation(input, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()));
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>
@@ -140,8 +140,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
                              .ThenByDescending(log => log.Id)
                              .Skip(skip)
                              .Take(take)
-                             .ToListAsync(cancellationToken)
-                             .ConfigureAwait(false);
+                             .ToListAsync(cancellationToken);
 
         return entities.Select(ToEnvelopeRecord).ToArray();
     }
@@ -162,8 +161,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
                                        .ThenByDescending(log => log.Id)
                                        .Skip(skip)
                                        .Take(take)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -172,8 +170,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
     {
         return await _dbContext.AgentExecutionLogs
                                .Where(log => log.CreatedAtUtc < cutoffEpochMs)
-                               .ExecuteDeleteAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<TokenUsageAggregateRecord>> SummarizeTokenUsageAsync(long? fromEpochMsInclusive,
@@ -221,8 +218,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
                             .OrderByDescending(bucket => bucket.Day)
                             .ThenBy(bucket => bucket.Provider)
                             .ThenBy(bucket => bucket.ModelName)
-                            .ToListAsync(cancellationToken)
-                            .ConfigureAwait(false);
+                            .ToListAsync(cancellationToken);
 
         return buckets
                .Select(bucket => new TokenUsageAggregateRecord(bucket.ModelName,
@@ -252,8 +248,7 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
                                                  newer.AgentDefinitionId == log.AgentDefinitionId
                                                  && newer.CreatedAtUtc > log.CreatedAtUtc)
                                              >= maxPerAgent)
-                               .ExecuteDeleteAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .ExecuteDeleteAsync(cancellationToken);
     }
 
     private static AgentExecutionLogRecord ToRecord(AgentExecutionLog entity)

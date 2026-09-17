@@ -14,12 +14,11 @@ internal static class ExecCreateEndpoint
     {
         if (!state.Containers.ContainsKey(id))
         {
-            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status404NotFound, $"No such container: {id}")
-                                          .ConfigureAwait(false);
+            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status404NotFound, $"No such container: {id}");
             return;
         }
 
-        var body = await FakeDockerEndpointMapper.ReadJsonObjectAsync(context).ConfigureAwait(false);
+        var body = await FakeDockerEndpointMapper.ReadJsonObjectAsync(context);
         var command = body?["Cmd"] is JsonArray cmd
             ? string.Join(' ', cmd.Select(argument => argument?.GetValue<string>() ?? string.Empty))
             : string.Empty;
@@ -39,7 +38,6 @@ internal static class ExecCreateEndpoint
                                           {
                                               ["Id"] = session.Id
                                           },
-                                          StatusCodes.Status201Created)
-                                      .ConfigureAwait(false);
+                                          StatusCodes.Status201Created);
     }
 }

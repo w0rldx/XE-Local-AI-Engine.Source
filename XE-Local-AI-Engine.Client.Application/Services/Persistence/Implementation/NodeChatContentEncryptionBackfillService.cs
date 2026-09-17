@@ -76,18 +76,18 @@ public sealed class NodeChatContentEncryptionBackfillService(
     {
         try
         {
-            var reclamationPendingFromPreviousRun = await IsReclamationPendingAsync(cancellationToken).ConfigureAwait(false);
-            var hasLegacyCandidates = await HasLegacyCandidatesAsync(cancellationToken).ConfigureAwait(false);
+            var reclamationPendingFromPreviousRun = await IsReclamationPendingAsync(cancellationToken);
+            var hasLegacyCandidates = await HasLegacyCandidatesAsync(cancellationToken);
 
             // Set the durable marker BEFORE any legacy row is re-encrypted, so a failure or shutdown during the single
             // reclamation pass below cannot lose the fact that plaintext residue still has to be reclaimed. It is
             // committed on its own connection, so it is durable independently of (and prior to) the migration commits.
             if (hasLegacyCandidates)
             {
-                await SetReclamationPendingAsync(cancellationToken).ConfigureAwait(false);
+                await SetReclamationPendingAsync(cancellationToken);
             }
 
-            var total = await MigrateAllAsync(DefaultBatchSize, cancellationToken).ConfigureAwait(false);
+            var total = await MigrateAllAsync(DefaultBatchSize, cancellationToken);
             if (total > 0)
             {
                 logger.LogInformation("NodeChatContentEncryptionBackfillService: encrypted {Count} legacy plaintext message row(s).", total);
@@ -97,9 +97,9 @@ public sealed class NodeChatContentEncryptionBackfillService(
             // still set) — an idempotent retry until the checkpoint/VACUUM pass finally succeeds. Clear the marker only
             // on success; a failure/cancellation leaves it set so the next startup retries.
             if ((hasLegacyCandidates || reclamationPendingFromPreviousRun)
-                && await CheckpointAndVacuumAsync(cancellationToken).ConfigureAwait(false))
+                && await CheckpointAndVacuumAsync(cancellationToken))
             {
-                await ClearReclamationPendingAsync(cancellationToken).ConfigureAwait(false);
+                await ClearReclamationPendingAsync(cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -122,7 +122,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
         var total = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
-            var migrated = await MigrateBatchAsync(batchSize, cancellationToken).ConfigureAwait(false);
+            var migrated = await MigrateBatchAsync(batchSize, cancellationToken);
             if (migrated == 0)
             {
                 break;
@@ -146,15 +146,14 @@ public sealed class NodeChatContentEncryptionBackfillService(
 
         var rows = await dbContext.Database
                                   .SqlQueryRaw<LegacyMessageRow>(CandidateSelectSql, batchSize)
-                                  .ToListAsync(cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
         {
             return 0;
         }
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         foreach (var row in rows)
         {
@@ -166,11 +165,11 @@ public sealed class NodeChatContentEncryptionBackfillService(
             AddParameter(command, "$content", encryptedContent);
             AddParameter(command, "$metadata_json", encryptedMetadata);
             AddParameter(command, "$message_id", row.MessageId);
-            await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await OpenIfNeededAsync(command.Connection, cancellationToken);
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return rows.Count;
     }
 
@@ -189,22 +188,22 @@ public sealed class NodeChatContentEncryptionBackfillService(
             await using var scope = scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
             var connection = dbContext.Database.GetDbConnection();
-            await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+            await OpenIfNeededAsync(connection, cancellationToken);
 
             // A checkpoint that reports busy or leaves frames behind must NOT be treated as success: proceeding to
             // VACUUM and clearing the marker on an incomplete truncate could leave plaintext-bearing WAL frames on disk
             // with the marker permanently cleared. Bail out (keep the marker) so the next startup retries.
-            if (!await CheckpointTruncatedFullyAsync(connection, cancellationToken).ConfigureAwait(false))
+            if (!await CheckpointTruncatedFullyAsync(connection, cancellationToken))
             {
                 LogIncompleteCheckpoint("before VACUUM");
                 return false;
             }
 
-            await ExecuteRawAsync(connection, "VACUUM;", cancellationToken).ConfigureAwait(false);
+            await ExecuteRawAsync(connection, "VACUUM;", cancellationToken);
 
             // The second checkpoint flushes VACUUM's own rebuild into the main file; if it does not fully truncate, the
             // rebuilt (residue-free) pages may still be sitting in the WAL, so the reclamation is not yet complete.
-            if (!await CheckpointTruncatedFullyAsync(connection, cancellationToken).ConfigureAwait(false))
+            if (!await CheckpointTruncatedFullyAsync(connection, cancellationToken))
             {
                 LogIncompleteCheckpoint("after VACUUM");
                 return false;
@@ -236,8 +235,8 @@ public sealed class NodeChatContentEncryptionBackfillService(
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
         {
             return true;
         }
@@ -281,7 +280,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         if (addMarkerName)
@@ -289,7 +288,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
             AddParameter(command, "$name", MaintenanceStateName);
         }
 
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(result, CultureInfo.InvariantCulture) != 0;
     }
 
@@ -299,11 +298,11 @@ public sealed class NodeChatContentEncryptionBackfillService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         AddParameter(command, "$name", MaintenanceStateName);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
@@ -312,7 +311,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
     {
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     // Minimal projection for the raw candidate query. Content is NOT NULL; metadata_json is nullable.

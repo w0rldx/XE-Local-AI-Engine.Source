@@ -48,31 +48,31 @@ public sealed class StartLiveTranscriptionSessionEndpoint(ITranscriptionService 
         StartLiveResult result;
         try
         {
-            result = await _sessions.StartLiveAsync(req.SessionId, ct).ConfigureAwait(false);
+            result = await _sessions.StartLiveAsync(req.SessionId, ct);
         }
         catch (LiveTranscriptionSourceKindException exception)
         {
             // A refusal about the session's own shape, not about anything the caller sent — but it is still the
             // caller's request that cannot be satisfied, and a 500 would invite a retry that can never work.
             AddError(exception.Message);
-            await Send.ErrorsAsync(StatusCodes.Status400BadRequest, ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(StatusCodes.Status400BadRequest, ct);
             return;
         }
 
         if (result.Outcome == StartLiveOutcome.SessionNotFound)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         if (result.Outcome == StartLiveOutcome.SessionAlreadyFinished)
         {
-            await Send.ResultAsync(Results.Conflict(ToResponse(req.SessionId, result))).ConfigureAwait(false);
+            await Send.ResultAsync(Results.Conflict(ToResponse(req.SessionId, result)));
             return;
         }
 
         // Started and AlreadyLive are the same answer to the caller: the session is live and this is where to resume.
-        await Send.OkAsync(ToResponse(req.SessionId, result), ct).ConfigureAwait(false);
+        await Send.OkAsync(ToResponse(req.SessionId, result), ct);
     }
 
     private static StartLiveTranscriptionSessionResponse ToResponse(Guid sessionId, StartLiveResult result) =>

@@ -26,7 +26,7 @@ public sealed class PendingFootprintLedger : IPendingFootprintLedger, IDisposabl
     /// <inheritdoc />
     public async Task<IDisposable> EnterDecisionAsync(CancellationToken ct)
     {
-        await _decisionGate.WaitAsync(ct).ConfigureAwait(false);
+        await _decisionGate.WaitAsync(ct);
         return new GateHandle(_decisionGate);
     }
 

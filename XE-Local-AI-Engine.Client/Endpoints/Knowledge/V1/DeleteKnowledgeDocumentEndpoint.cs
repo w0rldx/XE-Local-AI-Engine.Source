@@ -24,13 +24,13 @@ public sealed class DeleteKnowledgeDocumentEndpoint(IKnowledgeDocumentPurgeServi
 
     public override async Task HandleAsync(KnowledgeDocumentRouteRequest req, CancellationToken ct)
     {
-        var deleted = await _purgeService.PurgeAsync(req.DocumentId, ct).ConfigureAwait(false);
+        var deleted = await _purgeService.PurgeAsync(req.DocumentId, ct);
         if (!deleted)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

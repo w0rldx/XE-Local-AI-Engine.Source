@@ -29,7 +29,7 @@ public sealed class WorkSessionStartupReconciler(
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var reconciled = await store.ReconcileRunningSessionsAsync(InterruptedReason, cancellationToken).ConfigureAwait(false);
+        var reconciled = await store.ReconcileRunningSessionsAsync(InterruptedReason, cancellationToken);
         if (reconciled > 0)
         {
             _logger.LogInformation("Reconciled {Count} in-flight work session(s) to Interrupted after host startup.", reconciled);

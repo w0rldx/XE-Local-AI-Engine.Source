@@ -20,11 +20,11 @@ public sealed class ListToolMocksEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var records = await _mocks.ListAsync(ct).ConfigureAwait(false);
+        var records = await _mocks.ListAsync(ct);
         await Send.OkAsync(new ListToolMocksResponse
         {
             Items = records.Select(record => record.ToResponse()).ToArray()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -41,14 +41,14 @@ public sealed class GetToolMockEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(GetToolMockRequest req, CancellationToken ct)
     {
-        var record = await _mocks.GetAsync(req.MockId, ct).ConfigureAwait(false);
+        var record = await _mocks.GetAsync(req.MockId, ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }
 
@@ -65,12 +65,11 @@ public sealed class CreateToolMockEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(CreateToolMockRequest req, CancellationToken ct)
     {
-        var record = await _mocks.CreateAsync(new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct).ConfigureAwait(false);
+        var record = await _mocks.CreateAsync(new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct);
         await Send.CreatedAtAsync<GetToolMockEndpoint>(new
                   {
                       mockId = record.Id
-                  }, record.ToResponse(), cancellation: ct)
-                  .ConfigureAwait(false);
+                  }, record.ToResponse(), cancellation: ct);
     }
 }
 
@@ -87,9 +86,8 @@ public sealed class UpdateToolMockEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(UpdateToolMockRequest req, CancellationToken ct)
     {
-        var record = await _mocks.UpdateAsync(req.MockId, req.ExpectedVersion, new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct)
-                                 .ConfigureAwait(false);
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        var record = await _mocks.UpdateAsync(req.MockId, req.ExpectedVersion, new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }
 
@@ -106,8 +104,8 @@ public sealed class DeleteToolMockEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(DeleteToolMockRequest req, CancellationToken ct)
     {
-        await _mocks.DeleteAsync(req.MockId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _mocks.DeleteAsync(req.MockId, req.ExpectedVersion, ct);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -125,7 +123,7 @@ public sealed class VerifyToolMockEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(VerifyToolMockRequest req, CancellationToken ct)
     {
-        var result = await _mocks.VerifyAsync(req.MockId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.OkAsync(result.Mock.ToResponse(), ct).ConfigureAwait(false);
+        var result = await _mocks.VerifyAsync(req.MockId, req.ExpectedVersion, ct);
+        await Send.OkAsync(result.Mock.ToResponse(), ct);
     }
 }

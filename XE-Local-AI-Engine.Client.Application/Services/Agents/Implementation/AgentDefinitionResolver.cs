@@ -64,7 +64,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return null;
         }
 
-        var definition = await _store.GetByIdAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await _store.GetByIdAsync(definitionId, cancellationToken);
         if (definition is null)
         {
             // A binding pointing at a deleted definition degrades to the default persona rather than failing the
@@ -73,7 +73,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return null;
         }
 
-        return await ResolveAsync(definition, activeModelId, retrievalQuery, supportsTools, honorModelProfile, activeModelIsCloud, cancellationToken).ConfigureAwait(false);
+        return await ResolveAsync(definition, activeModelId, retrievalQuery, supportsTools, honorModelProfile, activeModelIsCloud, cancellationToken);
     }
 
     public async Task<ResolvedAgentRuntime?> ResolveAsync(AgentDefinitionRecord definition, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
@@ -97,11 +97,11 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         // pin the effective model IS the active model, so reuse the flag the caller already resolved (no extra lookup).
         var effectiveModelIsCloud = pinnedModel is null
             ? activeModelIsCloud
-            : (await _modelCapabilityResolver.ResolveAsync(pinnedModel, cancellationToken).ConfigureAwait(false)).IsCloud;
-        var allowedTools = await ProjectAllowedToolsAsync(definition, effectiveModel, supportsTools, effectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
-        var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
-        var skills = await ResolveSkillsAsync(definition, cancellationToken).ConfigureAwait(false);
-        var customTools = await ResolveCustomToolsAsync(allowedTools, cancellationToken).ConfigureAwait(false);
+            : (await _modelCapabilityResolver.ResolveAsync(pinnedModel, cancellationToken)).IsCloud;
+        var allowedTools = await ProjectAllowedToolsAsync(definition, effectiveModel, supportsTools, effectiveModelIsCloud, cancellationToken);
+        var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken);
+        var skills = await ResolveSkillsAsync(definition, cancellationToken);
+        var customTools = await ResolveCustomToolsAsync(allowedTools, cancellationToken);
 
         return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,
@@ -137,7 +137,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return null;
         }
 
-        var stored = await _customToolStore.ListAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await _customToolStore.ListAsync(cancellationToken);
         var resolved = stored
                        .Where(tool => offeredCustomNames.Contains(tool.Name))
                        .Select(static tool => new ResolvedCustomTool(tool.Name, tool.Version, tool.Mode == CustomToolMode.Fixed))
@@ -173,7 +173,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return [];
         }
 
-        var enabled = await _agentSkillStore.ListEnabledByIdsAsync(assignedIds, cancellationToken).ConfigureAwait(false);
+        var enabled = await _agentSkillStore.ListEnabledByIdsAsync(assignedIds, cancellationToken);
 
         var resolvedIds = new HashSet<Guid>(enabled.Select(static skill => skill.Id));
         var droppedIds = assignedIds.Where(id => !resolvedIds.Contains(id)).ToArray();
@@ -337,7 +337,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     /// </summary>
     private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
     {
-        var personaPrompt = await ComposePersonaPromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        var personaPrompt = await ComposePersonaPromptAsync(definition, retrievalQuery, cancellationToken);
         return definition.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
@@ -358,7 +358,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return definition.Instructions;
         }
 
-        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken).ConfigureAwait(false);
+        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken);
         var selected = await PlaybookRetrievalSelector.SelectAsync(_retrievalRanker,
             retrievalQuery,
             enabled,
@@ -367,7 +367,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             cancellationToken,
             _retrievalOptions.MaxInjectedMemoryTokens,
             _retrievalOptions.MaxInjectedFailureMemoryTokens,
-            _logger).ConfigureAwait(false);
+            _logger);
         return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 
@@ -395,7 +395,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             // plain mode-off chat. With NO node policy configured the Permissive floor is identity, so the offer — and the
             // runtime-package config hash — stay byte-identical to the mode-off path from before this feature existed. Per-agent ToolApprovals
             // are intentionally NOT applied here: this path reproduces plain chat, which carries no per-agent overrides.
-            var wholeOffer = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
+            var wholeOffer = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken);
             AllowedToolDto[] composedWholeOffer =
             [
                 .. wholeOffer.Select(tool => tool with
@@ -417,7 +417,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         // profile that lists spawn_subagent resolve it while the default/mode-off path never does. Tools the definition
         // names but the pool does not contain (uninstalled or not capability-eligible) are dropped and logged — never
         // fabricated.
-        var offered = await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken).ConfigureAwait(false);
+        var offered = await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered

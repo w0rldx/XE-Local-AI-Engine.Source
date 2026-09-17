@@ -23,7 +23,7 @@ public sealed class GgufImportExceptionHandler : IExceptionHandler
             return false;
         }
 
-        await GgufImportEndpointSupport.Error(importFailure).ExecuteAsync(httpContext).ConfigureAwait(false);
+        await GgufImportEndpointSupport.Error(importFailure).ExecuteAsync(httpContext);
         return true;
     }
 }

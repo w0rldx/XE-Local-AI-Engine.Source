@@ -19,7 +19,7 @@ internal sealed class HtmlDocumentReader : IngestionDocumentReader
         ArgumentNullException.ThrowIfNull(source);
 
         using var buffer = new MemoryStream();
-        await source.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        await source.CopyToAsync(buffer, cancellationToken);
         var html = PlaintextDocumentReader.Decode(buffer.ToArray());
 
         var document = new IngestionDocument(identifier ?? "document");

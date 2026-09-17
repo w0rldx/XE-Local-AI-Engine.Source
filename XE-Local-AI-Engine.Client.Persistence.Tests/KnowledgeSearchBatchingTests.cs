@@ -48,12 +48,12 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         var chunkC = Guid.NewGuid();
         var missingChunk = Guid.NewGuid(); // never seeded — the batch hydration must skip it
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentA).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentB).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, "alpha content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentA, chunkB, chunkIndex: 1, "beta content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentB, chunkC, chunkIndex: 0, "gamma content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentA);
+        await SeedDocumentAsync(databasePath, documentB);
+        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentA, chunkB, chunkIndex: 1, "beta content");
+        await SeedChunkAsync(databasePath, documentB, chunkC, chunkIndex: 0, "gamma content");
 
         // FTS returns A, missing, B, C in rank order. Embedding is degraded (no provider), so the fused order is the FTS
         // order; the missing chunk must be dropped by hydration while A, B, C keep their order.
@@ -69,7 +69,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, DegradedProviderResolver());
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(3, orderedChunkIds.Count);
@@ -87,11 +87,11 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         var chunkB = Guid.NewGuid();
         var chunkC = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentA).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, "alpha content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentA, chunkB, chunkIndex: 1, "beta content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentA, chunkC, chunkIndex: 2, "gamma content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentA);
+        await SeedChunkAsync(databasePath, documentA, chunkA, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentA, chunkB, chunkIndex: 1, "beta content");
+        await SeedChunkAsync(databasePath, documentA, chunkC, chunkIndex: 2, "gamma content");
 
         // Lexical arm ranks A then B; semantic arm ranks B then C. Both arms must reach fusion under the concurrent
         // implementation, so the result order must equal the independent RRF baseline of the two lists.
@@ -122,7 +122,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, ResolvingProviderResolver(), vectorSearch);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
 
         var baseline = new ReciprocalRankFusion().Fuse([ftsRanked, vectorRanked]).Select(entry => entry.ChunkId).ToList();
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
@@ -147,12 +147,12 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         var chunkB = Guid.NewGuid();
         var chunkC = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, document).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, document);
         // A and B carry the SAME content up to whitespace + case; C is distinct. A outranks B in the fused (FTS) order.
-        await SeedChunkAsync(databasePath, document, chunkA, chunkIndex: 0, "Shared answer text.").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, document, chunkB, chunkIndex: 1, "shared   answer   text.").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, document, chunkC, chunkIndex: 2, "A different answer.").ConfigureAwait(false);
+        await SeedChunkAsync(databasePath, document, chunkA, chunkIndex: 0, "Shared answer text.");
+        await SeedChunkAsync(databasePath, document, chunkB, chunkIndex: 1, "shared   answer   text.");
+        await SeedChunkAsync(databasePath, document, chunkC, chunkIndex: 2, "A different answer.");
 
         // BM25 is more-negative-for-stronger, so the rank order A, B, C descends into the negatives.
         var ftsHits = new List<FtsSearchHit>
@@ -165,7 +165,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, DegradedProviderResolver());
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(2, orderedChunkIds.Count);
@@ -228,7 +228,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private async Task SeedDocumentAsync(string databasePath, Guid documentId)
@@ -240,7 +240,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         }
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -251,13 +251,13 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         command.Parameters.AddWithValue("$name", encryptedName);
         command.Parameters.AddWithValue("$hash", "hash-" + documentId.ToString("N"));
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task SeedChunkAsync(string databasePath, Guid documentId, Guid chunkId, int chunkIndex, string content)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -268,7 +268,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         command.Parameters.AddWithValue("$document", documentId);
         command.Parameters.AddWithValue("$index", chunkIndex);
         command.Parameters.AddWithValue("$content", content);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

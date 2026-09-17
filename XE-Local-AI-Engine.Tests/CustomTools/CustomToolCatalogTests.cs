@@ -39,11 +39,11 @@ public sealed class CustomToolCatalogTests
         var storeResolutions = new ReadCounter();
         var catalog = CreateCatalog(store, storeResolutions, Settings(customToolsEnabled: true));
 
-        var resolved = await catalog.TryResolveManyAsync(names, CancellationToken.None).ConfigureAwait(false);
+        var resolved = await catalog.TryResolveManyAsync(names, CancellationToken.None);
 
         AssertEx.Equal(expected: 5, resolved.Count, "every offerable requested name must resolve");
         AssertEx.Equal(expected: 1, storeResolutions.Value, "five names must open exactly one scope");
-        await store.Received(1).ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).ListAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -65,7 +65,7 @@ public sealed class CustomToolCatalogTests
             "custom__disabled",
             "custom__unacknowledged",
             "custom__unparsable"
-        ], CancellationToken.None).ConfigureAwait(false);
+        ], CancellationToken.None);
 
         AssertEx.Equal(expected: 1, resolved.Count, "only the enabled, acknowledged, compilable tool may resolve");
         AssertEx.True(resolved.ContainsKey("custom__offerable"), "the offerable tool must be present");
@@ -87,7 +87,7 @@ public sealed class CustomToolCatalogTests
             "custom__known",
             "custom__nobody_has_this_name",
             "   "
-        ], CancellationToken.None).ConfigureAwait(false);
+        ], CancellationToken.None);
 
         AssertEx.Equal(expected: 1, resolved.Count, "only the stored name may resolve");
         AssertEx.True(resolved.ContainsKey("custom__known"), "the stored name must resolve");
@@ -103,8 +103,7 @@ public sealed class CustomToolCatalogTests
         var store = BuildStore([Record("custom__alpha"), Record("custom__bravo")]);
         var catalog = CreateCatalog(store, new ReadCounter(), Settings(customToolsEnabled: true));
 
-        var resolved = await catalog.TryResolveManyAsync(["custom__alpha", "custom__bravo"], CancellationToken.None)
-                                    .ConfigureAwait(false);
+        var resolved = await catalog.TryResolveManyAsync(["custom__alpha", "custom__bravo"], CancellationToken.None);
 
         AssertEx.Equal(expected: 2, resolved.Count);
         foreach (var (name, tool) in resolved)
@@ -122,11 +121,11 @@ public sealed class CustomToolCatalogTests
         var storeResolutions = new ReadCounter();
         var catalog = CreateCatalog(store, storeResolutions, Settings(customToolsEnabled: false));
 
-        var resolved = await catalog.TryResolveManyAsync(["custom__alpha"], CancellationToken.None).ConfigureAwait(false);
+        var resolved = await catalog.TryResolveManyAsync(["custom__alpha"], CancellationToken.None);
 
         AssertEx.Empty(resolved, "a disabled node must resolve nothing");
         AssertEx.Equal(expected: 0, storeResolutions.Value, "a disabled node must open no scope");
-        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -138,12 +137,12 @@ public sealed class CustomToolCatalogTests
         var storeResolutions = new ReadCounter();
         var catalog = CreateCatalog(store, storeResolutions, settings);
 
-        var resolved = await catalog.TryResolveManyAsync([], CancellationToken.None).ConfigureAwait(false);
+        var resolved = await catalog.TryResolveManyAsync([], CancellationToken.None);
 
         AssertEx.Empty(resolved, "an empty request must resolve nothing");
         AssertEx.Equal(expected: 0, storeResolutions.Value, "an empty request must open no scope");
-        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await settings.DidNotReceive().GetCustomToolsEnabledAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>());
+        await settings.DidNotReceive().GetCustomToolsEnabledAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -162,14 +161,14 @@ public sealed class CustomToolCatalogTests
         var catalog = CreateCatalog(store, storeResolutions, Settings(customToolsEnabled: true));
         string[] requested = ["custom__alpha", "custom__bravo"];
 
-        var first = await catalog.TryResolveManyAsync(requested, CancellationToken.None).ConfigureAwait(false);
+        var first = await catalog.TryResolveManyAsync(requested, CancellationToken.None);
         records.Add(Record("custom__bravo"));
-        var second = await catalog.TryResolveManyAsync(requested, CancellationToken.None).ConfigureAwait(false);
+        var second = await catalog.TryResolveManyAsync(requested, CancellationToken.None);
 
         AssertEx.False(first.ContainsKey("custom__bravo"), "the tool did not exist yet on the first call");
         AssertEx.True(second.ContainsKey("custom__bravo"), "a tool added between two calls must resolve on the second");
         AssertEx.Equal(expected: 2, storeResolutions.Value, "two resolutions must open two scopes, never share one read");
-        await store.Received(2).ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(2).ListAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -186,20 +185,20 @@ public sealed class CustomToolCatalogTests
         var storeResolutions = new ReadCounter();
         var catalog = CreateCatalog(store, storeResolutions, Settings(customToolsEnabled: true));
 
-        var resolved = await catalog.TryResolveManyAsync(["custom__dup"], CancellationToken.None).ConfigureAwait(false);
+        var resolved = await catalog.TryResolveManyAsync(["custom__dup"], CancellationToken.None);
 
         AssertEx.False(resolved.ContainsKey("custom__dup"),
             "the first offerable record claimed the name and then failed its schema, so the name must resolve to nothing");
         AssertEx.Empty(resolved, "the duplicate must not resolve under any other key either");
         AssertEx.Equal(expected: 1, storeResolutions.Value, "a duplicate name must not cost a second read");
-        await store.Received(1).ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).ListAsync(Arg.Any<CancellationToken>());
 
         // Control: the second record is valid on its own, so the absence above is the claim order and not an unresolvable
         // second row.
         var soloStore = BuildStore([Record("custom__dup")]);
         var soloCatalog = CreateCatalog(soloStore, new ReadCounter(), Settings(customToolsEnabled: true));
 
-        var solo = await soloCatalog.TryResolveManyAsync(["custom__dup"], CancellationToken.None).ConfigureAwait(false);
+        var solo = await soloCatalog.TryResolveManyAsync(["custom__dup"], CancellationToken.None);
 
         AssertEx.True(solo.ContainsKey("custom__dup"), "the second record resolves when no earlier record claims the name");
     }

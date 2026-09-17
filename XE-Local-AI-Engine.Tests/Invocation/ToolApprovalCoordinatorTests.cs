@@ -64,8 +64,7 @@ public sealed class ToolApprovalCoordinatorTests
                                "unattended-unavailable",
                                Arg.Any<string>(),
                                Arg.Any<long>(),
-                               Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                               Arg.Any<CancellationToken>());
         await auditRecorder.DidNotReceive()
                            .RecordAsync(Arg.Any<Guid?>(),
                                Arg.Any<string>(),
@@ -73,8 +72,7 @@ public sealed class ToolApprovalCoordinatorTests
                                "session-scope auto-approve",
                                Arg.Any<string>(),
                                Arg.Any<long>(),
-                               Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                               Arg.Any<CancellationToken>());
     }
 
     [Test]

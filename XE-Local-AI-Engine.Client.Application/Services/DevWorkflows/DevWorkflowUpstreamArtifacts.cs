@@ -31,7 +31,7 @@ internal static class DevWorkflowUpstreamArtifacts
             return [];
         }
 
-        var artifacts = await store.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var artifacts = await store.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken);
         return [.. artifacts.Where(artifact => artifact.IsLatest && sources.Contains(artifact.ProducingNodeKey))];
     }
 
@@ -67,7 +67,7 @@ internal static class DevWorkflowUpstreamArtifacts
             return [];
         }
 
-        var nodeRuns = await store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false);
+        var nodeRuns = await store.ListNodeRunsAsync(runId, cancellationToken);
         return
         [
             .. nodeRuns.Where(nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Skipped && sources.Contains(nodeRun.NodeKey))
@@ -148,7 +148,7 @@ internal static class DevWorkflowUpstreamArtifacts
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(nodeRun);
 
-        var upstream = await ResolveAsync(store, graph, run.Id, nodeRun.NodeKey, cancellationToken).ConfigureAwait(false);
+        var upstream = await ResolveAsync(store, graph, run.Id, nodeRun.NodeKey, cancellationToken);
         if (upstream.Count == 0)
         {
             return upstream;
@@ -159,8 +159,7 @@ internal static class DevWorkflowUpstreamArtifacts
                                DevWorkflowVersions.Any,
                                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "consume-upstream"),
                                [.. upstream.Select(static artifact => artifact.Id)]),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return upstream;
     }
 }

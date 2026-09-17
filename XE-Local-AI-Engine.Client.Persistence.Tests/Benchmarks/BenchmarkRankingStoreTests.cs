@@ -34,16 +34,16 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_IsDenseDescendingAcrossTheWholeProject_NotThePage()
     {
-        await using var context = await CreateDatabaseAsync("rank-dense.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-dense.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
-        var ninety = await ScoredRunAsync(store, project.Id, 90).ConfigureAwait(false);
-        var seventyFirst = await ScoredRunAsync(store, project.Id, 70).ConfigureAwait(false);
-        var seventySecond = await ScoredRunAsync(store, project.Id, 70).ConfigureAwait(false);
-        var ten = await ScoredRunAsync(store, project.Id, 10).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject());
+        var ninety = await ScoredRunAsync(store, project.Id, 90);
+        var seventyFirst = await ScoredRunAsync(store, project.Id, 70);
+        var seventySecond = await ScoredRunAsync(store, project.Id, 70);
+        var ten = await ScoredRunAsync(store, project.Id, 10);
 
-        var firstPage = await store.ListRunsAsync(project.Id, skip: 0, take: 2).ConfigureAwait(false);
-        var secondPage = await store.ListRunsAsync(project.Id, skip: 2, take: 2).ConfigureAwait(false);
+        var firstPage = await store.ListRunsAsync(project.Id, skip: 0, take: 2);
+        var secondPage = await store.ListRunsAsync(project.Id, skip: 2, take: 2);
 
         var ranks = firstPage.Items.Concat(secondPage.Items).ToDictionary(static run => run.Id, static run => run.Rank);
         AssertEx.Equal<int?>(1, ranks[ninety]);
@@ -57,16 +57,16 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_UserOverrideOutranksTheJudgeAndAlwaysCounts()
     {
-        await using var context = await CreateDatabaseAsync("rank-user-override.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-user-override.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var judged = await JudgedRunAsync(store, project, revision, score: 40, executionKey: "key-a").ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var judged = await JudgedRunAsync(store, project, revision, score: 40, executionKey: "key-a");
 
         // A second run the judge never touched, but the operator scored.
-        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        var overridden = await ScoredRunAsync(store, refreshed.Id, 95).ConfigureAwait(false);
+        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var overridden = await ScoredRunAsync(store, refreshed.Id, 95);
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
         var byId = page.Items.ToDictionary(static run => run.Id);
         AssertEx.Equal(BenchmarkQualityScoreSources.User, byId[overridden].QualityScoreSource);
@@ -79,22 +79,22 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_ExcludesJudgingsOutsideTheCurrentCohort()
     {
-        await using var context = await CreateDatabaseAsync("rank-cohort.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-cohort.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
 
         // Ranked: it defines the cohort key.
-        var ranked = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a").ConfigureAwait(false);
+        var ranked = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a");
 
         // Judged on a different runtime — same policy, different execution.
-        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        var otherRuntime = await JudgedRunAsync(store, refreshed, revision, score: 99, executionKey: "key-b").ConfigureAwait(false);
+        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var otherRuntime = await JudgedRunAsync(store, refreshed, revision, score: 99, executionKey: "key-b");
 
         // Judged with no execution key at all — the node could not describe what it ran.
-        refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        var incomplete = await JudgedRunAsync(store, refreshed, revision, score: 99, executionKey: null).ConfigureAwait(false);
+        refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var incomplete = await JudgedRunAsync(store, refreshed, revision, score: 99, executionKey: null);
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
         var byId = page.Items.ToDictionary(static run => run.Id);
         AssertEx.Equal<int?>(1, byId[ranked].Rank);
@@ -110,15 +110,15 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_ExcludesAStaleCohortGeneration()
     {
-        await using var context = await CreateDatabaseAsync("rank-generation.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-generation.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a").ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var run = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a");
 
         // The operator moves the cohort. The old judging keeps its score and its key, but not its membership.
-        _ = await store.BeginProjectRejudgeAsync(project.Id, await CurrentVersionAsync(store, project.Id).ConfigureAwait(false)).ConfigureAwait(false);
+        _ = await store.BeginProjectRejudgeAsync(project.Id, await CurrentVersionAsync(store, project.Id));
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
         var judged = page.Items.Single(item => item.Id == run);
         AssertEx.Null(judged.Rank);
@@ -131,18 +131,17 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_ExcludesAJudgingUnderAnOutdatedPolicy()
     {
-        await using var context = await CreateDatabaseAsync("rank-policy.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-policy.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a").ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var run = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a");
 
         _ = await store.ActivateJudgePolicyAsync(project.Id,
-                           await CurrentVersionAsync(store, project.Id).ConfigureAwait(false),
+                           await CurrentVersionAsync(store, project.Id),
                            Encoding.UTF8.GetBytes("""{"rubric":"b"}"""),
-                           "0000000000000000000000000000000000000000000000000000000000000002")
-                       .ConfigureAwait(false);
+                           "0000000000000000000000000000000000000000000000000000000000000002");
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
         var judged = page.Items.Single(item => item.Id == run);
         AssertEx.Null(judged.Rank);
@@ -157,19 +156,19 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         // The live bug: on a project WITHOUT a judge the truncated run came back "no-score" — technically true and
         // completely useless, because scoring it is not what it needs. Only LoadRankingAsync applied the run-level
         // exclusions, so the single-run read and every write-returning path still reported the judge-derived reason.
-        await using var context = await CreateDatabaseAsync("truncated-beats-no-score.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("truncated-beats-no-score.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
-        var runId = await StartRunAsync(store, project.Id).ConfigureAwait(false);
-        var claim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var project = await store.CreateProjectAsync(NewProject());
+        var runId = await StartRunAsync(store, project.Id);
+        var claim = AssertEx.NotNull(await store.ClaimNextAsync());
 
         // The write's own return value is the third path, and the one the executor hands straight to the hub.
         var written = await store.MarkPrimarySucceededAsync(PrimarySuccess(runId, claim.Run.Version) with
         {
             PrimaryStopReason = "length"
-        }).ConfigureAwait(false);
-        var read = AssertEx.NotNull(await store.GetRunAsync(runId).ConfigureAwait(false));
-        var listed = (await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false)).Items.Single();
+        });
+        var read = AssertEx.NotNull(await store.GetRunAsync(runId));
+        var listed = (await store.ListRunsAsync(project.Id, skip: 0, take: 10)).Items.Single();
 
         foreach (var (path, run) in new[]
                  {
@@ -189,16 +188,16 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_ExcludesATruncatedRunEvenWhenTheJudgeScoredItWell()
     {
-        await using var context = await CreateDatabaseAsync("rank-truncated.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-truncated.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
 
         // Both judgings are in the live cohort and both scored well. Only the complete one is a comparable measurement.
-        var complete = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a").ConfigureAwait(false);
-        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        var truncated = await JudgedRunAsync(store, refreshed, revision, score: 96, executionKey: "key-a", stopReason: "length").ConfigureAwait(false);
+        var complete = await JudgedRunAsync(store, project, revision, score: 80, executionKey: "key-a");
+        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var truncated = await JudgedRunAsync(store, refreshed, revision, score: 96, executionKey: "key-a", stopReason: "length");
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
         var byId = page.Items.ToDictionary(static run => run.Id);
         AssertEx.Equal<int?>(1, byId[complete].Rank);
@@ -223,17 +222,16 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_ExcludesASilentlyIncompleteRunTheSameWayItExcludesATruncatedOne()
     {
-        await using var context = await CreateDatabaseAsync("rank-incomplete.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-incomplete.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
 
-        var complete = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "key-a").ConfigureAwait(false);
-        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var complete = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "key-a");
+        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var incomplete = await JudgedRunAsync(store, refreshed, revision, score: 95, executionKey: "key-a",
-                stopReason: BenchmarkPrimaryStopReasons.Incomplete)
-            .ConfigureAwait(false);
+                stopReason: BenchmarkPrimaryStopReasons.Incomplete);
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
         var byId = page.Items.ToDictionary(static run => run.Id);
         AssertEx.Equal<int?>(1, byId[complete].Rank);
@@ -253,14 +251,14 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_UserScoreStillRanksATruncatedRun()
     {
-        await using var context = await CreateDatabaseAsync("rank-truncated-override.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-truncated-override.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject());
 
         // The operator override wins over truncation exactly as it wins over every judge-based exclusion.
-        var overridden = await ScoredRunAsync(store, project.Id, 55, stopReason: "length").ConfigureAwait(false);
+        var overridden = await ScoredRunAsync(store, project.Id, 55, stopReason: "length");
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
         var run = page.Items.Single(item => item.Id == overridden);
         AssertEx.Equal<int?>(1, run.Rank);
@@ -275,16 +273,16 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task Rank_ExcludesAWarmUpRunEvenWhenTheOperatorScoredIt()
     {
-        await using var context = await CreateDatabaseAsync("rank-warmup.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-warmup.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject());
 
         // A warm-up is the ONE exclusion an operator score does not override: it exists to absorb the first-launch cost
         // the repeats after it should not pay, so ranking it against them would rank the very thing it controls for.
-        var warmup = await ScoredRunAsync(store, project.Id, 95, warmup: true).ConfigureAwait(false);
-        var measured = await ScoredRunAsync(store, project.Id, 60).ConfigureAwait(false);
+        var warmup = await ScoredRunAsync(store, project.Id, 95, warmup: true);
+        var measured = await ScoredRunAsync(store, project.Id, 60);
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
 
         var warmupRun = page.Items.Single(item => item.Id == warmup);
         AssertEx.Null(warmupRun.Rank, "A warm-up never ranks.");
@@ -305,15 +303,15 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task ListRuns_FiltersByModelGroupAndByScoredWithoutChangingTheRanking()
     {
-        await using var context = await CreateDatabaseAsync("rank-filters.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-filters.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
-        var scored = await ScoredRunAsync(store, project.Id, 60, fingerprint: Fingerprint('a')).ConfigureAwait(false);
-        var otherModel = await ScoredRunAsync(store, project.Id, 90, fingerprint: Fingerprint('b')).ConfigureAwait(false);
-        var unscored = await StartRunAsync(store, project.Id, Fingerprint('a')).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject());
+        var scored = await ScoredRunAsync(store, project.Id, 60, fingerprint: Fingerprint('a'));
+        var otherModel = await ScoredRunAsync(store, project.Id, 90, fingerprint: Fingerprint('b'));
+        var unscored = await StartRunAsync(store, project.Id, Fingerprint('a'));
 
-        var sameModel = await store.ListRunsAsync(project.Id, skip: 0, take: 10, Fingerprint('a')).ConfigureAwait(false);
-        var scoredOnly = await store.ListRunsAsync(project.Id, skip: 0, take: 10, modelContentFingerprint: null, includeUnscored: false).ConfigureAwait(false);
+        var sameModel = await store.ListRunsAsync(project.Id, skip: 0, take: 10, Fingerprint('a'));
+        var scoredOnly = await store.ListRunsAsync(project.Id, skip: 0, take: 10, modelContentFingerprint: null, includeUnscored: false);
 
         AssertEx.Equal(expected: 2, sameModel.TotalCount, "Same-model history counts only that model's runs.");
         AssertEx.True(sameModel.Items.Any(item => item.Id == scored) && sameModel.Items.Any(item => item.Id == unscored));
@@ -332,19 +330,19 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         // A judging whose rubric was entirely verified server-side has no runtime to describe — which is not the same
         // as having an incomplete description of one, and execution-identity-incomplete would unrank it forever. The
         // constant key makes every such attempt of one revision share a cohort deterministically.
-        await using var context = await CreateDatabaseAsync("rank-verified-sentinel.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-verified-sentinel.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var high = await JudgedRunAsync(store, project, revision, score: 90, executionKey: null,
-            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel).ConfigureAwait(false);
-        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel);
+        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var low = await JudgedRunAsync(store, refreshed, revision, score: 40, executionKey: null,
-            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel).ConfigureAwait(false);
+            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel);
 
-        var runs = await store.ListRunsAsync(project.Id, skip: 0, take: 200).ConfigureAwait(false);
+        var runs = await store.ListRunsAsync(project.Id, skip: 0, take: 200);
         var byId = runs.Items.ToDictionary(static run => run.Id);
-        var current = AssertEx.NotNull(await store.GetJudgePolicyRevisionAsync(revision.Id).ConfigureAwait(false));
+        var current = AssertEx.NotNull(await store.GetJudgePolicyRevisionAsync(revision.Id));
 
         AssertEx.Equal(BenchmarkJudgeExecutionKey.VerifiedSentinel, current.ReferenceExecutionKey,
             "The first success claims the cohort, exactly as a measured key does.");
@@ -359,28 +357,28 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     {
         // The key is written once, at launch. A success command carrying the sentinel must not be able to repair or
         // replace a measured identity — that is how two different executions would end up in one cohort.
-        await using var context = await CreateDatabaseAsync("rank-verified-no-overwrite.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-verified-no-overwrite.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
 
         var measured = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "measured-key",
-            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel).ConfigureAwait(false);
+            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel);
 
-        var runs = await store.ListRunsAsync(project.Id, skip: 0, take: 200).ConfigureAwait(false);
+        var runs = await store.ListRunsAsync(project.Id, skip: 0, take: 200);
         var judge = AssertEx.NotNull(runs.Items.Single(run => run.Id == measured).Judge);
 
         AssertEx.Equal("measured-key", judge.ExecutionKey);
-        AssertEx.Equal("measured-key", AssertEx.NotNull(await store.GetJudgePolicyRevisionAsync(revision.Id).ConfigureAwait(false)).ReferenceExecutionKey);
+        AssertEx.Equal("measured-key", AssertEx.NotNull(await store.GetJudgePolicyRevisionAsync(revision.Id)).ReferenceExecutionKey);
     }
 
     private static async Task<long> CurrentVersionAsync(BenchmarkStore store, Guid projectId) =>
-        AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false)).Version;
+        AssertEx.NotNull(await store.GetProjectAsync(projectId)).Version;
 
     private static async Task<(BenchmarkProjectRecord Project, BenchmarkJudgePolicyRevisionRecord Revision)> CreateJudgeProjectAsync(BenchmarkStore store)
     {
-        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
-        var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyA, HashA).ConfigureAwait(false);
-        return (AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false)), activation.Revision);
+        var project = await store.CreateProjectAsync(NewProject());
+        var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyA, HashA);
+        return (AssertEx.NotNull(await store.GetProjectAsync(project.Id)), activation.Revision);
     }
 
     /// <summary>A run judged to <paramref name="score" /> on the execution <paramref name="executionKey" /> describes.</summary>
@@ -392,18 +390,17 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         string stopReason = "stop",
         string? verifiedExecutionKey = null)
     {
-        var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
-        var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var run = await store.StartRunAsync(NewRun(project));
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync());
         _ = await store.MarkPrimarySucceededAsync(PrimarySuccess(run.Id, primary.Run.Version) with
         {
             PrimaryStopReason = stopReason,
             JudgeAttempt = new BenchmarkJudgeAttemptSeed(revision.Id, new ReadOnlyMemory<byte>(JudgeRuntime))
-        }).ConfigureAwait(false);
-        var judge = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        });
+        var judge = AssertEx.NotNull(await store.ClaimNextAsync());
         if (executionKey is not null)
         {
-            _ = await store.MarkJudgeLaunchReadyAsync(judge.JudgeAttemptId!.Value, judge.QueueSequence, judge.Version, Receipt(), executionKey)
-                           .ConfigureAwait(false);
+            _ = await store.MarkJudgeLaunchReadyAsync(judge.JudgeAttemptId!.Value, judge.QueueSequence, judge.Version, Receipt(), executionKey);
         }
 
         _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id,
@@ -411,8 +408,7 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
                            Encoding.UTF8.GetBytes("{}"),
                            5,
                            score,
-                           verifiedExecutionKey))
-                       .ConfigureAwait(false);
+                           verifiedExecutionKey));
         return run.Id;
     }
 
@@ -421,15 +417,15 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     {
         // The export used to page, which recomputed the whole-project ranking per page to produce the same answer each
         // time. Ranking once is only safe while the one-call read is INDISTINGUISHABLE from the paged one.
-        await using var context = await CreateDatabaseAsync("rank-list-all.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("rank-list-all.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
-        var high = await ScoredRunAsync(store, project.Id, score: 90).ConfigureAwait(false);
-        var low = await ScoredRunAsync(store, project.Id, score: 10).ConfigureAwait(false);
-        var unranked = await ScoredRunAsync(store, project.Id, score: 50, warmup: true).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject());
+        var high = await ScoredRunAsync(store, project.Id, score: 90);
+        var low = await ScoredRunAsync(store, project.Id, score: 10);
+        var unranked = await ScoredRunAsync(store, project.Id, score: 50, warmup: true);
 
-        var all = await store.ListAllRunsAsync(project.Id).ConfigureAwait(false);
-        var paged = await store.ListRunsAsync(project.Id, skip: 0, take: 200).ConfigureAwait(false);
+        var all = await store.ListAllRunsAsync(project.Id);
+        var paged = await store.ListRunsAsync(project.Id, skip: 0, take: 200);
 
         AssertEx.Equal(expected: 3, all.Items.Count, "Every run of the project, in one call.");
         AssertEx.Equal(paged.TotalCount, all.TotalCount);
@@ -451,26 +447,26 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         string stopReason = "stop",
         bool warmup = false)
     {
-        var runId = await StartRunAsync(store, projectId, fingerprint, warmup).ConfigureAwait(false);
-        var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var runId = await StartRunAsync(store, projectId, fingerprint, warmup);
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync());
         var succeeded = await store.MarkPrimarySucceededAsync(PrimarySuccess(runId, primary.Run.Version) with
         {
             PrimaryStopReason = stopReason
-        }).ConfigureAwait(false);
-        _ = await store.SetUserScoreAsync(runId, score, succeeded.Version).ConfigureAwait(false);
+        });
+        _ = await store.SetUserScoreAsync(runId, score, succeeded.Version);
         return runId;
     }
 
     private static async Task<Guid> StartRunAsync(BenchmarkStore store, Guid projectId, string? fingerprint = null, bool warmup = false)
     {
-        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false));
+        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId));
         var run = await store.StartRunAsync(NewRun(project) with
         {
             ModelContentFingerprint = fingerprint ?? Fingerprint('a'),
             RepeatGroupId = warmup ? Guid.NewGuid() : null,
             RepeatIndex = warmup ? 0 : null,
             IsWarmup = warmup
-        }).ConfigureAwait(false);
+        });
         return run.Id;
     }
 
@@ -495,8 +491,8 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     {
         _ = Directory.CreateDirectory(_rootPath);
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
-        _ = await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureDeletedAsync();
+        _ = await context.Database.EnsureCreatedAsync();
         return context;
     }
 }

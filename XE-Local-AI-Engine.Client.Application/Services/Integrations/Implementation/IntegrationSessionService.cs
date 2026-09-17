@@ -92,7 +92,7 @@ public sealed class IntegrationSessionService
             // never a distinct code that would confirm the policy of a trigger the caller cannot otherwise inspect.
             return sessionId is null
                 ? Accepted(existing: null)
-                : await MaskAsync(sessionId.Value, cancellationToken).ConfigureAwait(false);
+                : await MaskAsync(sessionId.Value, cancellationToken);
         }
 
         if (sessionId is not { } id)
@@ -104,10 +104,10 @@ public sealed class IntegrationSessionService
         // trigger allowlist — because two routes composing the same rule separately is exactly how the execution
         // family lost its per-key allowlist. The helper re-reads the key row per request, so narrowing a key takes
         // effect on its next call.
-        var access = await _access.ResolveSessionAsync(id, caller, cancellationToken).ConfigureAwait(false);
+        var access = await _access.ResolveSessionAsync(id, caller, cancellationToken);
         if (access.Outcome != IntegrationAccessOutcome.Allowed || access.Session is not { } session)
         {
-            return await MaskAsync(id, cancellationToken).ConfigureAwait(false);
+            return await MaskAsync(id, cancellationToken);
         }
 
         // Another trigger's session is masked too: confirming it exists would let a caller enumerate sessions across
@@ -124,7 +124,7 @@ public sealed class IntegrationSessionService
 
         // Inside the caller's gate, so no second accept can read this count and then write a second seed into the same
         // conversation while the first is still being written.
-        var active = await _executions.CountActiveBySessionAsync(id, cancellationToken).ConfigureAwait(false);
+        var active = await _executions.CountActiveBySessionAsync(id, cancellationToken);
         return active == 0
             ? Accepted(session)
             : new IntegrationSessionGateResult(IntegrationAcceptOutcome.SessionBusy, Existing: null, SessionBusyMessage);
@@ -133,8 +133,8 @@ public sealed class IntegrationSessionService
     /// <summary>One session for the operator, unscoped: an operator is not acting as an integrator.</summary>
     public async Task<IntegrationSessionDto?> GetAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var session = await _sessions.GetByIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        return session is null ? null : await ToDtoAsync(session, cancellationToken).ConfigureAwait(false);
+        var session = await _sessions.GetByIdAsync(sessionId, cancellationToken);
+        return session is null ? null : await ToDtoAsync(session, cancellationToken);
     }
 
     /// <summary>The operator's page, in the store's order. Nothing is re-sorted or filtered here.</summary>
@@ -142,7 +142,7 @@ public sealed class IntegrationSessionService
     {
         ArgumentNullException.ThrowIfNull(filter);
 
-        var sessions = await _sessions.ListAsync(filter.TriggerId, filter.Status, filter.Limit, filter.Offset, cancellationToken).ConfigureAwait(false);
+        var sessions = await _sessions.ListAsync(filter.TriggerId, filter.Status, filter.Limit, filter.Offset, cancellationToken);
         if (sessions.Count == 0)
         {
             return [];
@@ -150,7 +150,7 @@ public sealed class IntegrationSessionService
 
         // One read for every name rather than one per row: the trigger list is node-scoped and small, and a per-row
         // lookup would turn a page of 50 into 51 queries.
-        var names = (await _triggers.ListAsync(cancellationToken).ConfigureAwait(false)).ToDictionary(static trigger => trigger.Id, static trigger => trigger.Name);
+        var names = (await _triggers.ListAsync(cancellationToken)).ToDictionary(static trigger => trigger.Id, static trigger => trigger.Name);
         return [.. sessions.Select(session => ToDto(session, names.GetValueOrDefault(session.TriggerId, string.Empty)))];
     }
 
@@ -175,10 +175,10 @@ public sealed class IntegrationSessionService
     {
         ArgumentNullException.ThrowIfNull(caller);
 
-        var access = await _access.ResolveSessionAsync(sessionId, caller, cancellationToken).ConfigureAwait(false);
+        var access = await _access.ResolveSessionAsync(sessionId, caller, cancellationToken);
         return access.Outcome != IntegrationAccessOutcome.Allowed || access.Session is not { } session
             ? null
-            : await ToDtoAsync(session, cancellationToken).ConfigureAwait(false);
+            : await ToDtoAsync(session, cancellationToken);
     }
 
     /// <summary>
@@ -189,8 +189,8 @@ public sealed class IntegrationSessionService
     /// </summary>
     public async Task<bool> CloseAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        using var lease = await _gate.EnterAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        var closed = await _sessions.CloseAsync(sessionId, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken).ConfigureAwait(false);
+        using var lease = await _gate.EnterAsync(sessionId, cancellationToken);
+        var closed = await _sessions.CloseAsync(sessionId, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
         _gate.Forget(sessionId);
         return closed;
     }
@@ -208,9 +208,9 @@ public sealed class IntegrationSessionService
     /// </summary>
     public async Task<IntegrationSessionDeleteOutcome> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        using var lease = await _gate.EnterAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        using var lease = await _gate.EnterAsync(sessionId, cancellationToken);
 
-        var session = await _sessions.GetByIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _sessions.GetByIdAsync(sessionId, cancellationToken);
         if (session is null)
         {
             // Same reason as the invoke path: this call minted the entry, no row justifies keeping it, and the read
@@ -219,17 +219,17 @@ public sealed class IntegrationSessionService
             return IntegrationSessionDeleteOutcome.NotFound;
         }
 
-        if (await _executions.CountActiveBySessionAsync(sessionId, cancellationToken).ConfigureAwait(false) > 0)
+        if (await _executions.CountActiveBySessionAsync(sessionId, cancellationToken) > 0)
         {
             return IntegrationSessionDeleteOutcome.Busy;
         }
 
-        await DeleteConversationAsync(session.ConversationId).ConfigureAwait(false);
+        await DeleteConversationAsync(session.ConversationId);
 
         // The backstop, not the mechanism: the purge above already cascaded this row away, so this ordinarily deletes
         // nothing. It matters only when the purge could not run — an operator must not be left with a session whose
         // conversation is gone.
-        _ = await _sessions.DeleteAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
+        _ = await _sessions.DeleteAsync(sessionId, CancellationToken.None);
         _gate.Forget(sessionId);
         return IntegrationSessionDeleteOutcome.Deleted;
     }
@@ -256,7 +256,7 @@ public sealed class IntegrationSessionService
     /// </summary>
     private async Task<IntegrationSessionGateResult> MaskAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        if (await _sessions.GetByIdAsync(sessionId, cancellationToken).ConfigureAwait(false) is null)
+        if (await _sessions.GetByIdAsync(sessionId, cancellationToken) is null)
         {
             _gate.Forget(sessionId);
         }
@@ -266,7 +266,7 @@ public sealed class IntegrationSessionService
 
     private async Task<IntegrationSessionDto> ToDtoAsync(IntegrationSessionSnapshot session, CancellationToken cancellationToken)
     {
-        var trigger = await _triggers.GetByIdAsync(session.TriggerId, cancellationToken).ConfigureAwait(false);
+        var trigger = await _triggers.GetByIdAsync(session.TriggerId, cancellationToken);
         return ToDto(session, trigger?.Name ?? string.Empty);
     }
 
@@ -292,8 +292,7 @@ public sealed class IntegrationSessionService
             _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId,
                                           _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                                           PurgeImmediately: true),
-                                      CancellationToken.None)
-                                  .ConfigureAwait(false);
+                                      CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
         {

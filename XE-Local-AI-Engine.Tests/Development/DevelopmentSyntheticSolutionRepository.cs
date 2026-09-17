@@ -114,7 +114,7 @@ internal static class DevelopmentSyntheticSolutionRepository
             }
 
             """,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         // Restore has to succeed with no network. DevelopmentWorkspaceTools.BuildEnvironment points NUGET_PACKAGES at
         // a fresh per-session directory, so the ambient package cache is not visible; clearing the package sources and
@@ -135,7 +135,7 @@ internal static class DevelopmentSyntheticSolutionRepository
              </configuration>
 
              """,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         // Build output must be ignored. DevelopmentPatchEvidenceService exports the subject with `git add -A`, so an
         // un-ignored bin/ or obj/ produced by validation would land in the patch and change the subject hash between
@@ -149,7 +149,7 @@ internal static class DevelopmentSyntheticSolutionRepository
             TestResults/
 
             """,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         await WriteAsync(repositoryRoot,
             SolutionPath,
@@ -167,7 +167,7 @@ internal static class DevelopmentSyntheticSolutionRepository
                   </Solution>
 
                   """,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         await WriteAsync(repositoryRoot,
             "src/Lib/Lib.csproj",
@@ -181,20 +181,20 @@ internal static class DevelopmentSyntheticSolutionRepository
             </Project>
 
             """,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
-        await WriteAsync(repositoryRoot, LibrarySourcePath, BaselineLibrarySource, cancellationToken).ConfigureAwait(false);
+        await WriteAsync(repositoryRoot, LibrarySourcePath, BaselineLibrarySource, cancellationToken);
 
         if (includeTests)
         {
-            await WriteTestProjectAsync(repositoryRoot, testFrameworkVersion, cancellationToken).ConfigureAwait(false);
+            await WriteTestProjectAsync(repositoryRoot, testFrameworkVersion, cancellationToken);
         }
 
-        await RunGitAsync(repositoryRoot, cancellationToken, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.email", "development-validation@example.invalid").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.name", "Development Validation Test").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, cancellationToken, "add", "-A", "--", ".").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, cancellationToken, "commit", "-m", "synthetic solution fixture").ConfigureAwait(false);
+        await RunGitAsync(repositoryRoot, cancellationToken, "init", "--initial-branch=main", ".");
+        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.email", "development-validation@example.invalid");
+        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.name", "Development Validation Test");
+        await RunGitAsync(repositoryRoot, cancellationToken, "add", "-A", "--", ".");
+        await RunGitAsync(repositoryRoot, cancellationToken, "commit", "-m", "synthetic solution fixture");
     }
 
     private static async Task WriteTestProjectAsync(string repositoryRoot,
@@ -218,7 +218,7 @@ internal static class DevelopmentSyntheticSolutionRepository
              </Project>
 
              """,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         await WriteAsync(repositoryRoot,
             "tests/Probe/FeatureTests.cs",
@@ -233,7 +233,7 @@ internal static class DevelopmentSyntheticSolutionRepository
               }
 
               """,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private static string LibrarySource(string value) =>
@@ -313,7 +313,7 @@ internal static class DevelopmentSyntheticSolutionRepository
         var path = Path.Combine(repositoryRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-        await File.WriteAllTextAsync(path, Lf(content), cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(path, Lf(content), cancellationToken);
     }
 
     private static async Task RunGitAsync(string workingDirectory,
@@ -340,11 +340,11 @@ internal static class DevelopmentSyntheticSolutionRepository
         process.Start();
         var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        await process.WaitForExitAsync(cancellationToken);
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {await standardOutput.ConfigureAwait(false)}{await standardError.ConfigureAwait(false)}");
+                $"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {await standardOutput}{await standardError}");
         }
     }
 }

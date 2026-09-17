@@ -862,11 +862,11 @@ public sealed class SubAgentSpawnServiceTests
             expectedBindingFingerprint: null,
             CancellationToken.None,
             Guid.NewGuid());
-        await decisionEntered.Task.ConfigureAwait(false);
+        await decisionEntered.Task;
 
         AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
         decision.SetResult(new CapacityDecision(CapacityVerdict.RejectInsufficient, "Insufficient capacity.", OllamaEvictionWarning: false));
-        _ = await pending.ConfigureAwait(false);
+        _ = await pending;
     }
 
     [Test]
@@ -998,11 +998,11 @@ public sealed class SubAgentSpawnServiceTests
             expectedBindingFingerprint: null,
             CancellationToken.None,
             workspaceId);
-        await harness.ChatClient.WaitUntilRunningAsync().ConfigureAwait(false);
+        await harness.ChatClient.WaitUntilRunningAsync();
 
         AssertEx.False(session.IsDisposed, "queued execution must retain the workspace lease through inference.");
         inferenceGate.SetResult();
-        _ = await pending.ConfigureAwait(false);
+        _ = await pending;
         AssertEx.True(session.IsDisposed, "queued execution must release the workspace lease before returning.");
     }
 
@@ -1057,10 +1057,10 @@ public sealed class SubAgentSpawnServiceTests
             "inspect",
             expectedBindingFingerprint: null,
             caller.Token);
-        await harness.ChatClient.WaitUntilRunningAsync().ConfigureAwait(false);
-        await caller.CancelAsync().ConfigureAwait(false);
+        await harness.ChatClient.WaitUntilRunningAsync();
+        await caller.CancelAsync();
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => pending).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => pending);
         inferenceGate.SetResult();
     }
 
@@ -1511,7 +1511,7 @@ public sealed class SubAgentSpawnServiceTests
             _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                      .Returns<Task<ResolvedAgentRuntime?>>(async call =>
                      {
-                         var reread = await _definitionStore.GetByIdAsync(id, call.Arg<CancellationToken>()).ConfigureAwait(false);
+                         var reread = await _definitionStore.GetByIdAsync(id, call.Arg<CancellationToken>());
                          return Project(reread!);
                      });
 
@@ -1675,7 +1675,7 @@ public sealed class SubAgentSpawnServiceTests
                      .Returns(async _ =>
                      {
                          entered.TrySetResult();
-                         return await decision.Task.ConfigureAwait(false);
+                         return await decision.Task;
                      });
         }
 

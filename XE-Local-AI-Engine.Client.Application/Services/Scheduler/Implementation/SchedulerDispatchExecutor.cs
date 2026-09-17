@@ -80,7 +80,7 @@ internal sealed class SchedulerDispatchExecutor(
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         ScheduledRunTrigger triggeredBy = ScheduledRunTrigger.Schedule)
     {
-        var definition = await _definitionStore.GetByIdAsync(scheduledJobId, cancellationToken).ConfigureAwait(false);
+        var definition = await _definitionStore.GetByIdAsync(scheduledJobId, cancellationToken);
         if (definition is null)
         {
             _logger.LogWarning("Scheduled job dispatch skipped: no definition found for id {ScheduledJobId} (fire {FireInstanceId}).",
@@ -108,8 +108,7 @@ internal sealed class SchedulerDispatchExecutor(
             return;
         }
 
-        await RecordAndRunAsync(definition, handler, fireInstanceId, scheduledFireTimeUtc, actualFireTimeUtc, parameterOverrides, triggeredBy, cancellationToken)
-            .ConfigureAwait(false);
+        await RecordAndRunAsync(definition, handler, fireInstanceId, scheduledFireTimeUtc, actualFireTimeUtc, parameterOverrides, triggeredBy, cancellationToken);
     }
 
     private async Task RecordAndRunAsync(ScheduledJobDefinitionRecord definition,
@@ -132,7 +131,7 @@ internal sealed class SchedulerDispatchExecutor(
                 ScheduledRunStatus.Running,
                 scheduledFireTimeUtc?.ToUnixTimeMilliseconds(),
                 actualFireMs),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         if (IsTerminal(run.Status))
         {
@@ -143,7 +142,7 @@ internal sealed class SchedulerDispatchExecutor(
             return;
         }
 
-        await SafePublishRunAsync(run, SchedulerHubEvents.RunStarted).ConfigureAwait(false);
+        await SafePublishRunAsync(run, SchedulerHubEvents.RunStarted);
 
         // The stored definition is NEVER mutated. A per-fire override (manual refresh) is merged onto a copy of the
         // parameters that the handler sees — only the whitelisted use-case key. A cron/no-override fire passes the stored
@@ -165,7 +164,7 @@ internal sealed class SchedulerDispatchExecutor(
 
         try
         {
-            await handler.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+            await handler.ExecuteAsync(context, cancellationToken);
 
             var completedMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
@@ -179,9 +178,9 @@ internal sealed class SchedulerDispatchExecutor(
                 completedMs,
                 completedMs - actualFireMs,
                 summary,
-                cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                cancellationToken: CancellationToken.None);
 
-            await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunCompleted).ConfigureAwait(false);
+            await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunCompleted);
         }
         catch (OperationCanceledException)
         {
@@ -189,7 +188,7 @@ internal sealed class SchedulerDispatchExecutor(
 
             // Operator cancel stamps CancellationRequestedAtUtc before interrupting; its absence means the only other
             // token-cancel source — the auto-interrupt max-runtime plugin — fired (graceful shutdown waits for jobs).
-            var latest = await _runStore.GetByIdAsync(run.Id, CancellationToken.None).ConfigureAwait(false);
+            var latest = await _runStore.GetByIdAsync(run.Id, CancellationToken.None);
             var wasCancelRequested = latest?.CancellationRequestedAtUtc is not null;
             var status = wasCancelRequested ? ScheduledRunStatus.Cancelled : ScheduledRunStatus.TimedOut;
 
@@ -200,10 +199,10 @@ internal sealed class SchedulerDispatchExecutor(
                 errorMessage: wasCancelRequested
                     ? "Run was cancelled."
                     : "Run exceeded its maximum runtime and was interrupted.",
-                cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                cancellationToken: CancellationToken.None);
 
             await SafePublishRunAsync(updated ?? run,
-                wasCancelRequested ? SchedulerHubEvents.RunCancelled : SchedulerHubEvents.RunFailed).ConfigureAwait(false);
+                wasCancelRequested ? SchedulerHubEvents.RunCancelled : SchedulerHubEvents.RunFailed);
 
             // Re-throw so Quartz observes the interrupt / shutdown.
             throw;
@@ -232,9 +231,9 @@ internal sealed class SchedulerDispatchExecutor(
                 completedMs - actualFireMs,
                 errorMessage: errorMessage,
                 errorDetails: exception.GetType().FullName,
-                cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                cancellationToken: CancellationToken.None);
 
-            await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunFailed).ConfigureAwait(false);
+            await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunFailed);
         }
     }
 
@@ -362,9 +361,9 @@ internal sealed class SchedulerDispatchExecutor(
             // reporting progress on its way out of a cancelled run forwards its (already-cancelled) token; honoring it
             // here would throw a second OperationCanceledException from SaveChanges that masks the real cancellation.
             _ = await _runEventStore.AddAsync(new ScheduledJobRunEventInput(runId, nextSequence, ScheduledRunEventLevel.Progress, message, dataJson),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
-            await SafePublishProgressAsync(runId, scheduledJobId, message, percent).ConfigureAwait(false);
+            await SafePublishProgressAsync(runId, scheduledJobId, message, percent);
         };
     }
 
@@ -387,7 +386,7 @@ internal sealed class SchedulerDispatchExecutor(
                 record.ErrorMessage,
                 occurredAt);
 
-            await _eventPublisher.PublishRunAsync(runEvent, CancellationToken.None).ConfigureAwait(false);
+            await _eventPublisher.PublishRunAsync(runEvent, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -401,7 +400,7 @@ internal sealed class SchedulerDispatchExecutor(
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             await _eventPublisher.PublishRunProgressAsync(new SchedulerRunProgressHubEvent(SchedulerHubEvents.RunProgress, runId, scheduledJobId, message, percent, occurredAt),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
         }
         catch (Exception exception)
         {

@@ -95,7 +95,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             return _current;
         }
 
-        var result = await RefreshCoreAsync(_refreshUrl, options, now, force: false, cancellationToken).ConfigureAwait(false);
+        var result = await RefreshCoreAsync(_refreshUrl, options, now, force: false, cancellationToken);
         return result.Snapshot;
     }
 
@@ -103,7 +103,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationId);
 
-        var snapshot = await GetCatalogAsync(cancellationToken).ConfigureAwait(false);
+        var snapshot = await GetCatalogAsync(cancellationToken);
         return snapshot.Document.Applications.FirstOrDefault(manifest => string.Equals(manifest.Id, applicationId, StringComparison.Ordinal));
     }
 
@@ -164,13 +164,13 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
     /// <summary>Reads at most <paramref name="maxBytes" /> bytes, or <see langword="null" /> once the body exceeds it.</summary>
     private static async Task<byte[]?> ReadCappedAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
     {
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
         using var buffer = new MemoryStream();
         var chunk = new byte[8192];
 
         while (true)
         {
-            var read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
+            var read = await stream.ReadAsync(chunk, cancellationToken);
             if (read == 0)
             {
                 break;
@@ -181,7 +181,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                 return null;
             }
 
-            await buffer.WriteAsync(chunk.AsMemory(start: 0, read), cancellationToken).ConfigureAwait(false);
+            await buffer.WriteAsync(chunk.AsMemory(start: 0, read), cancellationToken);
         }
 
         return buffer.ToArray();
@@ -193,7 +193,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
         bool force,
         CancellationToken cancellationToken)
     {
-        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _refreshGate.WaitAsync(cancellationToken);
         try
         {
             // Re-check under the lock: a concurrent (TTL-triggered) caller may already have refreshed while this one
@@ -208,13 +208,13 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             _lastAttemptUtc = attemptAtUtc;
             try
             {
-                await ProbeCachedETagAsync(refreshUrl, cancellationToken).ConfigureAwait(false);
+                await ProbeCachedETagAsync(refreshUrl, cancellationToken);
 
-                var outcome = await FetchAsync(refreshUrl, options, cancellationToken).ConfigureAwait(false);
+                var outcome = await FetchAsync(refreshUrl, options, cancellationToken);
                 if (outcome.NotModified)
                 {
                     // The cached copy is still current; promote it if the in-memory snapshot is still the bundled seed.
-                    var revalidated = await ApplyLastGoodAsync(refreshUrl, failureMessage: null, cancellationToken).ConfigureAwait(false);
+                    var revalidated = await ApplyLastGoodAsync(refreshUrl, failureMessage: null, cancellationToken);
                     if (revalidated.Snapshot.Source != ExternalAppCatalogSource.Bundled)
                     {
                         return revalidated;
@@ -224,19 +224,18 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                     // body is gone can only ever answer 304 again, so the node would report success and serve bundled
                     // for the life of the process: drop the token and ask for the document itself.
                     _lastETag = null;
-                    outcome = await FetchAsync(refreshUrl, options, cancellationToken).ConfigureAwait(false);
+                    outcome = await FetchAsync(refreshUrl, options, cancellationToken);
                     if (outcome.NotModified)
                     {
                         return await ApplyLastGoodAsync(refreshUrl,
                                 "Catalog refresh failed: the origin answered 304 to an unconditional request and no cached copy is usable.",
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                                cancellationToken);
                     }
                 }
 
                 if (outcome.FailureMessage is not null)
                 {
-                    return await ApplyLastGoodAsync(refreshUrl, outcome.FailureMessage, cancellationToken).ConfigureAwait(false);
+                    return await ApplyLastGoodAsync(refreshUrl, outcome.FailureMessage, cancellationToken);
                 }
 
                 var validation = ExternalAppCatalogValidator.Validate(outcome.Raw);
@@ -249,7 +248,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
 
                     var message = string.Create(CultureInfo.InvariantCulture,
                         $"Catalog refresh failed: the document failed validation ({validation.Errors.Count} errors, first: {firstError}).");
-                    return await ApplyLastGoodAsync(refreshUrl, message, cancellationToken).ConfigureAwait(false);
+                    return await ApplyLastGoodAsync(refreshUrl, message, cancellationToken);
                 }
 
                 _current = new ExternalAppCatalogSnapshot(validation.Document!,
@@ -259,7 +258,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                     LastRefreshFailure: null);
                 _lastETag = outcome.ETag;
 
-                await _cacheStore.SaveAsync(new StoredExternalAppCatalogCache(outcome.Raw!, attemptAtUtc, refreshUrl, outcome.ETag), cancellationToken).ConfigureAwait(false);
+                await _cacheStore.SaveAsync(new StoredExternalAppCatalogCache(outcome.Raw!, attemptAtUtc, refreshUrl, outcome.ETag), cancellationToken);
                 return new ExternalAppCatalogRefreshResult(_current, FailureMessage: null);
             }
             catch (OperationCanceledException)
@@ -291,7 +290,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
 
         _cacheProbed = true;
 
-        var stored = await _cacheStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await _cacheStore.LoadAsync(cancellationToken);
         if (stored is null || !string.Equals(stored.SourceUrl, refreshUrl, StringComparison.Ordinal))
         {
             return;
@@ -323,7 +322,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                 request.Headers.TryAddWithoutValidation("If-None-Match", _lastETag);
             }
 
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, fetchCts.Token).ConfigureAwait(false);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, fetchCts.Token);
 
             if (response.StatusCode == HttpStatusCode.NotModified)
             {
@@ -345,7 +344,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                     $"Catalog refresh failed: the response declared {declaredLength.Value} bytes, above the {options.MaxDocumentBytes} byte limit."));
             }
 
-            var bytes = await ReadCappedAsync(response.Content, options.MaxDocumentBytes, fetchCts.Token).ConfigureAwait(false);
+            var bytes = await ReadCappedAsync(response.Content, options.MaxDocumentBytes, fetchCts.Token);
             if (bytes is null)
             {
                 return FetchOutcome.Failed(string.Create(CultureInfo.InvariantCulture, $"Catalog refresh failed: the response exceeded the {options.MaxDocumentBytes} byte limit."));
@@ -397,7 +396,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             return Keep(failureMessage);
         }
 
-        var stored = await _cacheStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await _cacheStore.LoadAsync(cancellationToken);
         if (stored is null)
         {
             return Keep(failureMessage);

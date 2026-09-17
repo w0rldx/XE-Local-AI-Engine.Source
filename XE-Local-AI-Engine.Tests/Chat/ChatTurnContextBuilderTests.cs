@@ -28,10 +28,10 @@ public sealed class ChatTurnContextBuilderTests
         var store = Substitute.For<IConversationUploadedFileStore>();
         var builder = CreateBuilder(store);
 
-        var result = await builder.HasAttachmentContentAsync(conversationId, [Guid.NewGuid()]).ConfigureAwait(false);
+        var result = await builder.HasAttachmentContentAsync(conversationId, [Guid.NewGuid()]);
 
         AssertEx.True(result);
-        await store.DidNotReceive().ListAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().ListAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -43,7 +43,7 @@ public sealed class ChatTurnContextBuilderTests
              .Returns([File(conversationId, "notes.pdf", "application/pdf", ".pdf", DocumentExtractionStatus.Pending)]);
         var builder = CreateBuilder(store);
 
-        var result = await builder.HasAttachmentContentAsync(conversationId, requestedFileIds: null).ConfigureAwait(false);
+        var result = await builder.HasAttachmentContentAsync(conversationId, requestedFileIds: null);
 
         AssertEx.False(result);
     }
@@ -58,7 +58,7 @@ public sealed class ChatTurnContextBuilderTests
         store.ReadExtractedMarkdownAsync(conversationId, file.FileId, Arg.Any<CancellationToken>()).Returns("restart the service");
         var builder = CreateBuilder(store);
 
-        var message = await builder.BuildAttachmentContextAsync(conversationId, [file.FileId]).ConfigureAwait(false);
+        var message = await builder.BuildAttachmentContextAsync(conversationId, [file.FileId]);
 
         AssertEx.NotNull(message);
         AssertEx.Equal(MessageRole.User, message!.Role);
@@ -72,10 +72,10 @@ public sealed class ChatTurnContextBuilderTests
         var store = Substitute.For<IConversationUploadedFileStore>();
         var builder = CreateBuilder(store);
 
-        var message = await builder.BuildAttachmentContextAsync(Guid.NewGuid(), attachmentFileIds: null).ConfigureAwait(false);
+        var message = await builder.BuildAttachmentContextAsync(Guid.NewGuid(), attachmentFileIds: null);
 
         AssertEx.Null(message);
-        await store.DidNotReceive().ListAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().ListAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -94,7 +94,7 @@ public sealed class ChatTurnContextBuilderTests
                 MaxImageAttachmentBytes = 4
             });
 
-        var message = await builder.BuildImageContextAsync(conversationId, [first.FileId, second.FileId]).ConfigureAwait(false);
+        var message = await builder.BuildImageContextAsync(conversationId, [first.FileId, second.FileId]);
 
         AssertEx.NotNull(message);
         AssertEx.Equal(expected: 1, message!.Images!.Count);
@@ -108,7 +108,7 @@ public sealed class ChatTurnContextBuilderTests
                      .Returns(new KnowledgeSearchResult([Hit("Runbook", "restart the service with the eject command")]));
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService));
 
-        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?").ConfigureAwait(false);
+        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?");
 
         AssertEx.NotNull(grounding);
         AssertEx.True(grounding!.Message.Content.Contains("restart the service", StringComparison.Ordinal));
@@ -124,7 +124,7 @@ public sealed class ChatTurnContextBuilderTests
         var logger = new CapturingLogger<ChatTurnContextBuilder>();
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService), logger: logger);
 
-        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?").ConfigureAwait(false);
+        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?");
 
         AssertEx.Null(grounding);
         AssertEx.True(logger.AllText.Contains("failed for the plain-chat turn", StringComparison.Ordinal));
@@ -141,7 +141,7 @@ public sealed class ChatTurnContextBuilderTests
         var logger = new CapturingLogger<ChatTurnContextBuilder>();
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService), logger: logger);
 
-        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?", isRegeneratedTurn: true).ConfigureAwait(false);
+        var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?", isRegeneratedTurn: true);
 
         AssertEx.Null(grounding);
         AssertEx.True(logger.AllText.Contains("failed for the regenerated plain-chat turn", StringComparison.Ordinal));
@@ -153,10 +153,10 @@ public sealed class ChatTurnContextBuilderTests
         var searchService = Substitute.For<IKnowledgeSearchService>();
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService));
 
-        var grounding = await builder.BuildKnowledgeContextAsync("   ").ConfigureAwait(false);
+        var grounding = await builder.BuildKnowledgeContextAsync("   ");
 
         AssertEx.Null(grounding);
-        await searchService.DidNotReceive().SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await searchService.DidNotReceive().SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

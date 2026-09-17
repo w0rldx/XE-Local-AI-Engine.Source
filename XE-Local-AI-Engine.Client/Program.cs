@@ -13,13 +13,13 @@ FrameworkDependentVelopackBootstrap.Run(args);
 // pre-logger window.
 try
 {
-    var start = await XE_Local_AI_Engine.Client.Program.CreateAppAsync(args).ConfigureAwait(false);
+    var start = await XE_Local_AI_Engine.Client.Program.CreateAppAsync(args);
     if (start.App is null)
     {
         return start.ExitCode;
     }
 
-    await start.App.RunAsync().ConfigureAwait(false);
+    await start.App.RunAsync();
 }
 catch (HostAbortedException)
 {
@@ -33,8 +33,7 @@ catch (Exception ex)
     // rolling file and is skipped.
     if (!XE_Local_AI_Engine.Client.Program.StartupLoggerReady)
     {
-        await StartupCrashLog.RecordAsync("The application failed during early startup, before logging was initialized", ex, CancellationToken.None)
-                             .ConfigureAwait(false);
+        await StartupCrashLog.RecordAsync("The application failed during early startup, before logging was initialized", ex, CancellationToken.None);
     }
 
     Log.Fatal(ex, "The Application failed to start");
@@ -107,7 +106,7 @@ namespace XE_Local_AI_Engine.Client
             ArgumentNullException.ThrowIfNull(args);
             if (!DesktopLaunch.HasOneShotCommand(args))
             {
-                return await CreateAppCoreAsync(args, customization, commandContext: null).ConfigureAwait(false);
+                return await CreateAppCoreAsync(args, customization, commandContext: null);
             }
 
             var standardError = customization?.StandardError ?? Console.Error;
@@ -115,15 +114,14 @@ namespace XE_Local_AI_Engine.Client
             try
             {
                 customization?.BeforeOneShotCommand?.Invoke();
-                return await CreateAppCoreAsync(args, customization, commandContext).ConfigureAwait(false);
+                return await CreateAppCoreAsync(args, customization, commandContext);
             }
             catch (Exception exception)
             {
-                await standardError.WriteLineAsync($"The engine command failed unexpectedly (stage={commandContext.StageOutput}, type={exception.GetType().Name}).")
-                                   .ConfigureAwait(false);
+                await standardError.WriteLineAsync($"The engine command failed unexpectedly (stage={commandContext.StageOutput}, type={exception.GetType().Name}).");
                 if (exception is DesktopDataDirectoryException dataDirectoryException)
                 {
-                    await standardError.WriteLineAsync(dataDirectoryException.SafeDiagnostic).ConfigureAwait(false);
+                    await standardError.WriteLineAsync(dataDirectoryException.SafeDiagnostic);
                 }
 
                 return new ProgramStartResult(App: null, ExitCode: 1);
@@ -139,7 +137,7 @@ namespace XE_Local_AI_Engine.Client
 
             if (DesktopLaunch.HasHelpFlag(args))
             {
-                await WriteHelpAsync(standardOutput).ConfigureAwait(false);
+                await WriteHelpAsync(standardOutput);
                 return new ProgramStartResult(App: null, ExitCode: 0);
             }
 
@@ -154,19 +152,19 @@ namespace XE_Local_AI_Engine.Client
                         isManagedInstall,
                         standardOutput,
                         standardError,
-                        customization?.StatusHttpClientFactory).ConfigureAwait(false));
+                        customization?.StatusHttpClientFactory));
             }
 
             if (!DesktopLaunch.TryGetPort(args, out var requestedPort, out var portError))
             {
-                await standardError.WriteLineAsync(portError).ConfigureAwait(false);
+                await standardError.WriteLineAsync(portError);
                 return new ProgramStartResult(App: null, ExitCode: 2);
             }
 
             var setupRequested = DesktopLaunch.TryGetSetupCommand(args, out var setupCommand, out var setupError);
             if (setupRequested && setupError is not null)
             {
-                await standardError.WriteLineAsync(setupError).ConfigureAwait(false);
+                await standardError.WriteLineAsync(setupError);
                 return new ProgramStartResult(App: null, ExitCode: 2);
             }
 
@@ -178,7 +176,7 @@ namespace XE_Local_AI_Engine.Client
             var mcpKeyRequested = DesktopLaunch.TryGetMcpKeyScope(args, out var mcpKeyScope, out var mcpKeyError);
             if (mcpKeyRequested && mcpKeyError is not null)
             {
-                await standardError.WriteLineAsync(mcpKeyError).ConfigureAwait(false);
+                await standardError.WriteLineAsync(mcpKeyError);
                 return new ProgramStartResult(App: null, ExitCode: 3);
             }
 
@@ -259,7 +257,7 @@ namespace XE_Local_AI_Engine.Client
                                   + "instance, or stop it before running this command.");
                     }
 
-                    await Log.CloseAndFlushAsync().ConfigureAwait(false);
+                    await Log.CloseAndFlushAsync();
                     return new ProgramStartResult(App: null, ExitCode: setupRequested || mcpKeyRequested ? 4 : 1);
                 }
 
@@ -273,7 +271,7 @@ namespace XE_Local_AI_Engine.Client
                         Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
                         StartupLoggerReady = true;
                         Log.Fatal("Port {Port} is already in use; --port does not fall back automatically.", port);
-                        await Log.CloseAndFlushAsync().ConfigureAwait(false);
+                        await Log.CloseAndFlushAsync();
                         instanceLease.Dispose();
                         return new ProgramStartResult(App: null, ExitCode: 6);
                     }
@@ -284,7 +282,7 @@ namespace XE_Local_AI_Engine.Client
                 }
                 else
                 {
-                    builder.WebHost.UseUrls(await DesktopPortStore.ResolveBindUrlAsync(desktopDataDirectory, CancellationToken.None).ConfigureAwait(false));
+                    builder.WebHost.UseUrls(await DesktopPortStore.ResolveBindUrlAsync(desktopDataDirectory, CancellationToken.None));
                 }
 
                 // Desktop double-click launch supplies neither the node SQLite connection string nor the operator secret via
@@ -394,7 +392,7 @@ namespace XE_Local_AI_Engine.Client
             var knowledgeDowngradeCommand = DesktopLaunch.GetKnowledgeDowngradeCommand(args);
             if (knowledgeDowngradeCommand != KnowledgeDowngradeCommand.None)
             {
-                var downgradeExitCode = await RunKnowledgeDowngradeCommandAsync(app.Services, knowledgeDowngradeCommand).ConfigureAwait(false);
+                var downgradeExitCode = await RunKnowledgeDowngradeCommandAsync(app.Services, knowledgeDowngradeCommand);
                 instanceLease?.Dispose();
                 return new ProgramStartResult(App: null, downgradeExitCode);
             }
@@ -417,12 +415,12 @@ namespace XE_Local_AI_Engine.Client
                 // and write IMMEDIATELY after the node-chat pass: the identity pass runs against a different database,
                 // and a throw there would otherwise crash startup with the canvases already dropped and not yet
                 // written, which the next start could never recover (the table's absence is the one-shot marker).
-                var pendingCanvasWorkflows = await ReadPendingCanvasWorkflowsAsync(app.Services).ConfigureAwait(false);
+                var pendingCanvasWorkflows = await ReadPendingCanvasWorkflowsAsync(app.Services);
 
                 commandContext?.SetStage(OneShotCommandStage.Migrations);
-                await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
-                await ImportCanvasWorkflowsAsync(app.Services, pendingCanvasWorkflows).ConfigureAwait(false);
-                await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
+                await ApplyNodeChatMigrationsAsync(app.Services);
+                await ImportCanvasWorkflowsAsync(app.Services, pendingCanvasWorkflows);
+                await ApplyNodeIdentityMigrationsAsync(app.Services);
                 Log.Information("Database migrations applied.");
             }
             catch (Exception migrationException)
@@ -440,7 +438,7 @@ namespace XE_Local_AI_Engine.Client
             // without the old one, revokes all refresh tokens, then exits; off the flag this is a no-op and startup continues.
             if (DesktopLaunch.TryGetResetAdminPassword(args, out var resetPassword))
             {
-                var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword).ConfigureAwait(false);
+                var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword);
                 instanceLease?.Dispose();
                 return new ProgramStartResult(App: null, resetExitCode);
             }
@@ -448,7 +446,7 @@ namespace XE_Local_AI_Engine.Client
             if (setupRequested)
             {
                 commandContext?.SetStage(OneShotCommandStage.Handler);
-                var setupExitCode = await SetupCommandAsync(app.Services, setupCommand!, standardOutput, standardError).ConfigureAwait(false);
+                var setupExitCode = await SetupCommandAsync(app.Services, setupCommand!, standardOutput, standardError);
                 if (setupExitCode != 0)
                 {
                     instanceLease?.Dispose();
@@ -459,8 +457,7 @@ namespace XE_Local_AI_Engine.Client
             if (mcpKeyRequested)
             {
                 commandContext?.SetStage(OneShotCommandStage.Handler);
-                var mcpKeyExitCode = await McpKeyCommandAsync(app.Services, mcpKeyScope!.Value, standardOutput, standardError)
-                    .ConfigureAwait(false);
+                var mcpKeyExitCode = await McpKeyCommandAsync(app.Services, mcpKeyScope!.Value, standardOutput, standardError);
                 if (mcpKeyExitCode != 0)
                 {
                     instanceLease?.Dispose();
@@ -474,8 +471,8 @@ namespace XE_Local_AI_Engine.Client
                 return new ProgramStartResult(App: null, ExitCode: 0);
             }
 
-            await RecoverInterruptedNodeChatMessagesAsync(app.Services).ConfigureAwait(false);
-            await ReconcileStaleScheduledRunsAsync(app.Services).ConfigureAwait(false);
+            await RecoverInterruptedNodeChatMessagesAsync(app.Services);
+            await ReconcileStaleScheduledRunsAsync(app.Services);
             ActivateInvocationResumeRegistry(app.Services);
             RegisterWorkerShutdownDrain(app);
 
@@ -516,7 +513,7 @@ namespace XE_Local_AI_Engine.Client
                     return Task.CompletedTask;
                 });
 
-                await next().ConfigureAwait(false);
+                await next();
             });
 
             // Desktop mode serves plain HTTP on loopback only, so the HTTPS-redirect/HSTS pipeline is
@@ -574,7 +571,7 @@ namespace XE_Local_AI_Engine.Client
                         return;
                     }
 
-                    await next(context).ConfigureAwait(false);
+                    await next(context);
                 });
             }
 
@@ -595,7 +592,7 @@ namespace XE_Local_AI_Engine.Client
                         return;
                     }
 
-                    await next(context).ConfigureAwait(false);
+                    await next(context);
                 });
             }
 
@@ -614,7 +611,7 @@ namespace XE_Local_AI_Engine.Client
                         return;
                     }
 
-                    await next(context).ConfigureAwait(false);
+                    await next(context);
                 });
             }
 
@@ -634,7 +631,7 @@ namespace XE_Local_AI_Engine.Client
                         return;
                     }
 
-                    await next(context).ConfigureAwait(false);
+                    await next(context);
                 });
             }
 
@@ -654,7 +651,7 @@ namespace XE_Local_AI_Engine.Client
                         return;
                     }
 
-                    await next(context).ConfigureAwait(false);
+                    await next(context);
                 });
             }
 
@@ -674,7 +671,7 @@ namespace XE_Local_AI_Engine.Client
                         return;
                     }
 
-                    await next(context).ConfigureAwait(false);
+                    await next(context);
                 });
             }
 

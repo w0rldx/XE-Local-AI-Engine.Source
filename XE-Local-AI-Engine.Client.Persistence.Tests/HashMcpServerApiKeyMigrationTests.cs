@@ -20,23 +20,23 @@ public sealed class HashMcpServerApiKeyMigrationTests
     [Test]
     public async Task Migrate_OverAnExistingKey_DeletesItRatherThanCarryingItForward()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("hash-mcp-api-key.sqlite", PreHashMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("hash-mcp-api-key.sqlite", PreHashMigrationId);
 
         await probe.ExecuteAsync("""
                                  INSERT INTO mcp_server_api_keys (id, prefix, material, created_at_utc)
                                  VALUES ($id, 'xemcp_', X'0102030405', 1234);
                                  """,
-            command => command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString())).ConfigureAwait(false);
+            command => command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString()));
 
-        AssertEx.Equal(expected: 1L, (await probe.LongsAsync("SELECT COUNT(*) FROM mcp_server_api_keys;").ConfigureAwait(false)).Single(),
+        AssertEx.Equal(expected: 1L, (await probe.LongsAsync("SELECT COUNT(*) FROM mcp_server_api_keys;")).Single(),
             "The pre-migration key must actually be present, or this test proves nothing.");
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
-        AssertEx.Equal(expected: 0L, (await probe.LongsAsync("SELECT COUNT(*) FROM mcp_server_api_keys;").ConfigureAwait(false)).Single(),
+        AssertEx.Equal(expected: 0L, (await probe.LongsAsync("SELECT COUNT(*) FROM mcp_server_api_keys;")).Single(),
             "The old credential must be deleted — a renamed row would be undecryptable ciphertext that breaks every read.");
 
-        var columns = await probe.ColumnsAsync("mcp_server_api_keys").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("mcp_server_api_keys");
         AssertEx.True(columns.Contains("key_hash"), "The credential column must have been renamed to key_hash.");
         AssertEx.False(columns.Contains("material"), "The recoverable-secret column must be gone.");
     }

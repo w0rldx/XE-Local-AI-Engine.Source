@@ -23,12 +23,12 @@ public sealed class ListConversationFilesEndpoint(IConversationUploadedFileStore
 
     public override async Task HandleAsync(ListConversationUploadsRequest req, CancellationToken ct)
     {
-        var files = await _fileStore.ListAsync(req.ConversationId, ct).ConfigureAwait(false);
+        var files = await _fileStore.ListAsync(req.ConversationId, ct);
 
         await Send.OkAsync(new ListConversationUploadsResponse
             {
                 Items = files.Select(static file => file.ToResponse()).ToArray()
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

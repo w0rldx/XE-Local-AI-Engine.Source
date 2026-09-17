@@ -31,23 +31,23 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("branch-variant-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreBranchVariantMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreBranchVariantMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var messageColumns = await GetColumnsAsync(connection, "messages").ConfigureAwait(false);
+        var messageColumns = await GetColumnsAsync(connection, "messages");
         AssertEx.True(messageColumns.Contains("parent_message_id"), "messages.parent_message_id should be added.");
         AssertEx.True(messageColumns.Contains("variant_group_id"), "messages.variant_group_id should be added.");
 
-        var conversationColumns = await GetColumnsAsync(connection, "conversations").ConfigureAwait(false);
+        var conversationColumns = await GetColumnsAsync(connection, "conversations");
         AssertEx.True(conversationColumns.Contains("branch_of_conversation_id"), "conversations.branch_of_conversation_id should be added.");
 
-        AssertEx.True(await TableExistsAsync(connection, "message_feedback").ConfigureAwait(false), "message_feedback table should be created.");
+        AssertEx.True(await TableExistsAsync(connection, "message_feedback"), "message_feedback table should be created.");
     }
 
     [Test]
@@ -55,23 +55,23 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("branch-variant-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreBranchVariantMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreBranchVariantMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var messageColumns = await GetColumnsAsync(connection, "messages").ConfigureAwait(false);
+        var messageColumns = await GetColumnsAsync(connection, "messages");
         AssertEx.False(messageColumns.Contains("parent_message_id"), "Rollback should drop messages.parent_message_id.");
         AssertEx.False(messageColumns.Contains("variant_group_id"), "Rollback should drop messages.variant_group_id.");
 
-        var conversationColumns = await GetColumnsAsync(connection, "conversations").ConfigureAwait(false);
+        var conversationColumns = await GetColumnsAsync(connection, "conversations");
         AssertEx.False(conversationColumns.Contains("branch_of_conversation_id"), "Rollback should drop conversations.branch_of_conversation_id.");
 
-        AssertEx.False(await TableExistsAsync(connection, "message_feedback").ConfigureAwait(false), "Rollback should drop the message_feedback table.");
+        AssertEx.False(await TableExistsAsync(connection, "message_feedback"), "Rollback should drop the message_feedback table.");
     }
 
     [Test]
@@ -84,7 +84,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
         var parentId = Guid.NewGuid();
         var variantGroupId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -108,7 +108,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
                 VariantGroupId = variantGroupId
             });
 
-            await context.SaveChangesAsync().ConfigureAwait(false);
+            await context.SaveChangesAsync();
 
             context.MessageFeedback.Add(new NodeMessageFeedback
             {
@@ -120,19 +120,19 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
                 UpdatedAtUtc = 12
             });
 
-            await context.SaveChangesAsync().ConfigureAwait(false);
+            await context.SaveChangesAsync();
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            var conversation = await context.Conversations.SingleAsync(entity => entity.ConversationId == conversationId).ConfigureAwait(false);
+            var conversation = await context.Conversations.SingleAsync(entity => entity.ConversationId == conversationId);
             AssertEx.Equal(branchSourceId, conversation.BranchOfConversationId);
 
-            var message = await context.Messages.SingleAsync(entity => entity.MessageId == messageId).ConfigureAwait(false);
+            var message = await context.Messages.SingleAsync(entity => entity.MessageId == messageId);
             AssertEx.Equal(parentId, message.ParentMessageId);
             AssertEx.Equal(variantGroupId, message.VariantGroupId);
 
-            var feedback = await context.MessageFeedback.SingleAsync(entity => entity.MessageId == messageId).ConfigureAwait(false);
+            var feedback = await context.MessageFeedback.SingleAsync(entity => entity.MessageId == messageId);
             AssertEx.Equal(NodeMessageFeedbackRating.Up, feedback.Rating);
             AssertEx.Equal("helpful", feedback.Comment);
         }
@@ -152,7 +152,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -170,7 +170,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = commandText;
 
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -181,7 +181,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", table);
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return Convert.ToInt64(value, CultureInfo.InvariantCulture) > 0;
     }
 

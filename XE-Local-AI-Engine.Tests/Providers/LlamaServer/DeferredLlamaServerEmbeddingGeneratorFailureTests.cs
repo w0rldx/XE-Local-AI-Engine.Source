@@ -294,7 +294,7 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
                         HttpListenerContext context;
                         try
                         {
-                            context = await _listener.GetContextAsync().ConfigureAwait(false);
+                            context = await _listener.GetContextAsync();
                         }
                         catch (HttpListenerException)
                         {
@@ -309,7 +309,7 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
                         context.Response.StatusCode = (int)status;
                         context.Response.ContentType = "application/json";
                         context.Response.ContentLength64 = payload.Length;
-                        await context.Response.OutputStream.WriteAsync(payload, _cts.Token).ConfigureAwait(false);
+                        await context.Response.OutputStream.WriteAsync(payload, _cts.Token);
                         context.Response.Close();
                     }
                 },

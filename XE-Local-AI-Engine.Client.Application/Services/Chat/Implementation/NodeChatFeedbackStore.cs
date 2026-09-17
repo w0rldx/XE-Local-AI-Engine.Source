@@ -43,19 +43,19 @@ internal sealed class NodeChatFeedbackStore(NodeChatPersistenceWriter writer)
                 AddParameter(command, "$comment", comment);
                 AddParameter(command, "$created_at_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$updated_at_utc", request.UpdatedAtUtc);
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                await command.ExecuteNonQueryAsync(token);
 
-                return await ReadFeedbackAsync(dbContext, request.ConversationId, request.MessageId, token).ConfigureAwait(false)
+                return await ReadFeedbackAsync(dbContext, request.ConversationId, request.MessageId, token)
                        ?? throw new InvalidOperationException("The message feedback row could not be persisted.");
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<NodeChatMessageFeedbackDto?> GetMessageFeedbackAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
     {
         return await _writer.ExecuteConversationSharedAsync(conversationId,
             (dbContext, token) => ReadFeedbackAsync(dbContext, conversationId, messageId, token),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

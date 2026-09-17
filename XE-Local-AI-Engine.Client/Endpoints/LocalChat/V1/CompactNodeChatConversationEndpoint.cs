@@ -34,13 +34,13 @@ public sealed class CompactNodeChatConversationEndpoint(
 
     public override async Task HandleAsync(CompactNodeChatConversationRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
-        var result = await _compactionService.CompactAsync(req.ConversationId, req.Model, ct).ConfigureAwait(false);
+        var result = await _compactionService.CompactAsync(req.ConversationId, req.Model, ct);
 
         if (result.Outcome == ConversationCompactionOutcome.ConversationNotFound)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -54,6 +54,6 @@ public sealed class CompactNodeChatConversationEndpoint(
                 ModelUsed = result.ModelUsed,
                 UsedFallbackModel = result.UsedFallbackModel
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

@@ -63,7 +63,7 @@ internal sealed class GateableChatClient : IChatClient
     {
         CallCount++;
         CaptureTools(options);
-        await RunBodyAsync(cancellationToken).ConfigureAwait(false);
+        await RunBodyAsync(cancellationToken);
         return new ChatResponse(new ChatMessage(ChatRole.Assistant, _responseText));
     }
 
@@ -74,7 +74,7 @@ internal sealed class GateableChatClient : IChatClient
     {
         CallCount++;
         CaptureTools(options);
-        await RunBodyAsync(cancellationToken).ConfigureAwait(false);
+        await RunBodyAsync(cancellationToken);
         yield return new ChatResponseUpdate(ChatRole.Assistant, _responseText);
     }
 
@@ -111,7 +111,7 @@ internal sealed class GateableChatClient : IChatClient
         {
             if (_hold is not null)
             {
-                await _hold.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await _hold.WaitAsync(cancellationToken);
             }
 
             if (_delay > TimeSpan.Zero)
@@ -119,7 +119,7 @@ internal sealed class GateableChatClient : IChatClient
                 // real-timer: this latency IS the subject's input — callers use it to keep a send in flight while a
                 // cancellation or timeout races it. The hold TaskCompletionSource above is the deterministic seam for
                 // every other case; a caller that only needs "still running" should use that instead.
-                await Task.Delay(_delay, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(_delay, cancellationToken);
             }
         }
         catch (OperationCanceledException)

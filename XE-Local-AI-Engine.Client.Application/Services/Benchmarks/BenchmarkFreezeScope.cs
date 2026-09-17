@@ -34,7 +34,7 @@ public sealed class BenchmarkFreezeScope : IAsyncDisposable
     {
         foreach (var lease in _leases.Values.Reverse())
         {
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
         }
 
         _leases.Clear();
@@ -45,8 +45,8 @@ public sealed class BenchmarkFreezeScope : IAsyncDisposable
     {
         if (!_inspected)
         {
-            _capabilities = await resolver.InspectAsync(cancellationToken).ConfigureAwait(false);
-            _variant = await resolver.SelectVariantAsync(_capabilities, cancellationToken).ConfigureAwait(false);
+            _capabilities = await resolver.InspectAsync(cancellationToken);
+            _variant = await resolver.SelectVariantAsync(_capabilities, cancellationToken);
             _inspected = true;
             Inspections++;
         }
@@ -63,7 +63,7 @@ public sealed class BenchmarkFreezeScope : IAsyncDisposable
             return cached;
         }
 
-        var lease = await acquire(modelName, cancellationToken).ConfigureAwait(false);
+        var lease = await acquire(modelName, cancellationToken);
         _leases[modelName] = lease;
         Verifications++;
         return lease;

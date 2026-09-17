@@ -51,7 +51,7 @@ public sealed class DevelopmentAttemptFailureReportingTests
                 providerCalls: 3,
                 "coder");
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.OutputTokenBudgetExceeded, failure.FailureCode);
         AssertEx.True(failure.OperatorReason.Contains("301", StringComparison.Ordinal), "the reason must state what was produced");
@@ -71,7 +71,7 @@ public sealed class DevelopmentAttemptFailureReportingTests
                 providerCalls: 3,
                 "reviewer");
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.UsageNotReported, failure.FailureCode);
         AssertEx.True(failure.OperatorReason.Contains("reviewer", StringComparison.Ordinal));

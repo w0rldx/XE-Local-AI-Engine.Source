@@ -36,17 +36,17 @@ public sealed class ContextExpansionServiceTests : IDisposable
         var documentA = Guid.NewGuid();
         var documentB = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentA).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentB).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentA);
+        await SeedDocumentAsync(databasePath, documentB);
         for (var index = 0; index < 5; index++)
         {
-            await SeedChunkAsync(databasePath, documentA, Guid.NewGuid(), index, $"a-chunk-{index}").ConfigureAwait(false);
+            await SeedChunkAsync(databasePath, documentA, Guid.NewGuid(), index, $"a-chunk-{index}");
         }
 
         for (var index = 0; index < 3; index++)
         {
-            await SeedChunkAsync(databasePath, documentB, Guid.NewGuid(), index, $"b-chunk-{index}").ConfigureAwait(false);
+            await SeedChunkAsync(databasePath, documentB, Guid.NewGuid(), index, $"b-chunk-{index}");
         }
 
         var anchors = new List<KnowledgeNeighborAnchor>
@@ -61,7 +61,7 @@ public sealed class ContextExpansionServiceTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = new ContextExpansionService(context);
 
-        var batched = await service.ExpandBatchAsync(anchors, Window, CancellationToken.None).ConfigureAwait(false);
+        var batched = await service.ExpandBatchAsync(anchors, Window, CancellationToken.None);
         // Two documents → exactly two DB commands (one per document), regardless of how many anchors/ranges each holds.
         var batchQueryCount = service.LastBatchQueryCount;
 
@@ -69,7 +69,7 @@ public sealed class ContextExpansionServiceTests : IDisposable
         for (var index = 0; index < anchors.Count; index++)
         {
             var anchor = anchors[index];
-            var perAnchor = await service.ExpandAsync(anchor.DocumentId, anchor.ChunkIndex, Window, CancellationToken.None).ConfigureAwait(false);
+            var perAnchor = await service.ExpandAsync(anchor.DocumentId, anchor.ChunkIndex, Window, CancellationToken.None);
             AssertNeighborsEqual(perAnchor, batched[index]);
         }
 
@@ -85,11 +85,11 @@ public sealed class ContextExpansionServiceTests : IDisposable
         const int nearAnchor = 10;
         const int farAnchor = 190;
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
         for (var index = 0; index < chunkCount; index++)
         {
-            await SeedChunkAsync(databasePath, documentId, Guid.NewGuid(), index, $"chunk-{index}").ConfigureAwait(false);
+            await SeedChunkAsync(databasePath, documentId, Guid.NewGuid(), index, $"chunk-{index}");
         }
 
         var anchors = new List<KnowledgeNeighborAnchor>
@@ -101,7 +101,7 @@ public sealed class ContextExpansionServiceTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = new ContextExpansionService(context);
 
-        var batched = await service.ExpandBatchAsync(anchors, Window, CancellationToken.None).ConfigureAwait(false);
+        var batched = await service.ExpandBatchAsync(anchors, Window, CancellationToken.None);
         // Capture the seams immediately: the two disjoint ranges of this one document must be read by a SINGLE DB command
         // (the one-query-per-document contract), and hydration must be bounded to the union of the two windows.
         var batchQueryCount = service.LastBatchQueryCount;
@@ -109,8 +109,8 @@ public sealed class ContextExpansionServiceTests : IDisposable
 
         // Content is unchanged: each anchor's window matches per-anchor expansion exactly.
         AssertEx.Equal(2, batched.Count);
-        var nearExpected = await service.ExpandAsync(documentId, nearAnchor, Window, CancellationToken.None).ConfigureAwait(false);
-        var farExpected = await service.ExpandAsync(documentId, farAnchor, Window, CancellationToken.None).ConfigureAwait(false);
+        var nearExpected = await service.ExpandAsync(documentId, nearAnchor, Window, CancellationToken.None);
+        var farExpected = await service.ExpandAsync(documentId, farAnchor, Window, CancellationToken.None);
         AssertNeighborsEqual(nearExpected, batched[0]);
         AssertNeighborsEqual(farExpected, batched[1]);
 
@@ -125,12 +125,12 @@ public sealed class ContextExpansionServiceTests : IDisposable
     public async Task ExpandBatchAsync_EmptyAnchors_ReturnsEmpty()
     {
         var databasePath = GetDatabasePath("expand-empty.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = new ContextExpansionService(context);
 
-        var batched = await service.ExpandBatchAsync([], Window, CancellationToken.None).ConfigureAwait(false);
+        var batched = await service.ExpandBatchAsync([], Window, CancellationToken.None);
 
         AssertEx.Empty(batched);
     }
@@ -140,15 +140,15 @@ public sealed class ContextExpansionServiceTests : IDisposable
     {
         var databasePath = GetDatabasePath("expand-collection-scope.sqlite");
         var documentId = Guid.NewGuid();
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId, "PROJECT-A").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, Guid.NewGuid(), 0, "project-a-secret").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, "PROJECT-A");
+        await SeedChunkAsync(databasePath, documentId, Guid.NewGuid(), 0, "project-a-secret");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = new ContextExpansionService(context);
 
-        var denied = await service.ExpandAsync(documentId, 0, Window, "PROJECT-B", CancellationToken.None).ConfigureAwait(false);
-        var allowed = await service.ExpandAsync(documentId, 0, Window, "PROJECT-A", CancellationToken.None).ConfigureAwait(false);
+        var denied = await service.ExpandAsync(documentId, 0, Window, "PROJECT-B", CancellationToken.None);
+        var allowed = await service.ExpandAsync(documentId, 0, Window, "PROJECT-A", CancellationToken.None);
 
         AssertEx.Empty(denied);
         AssertEx.Equal(1, allowed.Count);
@@ -171,7 +171,7 @@ public sealed class ContextExpansionServiceTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private Task SeedDocumentAsync(string databasePath, Guid documentId)
@@ -188,7 +188,7 @@ public sealed class ContextExpansionServiceTests : IDisposable
         }
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -200,13 +200,13 @@ public sealed class ContextExpansionServiceTests : IDisposable
         command.Parameters.AddWithValue("$hash", "hash-" + documentId.ToString("N"));
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
         command.Parameters.AddWithValue("$collection", collectionId);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task SeedChunkAsync(string databasePath, Guid documentId, Guid chunkId, int chunkIndex, string content)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -218,7 +218,7 @@ public sealed class ContextExpansionServiceTests : IDisposable
         command.Parameters.AddWithValue("$index", chunkIndex);
         command.Parameters.AddWithValue("$content", content);
         command.Parameters.AddWithValue("$heading", "Heading > " + content);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

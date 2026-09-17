@@ -21,13 +21,12 @@ public sealed class ExternalAppEncryptionTests
     public async Task VariablesJson_WhenSaved_IsNotPlaintextAtRest()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var command = ExternalAppTestFixture.Create();
-        _ = await new ExternalAppInstanceStore(context).CreateAsync(command).ConfigureAwait(false);
+        _ = await new ExternalAppInstanceStore(context).CreateAsync(command);
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT variables_json FROM external_app_instances WHERE id = $id;",
-                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))
-                                                   .ConfigureAwait(false)) as byte[];
+                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))) as byte[];
 
         AssertEx.False(AssertEx.NotNull(stored).AsSpan().IndexOf(Encoding.UTF8.GetBytes(ExternalAppTestFixture.SeedSecret)) >= 0,
             "An application's admin password must not survive as plaintext in the database file.");
@@ -39,15 +38,15 @@ public sealed class ExternalAppEncryptionTests
         using var fixture = new ExternalAppTestFixture();
         var command = ExternalAppTestFixture.Create();
 
-        await using (var writeContext = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var writeContext = await fixture.CreateSchemaAsync())
         {
-            _ = await new ExternalAppInstanceStore(writeContext).CreateAsync(command).ConfigureAwait(false);
+            _ = await new ExternalAppInstanceStore(writeContext).CreateAsync(command);
         }
 
         // A fresh context, so the answer comes from the materialization interceptor rather than from the writer's own
         // change tracker, which still holds the plaintext.
         await using var readContext = fixture.CreateContext();
-        var snapshot = AssertEx.NotNull(await new ExternalAppInstanceStore(readContext).GetAsync(command.Id).ConfigureAwait(false));
+        var snapshot = AssertEx.NotNull(await new ExternalAppInstanceStore(readContext).GetAsync(command.Id));
 
         AssertEx.Equal(ExternalAppTestFixture.SeedVariablesJson, snapshot.VariablesJson, "The store boundary hands the application layer decrypted text, never the sealed bytes.");
     }
@@ -59,16 +58,15 @@ public sealed class ExternalAppEncryptionTests
         var victim = ExternalAppTestFixture.Create();
         var attacker = ExternalAppTestFixture.Create(applicationId: "searxng", variablesJson: """{"SEARXNG_SECRET":"unrelated"}""");
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = new ExternalAppInstanceStore(context);
-            _ = await store.CreateAsync(victim).ConfigureAwait(false);
-            _ = await store.CreateAsync(attacker).ConfigureAwait(false);
+            _ = await store.CreateAsync(victim);
+            _ = await store.CreateAsync(attacker);
         }
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT variables_json FROM external_app_instances WHERE id = $id;",
-                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", victim.Id))
-                                                   .ConfigureAwait(false)) as byte[];
+                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", victim.Id))) as byte[];
 
         // Copy one instance's sealed variables onto another's row. The AAD binds the row's own id in BOTH slots, so the
         // copy must fail authentication rather than hand the second instance the first one's credentials.
@@ -77,8 +75,7 @@ public sealed class ExternalAppEncryptionTests
                          {
                              sqlCommand.Parameters.AddWithValue("$payload", stored!);
                              sqlCommand.Parameters.AddWithValue("$id", attacker.Id);
-                         })
-                     .ConfigureAwait(false);
+                         });
 
         await using var attackContext = fixture.CreateContext();
         _ = AssertEx.Throws<CryptographicException>(() => _ = attackContext.ExternalAppInstances.AsNoTracking().SingleOrDefault(row => row.Id == attacker.Id),
@@ -89,13 +86,12 @@ public sealed class ExternalAppEncryptionTests
     public async Task BridgeToken_WhenSaved_IsNotPlaintextAtRest()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var command = ExternalAppTestFixture.Create();
-        _ = await new ExternalAppInstanceStore(context).CreateAsync(command).ConfigureAwait(false);
+        _ = await new ExternalAppInstanceStore(context).CreateAsync(command);
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT bridge_token FROM external_app_instances WHERE id = $id;",
-                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))
-                                                   .ConfigureAwait(false)) as byte[];
+                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))) as byte[];
 
         AssertEx.False(AssertEx.NotNull(stored).AsSpan().IndexOf(Encoding.UTF8.GetBytes(ExternalAppTestFixture.SeedBridgeSecret)) >= 0,
             "A live credential for this node's inference surface must not survive as plaintext in the database file.");
@@ -107,15 +103,15 @@ public sealed class ExternalAppEncryptionTests
         using var fixture = new ExternalAppTestFixture();
         var command = ExternalAppTestFixture.Create();
 
-        await using (var writeContext = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var writeContext = await fixture.CreateSchemaAsync())
         {
-            _ = await new ExternalAppInstanceStore(writeContext).CreateAsync(command).ConfigureAwait(false);
+            _ = await new ExternalAppInstanceStore(writeContext).CreateAsync(command);
         }
 
         // The PLAINTEXT has to come back, not a digest: Start rebuilds an instance's containers from stored state and
         // a container's environment is immutable, so the engine must re-inject the SAME token it injected originally.
         await using var readContext = fixture.CreateContext();
-        var snapshot = AssertEx.NotNull(await new ExternalAppInstanceStore(readContext).GetAsync(command.Id).ConfigureAwait(false));
+        var snapshot = AssertEx.NotNull(await new ExternalAppInstanceStore(readContext).GetAsync(command.Id));
 
         AssertEx.Equal(ExternalAppTestFixture.BridgeTokenFor(command.Id), snapshot.BridgeToken);
     }
@@ -127,16 +123,15 @@ public sealed class ExternalAppEncryptionTests
         var victim = ExternalAppTestFixture.Create();
         var attacker = ExternalAppTestFixture.Create(applicationId: "searxng");
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = new ExternalAppInstanceStore(context);
-            _ = await store.CreateAsync(victim).ConfigureAwait(false);
-            _ = await store.CreateAsync(attacker).ConfigureAwait(false);
+            _ = await store.CreateAsync(victim);
+            _ = await store.CreateAsync(attacker);
         }
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT bridge_token FROM external_app_instances WHERE id = $id;",
-                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", victim.Id))
-                                                   .ConfigureAwait(false)) as byte[];
+                                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", victim.Id))) as byte[];
 
         // The AAD binds the row's own id in BOTH slots, so one instance's sealed token cannot be read back as
         // another's — which is what stops a row copy from turning into a grant of the first instance's bridge access.
@@ -145,8 +140,7 @@ public sealed class ExternalAppEncryptionTests
                          {
                              sqlCommand.Parameters.AddWithValue("$payload", stored!);
                              sqlCommand.Parameters.AddWithValue("$id", attacker.Id);
-                         })
-                     .ConfigureAwait(false);
+                         });
 
         await using var attackContext = fixture.CreateContext();
         _ = AssertEx.Throws<CryptographicException>(() => _ = attackContext.ExternalAppInstances.AsNoTracking().SingleOrDefault(row => row.Id == attacker.Id),
@@ -163,13 +157,13 @@ public sealed class ExternalAppEncryptionTests
         using var fixture = new ExternalAppTestFixture();
         var command = ExternalAppTestFixture.Create(withBridgeToken: false);
 
-        await using (var writeContext = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var writeContext = await fixture.CreateSchemaAsync())
         {
-            _ = await new ExternalAppInstanceStore(writeContext).CreateAsync(command).ConfigureAwait(false);
+            _ = await new ExternalAppInstanceStore(writeContext).CreateAsync(command);
         }
 
         await using var readContext = fixture.CreateContext();
-        var snapshot = AssertEx.NotNull(await new ExternalAppInstanceStore(readContext).GetAsync(command.Id).ConfigureAwait(false));
+        var snapshot = AssertEx.NotNull(await new ExternalAppInstanceStore(readContext).GetAsync(command.Id));
 
         AssertEx.Null(snapshot.BridgeToken, "A row with no token reads back as none; it never fails the whole instance.");
     }
@@ -181,14 +175,13 @@ public sealed class ExternalAppEncryptionTests
         // it stands, so encrypting it would buy nothing and cost the replay. If a later change puts real content here,
         // this test is the one that has to be re-argued.
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = new ExternalAppInstanceStore(context);
         var command = ExternalAppTestFixture.Create(firstEventDetailJson: """{"acceptedPermissions":["internet"]}""");
-        _ = await store.CreateAsync(command).ConfigureAwait(false);
+        _ = await store.CreateAsync(command);
 
         var stored = await fixture.RawScalarAsync("SELECT detail_json FROM external_app_instance_events WHERE instance_id = $id;",
-                                      sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))
-                                  .ConfigureAwait(false);
+                                      sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id));
 
         AssertEx.Equal("""{"acceptedPermissions":["internet"]}""", AssertEx.NotNull(stored as string), "detail_json is a TEXT column with no interceptor entry, by design.");
     }

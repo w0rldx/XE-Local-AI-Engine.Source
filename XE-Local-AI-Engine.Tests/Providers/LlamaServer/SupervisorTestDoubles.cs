@@ -90,7 +90,7 @@ internal sealed class FakeProcessHandle(int pid, bool exitOnTreeKill = true, Act
     {
         try
         {
-            await _exitSignal.Task.WaitAsync(timeout, ct).ConfigureAwait(false);
+            await _exitSignal.Task.WaitAsync(timeout, ct);
             return true;
         }
         catch (TimeoutException)
@@ -168,7 +168,7 @@ internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
         Interlocked.Increment(ref _waiting);
         try
         {
-            await _release.Task.WaitAsync(ct).ConfigureAwait(false);
+            await _release.Task.WaitAsync(ct);
             return true;
         }
         finally

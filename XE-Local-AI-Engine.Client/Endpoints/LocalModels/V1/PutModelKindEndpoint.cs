@@ -30,21 +30,21 @@ public sealed class PutModelKindEndpoint(
         if (validationError is not null)
         {
             AddError(validationError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (!TryParseKind(req.Kind, out var kind))
         {
             AddError("Invalid model kind");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         // The validator's pattern rejects whitespace, so the validated (decoded) name is already the persisted key — pass it
         // through unchanged so the key that was validated and the key that is stored/probed are provably identical.
-        var result = await _classificationService.SetOverrideAsync(decodedModelName!, kind, ct).ConfigureAwait(false);
-        await Send.OkAsync(result.ToKindResponse(), ct).ConfigureAwait(false);
+        var result = await _classificationService.SetOverrideAsync(decodedModelName!, kind, ct);
+        await Send.OkAsync(result.ToKindResponse(), ct);
     }
 
     private static bool TryParseKind(string? value, out ModelKind kind)

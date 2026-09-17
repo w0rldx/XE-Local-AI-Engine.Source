@@ -21,16 +21,15 @@ public sealed class NodeChatStreamCancellationRegistryTests
         });
 
         var cancelTask = Task.Run(() => registry.TryCancel(correlation));
-        await callbackEntered.Task.ConfigureAwait(false);
+        await callbackEntered.Task;
         var disposeTask = Task.Run(registration.Dispose);
 
         await AssertEx.StaysIncompleteAsync(disposeTask,
-                          "Once cancellation claims a live registration, disposal must not report completion while its callback can still execute.")
-                      .ConfigureAwait(false);
+                          "Once cancellation claims a live registration, disposal must not report completion while its callback can still execute.");
 
         releaseCallback.SetResult();
-        AssertEx.True(await cancelTask.ConfigureAwait(false));
-        await disposeTask.ConfigureAwait(false);
+        AssertEx.True(await cancelTask);
+        await disposeTask;
         AssertEx.False(registry.TryCancel(correlation), "A completed disposal must make the registration undiscoverable.");
     }
 }

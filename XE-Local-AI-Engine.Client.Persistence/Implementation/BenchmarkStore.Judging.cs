@@ -19,13 +19,13 @@ public sealed partial class BenchmarkStore
         }
 
         EnsurePolicyHash(policyHash);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedProjectVersion);
-        await EnsureNoActiveJudgeAttemptsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await EnsureNoActiveJudgeAttemptsAsync(projectId, cancellationToken);
 
         var current = project.CurrentJudgePolicyRevisionId is { } currentRevisionId
-            ? await RequireJudgePolicyRevisionAsync(currentRevisionId, cancellationToken).ConfigureAwait(false)
+            ? await RequireJudgePolicyRevisionAsync(currentRevisionId, cancellationToken)
             : null;
 
         // Re-activating the policy the project already judges under changes nothing — in particular it must not reset
@@ -36,26 +36,26 @@ public sealed partial class BenchmarkStore
         }
 
         var now = Now();
-        var (revision, wasCreated) = await RepointJudgePolicyAsync(project, policyJson, policyHash, now, cancellationToken).ConfigureAwait(false);
+        var (revision, wasCreated) = await RepointJudgePolicyAsync(project, policyJson, policyHash, now, cancellationToken);
         project.Version++;
         project.UpdatedAtUtc = now;
-        var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken).ConfigureAwait(false);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), wasCreated, runIds);
     }
 
     public async Task DisableJudgePolicyAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedProjectVersion);
-        await EnsureNoActiveJudgeAttemptsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await EnsureNoActiveJudgeAttemptsAsync(projectId, cancellationToken);
         project.CurrentJudgePolicyRevisionId = null;
         project.Version++;
         project.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<BenchmarkProjectFidelityChange> UpdateProjectFidelityAsync(Guid projectId,
@@ -65,8 +65,8 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedProjectVersion);
 
         // No freeze check, on purpose. See IBenchmarkStore: a frozen project refuses edits to what its runs were
@@ -81,12 +81,12 @@ public sealed partial class BenchmarkStore
         project.Version++;
         project.UpdatedAtUtc = now;
 
-        var frozen = await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken).ConfigureAwait(false);
+        var frozen = await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken);
         var enqueued = measureExisting && input.FidelityEnabled
-            ? await EnqueueMissingFidelityAsync(project, now, cancellationToken).ConfigureAwait(false)
+            ? await EnqueueMissingFidelityAsync(project, now, cancellationToken)
             : [];
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new BenchmarkProjectFidelityChange(ToRecord(project, frozen), enqueued);
     }
 
@@ -109,14 +109,13 @@ public sealed partial class BenchmarkStore
                                                                                                     && other.TaskItemIndex < entity.TaskItemIndex)
                                                           && !_dbContext.BenchmarkFidelityAttempts.Any(attempt => attempt.RunId == entity.Id))
                                          .OrderBy(entity => entity.CreatedAtUtc)
-                                         .ToListAsync(cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .ToListAsync(cancellationToken);
         foreach (var run in candidates)
         {
             // AppendFidelityWorkAsync already sets the projection to 'queued' and clears the error, which is exactly
             // what an enqueued measurement is. Resetting it to null here undid that in the same transaction and left
             // the run reading as "fidelity was never asked for" while its item sat in the queue.
-            _ = await AppendFidelityWorkAsync(run, kind, now, cancellationToken).ConfigureAwait(false);
+            _ = await AppendFidelityWorkAsync(run, kind, now, cancellationToken);
             run.Version++;
             run.UpdatedAtUtc = now;
         }
@@ -125,12 +124,12 @@ public sealed partial class BenchmarkStore
     }
 
     public async Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default) =>
-        await _dbContext.BenchmarkJudgeAttempts.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false) is { } attempt
+        await _dbContext.BenchmarkJudgeAttempts.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken) is { } attempt
             ? ToRecord(attempt)
             : null;
 
     public async Task<BenchmarkJudgePolicyRevisionRecord?> GetJudgePolicyRevisionAsync(Guid revisionId, CancellationToken cancellationToken = default) =>
-        await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == revisionId, cancellationToken).ConfigureAwait(false) is { } revision
+        await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == revisionId, cancellationToken) is { } revision
             ? ToRecord(revision, includePayload: true)
             : null;
 
@@ -140,16 +139,14 @@ public sealed partial class BenchmarkStore
         var revisionId = await _dbContext.BenchmarkProjects.AsNoTracking()
                                          .Where(entity => entity.Id == projectId)
                                          .Select(entity => entity.CurrentJudgePolicyRevisionId)
-                                         .SingleOrDefaultAsync(cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .SingleOrDefaultAsync(cancellationToken);
         if (revisionId is null)
         {
             return null;
         }
 
         var revision = await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking()
-                                       .SingleOrDefaultAsync(entity => entity.Id == revisionId, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleOrDefaultAsync(entity => entity.Id == revisionId, cancellationToken);
         return revision is null ? null : ToRecord(revision, includePayload: true);
     }
 
@@ -167,14 +164,13 @@ public sealed partial class BenchmarkStore
                             entity.ReferenceExecutionKey,
                             entity.CohortGeneration,
                             entity.CreatedAtUtc))
-                        .ToArrayAsync(cancellationToken)
-                        .ConfigureAwait(false);
+                        .ToArrayAsync(cancellationToken);
 
     public async Task<BenchmarkJudgeAttemptRecord> EnqueueJudgeAttemptAsync(BenchmarkEnqueueJudgeAttemptCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var run = await RequireRunAsync(command.RunId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var run = await RequireRunAsync(command.RunId, tracking: true, cancellationToken);
         EnsureVersion(run.Version, command.ExpectedRunVersion);
         if (run.PrimaryStatus != BenchmarkPrimaryStatus.Succeeded || run.OutputPartsJson is null)
         {
@@ -184,16 +180,15 @@ public sealed partial class BenchmarkStore
         var currentRevisionId = await _dbContext.BenchmarkProjects.AsNoTracking()
                                                 .Where(entity => entity.Id == run.ProjectId)
                                                 .Select(entity => entity.CurrentJudgePolicyRevisionId)
-                                                .SingleOrDefaultAsync(cancellationToken)
-                                                .ConfigureAwait(false);
+                                                .SingleOrDefaultAsync(cancellationToken);
         if (currentRevisionId != command.PolicyRevisionId)
         {
             throw new BenchmarkJudgePolicyChangedException("The requested judge policy revision is not the project's current one.");
         }
 
-        var revision = await RequireJudgePolicyRevisionAsync(command.PolicyRevisionId, cancellationToken).ConfigureAwait(false);
+        var revision = await RequireJudgePolicyRevisionAsync(command.PolicyRevisionId, cancellationToken);
         var currentAttempt = run.CurrentJudgeAttemptId is { } currentAttemptId
-            ? await RequireJudgeAttemptAsync(currentAttemptId, cancellationToken).ConfigureAwait(false)
+            ? await RequireJudgeAttemptAsync(currentAttemptId, cancellationToken)
             : null;
         if (currentAttempt?.Status is BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running)
         {
@@ -219,12 +214,11 @@ public sealed partial class BenchmarkStore
                 command.RuntimeUnresolvedReason,
                 command.LaunchIntent,
                 now,
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         run.Version++;
         run.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(attempt);
     }
 
@@ -233,10 +227,10 @@ public sealed partial class BenchmarkStore
         BenchmarkJudgeAttemptSeed? cohortAttemptSeed = null,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedProjectVersion);
-        await EnsureNoActiveJudgeAttemptsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await EnsureNoActiveJudgeAttemptsAsync(projectId, cancellationToken);
         if (project.CurrentJudgePolicyRevisionId is not { } revisionId)
         {
             throw new BenchmarkConflictException("JudgeDisabled");
@@ -252,14 +246,14 @@ public sealed partial class BenchmarkStore
         // The reset and the attempts are committed together, so "move the cohort to the current runtime" can never
         // leave a partial set that would then rank against a key half of it never ran under.
         var now = Now();
-        var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken).ConfigureAwait(false);
+        var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken);
         revision.ReferenceExecutionKey = null;
         revision.CohortGeneration = checked(revision.CohortGeneration + 1);
         project.Version++;
         project.UpdatedAtUtc = now;
-        var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken).ConfigureAwait(false);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var runIds = await EnqueueCohortAttemptsAsync(projectId, revision, cohortAttemptSeed, now, cancellationToken);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new BenchmarkJudgePolicyActivation(ToRecord(revision, includePayload: true), WasCreated: false, runIds);
     }
 
@@ -279,8 +273,7 @@ public sealed partial class BenchmarkStore
                                        .Where(entity => entity.Id == revisionId
                                                         && entity.CohortGeneration == cohortGeneration
                                                         && entity.ReferenceExecutionKey == null)
-                                       .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.ReferenceExecutionKey, executionKey), cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.ReferenceExecutionKey, executionKey), cancellationToken);
         return promoted == 1;
     }
 }

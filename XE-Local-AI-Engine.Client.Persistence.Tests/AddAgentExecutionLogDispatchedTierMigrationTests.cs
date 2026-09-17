@@ -47,15 +47,15 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
     {
         var databasePath = GetDatabasePath("dispatched-tier-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreWaveMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreWaveMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection, "agent_execution_logs");
         foreach (var column in DispatchColumns)
         {
             AssertEx.True(columns.Contains(column), $"agent_execution_logs should expose the {column} column after the migration.");
@@ -67,10 +67,10 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
     {
         var databasePath = GetDatabasePath("dispatched-tier-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection, "agent_execution_logs");
         foreach (var column in DispatchColumns)
         {
             AssertEx.True(columns.Contains(column), $"A fresh migrate-to-head should expose the {column} column.");
@@ -85,9 +85,9 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
         var databasePath = GetDatabasePath("dispatched-tier-existing-row.sqlite");
         var rowId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreWaveMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreWaveMigrationId);
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             await using var insert = connection.CreateCommand();
             insert.CommandText = """
@@ -96,23 +96,23 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
                                  """;
             insert.Parameters.AddWithValue("$id", rowId.ToString());
             insert.Parameters.AddWithValue("$agent", Guid.NewGuid().ToString());
-            _ = await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await insert.ExecuteNonQueryAsync();
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var readConnection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var readConnection = await OpenConnectionAsync(databasePath);
         await using var select = readConnection.CreateCommand();
         select.CommandText = "SELECT dispatched_tier, authored_effort FROM agent_execution_logs WHERE id = $id;";
         select.Parameters.AddWithValue("$id", rowId.ToString());
-        await using var reader = await select.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await select.ExecuteReaderAsync();
 
-        AssertEx.True(await reader.ReadAsync().ConfigureAwait(false), "The pre-migration row must survive the migration.");
-        AssertEx.True(await reader.IsDBNullAsync(0).ConfigureAwait(false), "An existing row reads back null for the dispatched tier.");
-        AssertEx.True(await reader.IsDBNullAsync(1).ConfigureAwait(false), "An existing row reads back null for the authored effort.");
+        AssertEx.True(await reader.ReadAsync(), "The pre-migration row must survive the migration.");
+        AssertEx.True(await reader.IsDBNullAsync(0), "An existing row reads back null for the dispatched tier.");
+        AssertEx.True(await reader.IsDBNullAsync(1), "An existing row reads back null for the authored effort.");
     }
 
     [Test]
@@ -120,15 +120,15 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
     {
         var databasePath = GetDatabasePath("dispatched-tier-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreWaveMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreWaveMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection, "agent_execution_logs");
         foreach (var column in WaveLogColumns)
         {
             AssertEx.False(columns.Contains(column), $"Rolling back the wave should drop the {column} column.");
@@ -142,9 +142,9 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
 
         // And it stops at the wave. The integration foundation is the migration underneath it, so its table and its
         // conversations column are what a rollback that overshot would take next.
-        AssertEx.True((await GetColumnNamesAsync(connection, "integration_executions").ConfigureAwait(false)).Count > 0,
+        AssertEx.True((await GetColumnNamesAsync(connection, "integration_executions")).Count > 0,
             "Rolling back the wave must leave the integration foundation's tables in place.");
-        AssertEx.True((await GetColumnNamesAsync(connection, "conversations").ConfigureAwait(false)).Contains("kind"),
+        AssertEx.True((await GetColumnNamesAsync(connection, "conversations")).Contains("kind"),
             "Rolling back the wave must leave the integration foundation's conversation kind in place.");
     }
 
@@ -161,7 +161,7 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -173,8 +173,8 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
         command.Parameters.AddWithValue("$table", tableName);
 
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             columns.Add(reader.GetString(0));
         }

@@ -177,7 +177,7 @@ internal sealed class OpenAiWireRecorder
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             int index;
             lock (recorder._requests)
             {

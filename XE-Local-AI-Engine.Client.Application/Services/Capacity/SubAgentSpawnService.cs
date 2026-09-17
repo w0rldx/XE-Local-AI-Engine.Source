@@ -159,7 +159,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         // directly would all bypass the offer. Delegation is an egress decision — the child can be bound to a
         // node-local model that reads the workspace and knowledge base, and its answer returns into the parent's
         // transcript — so a parent that may not read that data itself may not obtain it through a child.
-        if (await IsOutsideTrustBoundaryAsync(context?.RootModelId, ct).ConfigureAwait(false))
+        if (await IsOutsideTrustBoundaryAsync(context?.RootModelId, ct))
         {
             return ReasonParentOutsideTrustBoundary;
         }
@@ -175,18 +175,18 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         // A sub-agent always runs a chat/tool loop, so it competes for a Chat-role process.
         const ModelRole role = ModelRole.Chat;
 
-        var binding = await ResolveBindingAsync(request, ct).ConfigureAwait(false);
+        var binding = await ResolveBindingAsync(request, ct);
         if (binding is null)
         {
             return ReasonSubAgentUnresolved;
         }
 
-        var decision = await _capacityService.DecideAsync(binding.ModelName, role, ct).ConfigureAwait(false);
+        var decision = await _capacityService.DecideAsync(binding.ModelName, role, ct);
 
         return decision.Verdict switch
         {
-            CapacityVerdict.Allow => await RunAllowAsync(binding, decision, context, request.Task, ct).ConfigureAwait(false),
-            CapacityVerdict.QueueSameModel => await RunQueuedAsync(binding, context, role, request.Task, ct).ConfigureAwait(false),
+            CapacityVerdict.Allow => await RunAllowAsync(binding, decision, context, request.Task, ct),
+            CapacityVerdict.QueueSameModel => await RunQueuedAsync(binding, context, role, request.Task, ct),
             _ => decision.Reason
         };
     }
@@ -207,7 +207,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var nodeSettings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false);
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(ct);
 
         // Linked, not replaced: the caller's token still wins (operator cancel, dispatcher watchdog, host shutdown) and
         // its durable stop marker still chooses the terminal outcome. This only adds the missing whole-turn deadline.
@@ -216,7 +216,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
         try
         {
-            return await SpawnForMcpCoreAsync(request, task, expectedBindingFingerprint, workspaceId, deadline.Token).ConfigureAwait(false);
+            return await SpawnForMcpCoreAsync(request, task, expectedBindingFingerprint, workspaceId, deadline.Token);
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !ct.IsCancellationRequested)
         {
@@ -245,7 +245,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonDepthExceeded);
         }
 
-        var resolution = await _mcpExecutionBindingResolver.ResolveAsync(request, ct).ConfigureAwait(false);
+        var resolution = await _mcpExecutionBindingResolver.ResolveAsync(request, ct);
         if (resolution.Binding is not { } mcpBinding)
         {
             return SpawnOutcome.Rejected(resolution.FailureCode ?? McpExecutionFailureCodes.InternalFailure, resolution.DisplayMessage);
@@ -264,7 +264,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonFanOutExceeded);
         }
 
-        var binding = await TryCreateResolvedMcpBindingAsync(mcpBinding, request, ct).ConfigureAwait(false);
+        var binding = await TryCreateResolvedMcpBindingAsync(mcpBinding, request, ct);
         if (binding is null)
         {
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.AgentConfigChanged,
@@ -279,11 +279,11 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         }
 
         const ModelRole role = ModelRole.Chat;
-        var decision = await _capacityService.DecideAsync(binding.ModelName, role, ct).ConfigureAwait(false);
+        var decision = await _capacityService.DecideAsync(binding.ModelName, role, ct);
         return decision.Verdict switch
         {
-            CapacityVerdict.Allow => await RunAllowedMcpAsync(binding, decision, context, task, workspaceId, ct).ConfigureAwait(false),
-            CapacityVerdict.QueueSameModel => await RunQueuedMcpAsync(binding, context, role, task, workspaceId, ct).ConfigureAwait(false),
+            CapacityVerdict.Allow => await RunAllowedMcpAsync(binding, decision, context, task, workspaceId, ct),
+            CapacityVerdict.QueueSameModel => await RunQueuedMcpAsync(binding, context, role, task, workspaceId, ct),
             _ => SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, decision.Reason)
         };
     }
@@ -302,7 +302,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
         try
         {
-            var workspace = await OpenWorkspaceAsync(workspaceId, ct).ConfigureAwait(false);
+            var workspace = await OpenWorkspaceAsync(workspaceId, ct);
             if (workspace.Failure is { } failure)
             {
                 return failure;
@@ -310,7 +310,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
             using var session = workspace.Session;
             using var ambient = session?.EnterAmbientScope();
-            var content = await RunSubAgentAsync(binding, context, task, ct).ConfigureAwait(false);
+            var content = await RunSubAgentAsync(binding, context, task, ct);
             return SpawnOutcome.Success(content);
         }
         finally
@@ -326,7 +326,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         Guid? workspaceId,
         CancellationToken ct)
     {
-        var workspace = await OpenWorkspaceAsync(workspaceId, ct).ConfigureAwait(false);
+        var workspace = await OpenWorkspaceAsync(workspaceId, ct);
         if (workspace.Failure is { } failure)
         {
             return failure;
@@ -344,7 +344,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
                 timedOut = true;
                 return string.Empty;
             },
-            ct).ConfigureAwait(false);
+            ct);
         return timedOut
             ? SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonQueueBusy)
             : SpawnOutcome.Success(content);
@@ -357,7 +357,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         IList<AITool>? tools;
         if (request.InboundContext.IsAgentic)
         {
-            var agentic = await ResolveAgenticMcpToolsAsync(binding.AllowedTools, request, cancellationToken).ConfigureAwait(false);
+            var agentic = await ResolveAgenticMcpToolsAsync(binding.AllowedTools, request, cancellationToken);
             if (!agentic.Success)
             {
                 return null;
@@ -444,7 +444,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             _mcpToolRegistry,
             _customToolCatalog,
             _logger,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (executables.Count != allowedTools.Count
             || executables.Select(static executable => executable.Name).Distinct(StringComparer.Ordinal).Count() != allowedTools.Count)
         {
@@ -500,7 +500,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         }
 
         return CodexModelCatalog.IsCodexModel(modelId)
-               || await _modelTrustResolver.ResolveAsync(modelId, ct).ConfigureAwait(false) != ModelTrustLocality.Local;
+               || await _modelTrustResolver.ResolveAsync(modelId, ct) != ModelTrustLocality.Local;
     }
 
     private async Task<string> RunAllowAsync(ResolvedBinding binding,
@@ -517,7 +517,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
         try
         {
-            return await RunSubAgentAsync(binding, context, task, ct).ConfigureAwait(false);
+            return await RunSubAgentAsync(binding, context, task, ct);
         }
         finally
         {
@@ -534,7 +534,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             TimeSpan.FromSeconds(_options.QueueWaitSeconds),
             innerCt => RunSubAgentAsync(binding, context, task, innerCt),
             static () => ReasonQueueBusy,
-            ct).ConfigureAwait(false);
+            ct);
     }
 
     // Builds the bound sub-agent (mirrors OrchestrationAgentFactory.BuildAgent's ChatClientAgent ctor) with the curated
@@ -548,7 +548,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         // weaker unpinned check — while the child is running with a tool set authorized against the declaration read
         // here. Resolved first and scoped HERE: an AsyncLocal seeded inside the async helper would not survive its
         // return. The child runs inside this frame's flow, so the scope reaches it; pins stack, so the parent's lives.
-        var childPins = await ExternalProviderInvocationPin.ResolveAsync(_externalProviderRegistry, binding.ModelName, ct).ConfigureAwait(false);
+        var childPins = await ExternalProviderInvocationPin.ResolveAsync(_externalProviderRegistry, binding.ModelName, ct);
         using var childBindingPin = ExternalProviderBindingPinScope.Begin(childPins);
 
         // The child MUST run on its bound model: RuntimeChatClient routes the shared IChatClient to a provider PER SEND
@@ -603,7 +603,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
         using (context.BeginChildScope())
         {
-            var result = await function.InvokeAsync(arguments, ct).ConfigureAwait(false);
+            var result = await function.InvokeAsync(arguments, ct);
             return result?.ToString() ?? string.Empty;
         }
     }

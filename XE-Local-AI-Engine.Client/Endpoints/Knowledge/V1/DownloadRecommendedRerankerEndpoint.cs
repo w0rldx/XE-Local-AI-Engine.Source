@@ -45,7 +45,7 @@ public sealed class DownloadRecommendedRerankerEndpoint(
     {
         // Already-installed friendly no-op: RecommendedRerankerModel's rule is deliberately the narrow one — only the
         // recommended repo counts, because choosing a reranker is an explicit operator act.
-        var existing = await RecommendedRerankerModel.ResolveExistingAsync(_modelStore, ct).ConfigureAwait(false);
+        var existing = await RecommendedRerankerModel.ResolveExistingAsync(_modelStore, ct);
         if (existing is not null)
         {
             await Send.OkAsync(new DownloadRecommendedRerankerResponse
@@ -56,13 +56,13 @@ public sealed class DownloadRecommendedRerankerEndpoint(
                     AlreadyInstalled = true,
                     AlreadyInFlight = false
                 },
-                ct).ConfigureAwait(false);
+                ct);
             return;
         }
 
         // Start (or rejoin) the download through the coordinator's detached path — the SAME path an operator-initiated
         // GGUF download uses, so progress/cancel and the model_provider_map write happen through one code path.
-        var ticket = await _downloadCoordinator.StartAsync(RecommendedRerankerModel.ToDownloadRequest(), ct).ConfigureAwait(false);
+        var ticket = await _downloadCoordinator.StartAsync(RecommendedRerankerModel.ToDownloadRequest(), ct);
 
         await Send.OkAsync(new DownloadRecommendedRerankerResponse
             {
@@ -72,6 +72,6 @@ public sealed class DownloadRecommendedRerankerEndpoint(
                 AlreadyInstalled = false,
                 AlreadyInFlight = ticket.AlreadyInFlight
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

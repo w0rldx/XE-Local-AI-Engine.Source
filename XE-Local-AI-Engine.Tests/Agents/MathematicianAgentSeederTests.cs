@@ -31,16 +31,16 @@ public sealed class MathematicianAgentSeederTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = CreateSeeder(scopeFactory, computeEnabled: true);
 
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
+        await seeder.StartAsync(CancellationToken.None);
 
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
 
-        var slugs = await store.ListSeededSlugsAsync().ConfigureAwait(false);
+        var slugs = await store.ListSeededSlugsAsync();
         AssertEx.Contains(slugs, AgentDefaults.MathematicianAgentSeedSlug);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         var rows = definitions.Where(definition => definition.SeedSlug == AgentDefaults.MathematicianAgentSeedSlug).ToList();
         AssertEx.Equal(expected: 1, rows.Count);
 
@@ -65,16 +65,16 @@ public sealed class MathematicianAgentSeederTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = CreateSeeder(scopeFactory, computeEnabled: false);
 
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
 
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
 
-        var slugs = await store.ListSeededSlugsAsync().ConfigureAwait(false);
+        var slugs = await store.ListSeededSlugsAsync();
         AssertEx.False(slugs.Contains(AgentDefaults.MathematicianAgentSeedSlug),
             "a node with Compute:Enabled=false must not publish an agent whose only tool is refused on every call");
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         AssertEx.False(definitions.Any(definition => definition.SeedSlug == AgentDefaults.MathematicianAgentSeedSlug),
             "no Mathematician definition may exist after a disabled-compute start");
     }
@@ -86,18 +86,18 @@ public sealed class MathematicianAgentSeederTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
 
         // Boot 1: compute on — the Mathematician is seeded.
-        await CreateSeeder(scopeFactory, computeEnabled: true).StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await CreateSeeder(scopeFactory, computeEnabled: true).StartAsync(CancellationToken.None);
 
         // Boot 2: the operator turned compute off. Seeding is additive-only, so the existing row must survive.
-        await CreateSeeder(scopeFactory, computeEnabled: false).StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await CreateSeeder(scopeFactory, computeEnabled: false).StartAsync(CancellationToken.None);
 
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
 
-        var slugs = await store.ListSeededSlugsAsync().ConfigureAwait(false);
+        var slugs = await store.ListSeededSlugsAsync();
         AssertEx.Contains(slugs, AgentDefaults.MathematicianAgentSeedSlug);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         var rows = definitions.Where(definition => definition.SeedSlug == AgentDefaults.MathematicianAgentSeedSlug).ToList();
         AssertEx.Equal(expected: 1, rows.Count);
         AssertEx.Contains(rows[0].AllowedToolNames, ComputeToolDefinition.ToolName);

@@ -24,13 +24,13 @@ public sealed class HarvestGoldenConversationsEndpoint(IGoldenHarvestService har
 
     public override async Task HandleAsync(HarvestGoldenConversationsRequest req, CancellationToken ct)
     {
-        var outcome = await _harvestService.HarvestAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
+        var outcome = await _harvestService.HarvestAsync(req.AgentDefinitionId, ct);
         if (!outcome.AgentExists)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(outcome.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(outcome.ToResponse(), ct);
     }
 }

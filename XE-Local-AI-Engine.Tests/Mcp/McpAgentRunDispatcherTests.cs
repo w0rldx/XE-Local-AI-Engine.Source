@@ -27,7 +27,7 @@ public sealed class McpAgentRunDispatcherTests
         store.ListAsync(Arg.Any<int>(), McpAgentRunStatus.Queued, Arg.Any<CancellationToken>()).Returns(async _ =>
         {
             listStarted.TrySetResult();
-            await releaseList.Task.ConfigureAwait(false);
+            await releaseList.Task;
             return [queued];
         });
         await using var provider = CreateProvider(store, executor);
@@ -35,13 +35,13 @@ public sealed class McpAgentRunDispatcherTests
             registry,
             provider.GetRequiredService<McpAgentRunMetrics>(),
             TimeProvider.System);
-        await dispatcher.StartAsync(timeout.Token).ConfigureAwait(false);
-        await listStarted.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
+        await dispatcher.StartAsync(timeout.Token);
+        await listStarted.Task.WaitAsync(timeout.Token);
 
         var stop = dispatcher.StopAsync(timeout.Token);
         AssertEx.False(stop.IsCompleted, "Shutdown must wait for the admitted queue read to leave the claim gate.");
         releaseList.TrySetResult();
-        await stop.WaitAsync(timeout.Token).ConfigureAwait(false);
+        await stop.WaitAsync(timeout.Token);
 
         await store.DidNotReceiveWithAnyArgs().TryClaimAsync(Guid.Empty, default, default, default);
         await store.DidNotReceiveWithAnyArgs().RequestStopAsync(Guid.Empty, default, default, default, default);
@@ -54,7 +54,7 @@ public sealed class McpAgentRunDispatcherTests
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         using var cancelledShutdown = new CancellationTokenSource();
-        await cancelledShutdown.CancelAsync().ConfigureAwait(false);
+        await cancelledShutdown.CancelAsync();
         var registry = new McpAgentRunCancellationRegistry();
         var store = Substitute.For<IMcpAgentRunStore>();
         var executor = Substitute.For<IMcpAgentRunExecutor>();
@@ -64,7 +64,7 @@ public sealed class McpAgentRunDispatcherTests
         store.ListAsync(Arg.Any<int>(), McpAgentRunStatus.Queued, Arg.Any<CancellationToken>()).Returns(async _ =>
         {
             listStarted.TrySetResult();
-            await releaseList.Task.ConfigureAwait(false);
+            await releaseList.Task;
             return [queued];
         });
         await using var provider = CreateProvider(store, executor);
@@ -72,14 +72,14 @@ public sealed class McpAgentRunDispatcherTests
             registry,
             provider.GetRequiredService<McpAgentRunMetrics>(),
             TimeProvider.System);
-        await dispatcher.StartAsync(timeout.Token).ConfigureAwait(false);
-        await listStarted.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
+        await dispatcher.StartAsync(timeout.Token);
+        await listStarted.Task.WaitAsync(timeout.Token);
 
         // A host shutdown token that has already tripped must not abort the durable stop work nor escape as an exception.
         var stop = dispatcher.StopAsync(cancelledShutdown.Token);
         AssertEx.False(stop.IsCompleted, "Shutdown must still wait for the admitted queue read to leave the claim gate.");
         releaseList.TrySetResult();
-        await stop.WaitAsync(timeout.Token).ConfigureAwait(false);
+        await stop.WaitAsync(timeout.Token);
     }
 
     [Test]
@@ -135,7 +135,7 @@ public sealed class McpAgentRunDispatcherTests
             provider.GetRequiredService<McpAgentRunMetrics>(),
             TimeProvider.System);
 
-        await BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token).WaitAsync(TimeSpan.FromSeconds(5));
 
         AssertEx.Equal(expectedStatus, finalization!.Status);
         AssertEx.Equal(stopReason, finalization.ExpectedStopReason);
@@ -180,7 +180,7 @@ public sealed class McpAgentRunDispatcherTests
             provider.GetRequiredService<McpAgentRunMetrics>(),
             TimeProvider.System);
 
-        await BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token).WaitAsync(TimeSpan.FromSeconds(5));
 
         AssertEx.Equal(McpAgentRunStatus.Succeeded, finalization!.Status);
         AssertEx.Equal(McpAgentRunStopReason.None, finalization.ExpectedStopReason);
@@ -235,7 +235,7 @@ public sealed class McpAgentRunDispatcherTests
         {
             executionStarted.TrySetResult();
             var token = callInfo.Arg<CancellationToken>();
-            await Task.Delay(Timeout.InfiniteTimeSpan, token).ConfigureAwait(false);
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
             return SpawnOutcome.Success("unreachable");
         });
         store.TryFinalizeAsync(Arg.Any<McpAgentRunFinalization>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
@@ -250,10 +250,10 @@ public sealed class McpAgentRunDispatcherTests
             provider.GetRequiredService<McpAgentRunMetrics>(),
             clock);
         var dispatch = BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token);
-        await executionStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await executionStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         clock.Advance(TimeSpan.FromMinutes(30));
-        await dispatch.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(5));
 
         AssertEx.Equal(TimeSpan.FromMinutes(30), clock.FirstDueTime);
         AssertEx.Equal(McpAgentRunStatus.Failed, finalization!.Status);

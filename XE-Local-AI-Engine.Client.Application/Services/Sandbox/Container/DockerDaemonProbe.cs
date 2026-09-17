@@ -163,14 +163,14 @@ internal static class DockerDaemonProbe
         // failure, API too old, seccomp unsupported — where it is reported and never acted on. Those may carry a pin
         // that has since moved; re-reading it would mean taking the gate on paths that approve nothing, which is the
         // contention the gate is kept short to avoid. Every path that does approve re-reads inside CommitAsync.
-        var pinned = await attestationStore.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var pinned = await attestationStore.ReadAsync(cancellationToken);
 
         DockerDaemonIdentity identity;
         await using (var client = clientFactory(endpoint))
         {
             try
             {
-                identity = await client.ProbeAsync(cancellationToken).ConfigureAwait(false);
+                identity = await client.ProbeAsync(cancellationToken);
             }
             catch (DockerRuntimeException exception)
             {
@@ -216,11 +216,10 @@ internal static class DockerDaemonProbe
         // confirmation can move the pin while this probe's transport call is in flight, and the resolver would then
         // cache Ready for the superseded daemon instead of reporting DaemonIdentityChanged. The gate still holds no
         // daemon I/O, so a matching probe waits only out the other probe's store operations, never its timeout.
-        await Transaction.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await Transaction.WaitAsync(cancellationToken);
         try
         {
-            return await CommitAsync(request, endpoint, identity, attestationStore, timeProvider, logger, cancellationToken)
-                .ConfigureAwait(false);
+            return await CommitAsync(request, endpoint, identity, attestationStore, timeProvider, logger, cancellationToken);
         }
         finally
         {
@@ -243,7 +242,7 @@ internal static class DockerDaemonProbe
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        var pinned = await attestationStore.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var pinned = await attestationStore.ReadAsync(cancellationToken);
 
         // Trust-on-first-use is the pin, not a check: there is nothing to compare a first daemon
         // against. What it buys is that every subsequent run has something to compare against, which is where the
@@ -251,7 +250,7 @@ internal static class DockerDaemonProbe
         if (pinned is null)
         {
             var firstUse = BuildAttestation(identity, endpoint, timeProvider, confirmedByOperator: request.ConfirmingDaemonId is not null);
-            await attestationStore.WriteAsync(firstUse, cancellationToken).ConfigureAwait(false);
+            await attestationStore.WriteAsync(firstUse, cancellationToken);
             logger.LogInformation("Pinned Docker daemon {DaemonId} at {Endpoint} on first use.", identity.DaemonId, endpoint.Display);
             return Ready(identity, endpoint, firstUse);
         }
@@ -276,7 +275,7 @@ internal static class DockerDaemonProbe
             }
 
             var confirmed = BuildAttestation(identity, endpoint, timeProvider, confirmedByOperator: true);
-            await attestationStore.WriteAsync(confirmed, cancellationToken).ConfigureAwait(false);
+            await attestationStore.WriteAsync(confirmed, cancellationToken);
             logger.LogWarning("Operator re-confirmed the Docker daemon: {PreviousDaemonId} replaced by {DaemonId} at {Endpoint}.",
                 pinned.DaemonId,
                 identity.DaemonId,

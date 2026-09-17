@@ -159,17 +159,17 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task AMaterializedChildsValidation_OverlaysTheSiblingImplementationsApprovedPatch()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply), Artifact(ApprovedSubject));
 
-        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None);
 
         AssertEx.Null(overlay.Refusal);
         var basedOn = AssertEx.NotNull(overlay.BasedOn);
         AssertEx.Equal(TaskId, basedOn.DevelopmentTaskId);
         AssertEx.Equal(PatchHash, basedOn.PatchHash);
         AssertEx.True(File.Exists(Path.Combine(workspace, "subtract.txt")), "the commands are about to run over the child's work rather than over the base.");
-        AssertEx.Contains(await StatusAsync(workspace).ConfigureAwait(false),
+        AssertEx.Contains(await StatusAsync(workspace),
             "A  subtract.txt",
             message: "staged, exactly as the apply gate stages it — the validation commands see an index that matches the approved subject.");
     }
@@ -181,10 +181,10 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task WhenTheStoredPatchIsNotTheApprovedSubject_TheNodeRefusesRatherThanJudgingTheBase()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply), Artifact("A-DIFFERENT-SUBJECT"));
 
-        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None);
 
         AssertEx.Null(overlay.BasedOn);
         AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "not the subject its approval names");
@@ -198,10 +198,10 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task WhenTheSiblingHasNoApprovedPatchYet_TheNodeRefusesRatherThanJudgingTheBase()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.InProgress), Artifact(ApprovedSubject));
 
-        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None);
 
         AssertEx.Null(overlay.BasedOn);
         AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "InProgress");
@@ -217,10 +217,10 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task WhenTheApprovedTaskCarriesNoSubjectAtAll_TheNodeRefusesInsteadOfOverlayingUnbound()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply, approvedSubjectHash: null), Artifact(ApprovedSubject));
 
-        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None);
 
         AssertEx.Null(overlay.BasedOn);
         AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "names no approved subject");
@@ -235,10 +235,10 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task WhenTheCloneGroupOffersTwoImplementations_TheNodeRefusesAndNamesThem()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply), Artifact(ApprovedSubject), twoImplementations: true);
 
-        var overlay = await commands.OverlayAsync(Run(TwoImplementationGraph), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+        var overlay = await commands.OverlayAsync(Run(TwoImplementationGraph), ValidateRow(), Session(workspace), CancellationToken.None);
 
         AssertEx.Null(overlay.BasedOn);
         var refusal = AssertEx.NotNull(overlay.Refusal);
@@ -254,21 +254,21 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task WhenTheApprovedPatchNoLongerApplies_TheNodeRefusesRatherThanJudgingWhatIsThere()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
 
         // The same path the patch adds, already committed with different content: git apply refuses, exactly as it does
         // when the base branch moved on after the patch was produced.
-        await File.WriteAllTextAsync(Path.Combine(workspace, "subtract.txt"), "someone else's work\n").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "add", "subtract.txt").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "commit", "-m", "conflicting change").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(workspace, "subtract.txt"), "someone else's work\n");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "add", "subtract.txt");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "commit", "-m", "conflicting change");
 
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply), Artifact(ApprovedSubject));
 
-        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None);
 
         AssertEx.Null(overlay.BasedOn);
         AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "did not apply to this node's freshly prepared workspace");
-        AssertEx.Equal("someone else's work\n", await File.ReadAllTextAsync(Path.Combine(workspace, "subtract.txt")).ConfigureAwait(false));
+        AssertEx.Equal("someone else's work\n", await File.ReadAllTextAsync(Path.Combine(workspace, "subtract.txt")));
     }
 
     /// <summary>
@@ -279,7 +279,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task AnUndecomposedValidation_OverlaysTheDevTaskItFollows()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply),
             Artifact(ApprovedSubject),
             [PlainRow("implement", DevWorkflowNodeType.DevTask, TaskId), PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null)]);
@@ -287,8 +287,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         var overlay = await commands.OverlayAsync(Run(UndecomposedGraph),
                                         PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
                                         Session(workspace),
-                                        CancellationToken.None)
-                                    .ConfigureAwait(false);
+                                        CancellationToken.None);
 
         AssertEx.Null(overlay.Refusal);
         var basedOn = AssertEx.NotNull(overlay.BasedOn);
@@ -305,7 +304,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task AValidationPastAnApply_StillJudgesTheCommittedBase()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply),
             Artifact(ApprovedSubject),
             [
@@ -317,8 +316,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         var overlay = await commands.OverlayAsync(Run(IntegrationGraph),
                                         PlainRow("fullvalidate", DevWorkflowNodeType.Tool, developmentTaskId: null),
                                         Session(workspace),
-                                        CancellationToken.None)
-                                    .ConfigureAwait(false);
+                                        CancellationToken.None);
 
         AssertEx.Null(overlay.Refusal);
         AssertEx.Null(overlay.BasedOn);
@@ -333,7 +331,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task WhenTwoImplementationsFeedOneValidationOutsideACloneGroup_TheNodeRefusesAndNamesThem()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply),
             Artifact(ApprovedSubject),
             [
@@ -345,8 +343,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         var overlay = await commands.OverlayAsync(Run(TwoUpstreamImplementationsGraph),
                                         PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
                                         Session(workspace),
-                                        CancellationToken.None)
-                                    .ConfigureAwait(false);
+                                        CancellationToken.None);
 
         AssertEx.Null(overlay.BasedOn);
         var refusal = AssertEx.NotNull(overlay.Refusal);
@@ -363,7 +360,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task AValidationWithNoImplementationUpstream_OverlaysNothing()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply),
             Artifact(ApprovedSubject),
             [PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null)]);
@@ -371,8 +368,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         var overlay = await commands.OverlayAsync(Run(UndecomposedGraph),
                                         PlainRow("validate", DevWorkflowNodeType.Tool, developmentTaskId: null),
                                         Session(workspace),
-                                        CancellationToken.None)
-                                    .ConfigureAwait(false);
+                                        CancellationToken.None);
 
         AssertEx.Null(overlay.Refusal);
         AssertEx.Null(overlay.BasedOn);
@@ -387,10 +383,10 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     [Test]
     public async Task WhenTheApprovedPatchDoesNotVerify_TheNodeRefusesRatherThanJudgingTheBase()
     {
-        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var workspace = await WorkspaceAsync();
         var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply), patch: null);
 
-        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None);
 
         AssertEx.Null(overlay.BasedOn);
         AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "could not be verified");
@@ -428,12 +424,12 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     {
         var workspace = Path.Combine(_root, "workspace");
         Directory.CreateDirectory(workspace);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.email", "overlay@example.invalid").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.name", "Overlay Test").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(workspace, "README.md"), "base\n").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "add", "README.md").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "commit", "-m", "base").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "init", "--initial-branch=main", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.email", "overlay@example.invalid");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.name", "Overlay Test");
+        await File.WriteAllTextAsync(Path.Combine(workspace, "README.md"), "base\n");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "add", "README.md");
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "commit", "-m", "base");
         return workspace;
     }
 
@@ -482,8 +478,8 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             StartInfo = startInfo
         };
         _ = process.Start();
-        var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
         return output;
     }
 

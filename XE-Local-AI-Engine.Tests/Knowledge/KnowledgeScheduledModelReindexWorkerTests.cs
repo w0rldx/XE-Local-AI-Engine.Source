@@ -22,7 +22,7 @@ public sealed class KnowledgeScheduledModelReindexWorkerTests
         await using var provider = BuildProvider(catalog);
         using var worker = CreateWorker(provider, dispatcher);
 
-        await worker.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.ReconcileOnceAsync(CancellationToken.None);
 
         AssertEx.Equal(2, dispatcher.Attempts.Count);
         AssertEx.Equal(first, dispatcher.Attempts[0]);
@@ -41,7 +41,7 @@ public sealed class KnowledgeScheduledModelReindexWorkerTests
         await using var provider = BuildProvider(catalog);
         using var worker = CreateWorker(provider, dispatcher);
 
-        await worker.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.ReconcileOnceAsync(CancellationToken.None);
 
         AssertEx.Equal(1, dispatcher.Attempts.Count);
         AssertEx.Equal(first, dispatcher.Attempts[0]);

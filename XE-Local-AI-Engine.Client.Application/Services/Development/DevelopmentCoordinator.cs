@@ -60,8 +60,7 @@ public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopment
         var completed = await _store.FindOperationAsync(subject.ProjectId,
                                         operationId,
                                         DevelopmentOperationPhases.ApplyCompleted,
-                                        cancellationToken)
-                                    .ConfigureAwait(false);
+                                        cancellationToken);
         if (completed is not null)
         {
             return completed;
@@ -70,40 +69,39 @@ public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopment
         var blocked = await _store.FindOperationAsync(subject.ProjectId,
                                       operationId,
                                       DevelopmentOperationPhases.ApplyBlocked,
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
         if (blocked is not null)
         {
             return blocked;
         }
 
-        _ = await _store.RecordApplyStartedAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
-        var hostState = await _applyPort.InspectAsync(subject, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        _ = await _store.RecordApplyStartedAsync(operationId, subject, cancellationToken);
+        var hostState = await _applyPort.InspectAsync(subject, repositoryRoot, cancellationToken);
         if (revalidateBeforeHostMutation is not null)
         {
-            await revalidateBeforeHostMutation(cancellationToken).ConfigureAwait(false);
+            await revalidateBeforeHostMutation(cancellationToken);
         }
 
         switch (hostState)
         {
             case DevelopmentHostApplyState.UnappliedBaseUnchanged:
-                await _applyPort.ApplyAsync(subject, repositoryRoot, cancellationToken).ConfigureAwait(false);
+                await _applyPort.ApplyAsync(subject, repositoryRoot, cancellationToken);
                 break;
             case DevelopmentHostApplyState.ExactApprovedResultPresent:
                 break;
             case DevelopmentHostApplyState.Ambiguous:
-                return await _store.BlockApplyAsync(operationId, subject, AmbiguousApplyReason, cancellationToken).ConfigureAwait(false);
+                return await _store.BlockApplyAsync(operationId, subject, AmbiguousApplyReason, cancellationToken);
             default:
                 throw new InvalidOperationException($"Unsupported Development host apply state '{hostState}'.");
         }
 
-        return await _store.CompleteApplyAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
+        return await _store.CompleteApplyAsync(operationId, subject, cancellationToken);
     }
 
     public async Task<int> ReconcileStartupAsync(CancellationToken cancellationToken = default)
     {
-        var interrupted = await _store.ReconcileRunningAttemptsAsync(StartupInterruptedReason, cancellationToken).ConfigureAwait(false);
-        var validations = await _store.ReconcileIncompleteValidationsAsync(StartupValidationRecoveryReason, cancellationToken).ConfigureAwait(false);
+        var interrupted = await _store.ReconcileRunningAttemptsAsync(StartupInterruptedReason, cancellationToken);
+        var validations = await _store.ReconcileIncompleteValidationsAsync(StartupValidationRecoveryReason, cancellationToken);
         return interrupted + validations;
     }
 }

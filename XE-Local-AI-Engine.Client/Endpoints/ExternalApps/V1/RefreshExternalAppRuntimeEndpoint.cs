@@ -42,27 +42,27 @@ public sealed class RefreshExternalAppRuntimeEndpoint(IContainerRuntimeResolver 
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var resolution = await _resolver.ResolveAsync(forceRefresh: true, cancellationToken: ct).ConfigureAwait(false);
+        var resolution = await _resolver.ResolveAsync(forceRefresh: true, cancellationToken: ct);
 
         if (req.AcknowledgeDaemonId is { Length: > 0 } acknowledged)
         {
             if (!string.Equals(acknowledged, resolution.Daemon.DaemonId, StringComparison.Ordinal))
             {
                 AddError("That is not the daemon answering now. Re-read the runtime panel before approving it.");
-                await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                await Send.ErrorsAsync(cancellation: ct);
                 return;
             }
 
-            resolution = await _resolver.ConfirmDaemonIdentityAsync(acknowledged, ct).ConfigureAwait(false);
+            resolution = await _resolver.ConfirmDaemonIdentityAsync(acknowledged, ct);
         }
 
         var foreignInstallContainers = 0;
         if (resolution.Ready)
         {
-            var summary = await _reconciler.ReconcileAsync(ct).ConfigureAwait(false);
+            var summary = await _reconciler.ReconcileAsync(ct);
             foreignInstallContainers = summary.ForeignInstallContainers;
         }
 
-        await Send.OkAsync(ExternalAppMapper.ToRuntimeResponse(resolution, foreignInstallContainers), ct).ConfigureAwait(false);
+        await Send.OkAsync(ExternalAppMapper.ToRuntimeResponse(resolution, foreignInstallContainers), ct);
     }
 }

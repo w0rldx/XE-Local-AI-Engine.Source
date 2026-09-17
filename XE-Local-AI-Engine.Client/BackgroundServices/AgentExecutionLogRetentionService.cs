@@ -45,7 +45,7 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
         // post-restart tick. Best-effort — a startup-sweep failure is logged and the periodic loop still runs.
         try
         {
-            await SweepAsync(stoppingToken).ConfigureAwait(false);
+            await SweepAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -62,7 +62,7 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
         {
             try
             {
-                if (!await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+                if (!await timer.WaitForNextTickAsync(stoppingToken))
                 {
                     break;
                 }
@@ -74,7 +74,7 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
 
             try
             {
-                await SweepAsync(stoppingToken).ConfigureAwait(false);
+                await SweepAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -96,12 +96,12 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
                                          .AddDays(-_options.RetentionDays)
                                          .ToUnixTimeMilliseconds();
 
-        var deletedByAge = await executionLogStore.DeleteOlderThanAsync(cutoffEpochMs, cancellationToken).ConfigureAwait(false);
+        var deletedByAge = await executionLogStore.DeleteOlderThanAsync(cutoffEpochMs, cancellationToken);
 
         var deletedByCap = 0;
         if (_options.MaxRowsPerAgent is { } maxRowsPerAgent && maxRowsPerAgent > 0)
         {
-            deletedByCap = await executionLogStore.TrimToMaxPerAgentAsync(maxRowsPerAgent, cancellationToken).ConfigureAwait(false);
+            deletedByCap = await executionLogStore.TrimToMaxPerAgentAsync(maxRowsPerAgent, cancellationToken);
         }
 
         if (deletedByAge > 0 || deletedByCap > 0)

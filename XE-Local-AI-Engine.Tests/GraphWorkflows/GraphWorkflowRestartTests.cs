@@ -44,20 +44,20 @@ public sealed class GraphWorkflowRestartTests
     public async Task AnInterruptedQueuedNodeRun_CollapsesToPendingUnspentAndRunsOnTheFirstTick()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Queued).ConfigureAwait(false);
+        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Queued);
 
-        await RestartAsync(harness).ConfigureAwait(false);
+        await RestartAsync(harness);
 
-        var collapsed = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var collapsed = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, collapsed.Status);
         AssertEx.Equal(expected: 1, collapsed.Attempt, "a row that was never dispatched did not fail, so it is not an attempt.");
         AssertEx.Equal(GraphWorkflowFailureClass.None, collapsed.FailureClass, "a re-dispatchable row must not carry the reason it stopped.");
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), "node.interrupted");
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId), "node.interrupted");
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded,
-            (await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "work")).Status,
             "the replacement dispatcher re-dispatches it on its first tick.");
     }
 
@@ -70,18 +70,18 @@ public sealed class GraphWorkflowRestartTests
     public async Task AnInterruptedRunningInlineNodeRun_CollapsesToPendingAndTheFirstTickRunsIt()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running);
 
-        await RestartAsync(harness).ConfigureAwait(false);
+        await RestartAsync(harness);
 
-        var collapsed = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var collapsed = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, collapsed.Status);
         AssertEx.Equal(expected: 1, collapsed.Attempt, "an inline node re-derives its answer, so the restart costs it no attempt.");
         AssertEx.Null(collapsed.StartedAtUtc, "or a reader sees the row running since the attempt the host died on.");
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "work")).Status);
     }
 
     /// <summary>
@@ -94,15 +94,15 @@ public sealed class GraphWorkflowRestartTests
     public async Task AnInterruptedRunningAgentNodeRun_IsFailedInterruptedRatherThanResumed()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await RunningAgentNodeAsync(harness, GraphWorkflowGraphs.InlineWithAgent).ConfigureAwait(false);
+        var runId = await RunningAgentNodeAsync(harness, GraphWorkflowGraphs.InlineWithAgent);
 
-        await RestartAsync(harness).ConfigureAwait(false);
+        await RestartAsync(harness);
 
-        var failed = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+        var failed = await harness.ReadNodeRunAsync(runId, "analyze");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, failed.Status, "never resume a provider stream: there is nothing left to resume.");
         AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, failed.FailureClass);
         AssertEx.Equal(expected: 1, failed.Attempt, "the reconciler never re-attempts; the dispatcher's retry stage decides that.");
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId),
             "node.interrupted, node.failed",
             message: "the collapse and the verdict that repairs it are both on the log, in that order.");
     }
@@ -117,16 +117,16 @@ public sealed class GraphWorkflowRestartTests
     public async Task AnInterruptedAgentWithAnAttemptLeft_IsReAttemptedByTheDispatchersRetryStage()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await RunningAgentNodeAsync(harness, GraphWorkflowGraphs.InlineWithAgent).ConfigureAwait(false);
+        var runId = await RunningAgentNodeAsync(harness, GraphWorkflowGraphs.InlineWithAgent);
 
-        await RestartAsync(harness).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await RestartAsync(harness);
+        _ = await harness.AdvanceAsync(runId);
 
         // The second attempt then fails ValidationFailed, because this build registers no Agent lane — the absent case
         // the dispatcher documents, and the one the agent executor removes. What is under test is that the attempt was
         // spent at all, which is the retry stage consuming a verdict recovery wrote and knows nothing further about.
-        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Attempt);
-        var retried = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "node.retried");
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "analyze")).Attempt);
+        var retried = (await harness.ReadEventsAsync(runId)).Single(static entry => entry.EventType == "node.retried");
         AssertEx.Contains(retried.DetailJson, "Interrupted", message: "the row cleared the failure, so the event is the only place the interruption survives.");
     }
 
@@ -140,17 +140,17 @@ public sealed class GraphWorkflowRestartTests
     public async Task ANodeRunWaitingForApproval_ComesBackFromARestartUntouched()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.WaitingForApproval).ConfigureAwait(false);
-        var paused = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.WaitingForApproval);
+        var paused = await harness.ReadNodeRunAsync(runId, "work");
 
-        await RestartAsync(harness).ConfigureAwait(false);
+        await RestartAsync(harness);
 
-        var afterwards = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var afterwards = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval, afterwards.Status);
         AssertEx.Equal(paused.Attempt, afterwards.Attempt);
         AssertEx.Equal(paused.UpdatedAtUtc, afterwards.UpdatedAtUtc, "untouched means the row was not written at all, not that it landed back where it was.");
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.interrupted"));
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.interrupted"));
     }
 
     /// <summary>
@@ -168,12 +168,12 @@ public sealed class GraphWorkflowRestartTests
     public async Task AStartupRecovery_DecidesNothingAboutTheRunItself()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
-        var before = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running);
+        var before = await harness.ReadRunAsync(runId);
 
-        await RestartAsync(harness).ConfigureAwait(false);
+        await RestartAsync(harness);
 
-        var afterwards = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var afterwards = await harness.ReadRunAsync(runId);
         AssertEx.Equal(before.Status, afterwards.Status, "runs auto-resume: a restart is not an operator decision to make about every live run.");
         AssertEx.Equal(before.FailureClass, afterwards.FailureClass);
         AssertEx.Equal(before.CompletedAtUtc, afterwards.CompletedAtUtc);
@@ -189,16 +189,16 @@ public sealed class GraphWorkflowRestartTests
     public async Task ARunWhoseAgentHasNoAttemptLeft_SettlesFailedInsteadOfLooping()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await RunningAgentNodeAsync(harness, GraphWorkflowGraphs.InlineWithSingleAttemptAgent).ConfigureAwait(false);
+        var runId = await RunningAgentNodeAsync(harness, GraphWorkflowGraphs.InlineWithSingleAttemptAgent);
 
-        await RestartAsync(harness).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await RestartAsync(harness);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        var analyze = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId)).Status);
+        var analyze = await harness.ReadNodeRunAsync(runId, "analyze");
         AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, analyze.FailureClass, "the node's own budget refused the retry, so the class recovery wrote stands.");
         AssertEx.Equal(expected: 1, analyze.Attempt);
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.retried"));
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.retried"));
     }
 
     /// <summary>
@@ -211,21 +211,21 @@ public sealed class GraphWorkflowRestartTests
     public async Task ARecoveryThatDiesBeforeItCommits_LeavesTheRowsForTheNextBootToRepairExactlyOnce()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running);
 
-        await FailRecoveryAsync(harness).ConfigureAwait(false);
-        await FailRecoveryAsync(harness).ConfigureAwait(false);
+        await FailRecoveryAsync(harness);
+        await FailRecoveryAsync(harness);
 
-        var stranded = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var stranded = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, stranded.Status, "a recovery that did not commit leaves the row exactly as the dead host left it.");
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.interrupted"),
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.interrupted"),
             "and writes no event either: the collapse and its verdicts are one transaction.");
 
-        await RestartAsync(harness).ConfigureAwait(false);
+        await RestartAsync(harness);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "work")).Status);
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.interrupted"),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "node.interrupted"),
             "one interruption, one interrupted event, however many boots died trying to record it.");
     }
 
@@ -240,7 +240,7 @@ public sealed class GraphWorkflowRestartTests
     {
         var store = new DriftingGraphWorkflowStore();
 
-        await NewReconciler(enabled: true).RecoverAsync(store, CancellationToken.None).ConfigureAwait(false);
+        await NewReconciler(enabled: true).RecoverAsync(store, CancellationToken.None);
 
         AssertEx.Equal(expected: 3, store.Settlements.Count, "recovery is bounded: a writer it cannot outrace must not keep it from the dispatcher.");
         AssertEx.Null(store.Settlements[0], "an unjudged row on an early pass is read again rather than failed off stale evidence.");
@@ -258,7 +258,7 @@ public sealed class GraphWorkflowRestartTests
     [NotInParallel(RecoveryKey)]
     public async Task ADisabledNode_OpensNoScopeAndReadsNoRowAtStartup()
     {
-        await NewReconciler(enabled: false).StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await NewReconciler(enabled: false).StartAsync(CancellationToken.None);
     }
 
     /// <summary>
@@ -289,8 +289,7 @@ public sealed class GraphWorkflowRestartTests
         await new GraphWorkflowStartupReconciler(harness.Services.GetRequiredService<IServiceScopeFactory>(),
                   Options.Create(harness.CurrentOptions()),
                   harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
 
         _ = harness.CreateReplacementDispatcher();
     }
@@ -308,7 +307,7 @@ public sealed class GraphWorkflowRestartTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-        var interrupted = await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false);
+        var interrupted = await store.ListInterruptedNodeRunsAsync();
         AssertEx.NotEmpty(interrupted, "there was no in-flight node run for the failed recovery to have died on.");
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => store.ReconcileNonTerminalNodeRunsAsync("the host restarted",
@@ -322,8 +321,7 @@ public sealed class GraphWorkflowRestartTests
                                           long.MaxValue,
                                           GraphWorkflowNodeRunStatus.Pending)
                                   ]))
-                          ]))
-                          .ConfigureAwait(false);
+                          ]));
     }
 
     private static GraphWorkflowStartupReconciler NewReconciler(bool enabled) =>
@@ -337,12 +335,12 @@ public sealed class GraphWorkflowRestartTests
     /// <summary>A run ticked far enough that its inline work node is in flight, the way a host death would leave it.</summary>
     private static async Task<Guid> InFlightWorkNodeAsync(GraphWorkflowHarness harness, GraphWorkflowNodeRunStatus status)
     {
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineRetryable).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineRetryable);
 
         // Out of Pending, then Start — after which the work node is Pending and nothing has dispatched it yet.
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", status).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "work", status);
         return runId;
     }
 
@@ -352,10 +350,10 @@ public sealed class GraphWorkflowRestartTests
     /// </summary>
     private static async Task<Guid> RunningAgentNodeAsync(GraphWorkflowHarness harness, string graphJson)
     {
-        var runId = await harness.StartRunAsync(graphJson).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "analyze", GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(graphJson);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "analyze", GraphWorkflowNodeRunStatus.Running);
         return runId;
     }
 }

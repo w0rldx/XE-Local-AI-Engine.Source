@@ -77,50 +77,50 @@ public sealed partial class IntegrationExecutionStore
             throw new ArgumentException("The accepted event's execution id must equal the command's execution id.", nameof(command));
         }
 
-        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = BeginImmediateTransaction(connection);
 
         // 1. Revocation re-read. Authentication happens before the body is read and before admission does any work, so
         // a credential can be revoked inside that window; this read is what stops it creating durable work.
-        var keyState = await ReadKeyRevocationAsync(connection, transaction, command.KeyPrefix, cancellationToken).ConfigureAwait(false);
+        var keyState = await ReadKeyRevocationAsync(connection, transaction, command.KeyPrefix, cancellationToken);
         if (keyState is not KeyRevocationState.Live)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return false;
         }
 
         // 2. Node-wide cap, across all triggers and all principals.
-        var nodeActive = await CountActiveExecutionsAsync(connection, transaction, principalId: null, cancellationToken).ConfigureAwait(false);
+        var nodeActive = await CountActiveExecutionsAsync(connection, transaction, principalId: null, cancellationToken);
         if (nodeActive >= maxActive)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             throw new IntegrationQueueFullException("The node's integration execution queue is full.");
         }
 
         // 3. Per-principal cap. One noisy integrator must not be able to fill the node-wide queue and starve every
         // other principal and the interactive user.
-        var principalActive = await CountActiveExecutionsAsync(connection, transaction, command.PrincipalId, cancellationToken).ConfigureAwait(false);
+        var principalActive = await CountActiveExecutionsAsync(connection, transaction, command.PrincipalId, cancellationToken);
         if (principalActive >= maxActivePerPrincipal)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             throw new IntegrationQueueFullException("This principal's integration execution queue is full.");
         }
 
         // 4. The session: a fresh row, or the existing one's counters. Nothing else writes those two columns.
         if (command.NewSession is { } newSession)
         {
-            await InsertSessionAsync(connection, transaction, command, newSession, cancellationToken).ConfigureAwait(false);
+            await InsertSessionAsync(connection, transaction, command, newSession, cancellationToken);
         }
         else
         {
-            await BumpSessionAsync(connection, transaction, command, cancellationToken).ConfigureAwait(false);
+            await BumpSessionAsync(connection, transaction, command, cancellationToken);
         }
 
         // 5 and 6. The execution and its accepted event, then commit.
-        await InsertExecutionAsync(connection, transaction, command, cancellationToken).ConfigureAwait(false);
-        await InsertAcceptedEventAsync(connection, transaction, command.AcceptedEvent, cancellationToken).ConfigureAwait(false);
+        await InsertExecutionAsync(connection, transaction, command, cancellationToken);
+        await InsertAcceptedEventAsync(connection, transaction, command.AcceptedEvent, cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
@@ -129,12 +129,12 @@ public sealed partial class IntegrationExecutionStore
         var connection = new SqliteConnection(_connectionString);
         try
         {
-            await NodeSqlitePragmas.OpenAndConfigureAsync(connection, cancellationToken).ConfigureAwait(false);
+            await NodeSqlitePragmas.OpenAndConfigureAsync(connection, cancellationToken);
             return connection;
         }
         catch
         {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            await connection.DisposeAsync();
             throw;
         }
     }
@@ -176,13 +176,13 @@ public sealed partial class IntegrationExecutionStore
     {
         await using var command = CreateCommand(connection, transaction, "SELECT revoked_at_utc FROM integration_api_keys WHERE key_prefix = $keyPrefix;");
         Add(command, "$keyPrefix", keyPrefix);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
         {
             return KeyRevocationState.Missing;
         }
 
-        return await reader.IsDBNullAsync(ordinal: 0, cancellationToken).ConfigureAwait(false) ? KeyRevocationState.Live : KeyRevocationState.Revoked;
+        return await reader.IsDBNullAsync(ordinal: 0, cancellationToken) ? KeyRevocationState.Live : KeyRevocationState.Revoked;
     }
 
     /// <summary>
@@ -204,7 +204,7 @@ public sealed partial class IntegrationExecutionStore
             Add(command, "$principalId", ToDb(principal));
         }
 
-        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
     }
 
     private static async Task InsertSessionAsync(SqliteConnection connection,
@@ -227,7 +227,7 @@ public sealed partial class IntegrationExecutionStore
         Add(insert, "$status", IntegrationSessionStatus.Active.ToString());
         Add(insert, "$receivedAtUtc", command.ReceivedAtUtc);
         Add(insert, "$sequence", command.AcceptedEvent.Sequence);
-        _ = await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _ = await insert.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task BumpSessionAsync(SqliteConnection connection,
@@ -245,7 +245,7 @@ public sealed partial class IntegrationExecutionStore
         Add(update, "$principalId", ToDb(command.PrincipalId));
         Add(update, "$status", IntegrationSessionStatus.Active.ToString());
 
-        if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) == 0)
+        if (await update.ExecuteNonQueryAsync(cancellationToken) == 0)
         {
             // Missing, another principal's, or closed. An unscoped UPDATE would have silently affected nothing and let
             // the accept commit an execution onto a session that cannot host it; aborting here is what keeps the join
@@ -279,7 +279,7 @@ public sealed partial class IntegrationExecutionStore
         Add(insert, "$status", IntegrationExecutionStatus.Accepted.ToString());
         Add(insert, "$receivedAtUtc", command.ReceivedAtUtc);
         Add(insert, "$sequence", command.AcceptedEvent.Sequence);
-        _ = await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _ = await insert.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task InsertAcceptedEventAsync(SqliteConnection connection,
@@ -296,7 +296,7 @@ public sealed partial class IntegrationExecutionStore
         Add(insert, "$sequence", acceptedEvent.Sequence);
         Add(insert, "$eventType", acceptedEvent.EventType);
         Add(insert, "$occurredAtUtc", acceptedEvent.OccurredAtUtc);
-        _ = await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _ = await insert.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private enum KeyRevocationState

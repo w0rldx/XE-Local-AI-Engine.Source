@@ -58,7 +58,7 @@ public sealed class InferenceProfileEndpointTests
             })
         };
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -79,7 +79,7 @@ public sealed class InferenceProfileEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -105,7 +105,7 @@ public sealed class InferenceProfileEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -134,12 +134,12 @@ public sealed class InferenceProfileEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // Still a 400 (the response DTO carries no skip state — a 200-with-skip would change the OpenAPI contract),
         // but the operator reads a retry instruction rather than a failure.
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         AssertEx.Contains(payload, skipText, StringComparison.Ordinal);
     }
 
@@ -162,10 +162,10 @@ public sealed class InferenceProfileEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         AssertEx.True(payload.Length > 0, "A domain-failure freeze must return a non-empty error body.");
     }
 
@@ -204,10 +204,10 @@ public sealed class InferenceProfileEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ProfilesRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
 
         AssertEx.True(doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array,
@@ -243,7 +243,7 @@ public sealed class InferenceProfileEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await service.DidNotReceiveWithAnyArgs()
@@ -267,7 +267,7 @@ public sealed class InferenceProfileEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await service.DidNotReceiveWithAnyArgs()
@@ -295,10 +295,10 @@ public sealed class InferenceProfileEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         var profile = doc.RootElement.GetProperty("profile");
         AssertEx.Equal(profileId.ToString(), profile.GetProperty("id").GetString());

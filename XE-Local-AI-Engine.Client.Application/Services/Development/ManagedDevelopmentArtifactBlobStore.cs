@@ -31,7 +31,7 @@ public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBl
         ReadOnlyMemory<byte> content,
         CancellationToken cancellationToken = default)
     {
-        var written = await _blobs.WriteAsync(projectId, artifactId, content, cancellationToken).ConfigureAwait(false);
+        var written = await _blobs.WriteAsync(projectId, artifactId, content, cancellationToken);
         return new DevelopmentArtifactBlobWriteResult(written.OpaqueReference, written.ContentHash, written.ByteCount);
     }
 
@@ -41,7 +41,7 @@ public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBl
         long expectedByteCount,
         CancellationToken cancellationToken = default)
     {
-        var read = await _blobs.ReadAsync(projectId, artifactId, expectedHash, expectedByteCount, cancellationToken).ConfigureAwait(false);
+        var read = await _blobs.ReadAsync(projectId, artifactId, expectedHash, expectedByteCount, cancellationToken);
         return new DevelopmentArtifactBlobReadResult(Map(read.Status), read.Content);
     }
 

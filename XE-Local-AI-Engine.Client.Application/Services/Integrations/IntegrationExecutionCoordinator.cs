@@ -142,7 +142,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         {
             try
             {
-                await ReconcileInterruptedAsync(cancellationToken).ConfigureAwait(false);
+                await ReconcileInterruptedAsync(cancellationToken);
                 break;
             }
             catch (Exception exception) when (attempt < MaxRecoveryAttempts && !cancellationToken.IsCancellationRequested)
@@ -151,7 +151,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                     "Integration execution startup recovery failed on attempt {Attempt} of {MaxAttempts}; retrying.",
                     attempt,
                     MaxRecoveryAttempts);
-                await Task.Delay(RecoveryRetryDelay, _timeProvider, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(RecoveryRetryDelay, _timeProvider, cancellationToken);
             }
             catch (Exception exception)
             {
@@ -160,7 +160,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             }
         }
 
-        await base.StartAsync(cancellationToken).ConfigureAwait(false);
+        await base.StartAsync(cancellationToken);
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
 
-            var execution = await store.GetByIdAsync(executionId, CancellationToken.None).ConfigureAwait(false);
+            var execution = await store.GetByIdAsync(executionId, CancellationToken.None);
             if (execution is null)
             {
                 _logger.LogWarning("Integration execution {ExecutionId} was queued but no row exists for it.", executionId);
@@ -201,7 +201,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
             try
             {
-                await ExecuteOneAsync(scope.ServiceProvider, context, execution, runCancellation.Token, cancelToken, stoppingToken).ConfigureAwait(false);
+                await ExecuteOneAsync(scope.ServiceProvider, context, execution, runCancellation.Token, cancelToken, stoppingToken);
             }
             catch (Exception exception)
             {
@@ -214,7 +214,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 if (exception is OperationCanceledException && cancelToken.IsCancellationRequested)
                 {
                     _logger.LogInformation("Integration execution {ExecutionId} was cancelled while in flight.", executionId);
-                    await TerminalizeFromFaultAsync(context, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null).ConfigureAwait(false);
+                    await TerminalizeFromFaultAsync(context, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
                 }
                 else
                 {
@@ -223,15 +223,14 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                     await TerminalizeFromFaultAsync(context,
                             IntegrationExecutionStatus.Failed,
                             shutdown ? IntegrationFailureCategories.Shutdown : IntegrationFailureCategories.InternalFailure,
-                            shutdown ? "The node stopped while the execution was in flight." : "The execution failed unexpectedly.")
-                        .ConfigureAwait(false);
+                            shutdown ? "The node stopped while the execution was in flight." : "The execution failed unexpectedly.");
                 }
             }
 
             // Placed AFTER every terminal path rather than inside one of them: an execution can end at a dozen points,
             // including the fault handler above, and a per-invocation session left Active by any of them would stay
             // that way forever.
-            await ClosePerInvocationSessionAsync(scope.ServiceProvider, execution).ConfigureAwait(false);
+            await ClosePerInvocationSessionAsync(scope.ServiceProvider, execution);
         }
         finally
         {
@@ -260,7 +259,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         {
             // Queued ids left behind when the token trips are simply dropped: their rows are still Accepted, and the
             // next StartAsync sweep flips them to Failed / restart.
-            while (await _queue.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
+            while (await _queue.Reader.WaitToReadAsync(stoppingToken))
             {
                 while (!stoppingToken.IsCancellationRequested && _queue.Reader.TryRead(out var executionId))
                 {
@@ -276,7 +275,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
         // Every dispatched run terminalizes itself on the way down (`shutdown`), so the host must not tear their DI
         // scopes away mid-write. RunDispatchedAsync never faults, so this cannot throw.
-        await Task.WhenAll(inFlight).ConfigureAwait(false);
+        await Task.WhenAll(inFlight);
     }
 
     /// <summary>
@@ -290,7 +289,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         {
             try
             {
-                await ProcessOneAsync(executionId, stoppingToken).ConfigureAwait(false);
+                await ProcessOneAsync(executionId, stoppingToken);
                 return;
             }
             catch (Exception exception)
@@ -311,7 +310,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
                 try
                 {
-                    await Task.Delay(RecoveryRetryDelay, _timeProvider, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(RecoveryRetryDelay, _timeProvider, stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -320,7 +319,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             }
         }
 
-        await TerminalizeStrandedAsync(executionId).ConfigureAwait(false);
+        await TerminalizeStrandedAsync(executionId);
     }
 
     /// <summary>
@@ -346,8 +345,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         //
         // A stale snapshot is harmless: TerminalizeAsync is a status/version CAS over NonTerminalStatuses, so a row
         // that went terminal between the read and its turn loses the CAS and this sweep writes nothing for it.
-        var interrupted = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, NonTerminalStatuses, int.MaxValue, Offset: 0), cancellationToken)
-                                     .ConfigureAwait(false);
+        var interrupted = await store.ListAsync(new IntegrationExecutionFilter(TriggerId: null, SessionId: null, NonTerminalStatuses, int.MaxValue, Offset: 0), cancellationToken);
 
         var recovered = 0;
         foreach (var row in interrupted)
@@ -364,7 +362,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // The watermark alone is not enough: a writer that lost the watermark race before the crash left a
             // row whose highest EVENT sequence is above it, and seeding below that mints a terminal sequence that
             // collides with an existing (execution_id, sequence) row on every restart forever.
-            var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken).ConfigureAwait(false);
+            var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken);
             if (!_buffer.TryCreate(row.Id, seedSequence))
             {
                 _logger.LogWarning("The event buffer refused a recovery entry for integration execution {ExecutionId}; it stays non-terminal for the next restart.", row.Id);
@@ -376,15 +374,14 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                         NonTerminalStatuses,
                         IntegrationExecutionStatus.Failed,
                         IntegrationFailureCategories.Restart,
-                        "The node restarted while the execution was in flight.")
-                    .ConfigureAwait(false))
+                        "The node restarted while the execution was in flight."))
             {
                 recovered++;
 
                 // The sweep is a DIFFERENT terminal path from the run's own, and it has to close per-invocation
                 // sessions too — otherwise a session interrupted by a restart stays Active with no execution that
                 // could ever close it. The busy guard is bypassed by construction: the row is already terminal.
-                await ClosePerInvocationSessionAsync(scope.ServiceProvider, row).ConfigureAwait(false);
+                await ClosePerInvocationSessionAsync(scope.ServiceProvider, row);
             }
         }
 
@@ -406,7 +403,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         var highest = row.LastSequence;
         while (true)
         {
-            var page = await store.ListEventsAsync(row.Id, highest, RecoveryEventPageSize, cancellationToken).ConfigureAwait(false);
+            var page = await store.ListEventsAsync(row.Id, highest, RecoveryEventPageSize, cancellationToken);
             if (page.Count == 0)
             {
                 return highest;
@@ -434,26 +431,26 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         //    to run. Do not repair it — the seed text is not recoverable from the row, and a run against an empty seed
         //    is a worse outcome than a clean failure.
         var sessions = services.GetRequiredService<IIntegrationSessionStore>();
-        var session = await sessions.GetByIdAsync(execution.SessionId, runToken).ConfigureAwait(false);
+        var session = await sessions.GetByIdAsync(execution.SessionId, runToken);
         if (session is null)
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.InternalFailure, "The execution's session row is missing.").ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.InternalFailure, "The execution's session row is missing.");
             return;
         }
 
-        var trigger = await services.GetRequiredService<IIntegrationTriggerStore>().GetByIdAsync(execution.TriggerId, runToken).ConfigureAwait(false);
+        var trigger = await services.GetRequiredService<IIntegrationTriggerStore>().GetByIdAsync(execution.TriggerId, runToken);
         if (trigger is null || !trigger.Enabled)
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger was removed or disabled before the execution ran.").ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger was removed or disabled before the execution ran.");
             return;
         }
 
         context.Describe(trigger.Name, trigger.TargetAgentDefinitionId);
 
-        var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(trigger.TargetAgentDefinitionId, runToken).ConfigureAwait(false);
+        var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(trigger.TargetAgentDefinitionId, runToken);
         if (definition is null)
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.").ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.");
             return;
         }
 
@@ -467,8 +464,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         {
             await TerminalizeBeforeRunAsync(context,
                     IntegrationFailureCategories.TriggerUnavailable,
-                    "The trigger's target agent is an orchestrator, which external integrations do not run.")
-                .ConfigureAwait(false);
+                    "The trigger's target agent is an orchestrator, which external integrations do not run.");
             return;
         }
 
@@ -483,31 +479,29 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
         if (execution.StopRequestedAtUtc is not null)
         {
-            await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null).ConfigureAwait(false);
+            await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
             return;
         }
 
         // 3. The effective model, and the locality gate. A cloud model is rejected UP FRONT, before the lease and
         //    before the capacity decision, so unattended external work never egresses. The capacity decision itself
         //    moves to step 7, after the lease.
-        var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(runToken).ConfigureAwait(false);
+        var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(runToken);
         var localDefaultModel = await services.GetRequiredService<ILocalDefaultChatModelResolver>()
-                                              .ResolveAsync(nodeSettings.DefaultModelName, runToken)
-                                              .ConfigureAwait(false);
+                                              .ResolveAsync(nodeSettings.DefaultModelName, runToken);
         var pinnedModel = string.IsNullOrWhiteSpace(definition.ModelProfile) ? null : definition.ModelProfile;
         var effectiveModel = pinnedModel ?? localDefaultModel;
         if (string.IsNullOrWhiteSpace(effectiveModel))
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "No local chat model is available to run the trigger's agent.").ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "No local chat model is available to run the trigger's agent.");
             return;
         }
 
-        var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, runToken).ConfigureAwait(false);
+        var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, runToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
         if (effectiveModelIsCloud)
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.CloudModelRejected, "The trigger's effective model is cloud-hosted, and unattended runs are node-local only.")
-                .ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.CloudModelRejected, "The trigger's effective model is cloud-hosted, and unattended runs are node-local only.");
             return;
         }
 
@@ -533,8 +527,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                           runToken,
                           services.GetRequiredService<IOptions<ConversationCompactionOptions>>().Value.RecentMessagesToKeepVerbatim,
                           replaysToolHistory,
-                          toolResultExcerptChars)
-                      .ConfigureAwait(false);
+                          toolResultExcerptChars);
 
         // 3c. The turn read, and the ONE shape R4-1's forward-running failure leaves behind: the execution row commits
         //     before the conversation and the seed are written, so a row can be real and have nothing to run. Do not
@@ -545,12 +538,12 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         //     under a compacted session the capped read would hand the builder survivor rows with no parts and the
         //     replay would silently be empty. Every other policy keeps the cap — it has no tool history to replay.
         var conversation = replaysToolHistory
-            ? await persistence.GetConversationAsync(session.ConversationId, runToken).ConfigureAwait(false)
-            : await persistence.GetConversationForTurnAsync(session.ConversationId, runToken).ConfigureAwait(false);
+            ? await persistence.GetConversationAsync(session.ConversationId, runToken)
+            : await persistence.GetConversationForTurnAsync(session.ConversationId, runToken);
         var seed = conversation?.Messages.FirstOrDefault(message => message.MessageId == executionId);
         if (conversation is null || seed is null)
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.InternalFailure, "The execution's owned conversation or seed turn is missing.").ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.InternalFailure, "The execution's owned conversation or seed turn is missing.");
             return;
         }
 
@@ -562,11 +555,10 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                          supportsTools,
                                          honorModelProfile: true,
                                          effectiveModelIsCloud,
-                                         runToken)
-                                     .ConfigureAwait(false);
+                                         runToken);
         if (resolved is null)
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.").ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.");
             return;
         }
 
@@ -578,8 +570,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         {
             await TerminalizeBeforeRunAsync(context,
                     IntegrationFailureCategories.TriggerUnavailable,
-                    "The trigger's target agent is an orchestrator, which external integrations do not run.")
-                .ConfigureAwait(false);
+                    "The trigger's target agent is an orchestrator, which external integrations do not run.");
             return;
         }
 
@@ -599,7 +590,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         //     of the synopsis and the verbatim turns, which is the same placement and the same reason an uploaded
         //     attachment gets: it is reference material to read BEFORE the recent turns, not a turn of its own.
         var priorOutputs = replaysToolHistory
-            ? await BuildPriorOutputsAsync(services, session, executionId, runToken).ConfigureAwait(false)
+            ? await BuildPriorOutputsAsync(services, session, executionId, runToken)
             : null;
 
         //     And the session's own tool history: a caller-managed continuation replays each completed call and its
@@ -747,8 +738,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                     parts,
                     runToken,
                     cancelToken,
-                    stoppingToken)
-                .ConfigureAwait(false);
+                    stoppingToken);
         }
         finally
         {
@@ -783,7 +773,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         var remaining = deadlineUtc - NowUnixMilliseconds();
         if (remaining <= 0)
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.QueueTimeout, "The execution waited longer than this node's maximum queue age.").ConfigureAwait(false);
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.QueueTimeout, "The execution waited longer than this node's maximum queue age.");
             return;
         }
 
@@ -802,15 +792,13 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             //     "this one had to wait". Accepted -> Running directly is legal; Queued exists only for a real wait,
             //     and this is its only producer.
             if (!leaseTask.IsCompleted
-                && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId, context.Version, AcceptedOnly, IntegrationExecutionStatus.Queued), runToken)
-                              .ConfigureAwait(false))
+                && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate(executionId, context.Version, AcceptedOnly, IntegrationExecutionStatus.Queued), runToken))
             {
                 // A false means a concurrent cancel already CASed the row on the same version, so the row is terminal
                 // and no execution.queued may follow it.
                 context.Version++;
                 var queued = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionQueued, contentType: null, payload: null);
-                await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, queued.Sequence, queued.Type, DetailJson: null, queued.OccurredAtUtc), runToken)
-                           .ConfigureAwait(false);
+                await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, queued.Sequence, queued.Type, DetailJson: null, queued.OccurredAtUtc), runToken);
             }
         }
         catch
@@ -824,11 +812,11 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // race where it was granted a moment earlier the lease comes back here and is disposed. Never a detached
             // task — the settle has to happen before the fault handler runs, or the row terminalizes while the slot is
             // still held.
-            await queueDeadline.CancelAsync().ConfigureAwait(false);
+            await queueDeadline.CancelAsync();
             try
             {
-                var orphan = await leaseTask.ConfigureAwait(false);
-                await orphan.DisposeAsync().ConfigureAwait(false);
+                var orphan = await leaseTask;
+                await orphan.DisposeAsync();
             }
             catch (Exception reclaimFailure)
             {
@@ -842,23 +830,23 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         IAsyncDisposable lease;
         try
         {
-            lease = await leaseTask.ConfigureAwait(false);
+            lease = await leaseTask;
         }
         catch (OperationCanceledException)
         {
             // 7b. Three causes reach here with no lease held, and they must not be conflated.
-            await ReloadVersionAsync(context).ConfigureAwait(false);
+            await ReloadVersionAsync(context);
             if (cancelToken.IsCancellationRequested)
             {
-                await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null).ConfigureAwait(false);
+                await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
             }
             else if (stoppingToken.IsCancellationRequested)
             {
-                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.Shutdown, "The node stopped while the execution was waiting for the invocation lease.").ConfigureAwait(false);
+                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.Shutdown, "The node stopped while the execution was waiting for the invocation lease.");
             }
             else
             {
-                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.QueueTimeout, "The execution waited longer than this node's maximum queue age.").ConfigureAwait(false);
+                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.QueueTimeout, "The execution waited longer than this node's maximum queue age.");
             }
 
             return;
@@ -872,7 +860,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             //      before capacity, before the Running CAS, before any side effect at all.
             if (NowUnixMilliseconds() >= deadlineUtc)
             {
-                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.QueueTimeout, "The execution waited longer than this node's maximum queue age.").ConfigureAwait(false);
+                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.QueueTimeout, "The execution waited longer than this node's maximum queue age.");
                 return;
             }
 
@@ -880,17 +868,17 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             //      reservation across the whole lease wait; reversing the pair is deliberate, so a queued integration
             //      run cannot fail a concurrent interactive turn's capacity decision while it waits. Disposed in
             //      reverse acquisition order below.
-            var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, runToken).ConfigureAwait(false);
+            var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, runToken);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
-                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.CapacityRejected, "The node could not reserve capacity for the trigger's model.").ConfigureAwait(false);
+                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.CapacityRejected, "The node could not reserve capacity for the trigger's model.");
                 return;
             }
 
             reservation = decision.Reservation;
 
             // 7c. A cancel that arrived while the lease was being awaited lands here.
-            var current = await store.GetByIdAsync(executionId, runToken).ConfigureAwait(false);
+            var current = await store.GetByIdAsync(executionId, runToken);
             if (current is null)
             {
                 return;
@@ -904,7 +892,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
             if (current.StopRequestedAtUtc is not null)
             {
-                await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null).ConfigureAwait(false);
+                await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
                 return;
             }
 
@@ -918,10 +906,9 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                     startedAtUtc,
                                     EndedAtUtc: null,
                                     package.InvocationId),
-                                runToken)
-                            .ConfigureAwait(false))
+                                runToken))
             {
-                var reloaded = await store.GetByIdAsync(executionId, runToken).ConfigureAwait(false);
+                var reloaded = await store.GetByIdAsync(executionId, runToken);
                 if (reloaded is null || !NonTerminalStatuses.Contains(reloaded.Status))
                 {
                     return;
@@ -935,15 +922,14 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 // from the cancel endpoint was then shown a failure it never caused.
                 if (reloaded.StopRequestedAtUtc is not null)
                 {
-                    await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null).ConfigureAwait(false);
+                    await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
                     return;
                 }
 
                 await TerminalizeFromFaultAsync(context,
                         IntegrationExecutionStatus.Failed,
                         IntegrationFailureCategories.InternalFailure,
-                        $"The execution could not be moved to Running from {reloaded.Status}.")
-                    .ConfigureAwait(false);
+                        $"The execution could not be moved to Running from {reloaded.Status}.");
                 return;
             }
 
@@ -954,8 +940,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             //     (ConversationId, MessageId, RequestId) against an EXISTING placeholder row, so creating it after the
             //     run would leave the assistant turn unpersisted.
             var started = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionStarted, contentType: null, payload: null);
-            await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, started.Sequence, started.Type, DetailJson: null, started.OccurredAtUtc), runToken)
-                       .ConfigureAwait(false);
+            await store.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, started.Sequence, started.Type, DetailJson: null, started.OccurredAtUtc), runToken);
 
             var correlation = new NodeChatMessageCorrelation(session.ConversationId, messageId, executionId);
             _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(session.ConversationId,
@@ -966,8 +951,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                          MetadataJson: null,
                                          NodeChatOriginValues.Local,
                                          session.AgentDefinitionId),
-                                     runToken)
-                                 .ConfigureAwait(false);
+                                     runToken);
 
             // 8. Run.
             string? failureCategory = null;
@@ -981,7 +965,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 // Registered for the CURRENT run only, and unregistered with it.
                 await using var cancelBridge = cancelToken.Register(() => runner.Cancel(package.InvocationId));
                 using var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
-                await runner.RunAsync(executionContext, runToken).ConfigureAwait(false);
+                await runner.RunAsync(executionContext, runToken);
             }
             catch (ApprovalUnavailableException approvalUnavailable)
             {
@@ -991,7 +975,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 failureSummary = approvalUnavailable.Message;
             }
 
-            await FinishAsync(services, context, correlation, terminalState.Value, effectiveModel, mapper, parts, failureCategory, failureSummary).ConfigureAwait(false);
+            await FinishAsync(services, context, correlation, terminalState.Value, effectiveModel, mapper, parts, failureCategory, failureSummary);
         }
         finally
         {
@@ -1004,7 +988,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             }
             finally
             {
-                await lease.DisposeAsync().ConfigureAwait(false);
+                await lease.DisposeAsync();
             }
         }
     }
@@ -1035,8 +1019,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                       NodeChatMessageStatusValues.Failed,
                                       NowUnixMilliseconds(),
                                       Parts: parts.HasParts ? parts.Snapshot() : null),
-                                  CancellationToken.None)
-                              .ConfigureAwait(false);
+                                  CancellationToken.None);
         }
         else
         {
@@ -1077,8 +1060,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             var durationMs = state.GenerationDurationMs
                              ?? (state.CompletedAt is { } completedAt ? Math.Max(val1: 0L, (long)(completedAt - state.StartedAt).TotalMilliseconds) : 0L);
             var provider = await services.GetRequiredService<IUsageProviderResolver>()
-                                         .ResolveAsync(state.ModelUsed ?? effectiveModel, CancellationToken.None)
-                                         .ConfigureAwait(false);
+                                         .ResolveAsync(state.ModelUsed ?? effectiveModel, CancellationToken.None);
 
             // The envelope is not optional: SummarizeTokenUsageAsync reads only kind-1 rows, so omitting it would make
             // an external surface the one path that can silently burn tokens invisibly. The kind-3 audit row does not
@@ -1125,8 +1107,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                       Parts: parts.HasParts ? parts.Snapshot() : null,
                                       state.GenerationDurationMs,
                                       envelope),
-                                  CancellationToken.None)
-                              .ConfigureAwait(false);
+                                  CancellationToken.None);
         }
 
         // 9b. THE DRAIN SEAM. The mapper persists tool.* rows off a channel, and without an awaited drain here one of
@@ -1136,7 +1117,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         //     published, so abandoning the write would leave a visible event with no durable row behind it.
         try
         {
-            await mapper.DrainAsync(CancellationToken.None).ConfigureAwait(false);
+            await mapper.DrainAsync(CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -1152,12 +1133,12 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         //     Append for a terminal event (that publishes before the row exists), and never a status CAS followed by a
         //     separate event insert (a crash between them leaves a terminal row whose terminal event never arrives, and
         //     startup recovery scans only NON-terminal rows, so the inconsistency would be permanent).
-        if (!await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary).ConfigureAwait(false))
+        if (!await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary))
         {
             // A Running row that lost every bounded attempt is stranded: nothing else will pick it up, and its
             // admission slot is held until the process restarts. The fault path re-reads over EVERY non-terminal
             // status, honours the marker it finds and returns at once if some other writer closed the row first.
-            await TerminalizeFromFaultAsync(context, status, failureCategory, failureSummary).ConfigureAwait(false);
+            await TerminalizeFromFaultAsync(context, status, failureCategory, failureSummary);
         }
     }
 
@@ -1188,8 +1169,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                             // for exactly MaxPayloads would replay seven prior outputs where R4-9(b) promises eight.
                                             IntegrationPriorOutputsComposer.MaxPayloads + 1,
                                             Offset: 0),
-                                        cancellationToken)
-                                    .ConfigureAwait(false);
+                                        cancellationToken);
 
         var envelopes = new List<string>(IntegrationPriorOutputsComposer.MaxPayloads);
         foreach (var execution in executions)
@@ -1202,7 +1182,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // ponytail: a single page rather than a paging loop — an execution's persisted rows are bounded by the
             // 40-iteration tool cap (a handful of phase events, at most 80 tool.* and at most 40 external.output). If
             // MaximumToolIterationsPerRequest is ever raised, raise this with it.
-            var events = await store.ListEventsAsync(execution.Id, sinceSequence: 0, limit: 200, cancellationToken).ConfigureAwait(false);
+            var events = await store.ListEventsAsync(execution.Id, sinceSequence: 0, limit: 200, cancellationToken);
             for (var index = events.Count - 1; index >= 0; index--)
             {
                 var persisted = events[index];
@@ -1248,19 +1228,19 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     {
         try
         {
-            var row = await services.GetRequiredService<IIntegrationExecutionStore>().GetByIdAsync(execution.Id, CancellationToken.None).ConfigureAwait(false);
+            var row = await services.GetRequiredService<IIntegrationExecutionStore>().GetByIdAsync(execution.Id, CancellationToken.None);
             if (row is null || NonTerminalStatuses.Contains(row.Status))
             {
                 return;
             }
 
-            var trigger = await services.GetRequiredService<IIntegrationTriggerStore>().GetByIdAsync(execution.TriggerId, CancellationToken.None).ConfigureAwait(false);
+            var trigger = await services.GetRequiredService<IIntegrationTriggerStore>().GetByIdAsync(execution.TriggerId, CancellationToken.None);
             if (trigger is null || trigger.SessionPolicy != IntegrationSessionPolicy.PerInvocation)
             {
                 return;
             }
 
-            _ = await services.GetRequiredService<IntegrationSessionService>().CloseAsync(execution.SessionId, CancellationToken.None).ConfigureAwait(false);
+            _ = await services.GetRequiredService<IntegrationSessionService>().CloseAsync(execution.SessionId, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -1273,7 +1253,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
     private static async Task ReloadVersionAsync(ExecutionRunContext context)
     {
-        var row = await context.Store.GetByIdAsync(context.ExecutionId, CancellationToken.None).ConfigureAwait(false);
+        var row = await context.Store.GetByIdAsync(context.ExecutionId, CancellationToken.None);
         if (row is not null)
         {
             context.Version = row.Version;

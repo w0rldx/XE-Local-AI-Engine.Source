@@ -22,13 +22,13 @@ public sealed class RevokeMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiKey
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var revoked = await _apiKeyService.RevokeAsync(ct).ConfigureAwait(false);
+        var revoked = await _apiKeyService.RevokeAsync(ct);
         if (!revoked)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

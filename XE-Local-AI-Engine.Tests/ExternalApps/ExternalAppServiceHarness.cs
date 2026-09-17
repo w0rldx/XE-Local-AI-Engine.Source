@@ -169,7 +169,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     {
         await using var scope = _provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
-        var row = AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await store.GetAsync(instanceId));
 
         var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
                                      row.Version,
@@ -181,11 +181,10 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                                      ExternalAppInstanceEventKind.Failed,
                                      EventDetailJson: null,
                                      OccurredAtUtc: 50,
-                                     desiredState))
-                                 .ConfigureAwait(false);
+                                     desiredState));
         AssertEx.True(applied.Applied, $"Forcing instance {instanceId:N} to {status} must not lose its compare-and-swap.");
 
-        return AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
+        return AssertEx.NotNull(await store.GetAsync(instanceId));
     }
 
     /// <param name="withBridge">
@@ -228,7 +227,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         await using (var scope = provider.CreateAsyncScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-            await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+            await dbContext.Database.EnsureCreatedAsync();
         }
 
         var dataDirectory = new FakeNodeDataDirectory(rootPath);
@@ -343,8 +342,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                                      // Seeded rows carry a bridge token because real installs do; a row without
                                      // one models an instance installed before the bridge existed, which is a
                                      // different case and is seeded deliberately where it is wanted.
-                                     withBridgeToken ? ContainerBridgeToken.Mint(instanceId) : null))
-                                 .ConfigureAwait(false);
+                                     withBridgeToken ? ContainerBridgeToken.Mint(instanceId) : null));
 
         var version = created.Version;
         var currentStatus = ExternalAppInstanceStatus.Installing;
@@ -360,12 +358,11 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                                          ExternalAppInstanceEventKind.Installed,
                                          EventDetailJson: null,
                                          OccurredAtUtc: 2,
-                                         desiredState))
-                                     .ConfigureAwait(false);
+                                         desiredState));
             AssertEx.True(applied.Applied, "Seeding the row must not lose its compare-and-swap.");
         }
 
-        return AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
+        return AssertEx.NotNull(await store.GetAsync(instanceId));
     }
 
     /// <summary>
@@ -383,7 +380,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     {
         await using var scope = _provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
-        var row = AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await store.GetAsync(instanceId));
 
         var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
                                      row.Version,
@@ -395,8 +392,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                                      ExternalAppInstanceEventKind.Installed,
                                      EventDetailJson: null,
                                      OccurredAtUtc: 60,
-                                     ManifestSnapshotJson: manifestJson))
-                                 .ConfigureAwait(false);
+                                     ManifestSnapshotJson: manifestJson));
         AssertEx.True(applied.Applied, "Replacing the manifest snapshot must not lose its compare-and-swap.");
     }
 
@@ -408,7 +404,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     {
         await using var scope = _provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
-        var row = AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await store.GetAsync(instanceId));
 
         var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
                                      row.Version,
@@ -419,8 +415,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                                      row.Status,
                                      ExternalAppInstanceEventKind.Failed,
                                      EventDetailJson: null,
-                                     OccurredAtUtc: 99))
-                                 .ConfigureAwait(false);
+                                     OccurredAtUtc: 99));
         AssertEx.True(applied.Applied, "The competing write must land, or the test is not testing a lost swap.");
     }
 
@@ -432,8 +427,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     {
         await using var scope = _provider.CreateAsyncScope();
         var deleted = await scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>()
-                                 .DeleteAsync(instanceId, expectedVersion)
-                                 .ConfigureAwait(false);
+                                 .DeleteAsync(instanceId, expectedVersion);
         AssertEx.True(deleted, $"Deleting the row of instance {instanceId:N} must not lose its compare-and-swap.");
     }
 
@@ -458,8 +452,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                                      RuntimeOverride: null,
                                      CreatedAtUtc: 1,
                                      ExternalAppInstanceEventKind.PermissionAccepted,
-                                     FirstEventDetailJson: null))
-                                 .ConfigureAwait(false);
+                                     FirstEventDetailJson: null));
 
         AssertEx.True(created.Applied, "The staged row must have been written, or the projection has nothing to degrade.");
         return instanceId;
@@ -474,22 +467,21 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     {
         await using var scope = _provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
-        return await new ExternalAppBridgeTokenVerifier(store).VerifyAsync(presentedToken).ConfigureAwait(false);
+        return await new ExternalAppBridgeTokenVerifier(store).VerifyAsync(presentedToken);
     }
 
     /// <summary>Reads the row straight from the database, outside the service, so a projection bug cannot hide a write bug.</summary>
     public async Task<ExternalAppInstanceSnapshot?> ReadAsync(Guid instanceId)
     {
         await using var scope = _provider.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>().GetAsync(instanceId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>().GetAsync(instanceId);
     }
 
     public async Task<IReadOnlyList<ExternalAppInstanceEventSnapshot>> ReadEventsAsync(Guid instanceId)
     {
         await using var scope = _provider.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>()
-                          .ListEventsAsync(instanceId, afterSequence: 0, limit: 100)
-                          .ConfigureAwait(false);
+                          .ListEventsAsync(instanceId, afterSequence: 0, limit: 100);
     }
 
     /// <summary>
@@ -507,18 +499,18 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                     return row is not null && Array.IndexOf(expected, row.Status) >= 0;
                 },
                 TestBudgets.Contended,
-                "The instance never reached one of the expected statuses.").ConfigureAwait(false);
+                "The instance never reached one of the expected statuses.");
         }
         catch (AssertionException)
         {
             // Re-read for the report: the message has to say what the row actually settled on, and the failure
             // category is the whole diagnosis when a pipeline went the wrong way.
-            row = await ReadAsync(instanceId).ConfigureAwait(false);
+            row = await ReadAsync(instanceId);
             throw new AssertionException($"Instance {instanceId:N} never reached {string.Join(" or ", expected)}; it is {row?.Status.ToString() ?? "absent"} "
                                          + $"({row?.FailureCategory?.ToString() ?? "no category"}: {row?.FailureSummary ?? "no summary"}).");
         }
 
-        await WaitUntilIdleAsync(instanceId).ConfigureAwait(false);
+        await WaitUntilIdleAsync(instanceId);
         return row!;
     }
 
@@ -539,7 +531,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                 return lease is not null;
             },
             TestBudgets.Contended,
-            $"The operation on instance {instanceId:N} never released its gate.").ConfigureAwait(false);
+            $"The operation on instance {instanceId:N} never released its gate.");
     }
 
     /// <summary>
@@ -593,7 +585,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         }
 
         _hostHandle.Dispose();
-        await _provider.DisposeAsync().ConfigureAwait(false);
+        await _provider.DisposeAsync();
 
         if (Directory.Exists(RootPath))
         {
@@ -811,10 +803,10 @@ internal sealed class GatedContainerRuntime(FakeDockerRuntimeClient inner) : ICo
         if (PullGate is { } gate)
         {
             _ = PullReached.TrySetResult();
-            await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await gate.Task.WaitAsync(cancellationToken);
         }
 
-        await inner.PullImageAsync(imageReference, progress, cancellationToken).ConfigureAwait(false);
+        await inner.PullImageAsync(imageReference, progress, cancellationToken);
     }
 
     public Task<string> RunContainerAsync(ContainerSpecification specification, CancellationToken cancellationToken = default)

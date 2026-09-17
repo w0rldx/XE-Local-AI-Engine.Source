@@ -22,7 +22,7 @@ public sealed class RunningModelSnapshotMappingTests
         await using var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
         {
             Models = ["llama3:8b"]
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         server.State.RunningModels =
         [
             new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 5_000_000_000, SizeVramBytes: 4_000_000_000)
@@ -30,7 +30,7 @@ public sealed class RunningModelSnapshotMappingTests
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         var capabilityClient = new OllamaModelCapabilityClient(ollamaClient);
 
-        var running = await capabilityClient.ListRunningModelsAsync(CancellationToken.None).ConfigureAwait(false);
+        var running = await capabilityClient.ListRunningModelsAsync(CancellationToken.None);
 
         var snapshot = AssertEx.NotNull(running.SingleOrDefault());
         AssertEx.Equal(expected: 5_000_000_000L, snapshot.SizeBytes);
@@ -44,7 +44,7 @@ public sealed class RunningModelSnapshotMappingTests
         await using var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
         {
             Models = ["llama3:8b"]
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         server.State.RunningModels =
         [
             new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 7_000_000_000, SizeVramBytes: 6_000_000_000)
@@ -52,7 +52,7 @@ public sealed class RunningModelSnapshotMappingTests
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
 
-        var running = await modelService.ListRunningModelsAsync(CancellationToken.None).ConfigureAwait(false);
+        var running = await modelService.ListRunningModelsAsync(CancellationToken.None);
 
         var snapshot = AssertEx.NotNull(running.SingleOrDefault());
         AssertEx.Equal("llama3:8b", snapshot.Name);
@@ -66,7 +66,7 @@ public sealed class RunningModelSnapshotMappingTests
         await using var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
         {
             Models = ["llama3:8b"]
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         // Zero size/size_vram models a runtime that does not report a footprint; the mapping must surface null rather than 0.
         // (A running model always reports an expiry, so this case isolates the size/vram normalization.)
         server.State.RunningModels =
@@ -76,7 +76,7 @@ public sealed class RunningModelSnapshotMappingTests
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
 
-        var running = await modelService.ListRunningModelsAsync(CancellationToken.None).ConfigureAwait(false);
+        var running = await modelService.ListRunningModelsAsync(CancellationToken.None);
 
         var snapshot = AssertEx.NotNull(running.SingleOrDefault());
         AssertEx.Null(snapshot.SizeBytes);
@@ -120,14 +120,14 @@ public sealed class RunningModelSnapshotMappingTests
         await using var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
         {
             Models = ["llama3:8b"]
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
 
         // keep_alive=0 is issued via an empty-prompt generate (POST /api/generate); unloading a model that is not "loaded"
         // in the fake runtime is still a no-op success (idempotent). The decoded model name reaching the service is covered
         // by the endpoint tests; here we prove the graceful unload route is exercised.
-        await modelService.UnloadModelAsync("llama3:8b", CancellationToken.None).ConfigureAwait(false);
+        await modelService.UnloadModelAsync("llama3:8b", CancellationToken.None);
 
         AssertEx.Contains(server.RecordedRequests, request => request.Method == "POST" && request.Path == "/api/generate");
     }

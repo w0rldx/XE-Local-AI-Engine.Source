@@ -52,7 +52,7 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
     public async Task PrepareAsync_WarmsUnderItsOwnAttachKeyWithEgressAndTheSameMounts_ThenKillsIt()
     {
         var sandbox = new RecordingSandbox();
-        var (session, _) = await PrepareAsync(sandbox, DotnetProfile).ConfigureAwait(false);
+        var (session, _) = await PrepareAsync(sandbox, DotnetProfile);
 
         AssertEx.Equal(expected: 2, sandbox.Created.Count, "the warm restore must be a SECOND sandbox, not a re-used one.");
         var warm = sandbox.Created[0];
@@ -95,7 +95,7 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
     public async Task PrepareAsync_RunsExactlyTheProfilesRestoreCommandInTheWarmSandbox()
     {
         var sandbox = new RecordingSandbox();
-        _ = await PrepareAsync(sandbox, DotnetProfile).ConfigureAwait(false);
+        _ = await PrepareAsync(sandbox, DotnetProfile);
 
         var restoreCommand = DotnetProfile.ResolveCommand(DevelopmentCommandIds.DotnetRestore);
         var catalogCommands = sandbox.Executed
@@ -117,10 +117,10 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
     public async Task PrepareAsync_WhenTheBaseCommitIsAlreadyWarm_DoesNotWarmAgain()
     {
         var sandbox = new RecordingSandbox();
-        var (_, prepare) = await PrepareAsync(sandbox, DotnetProfile).ConfigureAwait(false);
+        var (_, prepare) = await PrepareAsync(sandbox, DotnetProfile);
         AssertEx.Equal(expected: 1, sandbox.Created.Count(static request => request.RuntimeProfile == "development-warm"));
 
-        _ = await prepare().ConfigureAwait(false);
+        _ = await prepare();
 
         AssertEx.Equal(expected: 1, sandbox.Created.Count(static request => request.RuntimeProfile == "development-warm"));
     }
@@ -138,22 +138,20 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         {
             RestoreExitCode = 1
         };
-        var (repository, data, snapshot, baseCommit) = await SeedAsync(DotnetProfile).ConfigureAwait(false);
+        var (repository, data, snapshot, baseCommit) = await SeedAsync(DotnetProfile);
         sandbox.BaseCommit = baseCommit;
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink());
 
         // A failing warm records nothing, which is what leaves the workspace in the "cloned but never warmed" state a
         // crash between the clone and the first warm would also produce.
-        var failed = await AssertEx.ThrowsAsync<InvalidOperationException>(() => provider.PrepareAsync(snapshot, Binding(snapshot, repository)))
-                                   .ConfigureAwait(false);
+        var failed = await AssertEx.ThrowsAsync<InvalidOperationException>(() => provider.PrepareAsync(snapshot, Binding(snapshot, repository)));
         AssertEx.Contains(failed.Message, "warm restore", StringComparison.Ordinal);
 
         var worktree = Path.Combine(data, "development", "workspaces", snapshot.ProjectId.ToString("N"), snapshot.TaskId.ToString("N"));
-        await File.WriteAllTextAsync(Path.Combine(worktree, "README.md"), "agent wrote this\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(worktree, "README.md"), "agent wrote this\n");
         sandbox.RestoreExitCode = 0;
 
-        var refused = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => provider.PrepareAsync(snapshot, Binding(snapshot, repository)))
-                                    .ConfigureAwait(false);
+        var refused = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => provider.PrepareAsync(snapshot, Binding(snapshot, repository)));
         AssertEx.Contains(refused.Message, "uncommitted tracked changes", StringComparison.Ordinal);
     }
 
@@ -164,7 +162,7 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
     public async Task PrepareAsync_WhenTheProfileDeclaresNoRestoreCommand_SkipsWarmingEntirely()
     {
         var sandbox = new RecordingSandbox();
-        _ = await PrepareAsync(sandbox, GenericProfile).ConfigureAwait(false);
+        _ = await PrepareAsync(sandbox, GenericProfile);
 
         AssertEx.Equal(expected: 1, sandbox.Created.Count);
         AssertEx.Equal("development-local", sandbox.Created[0].RuntimeProfile);
@@ -175,11 +173,11 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
     private async Task<(DevelopmentWorkspaceSession Session, Func<Task<DevelopmentWorkspaceSession>> Prepare)> PrepareAsync(RecordingSandbox sandbox,
         DevelopmentCommandProfile profile)
     {
-        var (repository, data, snapshot, baseCommit) = await SeedAsync(profile).ConfigureAwait(false);
+        var (repository, data, snapshot, baseCommit) = await SeedAsync(profile);
         sandbox.BaseCommit = baseCommit;
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink());
         var binding = Binding(snapshot, repository);
-        var session = await provider.PrepareAsync(snapshot, binding).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, binding);
         return (session, () => provider.PrepareAsync(snapshot, binding));
     }
 
@@ -188,13 +186,13 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-warm@example.invalid").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Warm Test").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base").ConfigureAwait(false);
-        var baseCommit = await ReadGitOutputAsync(repository, "rev-parse", "--verify", "refs/heads/main^{commit}").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-warm@example.invalid");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Warm Test");
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
+        var baseCommit = await ReadGitOutputAsync(repository, "rev-parse", "--verify", "refs/heads/main^{commit}");
 
         var data = Path.Combine(_root, "d-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(data);
@@ -227,9 +225,9 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         };
         process.Start();
         var error = process.StandardError.ReadToEndAsync();
-        var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        AssertEx.Equal(expected: 0, process.ExitCode, await error.ConfigureAwait(false));
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        AssertEx.Equal(expected: 0, process.ExitCode, await error);
         return output.Trim();
     }
 

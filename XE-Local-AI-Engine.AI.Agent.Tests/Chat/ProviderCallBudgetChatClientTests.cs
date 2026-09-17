@@ -288,7 +288,7 @@ public sealed class ProviderCallBudgetChatClientTests
         {
             await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () =>
             {
-                await foreach (var _ in sut.GetStreamingResponseAsync(messages, new ChatOptions()).ConfigureAwait(false))
+                await foreach (var _ in sut.GetStreamingResponseAsync(messages, new ChatOptions()))
                 {
                     // The budget rejection fires before the first chunk is pulled, so no update is ever yielded.
                 }
@@ -331,7 +331,7 @@ public sealed class ProviderCallBudgetChatClientTests
             using (var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance))
                 using (ProviderCallBudget.BeginScope(budgetOptions))
                 {
-                    _ = await sut.GetResponseAsync(messages, new ChatOptions()).ConfigureAwait(false);
+                    _ = await sut.GetResponseAsync(messages, new ChatOptions());
                     withoutToolsCount = inner.ReceivedMessageSets.Single().Count;
                 }
 
@@ -343,7 +343,7 @@ public sealed class ProviderCallBudgetChatClientTests
                     _ = await sut.GetResponseAsync(messages, new ChatOptions
                     {
                         Tools = ManyTools(5)
-                    }).ConfigureAwait(false);
+                    });
                     withToolsCount = inner.ReceivedMessageSets.Single().Count;
                 }
 
@@ -438,8 +438,7 @@ public sealed class ProviderCallBudgetChatClientTests
                                {
                                    ModelId = ModelId
                                }
-                           })
-                       .ConfigureAwait(false);
+                           });
 
         AssertEx.Equal(ModelId, inner.ReceivedOptions.Single()?.ModelId);
     }
@@ -455,8 +454,8 @@ public sealed class ProviderCallBudgetChatClientTests
         var calibrated = new TokenEstimatorCalibrationStore();
         calibrated.RecordObservedUsage(ModelId, estimatedTokens: 10_000, observedInputTokens: 15_000);
 
-        var neutralDelivered = await DeliverLongRoundAsync(neutral).ConfigureAwait(false);
-        var calibratedDelivered = await DeliverLongRoundAsync(calibrated).ConfigureAwait(false);
+        var neutralDelivered = await DeliverLongRoundAsync(neutral);
+        var calibratedDelivered = await DeliverLongRoundAsync(calibrated);
 
         AssertEx.True(calibratedDelivered < neutralDelivered,
             $"A model observed to cost more than estimated must trim earlier; delivered {calibratedDelivered} message(s) against {neutralDelivered} uncalibrated.");
@@ -481,7 +480,7 @@ public sealed class ProviderCallBudgetChatClientTests
                    ReservedOutputTokenFloor = 0
                }))
         {
-            _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions()).ConfigureAwait(false);
+            _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions());
         }
 
         // This hop is the only place holding both numbers for the SAME request: the estimate it just computed for the
@@ -511,7 +510,7 @@ public sealed class ProviderCallBudgetChatClientTests
                    ReservedOutputTokenFloor = 0
                }))
         {
-            await foreach (var update in sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()).ConfigureAwait(false))
+            await foreach (var update in sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()))
             {
                 GC.KeepAlive(update);
             }
@@ -537,7 +536,7 @@ public sealed class ProviderCallBudgetChatClientTests
 
         // The eval / preview-workflow runners drive the shared client with no scope. They are a pass-through, and a
         // pass-through has no estimate to pair the usage with, so they must teach the calibration nothing.
-        _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions()).ConfigureAwait(false);
+        _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions());
 
         AssertEx.Empty(store.Observations);
     }
@@ -555,7 +554,7 @@ public sealed class ProviderCallBudgetChatClientTests
                    ReservedOutputTokenFloor = 0
                }))
         {
-            _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions()).ConfigureAwait(false);
+            _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions());
         }
 
         AssertEx.Empty(store.Observations);
@@ -580,7 +579,7 @@ public sealed class ProviderCallBudgetChatClientTests
                    ReservedOutputTokenFloor = 0
                }))
         {
-            _ = await sut.GetResponseAsync(LongRound(), new ChatOptions()).ConfigureAwait(false);
+            _ = await sut.GetResponseAsync(LongRound(), new ChatOptions());
         }
 
         // Calibration is per model. An unnamed round is sent, but it belongs to no key and teaches nothing.
@@ -610,8 +609,7 @@ public sealed class ProviderCallBudgetChatClientTests
                              new ChatOptions
                              {
                                  ModelId = ModelId
-                             })
-                         .ConfigureAwait(false);
+                             });
         }
 
         return inner.ReceivedMessageSets.Single().Count;

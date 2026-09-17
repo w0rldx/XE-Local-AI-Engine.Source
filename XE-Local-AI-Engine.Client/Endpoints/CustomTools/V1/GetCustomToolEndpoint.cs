@@ -19,13 +19,13 @@ public sealed class GetCustomToolEndpoint(ICustomToolService customToolService)
     public override async Task HandleAsync(CancellationToken ct)
     {
         var customToolId = Route<Guid>("customToolId");
-        var view = await _customToolService.GetByIdAsync(customToolId, ct).ConfigureAwait(false);
+        var view = await _customToolService.GetByIdAsync(customToolId, ct);
         if (view is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(view, ct).ConfigureAwait(false);
+        await Send.OkAsync(view, ct);
     }
 }

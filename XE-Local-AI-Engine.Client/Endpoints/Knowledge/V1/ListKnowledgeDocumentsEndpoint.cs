@@ -24,13 +24,13 @@ public sealed class ListKnowledgeDocumentsEndpoint(IKnowledgeDocumentCatalogServ
     public override async Task HandleAsync(ListKnowledgeDocumentsRequest req, CancellationToken ct)
     {
         var documents = string.IsNullOrWhiteSpace(req.CollectionId)
-            ? await _catalogService.ListAsync(ct).ConfigureAwait(false)
-            : await _catalogService.ListAsync(req.CollectionId, ct).ConfigureAwait(false);
+            ? await _catalogService.ListAsync(ct)
+            : await _catalogService.ListAsync(req.CollectionId, ct);
         await Send.OkAsync(new ListKnowledgeDocumentsResponse
             {
                 Items = [.. documents.Select(ToResponse)]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 
     private static KnowledgeDocumentResponse ToResponse(KnowledgeDocumentSummary summary)

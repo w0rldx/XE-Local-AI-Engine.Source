@@ -228,7 +228,7 @@ public sealed class TrainedModelSmokeGateTests
             CancellationToken cancellationToken = default)
         {
             yield return new ChatResponseUpdate(ChatRole.Assistant, "unused");
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)

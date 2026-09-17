@@ -177,8 +177,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
     public new async ValueTask DisposeAsync()
     {
-        await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
-        await base.DisposeAsync().ConfigureAwait(false);
+        await _fakeOllamaServer.DisposeAsync();
+        await base.DisposeAsync();
         TryDeleteDirectory(_fixtureDataRoot);
         GC.SuppressFinalize(this);
     }
@@ -217,15 +217,14 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
         // Diagnostic: verify the React bundle baked in the correct API URL.
         var bundlePortInDist = FindBundledApiUrl(_webRoot);
-        await Console.Out.WriteLineAsync($"[FACTORY-DIAG] port={_port} ServerAddress={ServerAddress} webRoot={_webRoot} bundledApiUrl={bundlePortInDist}")
-                     .ConfigureAwait(false);
+        await Console.Out.WriteLineAsync($"[FACTORY-DIAG] port={_port} ServerAddress={ServerAddress} webRoot={_webRoot} bundledApiUrl={bundlePortInDist}");
 
         // Seed the single admin so the SPA presents /login (not the one-time /setup screen) and
         // browser tests can authenticate with a known password. Identity migrations + the Admin role
         // are applied by the host startup pipeline (Program.ApplyNodeIdentityMigrationsAsync) before
         // this runs. Idempotent: the PerTestSession factory initializes once per run.
-        await SeedAdminUserAsync().ConfigureAwait(false);
-        await SeedPooledUsersAsync().ConfigureAwait(false);
+        await SeedAdminUserAsync();
+        await SeedPooledUsersAsync();
     }
 
     /// <summary>
@@ -247,12 +246,12 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         using var scope = Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
 
-        var admin = await userManager.FindByEmailAsync(AdminEmail).ConfigureAwait(false)
+        var admin = await userManager.FindByEmailAsync(AdminEmail)
                     ?? throw new InvalidOperationException($"E2E admin '{AdminEmail}' was not seeded; cannot set tutorial state.");
 
         admin.TutorialState = tutorialStateJson;
 
-        var updateResult = await userManager.UpdateAsync(admin).ConfigureAwait(false);
+        var updateResult = await userManager.UpdateAsync(admin);
         if (!updateResult.Succeeded)
         {
             throw new InvalidOperationException("Failed to set E2E admin tutorial state: " +
@@ -269,7 +268,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         using var scope = Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
 
-        var admin = await userManager.FindByEmailAsync(AdminEmail).ConfigureAwait(false)
+        var admin = await userManager.FindByEmailAsync(AdminEmail)
                     ?? throw new InvalidOperationException($"E2E admin '{AdminEmail}' was not seeded; cannot read tutorial state.");
 
         return admin.TutorialState;
@@ -331,7 +330,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     {
         for (var index = 0; index < PooledUserCount; index++)
         {
-            await SeedUserAsync(PooledUserEmail(index), PooledUserPassword, setupCompleted: false).ConfigureAwait(false);
+            await SeedUserAsync(PooledUserEmail(index), PooledUserPassword, setupCompleted: false);
         }
     }
 
@@ -341,7 +340,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         using var scope = Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
 
-        if (await userManager.FindByEmailAsync(email).ConfigureAwait(false) is not null)
+        if (await userManager.FindByEmailAsync(email) is not null)
         {
             return;
         }
@@ -357,13 +356,13 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        var createResult = await userManager.CreateAsync(user, password).ConfigureAwait(false);
+        var createResult = await userManager.CreateAsync(user, password);
         if (!createResult.Succeeded)
         {
             throw new InvalidOperationException($"Failed to seed E2E user '{email}': " + string.Join(", ", createResult.Errors.Select(error => error.Description)));
         }
 
-        var roleResult = await userManager.AddToRoleAsync(user, NodeAuthorizationPolicies.AdminRole).ConfigureAwait(false);
+        var roleResult = await userManager.AddToRoleAsync(user, NodeAuthorizationPolicies.AdminRole);
         if (!roleResult.Succeeded)
         {
             throw new InvalidOperationException($"Failed to assign Admin role to E2E user '{email}': " + string.Join(", ", roleResult.Errors.Select(error => error.Description)));

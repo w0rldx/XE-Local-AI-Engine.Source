@@ -514,7 +514,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
         public async ValueTask DisposeAsync()
         {
             Handle.Dispose();
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
         }
 
         private static TrainingRunRecord Run(Guid runId, Guid datasetId, Guid freezeId) =>

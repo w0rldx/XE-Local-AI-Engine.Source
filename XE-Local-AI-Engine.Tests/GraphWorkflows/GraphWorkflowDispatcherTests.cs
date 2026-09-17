@@ -29,20 +29,20 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task ATick_AdvancesTheGraphByOneLayer()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":1}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":1}""");
 
-        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(runId).ConfigureAwait(false), "the first tick only moves the run out of Pending.");
-        AssertEx.Equal(GraphWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(runId), "the first tick only moves the run out of Pending.");
+        AssertEx.Equal(GraphWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId)).Status);
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceAsync(runId);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "start")).Status);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending,
-            (await harness.ReadNodeRunAsync(runId, "middle").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "middle")).Status,
             "the successor waits for the tick after the one that succeeded its predecessor.");
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "middle").ConfigureAwait(false)).Status);
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "done").ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceAsync(runId);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "middle")).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "done")).Status);
     }
 
     /// <summary>
@@ -54,15 +54,15 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task ARunThatReachesItsEnd_CompletesAndTakesTheEndNodesResult()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":7}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear, """{"seed":7}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var run = await harness.ReadRunAsync(runId);
         AssertEx.Equal(GraphWorkflowRunStatus.Completed, run.Status);
         AssertEx.Contains(run.OutputJson, "\"seed\":7", message: "the End node's resultPath projected the run input back out.");
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), "run.created, run.started, node.started");
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), "run.completed");
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId), "run.created, run.started, node.started");
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId), "run.completed");
     }
 
     /// <summary>
@@ -74,23 +74,23 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task AConditionRoutes_AndTheBranchNotTakenCascadesSkippedWithANamedReason()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineBranch, """{"requiresReview":true}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineBranch, """{"requiresReview":true}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "yes").ConfigureAwait(false)).Status);
-        AssertEx.Contains((await harness.ReadNodeRunAsync(runId, "check").ConfigureAwait(false)).OutputJson,
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "yes")).Status);
+        AssertEx.Contains((await harness.ReadNodeRunAsync(runId, "check")).OutputJson,
             "\"branch\":\"yes\"",
             message: "the label of the edge that fired is the recorded answer to which way the run went.");
 
-        var notTaken = await harness.ReadNodeRunAsync(runId, "no").ConfigureAwait(false);
+        var notTaken = await harness.ReadNodeRunAsync(runId, "no");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Skipped, notTaken.Status);
         AssertEx.Contains(notTaken.Error, "routed elsewhere", message: "the node whose condition sent the run the other way is the cause.");
 
-        var cascaded = await harness.ReadNodeRunAsync(runId, "after").ConfigureAwait(false);
+        var cascaded = await harness.ReadNodeRunAsync(runId, "after");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Skipped, cascaded.Status);
         AssertEx.Contains(cascaded.Error, "'no' was skipped", message: "a cascaded skip names the skip it followed, not the condition four nodes back.");
-        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>A fan-out admits every branch on ONE tick — the property Parallel exists to make observable.</summary>
@@ -98,20 +98,20 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task AParallelFanOut_AdmitsBothBranchesOnOneTick()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll);
 
         // Out of Pending, then start, then fanout — and the tick after that is the fan-out itself.
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "fast").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "fast")).Status);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded,
-            (await harness.ReadNodeRunAsync(runId, "slow").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "slow")).Status,
             "both branches of the fan-out were admitted by the same tick.");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending,
-            (await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "merge")).Status,
             "an All join does not proceed on the branch that happened to be shorter.");
     }
 
@@ -123,16 +123,16 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task AnAllJoin_WaitsForTheLongerBranchAndThenAdmits()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false)).Status);
-        AssertEx.Contains((await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false)).OutputJson,
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "merge")).Status);
+        AssertEx.Contains((await harness.ReadNodeRunAsync(runId, "merge")).OutputJson,
             "\"fast\"",
             message: "a join emits the per-source map, so everything downstream sees every branch.");
-        AssertEx.Contains((await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false)).OutputJson, "\"slower\"");
-        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Contains((await harness.ReadNodeRunAsync(runId, "merge")).OutputJson, "\"slower\"");
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>One satisfied branch is the whole contract of an <c>Any</c> join, even with a dead sibling beside it.</summary>
@@ -140,13 +140,13 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task AnAnyJoin_AdmitsOnOneSatisfiedEdge()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAny, """{"route":"left"}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAny, """{"route":"left"}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Skipped, (await harness.ReadNodeRunAsync(runId, "right").ConfigureAwait(false)).Status);
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false)).Status);
-        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Skipped, (await harness.ReadNodeRunAsync(runId, "right")).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "merge")).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -158,14 +158,14 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task AnAnyJoinWithNoBranchLeft_IsSkippedAndTheRunIsCancelledWithAReason()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAny, """{"route":"neither"}""").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAny, """{"route":"neither"}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Skipped, (await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false)).Status);
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Skipped, (await harness.ReadNodeRunAsync(runId, "merge")).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
         AssertEx.Equal(GraphWorkflowFailureClass.None,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).FailureClass,
+            (await harness.ReadRunAsync(runId)).FailureClass,
             "nothing failed and no gate was refused: the run simply reached no end.");
     }
 
@@ -189,15 +189,15 @@ public sealed class GraphWorkflowDispatcherTests
                                                          && descriptor.ImplementationType == typeof(GraphWorkflowToolExecutor));
             _ = services.Remove(toolLane);
         });
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolNode).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolNode);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var analyze = await harness.ReadNodeRunAsync(runId, "lookup").ConfigureAwait(false);
+        var analyze = await harness.ReadNodeRunAsync(runId, "lookup");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
         AssertEx.Contains(analyze.Error, "no executor for that kind");
-        AssertEx.Equal(GraphWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -208,7 +208,7 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task ANodeRunTheGraphDoesNotDeclare_FailsValidationFailed()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear);
         var runId = await harness.StartRunThroughTheStoreAsync(definitionId,
                                      GraphWorkflowGraphs.InlineLinear,
                                      [
@@ -216,12 +216,11 @@ public sealed class GraphWorkflowDispatcherTests
                                          ("middle", GraphWorkflowNodeKind.Parallel),
                                          ("done", GraphWorkflowNodeKind.End),
                                          ("phantom", GraphWorkflowNodeKind.Parallel)
-                                     ])
-                                 .ConfigureAwait(false);
+                                     ]);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var phantom = await harness.ReadNodeRunAsync(runId, "phantom").ConfigureAwait(false);
+        var phantom = await harness.ReadNodeRunAsync(runId, "phantom");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, phantom.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, phantom.FailureClass);
         AssertEx.Contains(phantom.Error, "no longer declares node 'phantom'");
@@ -235,13 +234,13 @@ public sealed class GraphWorkflowDispatcherTests
     public async Task ARunWhosePinnedGraphNoLongerParses_IsFailedOnceAndNotRetried()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
-        var runId = await harness.StartRunThroughTheStoreAsync(definitionId, "{ not json at all", [("start", GraphWorkflowNodeKind.Start)]).ConfigureAwait(false);
+        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear);
+        var runId = await harness.StartRunThroughTheStoreAsync(definitionId, "{ not json at all", [("start", GraphWorkflowNodeKind.Start)]);
 
-        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(runId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId).ConfigureAwait(false), "a terminal run is not advanced again.");
+        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(runId));
+        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId), "a terminal run is not advanced again.");
 
-        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var run = await harness.ReadRunAsync(runId);
         AssertEx.Equal(GraphWorkflowRunStatus.Failed, run.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, run.FailureClass);
     }
@@ -256,15 +255,15 @@ public sealed class GraphWorkflowDispatcherTests
         // A private host: the signal channel is the dispatcher's own, and a sibling's run draining it would decide
         // this test's answer.
         await using var harness = new GraphWorkflowHarness();
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear);
 
-        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceSafelyAsync(runId);
         AssertEx.True(harness.WasSignalled(runId), "the tick that started the run wrote a transition, so it asked for another.");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         _ = harness.WasSignalled(runId);
 
-        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceSafelyAsync(runId);
         AssertEx.False(harness.WasSignalled(runId), "a tick over a finished run writes nothing and asks for nothing.");
     }
 
@@ -282,17 +281,17 @@ public sealed class GraphWorkflowDispatcherTests
     {
         // A private host: the cap counts executing runs across the whole database, so it cannot be asserted on a shared one.
         await using var harness = new GraphWorkflowHarness(("GraphWorkflows:MaxConcurrentRuns", "1"));
-        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
-        var first = await harness.StartRunOfAsync(definitionId).ConfigureAwait(false);
-        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(first).ConfigureAwait(false), "the only slot is free, so the first run takes it.");
+        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear);
+        var first = await harness.StartRunOfAsync(definitionId);
+        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(first), "the only slot is free, so the first run takes it.");
 
-        var second = await harness.StartRunOfAsync(definitionId).ConfigureAwait(false);
-        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(second).ConfigureAwait(false), "the cap is reached, so the tick writes nothing.");
-        AssertEx.Equal(GraphWorkflowRunStatus.Pending, (await harness.ReadRunAsync(second).ConfigureAwait(false)).Status);
+        var second = await harness.StartRunOfAsync(definitionId);
+        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(second), "the cap is reached, so the tick writes nothing.");
+        AssertEx.Equal(GraphWorkflowRunStatus.Pending, (await harness.ReadRunAsync(second)).Status);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(first).ConfigureAwait(false);
-        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(first).ConfigureAwait(false)).Status);
-        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(second).ConfigureAwait(false), "with the first run finished the queue drains on the next offer.");
+        _ = await harness.AdvanceUntilQuiescentAsync(first);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(first)).Status);
+        AssertEx.Equal(expected: 1, await harness.AdvanceAsync(second), "with the first run finished the queue drains on the next offer.");
     }
 
     /// <summary>
@@ -305,22 +304,22 @@ public sealed class GraphWorkflowDispatcherTests
     {
         // A private host, for the same reason: the cap is a property of the whole database.
         await using var harness = new GraphWorkflowHarness(("GraphWorkflows:MaxConcurrentRuns", "1"));
-        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear);
         var runIds = new List<Guid>();
         for (var index = 0; index < 3; index++)
         {
-            runIds.Add(await harness.StartRunOfAsync(definitionId).ConfigureAwait(false));
+            runIds.Add(await harness.StartRunOfAsync(definitionId));
         }
 
         // Every run is Pending before the first tick, which is the state the cap used to read as "three are running".
         foreach (var runId in runIds)
         {
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
         }
 
         foreach (var runId in runIds)
         {
-            AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "every queued run reaches its End.");
+            AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status, "every queued run reaches its End.");
         }
     }
 
@@ -335,20 +334,20 @@ public sealed class GraphWorkflowDispatcherTests
         // A private host: the seam below is set on the CONTAINER's dispatcher, and on a shared host a sibling's tick
         // would run it too.
         await using var harness = new GraphWorkflowHarness();
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear);
         harness.Dispatcher.BeforeRunWrite = async () =>
         {
             // Once: the tick after this one drains, and a second cancel there would be asserting about the wrong write.
             harness.Dispatcher.BeforeRunWrite = null;
-            await harness.CancelAsync(runId).ConfigureAwait(false);
+            await harness.CancelAsync(runId);
         };
 
         // Through the production wrapper, because losing the version check is exactly what it is written to swallow.
-        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceSafelyAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId)).Status,
             "the cancel stands; the start it raced does not overwrite it.");
-        AssertEx.False((await harness.ReadEventTrailAsync(runId).ConfigureAwait(false)).Contains("run.started", StringComparison.Ordinal),
+        AssertEx.False((await harness.ReadEventTrailAsync(runId)).Contains("run.started", StringComparison.Ordinal),
             "and the run never reports a start it did not make.");
     }
 

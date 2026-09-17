@@ -28,13 +28,13 @@ public sealed class RejectSuggestedPlaybookActionEndpoint(IPlaybookActionService
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)
     {
-        var record = await _playbookActionService.RejectSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct).ConfigureAwait(false);
+        var record = await _playbookActionService.RejectSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

@@ -29,7 +29,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var provider = new CapturingProvider(Descriptor(ConfiguredName), Descriptor("qwen2.5:Q4_K_M"));
         var embedder = CreateEmbedder(provider);
 
-        var result = await embedder.EmbedAsync(["chunk one"], CancellationToken.None).ConfigureAwait(false);
+        var result = await embedder.EmbedAsync(["chunk one"], CancellationToken.None);
 
         AssertEx.Equal(ConfiguredName, provider.LastSelectedModelName);
         AssertEx.Equal(ConfiguredName, result.ResolvedModel);
@@ -49,7 +49,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         };
         var embedder = CreateEmbedder(provider);
 
-        var result = await embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None).ConfigureAwait(false);
+        var result = await embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None);
 
         AssertEx.Equal(2, result.Vectors.Count);
         AssertEx.Equal(width, result.Dimension);
@@ -67,7 +67,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         };
         var embedder = CreateEmbedder(provider);
 
-        var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None)).ConfigureAwait(false);
+        var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None));
 
         // Reason names the mismatch (integers only, content-free) so an operator can act.
         AssertEx.True(exception.Reason.Contains("1024", StringComparison.Ordinal), "Reason should name the expected width.");
@@ -81,7 +81,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var provider = new CapturingProvider(Descriptor("qwen2.5:Q4_K_M"), Descriptor(ggufName));
         var embedder = CreateEmbedder(provider);
 
-        var result = await embedder.EmbedAsync(["chunk one"], CancellationToken.None).ConfigureAwait(false);
+        var result = await embedder.EmbedAsync(["chunk one"], CancellationToken.None);
 
         AssertEx.Equal(ggufName, provider.LastSelectedModelName);
         // The resolved (GGUF) name — not the configured name — is what the ingestion lane stamps as the vector scope key.
@@ -100,7 +100,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         };
         var embedder = CreateEmbedder(provider);
 
-        _ = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one"], CancellationToken.None)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one"], CancellationToken.None));
 
         AssertEx.Equal(ConfiguredName, provider.LastSelectedModelName);
     }
@@ -119,7 +119,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var embedder = CreateEmbedder(provider);
 
         var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() =>
-            embedder.EmbedAsync(["chunk one"], CancellationToken.None)).ConfigureAwait(false);
+            embedder.EmbedAsync(["chunk one"], CancellationToken.None));
 
         AssertEx.True(exception.Reason.Contains("rejected the request", StringComparison.Ordinal),
             $"Reason should say the server rejected the request, got: {exception.Reason}");
@@ -143,7 +143,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var embedder = CreateEmbedder(provider);
 
         var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() =>
-            embedder.EmbedAsync(["chunk one"], CancellationToken.None)).ConfigureAwait(false);
+            embedder.EmbedAsync(["chunk one"], CancellationToken.None));
 
         AssertEx.True(exception.Reason.Contains("No embedding model is installed", StringComparison.Ordinal),
             $"An unreachable provider should still report the missing-model remediation, got: {exception.Reason}");
@@ -155,7 +155,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var provider = new CapturingProvider(Descriptor(ConfiguredName, maxContextTokens: 2048));
         var embedder = CreateEmbedder(provider);
 
-        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None).ConfigureAwait(false);
+        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None);
 
         AssertEx.Equal(2048, window);
     }
@@ -166,7 +166,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var provider = new CapturingProvider(Descriptor(ConfiguredName));
         var embedder = CreateEmbedder(provider);
 
-        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None).ConfigureAwait(false);
+        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None);
 
         AssertEx.Null(window);
     }
@@ -179,7 +179,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var provider = new CapturingProvider(Descriptor("qwen2.5:Q4_K_M", maxContextTokens: 32768));
         var embedder = CreateEmbedder(provider);
 
-        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None).ConfigureAwait(false);
+        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None);
 
         AssertEx.Null(window);
     }

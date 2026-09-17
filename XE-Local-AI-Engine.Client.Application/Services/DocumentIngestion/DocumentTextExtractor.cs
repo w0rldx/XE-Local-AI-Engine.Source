@@ -99,7 +99,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
 
         try
         {
-            var (document, inputBytes) = await ReadStructuredAsync(reader, content, fileName, normalizedExtension, cancellationToken).ConfigureAwait(false);
+            var (document, inputBytes) = await ReadStructuredAsync(reader, content, fileName, normalizedExtension, cancellationToken);
             var serialized = IngestionDocumentMarkdownSerializer.Serialize(document);
 
             // Bomb guard: reject a small upload that expanded into a huge text body (bytes-out vs bytes-in ratio) before
@@ -150,7 +150,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             // Return the reader's structured document verbatim (the chunking lane needs the heading structure and
             // applies its own per-chunk size bound), but first bound its AGGREGATE size: the verbatim path had no
             // ceiling, so a huge or bomb-expanded document reached chunking/persistence unbounded.
-            var (document, inputBytes) = await ReadStructuredAsync(reader, content, fileName, normalizedExtension, cancellationToken).ConfigureAwait(false);
+            var (document, inputBytes) = await ReadStructuredAsync(reader, content, fileName, normalizedExtension, cancellationToken);
 
             var totalChars = SumContentChars(document);
             var boundsReason = EvaluateStructuredBounds(inputBytes, totalChars);
@@ -193,7 +193,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         // MaxBufferedInputBytes, and exceeding it throws (surfaced as a content-free Failed result by the caller) instead
         // of risking OOM. This bounds only the raw bytes we materialize into the buffer.
         using var buffer = new MemoryStream();
-        var inputBytes = await CopyWithCeilingAsync(content, buffer, DocumentExtractionLimits.MaxBufferedInputBytes, cancellationToken).ConfigureAwait(false);
+        var inputBytes = await CopyWithCeilingAsync(content, buffer, DocumentExtractionLimits.MaxBufferedInputBytes, cancellationToken);
 
         // Pre-parse preflight: for a compressed container (zip-based .docx, or a PDF), reject up front using ONLY the
         // container's own cheap metadata — the zip central directory or the PDF page count — BEFORE the reader
@@ -209,7 +209,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         }
 
         buffer.Position = 0;
-        var document = await reader.ReadAsync(buffer, fileName, normalizedExtension, cancellationToken).ConfigureAwait(false);
+        var document = await reader.ReadAsync(buffer, fileName, normalizedExtension, cancellationToken);
         return new ExtractedDocument(document, inputBytes);
     }
 
@@ -471,7 +471,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         {
             long total = 0;
             int read;
-            while ((read = await source.ReadAsync(rented, cancellationToken).ConfigureAwait(false)) > 0)
+            while ((read = await source.ReadAsync(rented, cancellationToken)) > 0)
             {
                 total += read;
                 if (total > maxBytes)
@@ -479,7 +479,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                     throw new InvalidDataException("Document exceeds the maximum buffered input size allowed for extraction.");
                 }
 
-                await destination.WriteAsync(rented.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                await destination.WriteAsync(rented.AsMemory(0, read), cancellationToken);
             }
 
             return total;

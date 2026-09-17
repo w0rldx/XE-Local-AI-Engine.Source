@@ -274,8 +274,8 @@ public sealed class GoldenConversationStoreTests : IDisposable
         // input_turns/rubric BLOBs must NOT equal the UTF-8 plaintext. Read after the EF contexts are disposed so the
         // raw connection sees the committed row (there is exactly one golden row, so no id filter is needed — which also
         // avoids depending on the provider's Guid-to-column storage format).
-        var rawInputTurns = await ReadRawInputTurnsAsync(databasePath).ConfigureAwait(false);
-        var rawRubric = await ReadRawRubricAsync(databasePath).ConfigureAwait(false);
+        var rawInputTurns = await ReadRawInputTurnsAsync(databasePath);
+        var rawRubric = await ReadRawRubricAsync(databasePath);
         AssertEx.False(rawInputTurns.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(InputTurns)),
             "Harvested input_turns should be encrypted at rest, not stored as plaintext.");
         AssertEx.False(rawRubric.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(rubric)),
@@ -368,7 +368,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT input_turns FROM golden_conversations LIMIT 1;";
-        return await ReadBlobScalarAsync(command).ConfigureAwait(false);
+        return await ReadBlobScalarAsync(command);
     }
 
     private static async Task<byte[]> ReadRawRubricAsync(string databasePath)
@@ -377,12 +377,12 @@ public sealed class GoldenConversationStoreTests : IDisposable
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT rubric FROM golden_conversations LIMIT 1;";
-        return await ReadBlobScalarAsync(command).ConfigureAwait(false);
+        return await ReadBlobScalarAsync(command);
     }
 
     private static async Task<byte[]> ReadBlobScalarAsync(SqliteCommand command)
     {
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value as byte[] ?? throw new AssertionException("Expected a non-null encrypted BLOB.");
     }
 

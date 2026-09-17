@@ -16,7 +16,7 @@ internal static class ExternalAppCatalogEndpointSupport
     public static async Task<IReadOnlyDictionary<string, ExternalAppInstanceSummary>> InstalledByApplicationIdAsync(IExternalAppService apps,
         CancellationToken cancellationToken)
     {
-        var instances = await apps.ListAsync(cancellationToken).ConfigureAwait(false);
+        var instances = await apps.ListAsync(cancellationToken);
 
         var installed = new Dictionary<string, ExternalAppInstanceSummary>(instances.Count, StringComparer.Ordinal);
         foreach (var instance in instances)

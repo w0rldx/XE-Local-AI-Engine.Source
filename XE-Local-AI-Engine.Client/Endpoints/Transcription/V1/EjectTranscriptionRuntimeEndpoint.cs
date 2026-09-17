@@ -30,17 +30,16 @@ public sealed class EjectTranscriptionRuntimeEndpoint(ITranscriptionRuntimeServi
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var result = await _runtimeService.EjectAsync(ct).ConfigureAwait(false);
+        var result = await _runtimeService.EjectAsync(ct);
         if (!result.Evicted)
         {
             await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy(
                           "Wait for the running transcription, runtime startup, or runtime mutation to finish before ejecting the transcription runtime.",
-                          result.Activity))
-                      .ConfigureAwait(false);
+                          result.Activity));
             return;
         }
 
-        var view = await _runtimeService.GetRuntimeAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(view.ToResponse(), ct).ConfigureAwait(false);
+        var view = await _runtimeService.GetRuntimeAsync(ct);
+        await Send.OkAsync(view.ToResponse(), ct);
     }
 }

@@ -46,17 +46,17 @@ public sealed class ComparisonReportService(
             throw new EvaluationRejectedException("A comparison report needs a name.");
         }
 
-        var baseEvaluation = await _evaluations.GetAsync(command.BaseEvaluationRunId, cancellationToken).ConfigureAwait(false)
+        var baseEvaluation = await _evaluations.GetAsync(command.BaseEvaluationRunId, cancellationToken)
                              ?? throw new EvaluationRejectedException("The base evaluation run was not found.");
-        var tunedEvaluation = await _evaluations.GetAsync(command.TunedEvaluationRunId, cancellationToken).ConfigureAwait(false)
+        var tunedEvaluation = await _evaluations.GetAsync(command.TunedEvaluationRunId, cancellationToken)
                               ?? throw new EvaluationRejectedException("The tuned evaluation run was not found.");
 
         EnsureSuccessfullyComplete(baseEvaluation, "base");
         EnsureSuccessfullyComplete(tunedEvaluation, "tuned");
         var trainingRunId = EnsureComparable(baseEvaluation, tunedEvaluation);
 
-        var baseBenchmark = await RequireBenchmarkAsync(command.BaseBenchmarkRunId, cancellationToken).ConfigureAwait(false);
-        var tunedBenchmark = await RequireBenchmarkAsync(command.TunedBenchmarkRunId, cancellationToken).ConfigureAwait(false);
+        var baseBenchmark = await RequireBenchmarkAsync(command.BaseBenchmarkRunId, cancellationToken);
+        var tunedBenchmark = await RequireBenchmarkAsync(command.TunedBenchmarkRunId, cancellationToken);
 
         var deltas = ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark, tunedBenchmark);
         return await _evaluations.CreateComparisonAsync(new TrainingComparisonInput(command.Name.Trim(),
@@ -66,8 +66,7 @@ public sealed class ComparisonReportService(
                                          command.BaseBenchmarkRunId,
                                          command.TunedBenchmarkRunId,
                                          trainingRunId),
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+                                     cancellationToken);
     }
 
     public Task<IReadOnlyList<TrainingComparisonRecord>> ListAsync(CancellationToken cancellationToken = default) =>
@@ -78,11 +77,11 @@ public sealed class ComparisonReportService(
 
     public async Task DeleteAsync(Guid comparisonId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        var comparison = await _evaluations.GetComparisonAsync(comparisonId, cancellationToken).ConfigureAwait(false);
+        var comparison = await _evaluations.GetComparisonAsync(comparisonId, cancellationToken);
         if (comparison is not null)
         {
-            var baseEvaluation = await _evaluations.GetAsync(comparison.BaseEvaluationRunId, cancellationToken).ConfigureAwait(false);
-            var tunedEvaluation = await _evaluations.GetAsync(comparison.TunedEvaluationRunId, cancellationToken).ConfigureAwait(false);
+            var baseEvaluation = await _evaluations.GetAsync(comparison.BaseEvaluationRunId, cancellationToken);
+            var tunedEvaluation = await _evaluations.GetAsync(comparison.TunedEvaluationRunId, cancellationToken);
             var possibleRunIds = new[]
                                  {
                                      comparison.TrainingRunId,
@@ -93,7 +92,7 @@ public sealed class ComparisonReportService(
                                  .Distinct();
             foreach (var runId in possibleRunIds)
             {
-                var artifacts = await _runs.ListArtifactsAsync(runId, cancellationToken).ConfigureAwait(false);
+                var artifacts = await _runs.ListArtifactsAsync(runId, cancellationToken);
                 if (artifacts.Select(ArtifactQualityService.ReadDecision)
                              .Where(static decision => decision is not null)
                              .Any(decision => decision!.History.Any(item => item.ComparisonId == comparisonId)))
@@ -103,20 +102,20 @@ public sealed class ComparisonReportService(
             }
         }
 
-        await _evaluations.DeleteComparisonAsync(comparisonId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        await _evaluations.DeleteComparisonAsync(comparisonId, expectedVersion, cancellationToken);
     }
 
     public async Task<ComparisonSuggestion> SuggestAsync(Guid trainingRunId, CancellationToken cancellationToken = default)
     {
-        var run = await _runs.GetAsync(trainingRunId, cancellationToken).ConfigureAwait(false)
+        var run = await _runs.GetAsync(trainingRunId, cancellationToken)
                   ?? throw new EvaluationRejectedException("The training run was not found.");
 
-        var artifacts = await _runs.ListArtifactsAsync(trainingRunId, cancellationToken).ConfigureAwait(false);
+        var artifacts = await _runs.ListArtifactsAsync(trainingRunId, cancellationToken);
         var tunedArtifact = artifacts.FirstOrDefault(artifact => artifact.Kind != TrainingArtifactKind.HfAdapterDir
                                                                  && artifact.DiscardedAtUtc is null
                                                                  && !string.IsNullOrWhiteSpace(artifact.Sha256));
         var tunedModelName = tunedArtifact is null ? null : Path.GetFileName(tunedArtifact.Path);
-        var existing = await _evaluations.ListAsync(trainingRunId, cancellationToken).ConfigureAwait(false);
+        var existing = await _evaluations.ListAsync(trainingRunId, cancellationToken);
 
         // Matched by model name rather than by a stored "side" flag: the side an evaluation is on IS which model it
         // scored, and one stored flag that disagreed with the model name would be a second truth to keep in sync.
@@ -323,7 +322,7 @@ public sealed class ComparisonReportService(
             return null;
         }
 
-        return await _benchmarks.GetRunAsync(id, cancellationToken).ConfigureAwait(false)
+        return await _benchmarks.GetRunAsync(id, cancellationToken)
                ?? throw new EvaluationRejectedException("The paired benchmark run was not found.");
     }
 

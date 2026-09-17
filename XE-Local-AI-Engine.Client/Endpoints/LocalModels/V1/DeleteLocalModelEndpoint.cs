@@ -30,18 +30,18 @@ public sealed class DeleteLocalModelEndpoint(
         // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and delete
         // the decoded canonical name to keep "validated name == deleted name" true.
         var decodedModelName = ModelRouteName.Decode(req.ModelName);
-        if (!await ValidateModelNameAsync(decodedModelName, ct).ConfigureAwait(false))
+        if (!await ValidateModelNameAsync(decodedModelName, ct))
         {
             return;
         }
 
-        var result = await _administrationService.DeleteAsync(decodedModelName, ct).ConfigureAwait(false);
+        var result = await _administrationService.DeleteAsync(decodedModelName, ct);
 
         await Send.OkAsync(new DeleteLocalModelResponse
         {
             ModelName = result.ModelName!,
             Deleted = result.Deleted
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
@@ -53,7 +53,7 @@ public sealed class DeleteLocalModelEndpoint(
         }
 
         AddError(validationError);
-        await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        await Send.ErrorsAsync(cancellation: ct);
         return false;
     }
 }

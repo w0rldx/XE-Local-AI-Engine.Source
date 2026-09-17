@@ -62,7 +62,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     public async Task<IReadOnlyList<WorkSessionSummary>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var sessions = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var sessions = await _store.ListAsync(cancellationToken);
         return
         [
             .. sessions.Select(static session => new WorkSessionSummary(session.Id,
@@ -76,7 +76,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     }
 
     public async Task<WorkSessionDetail> GetAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        ToDetail(await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false));
+        ToDetail(await _store.GetAsync(sessionId, cancellationToken));
 
     public async Task<WorkSessionDetail> CreateAsync(CreateWorkSessionRequestModel model, CancellationToken cancellationToken = default)
     {
@@ -90,7 +90,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             throw new WorkSessionValidationException("Development work sessions are not supported yet.");
         }
 
-        _ = await ResolveToolCapableAgentAsync(model.AgentDefinitionId, model.Runtime?.ModelProfile, cancellationToken).ConfigureAwait(false);
+        _ = await ResolveToolCapableAgentAsync(model.AgentDefinitionId, model.Runtime?.ModelProfile, cancellationToken);
 
         var conversation = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest(title,
                                                      UserId: null,
@@ -98,8 +98,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
                                                      NodeChatOriginValues.Local,
                                                      model.AgentDefinitionId,
                                                      NodeConversationKind.WorkSession),
-                                                 cancellationToken)
-                                             .ConfigureAwait(false);
+                                                 cancellationToken);
 
         try
         {
@@ -109,15 +108,14 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
                                               model.Kind,
                                               title,
                                               objective),
-                                          cancellationToken)
-                                      .ConfigureAwait(false);
+                                          cancellationToken);
             return ToDetail(created);
         }
         catch
         {
             // The conversation exists only to carry this session. Leaving it behind would put an untitled empty chat in
             // the operator's list with nothing to explain it.
-            await DeleteConversationAsync(conversation.ConversationId).ConfigureAwait(false);
+            await DeleteConversationAsync(conversation.ConversationId);
             throw;
         }
     }
@@ -126,7 +124,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _store.GetAsync(sessionId, cancellationToken);
         var title = model.Title is null ? null : Require(model.Title, "title", MaxTitleLength);
         var objective = model.Objective is null ? null : Require(model.Objective, "objective", MaxObjectiveLength);
 
@@ -138,12 +136,11 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
         if (model.AgentDefinitionId is { } agentDefinitionId && agentDefinitionId != session.AgentDefinitionId)
         {
-            var effectiveModel = await ResolveToolCapableAgentAsync(agentDefinitionId, pinnedModelOverride: null, cancellationToken).ConfigureAwait(false);
-            await EnsureNoCloudEgressAsync(session, effectiveModel, cancellationToken).ConfigureAwait(false);
+            var effectiveModel = await ResolveToolCapableAgentAsync(agentDefinitionId, pinnedModelOverride: null, cancellationToken);
+            await EnsureNoCloudEgressAsync(session, effectiveModel, cancellationToken);
         }
 
-        var updated = await _store.UpdateAsync(new UpdateWorkSessionCommand(sessionId, session.Version, title, objective, model.AgentDefinitionId), cancellationToken)
-                                  .ConfigureAwait(false);
+        var updated = await _store.UpdateAsync(new UpdateWorkSessionCommand(sessionId, session.Version, title, objective, model.AgentDefinitionId), cancellationToken);
         return ToDetail(updated);
     }
 
@@ -188,26 +185,26 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     private async Task DeleteAsync(Guid sessionId, bool workflowOwned, CancellationToken cancellationToken)
     {
-        var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _store.GetAsync(sessionId, cancellationToken);
         EnsureCallerOwns(session, workflowOwned);
         if (session.Status is AgentWorkSessionStatus.Running or AgentWorkSessionStatus.WaitingForApproval or AgentWorkSessionStatus.WaitingForInput)
         {
             throw new WorkSessionInvalidTransitionException("Cancel the work session before deleting it; a step is still running.");
         }
 
-        _ = await _store.DeleteAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        _ = await _store.DeleteAsync(sessionId, cancellationToken);
 
         // The rows go first, then the bytes and the conversation. The store cannot reach either — the schema project
         // does not depend on the application layer — so sweeping them is this service's job, not the store's.
         _blobStore.DeleteSession(sessionId);
-        await DeleteConversationAsync(session.ConversationId).ConfigureAwait(false);
+        await DeleteConversationAsync(session.ConversationId);
     }
 
     public async Task<Guid> PostFollowUpAsync(Guid sessionId, string text, CancellationToken cancellationToken = default)
     {
         EnsureEnabled();
 
-        var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _store.GetAsync(sessionId, cancellationToken);
         if (string.IsNullOrWhiteSpace(text))
         {
             throw new WorkSessionValidationException("A follow-up needs some text.");
@@ -230,8 +227,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
                                       messageId,
                                       text.Trim(),
                                       _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
-                                  cancellationToken)
-                              .ConfigureAwait(false);
+                                  cancellationToken);
 
         // A paused or interrupted session picks the follow-up up by resuming: it rides the next step's history like any
         // other user turn. A parked one does not — its live step already holds the node's invocation slot, and its
@@ -245,8 +241,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
                         [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted],
                         workflowOwned: false,
                         runtime: null,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
             }
             catch (WorkSessionInvalidTransitionException exception)
             {
@@ -261,7 +256,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     public async Task<IReadOnlyList<WorkSessionTaskDto>> ListTasksAsync(Guid sessionId, long sinceSequence, CancellationToken cancellationToken = default)
     {
-        var tasks = await _store.ListTasksAsync(sessionId, sinceSequence, cancellationToken).ConfigureAwait(false);
+        var tasks = await _store.ListTasksAsync(sessionId, sinceSequence, cancellationToken);
         return
         [
             .. tasks.Select(static task => new WorkSessionTaskDto(task.Id,
@@ -279,7 +274,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     public async Task<IReadOnlyList<WorkSessionFindingDto>> ListFindingsAsync(Guid sessionId, long sinceSequence, CancellationToken cancellationToken = default)
     {
-        var findings = await _store.ListFindingsAsync(sessionId, sinceSequence, cancellationToken).ConfigureAwait(false);
+        var findings = await _store.ListFindingsAsync(sessionId, sinceSequence, cancellationToken);
         return
         [
             .. findings.Select(static finding => new WorkSessionFindingDto(finding.Id,
@@ -295,13 +290,13 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     public async Task<IReadOnlyList<WorkSessionArtifactDto>> ListArtifactsAsync(Guid sessionId, long sinceSequence, CancellationToken cancellationToken = default)
     {
-        var artifacts = await _store.ListArtifactsAsync(sessionId, sinceSequence, cancellationToken).ConfigureAwait(false);
+        var artifacts = await _store.ListArtifactsAsync(sessionId, sinceSequence, cancellationToken);
         return [.. artifacts.Select(ToDto)];
     }
 
     public async Task<IReadOnlyList<WorkSessionCheckpointDto>> ListCheckpointsAsync(Guid sessionId, long sinceSequence, CancellationToken cancellationToken = default)
     {
-        var checkpoints = await _store.ListCheckpointsAsync(sessionId, sinceSequence, cancellationToken).ConfigureAwait(false);
+        var checkpoints = await _store.ListCheckpointsAsync(sessionId, sinceSequence, cancellationToken);
         return
         [
             .. checkpoints.Select(static checkpoint => new WorkSessionCheckpointDto(checkpoint.Id,
@@ -315,7 +310,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     public async Task<IReadOnlyList<WorkSessionEventDto>> ListEventsAsync(Guid sessionId, long sinceSequence, int limit, CancellationToken cancellationToken = default)
     {
-        var events = await _store.ListEventsAsync(sessionId, sinceSequence, cancellationToken).ConfigureAwait(false);
+        var events = await _store.ListEventsAsync(sessionId, sinceSequence, cancellationToken);
         var clamped = limit <= 0 ? MaxEventPageSize : Math.Min(limit, MaxEventPageSize);
         return
         [
@@ -333,14 +328,14 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     public async Task<WorkSessionArtifactDto> GetArtifactAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken = default)
     {
-        return ToDto(await GetOwnedArtifactAsync(sessionId, artifactId, cancellationToken).ConfigureAwait(false));
+        return ToDto(await GetOwnedArtifactAsync(sessionId, artifactId, cancellationToken));
     }
 
     public async Task<WorkSessionArtifactContent> ReadArtifactContentAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken = default)
     {
-        var artifact = await GetOwnedArtifactAsync(sessionId, artifactId, cancellationToken).ConfigureAwait(false);
+        var artifact = await GetOwnedArtifactAsync(sessionId, artifactId, cancellationToken);
 
-        var read = await _blobStore.ReadAsync(sessionId, artifactId, artifact.ContentSha256, artifact.SizeBytes, cancellationToken).ConfigureAwait(false);
+        var read = await _blobStore.ReadAsync(sessionId, artifactId, artifact.ContentSha256, artifact.SizeBytes, cancellationToken);
         if (read.Status != WorkSessionArtifactReadStatus.Found)
         {
             // A tampered or missing blob is not content the node can vouch for, so it is not content the node hands
@@ -360,7 +355,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     /// </summary>
     private async Task<WorkSessionArtifactSnapshot> GetOwnedArtifactAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken)
     {
-        var artifact = await _store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        var artifact = await _store.GetArtifactAsync(artifactId, cancellationToken);
         if (artifact.SessionId != sessionId || !artifact.IsValid)
         {
             throw new WorkSessionNotFoundException($"Work session artifact '{artifactId}' was not found on session '{sessionId}'.");
@@ -377,7 +372,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     {
         EnsureEnabled();
 
-        var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _store.GetAsync(sessionId, cancellationToken);
         EnsureCallerOwns(session, workflowOwned);
         if (!allowedFrom.Contains(session.Status))
         {
@@ -391,8 +386,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             throw new WorkSessionInvalidTransitionException("The node is already running as many work sessions as it allows. Pause one first.");
         }
 
-        var running = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running), cancellationToken)
-                                  .ConfigureAwait(false);
+        var running = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, AgentWorkSessionStatus.Running), cancellationToken);
         if (_supervisor.TryStart(sessionId, runtime))
         {
             return ToDetail(running);
@@ -403,8 +397,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
                                          AgentWorkSessionStatus.Paused,
                                          CurrentTaskId: null,
                                          "The node could not admit the work session."),
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+                                     cancellationToken);
         _logger.LogWarning("Work session {SessionId} lost the admission race and was left Paused.", sessionId);
         _ = parked;
         throw new WorkSessionInvalidTransitionException("The node could not admit the work session just now. Try again in a moment.");
@@ -417,18 +410,17 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         bool workflowOwned,
         CancellationToken cancellationToken)
     {
-        var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _store.GetAsync(sessionId, cancellationToken);
         EnsureCallerOwns(session, workflowOwned);
-        if (await _supervisor.TryStopAsync(sessionId, reason, cancellationToken).ConfigureAwait(false))
+        if (await _supervisor.TryStopAsync(sessionId, reason, cancellationToken))
         {
             // The loop owns the terminal write, including the checkpoint that has to precede it. Re-read rather than
             // asserting a status this method did not write.
-            return ToDetail(await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false));
+            return ToDetail(await _store.GetAsync(sessionId, cancellationToken));
         }
 
         var settled = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, target, CurrentTaskId: null, sanitizedReason),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
         return ToDetail(settled);
     }
 
@@ -446,7 +438,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     /// </summary>
     private async Task<string?> ResolveToolCapableAgentAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken)
     {
-        var verdict = await _toolGate.InspectAsync(agentDefinitionId, pinnedModelOverride, cancellationToken).ConfigureAwait(false);
+        var verdict = await _toolGate.InspectAsync(agentDefinitionId, pinnedModelOverride, cancellationToken);
         if (!verdict.AgentExists)
         {
             throw new WorkSessionValidationException("That agent could not be found. It may have been deleted.");
@@ -486,13 +478,13 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             return;
         }
 
-        var capabilities = await _capabilityResolver.ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
+        var capabilities = await _capabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
         if (!capabilities.IsCloud)
         {
             return;
         }
 
-        var findings = await _store.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var findings = await _store.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken);
         if (findings.Count > 0)
         {
             throw new WorkSessionValidationException("This work session already holds findings taken on a node-local model. Moving it to a cloud model would send them off the node; "
@@ -507,8 +499,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId,
                                           _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                                           PurgeImmediately: true),
-                                      CancellationToken.None)
-                                  .ConfigureAwait(false);
+                                      CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
         {

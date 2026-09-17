@@ -42,7 +42,7 @@ public sealed class ImageModelDiscoveryEndpointTests
                      "images/models/inspect?repoId=o/r"
                  })
         {
-            using var response = await client.GetAsync(new Uri($"{ApiPrefix}/{route}", UriKind.Relative)).ConfigureAwait(false);
+            using var response = await client.GetAsync(new Uri($"{ApiPrefix}/{route}", UriKind.Relative));
             AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{route} must require the operator token.");
         }
     }
@@ -54,10 +54,10 @@ public sealed class ImageModelDiscoveryEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/catalog");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var items = body.GetProperty("items").EnumerateArray().ToList();
         AssertEx.NotEmpty(items, "The bundled catalog must reach the wire; an empty list means the embedded seed failed to load.");
 
@@ -87,9 +87,9 @@ public sealed class ImageModelDiscoveryEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/catalog");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var items = body.GetProperty("items").EnumerateArray().ToList();
         AssertEx.True(items.Single(item => item.GetProperty("id").GetString() == "sd-1.5").GetProperty("isInstalled").GetBoolean());
         AssertEx.False(items.Single(item => item.GetProperty("id").GetString() == "qwen-image").GetProperty("isInstalled").GetBoolean());
@@ -116,7 +116,7 @@ public sealed class ImageModelDiscoveryEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/browse?query=qwen&limit=5&sort=downloads&ggufOnly=true");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("qwen", discovery.LastQuery?.SearchText);
@@ -124,7 +124,7 @@ public sealed class ImageModelDiscoveryEndpointTests
         AssertEx.Equal(ImageModelSearchSort.Downloads, discovery.LastQuery?.Sort);
         AssertEx.True(discovery.LastQuery?.GgufOnly ?? false);
 
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var row = body.GetProperty("items").EnumerateArray().Single();
         AssertEx.Equal("QuantStack/Qwen-Image-GGUF", row.GetProperty("repoId").GetString());
         AssertEx.False(row.GetProperty("isTrustedPublisher").GetBoolean(), "The unverified-publisher badge is a soft warning the UI renders; it must survive the wire.");
@@ -142,10 +142,10 @@ public sealed class ImageModelDiscoveryEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/browse?query=qwen");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, "A Hub outage must not turn the browse panel red.");
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal(expected: 0, body.GetProperty("items").GetArrayLength());
     }
 
@@ -166,10 +166,10 @@ public sealed class ImageModelDiscoveryEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/inspect?repoId=second-state/FLUX.1-schnell-GGUF");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var files = body.GetProperty("files").EnumerateArray().ToList();
         AssertEx.Equal(expected: 2, files.Count);
         AssertEx.Equal("Vae", files.Single(f => f.GetProperty("fileName").GetString() == "ae.safetensors").GetProperty("suggestedRole").GetString());
@@ -184,7 +184,7 @@ public sealed class ImageModelDiscoveryEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/inspect?repoId=%20");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Null(discovery.LastInspectedRepoId, "A blank repo id must be rejected before discovery is touched.");
@@ -201,10 +201,10 @@ public sealed class ImageModelDiscoveryEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, "images/models/inspect?repoId=owner/repo");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal(expected: 0, body.GetProperty("files").GetArrayLength());
     }
 

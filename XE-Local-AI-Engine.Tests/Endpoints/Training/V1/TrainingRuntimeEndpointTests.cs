@@ -30,7 +30,7 @@ public sealed class TrainingRuntimeEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync($"{ApiPrefix}/runtime/status").ConfigureAwait(false);
+        using var response = await client.GetAsync($"{ApiPrefix}/runtime/status");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -41,7 +41,7 @@ public sealed class TrainingRuntimeEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync($"{ApiPrefix}/base-artifacts").ConfigureAwait(false);
+        using var response = await client.GetAsync($"{ApiPrefix}/base-artifacts");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -54,7 +54,7 @@ public sealed class TrainingRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/runtime/install");
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -67,10 +67,10 @@ public sealed class TrainingRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/runtime/status");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(json);
         AssertEx.True(document.RootElement.TryGetProperty("phase", out _), "The status must always carry a phase.");
         AssertEx.True(document.RootElement.TryGetProperty("logLines", out var logLines) && logLines.ValueKind == JsonValueKind.Array,
@@ -89,10 +89,10 @@ public sealed class TrainingRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/runtime/prerequisites");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.True(document.RootElement.TryGetProperty("items", out var items) && items.GetArrayLength() > 0,
             "The prerequisite report is per-item; an empty list would tell the operator nothing.");
         AssertEx.True(document.RootElement.TryGetProperty("canInstall", out _));
@@ -106,10 +106,10 @@ public sealed class TrainingRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/base-artifacts");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.True(document.RootElement.TryGetProperty("items", out var items) && items.GetArrayLength() == 0,
             "An empty database is an empty list, never a 404.");
     }
@@ -122,7 +122,7 @@ public sealed class TrainingRuntimeEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/base-artifacts/{Guid.NewGuid()}");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -136,7 +136,7 @@ public sealed class TrainingRuntimeEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"{ApiPrefix}/base-artifacts/{Guid.NewGuid()}");
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -156,7 +156,7 @@ public sealed class TrainingRuntimeEndpointTests
         };
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -172,8 +172,8 @@ public sealed class TrainingRuntimeEndpointTests
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/runtime/install");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
@@ -196,8 +196,8 @@ public sealed class TrainingRuntimeEndpointTests
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/runtime/remove");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
@@ -223,8 +223,8 @@ public sealed class TrainingRuntimeEndpointTests
             revision = "revision"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());

@@ -47,17 +47,17 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
 
         // Apply every migration up to (but not including) the repair — the schema has the messages table WITHOUT the
         // unique index, so duplicate sequences can be seeded exactly as the pre-lock race produced them.
-        await migrator.MigrateAsync(previousMigration).ConfigureAwait(false);
+        await migrator.MigrateAsync(previousMigration);
 
         var conversationId = Guid.NewGuid();
-        await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 5, createdAtUtc: 100).ConfigureAwait(false);
-        await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 5, createdAtUtc: 101).ConfigureAwait(false);
-        await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 6, createdAtUtc: 102).ConfigureAwait(false);
+        await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 5, createdAtUtc: 100);
+        await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 5, createdAtUtc: 101);
+        await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 6, createdAtUtc: 102);
 
         // Apply the repair migration: renumber duplicates, then create the unique index.
-        await migrator.MigrateAsync(repairMigration).ConfigureAwait(false);
+        await migrator.MigrateAsync(repairMigration);
 
-        var sequences = await ReadSequencesAsync(dbContext, conversationId).ConfigureAwait(false);
+        var sequences = await ReadSequencesAsync(dbContext, conversationId);
         AssertEx.Equal(expected: 3, sequences.Count);
         AssertEx.Equal(expected: 3, sequences.Distinct().Count());
         for (var expected = 0; expected < sequences.Count; expected++)
@@ -66,8 +66,7 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         }
 
         // The unique index is now in force: another duplicate insert must be rejected by the database.
-        var conflict = await AssertEx.ThrowsAsync<SqliteException>(() => InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 0, createdAtUtc: 200))
-                                     .ConfigureAwait(false);
+        var conflict = await AssertEx.ThrowsAsync<SqliteException>(() => InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 0, createdAtUtc: 200));
         AssertEx.Equal(expected: 2067, conflict.SqliteExtendedErrorCode);
     }
 
@@ -80,12 +79,11 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
 
         // Applying every migration (including the repair) against an empty database must succeed and leave the unique
         // index enforcing sequence uniqueness.
-        await dbContext.Database.MigrateAsync().ConfigureAwait(false);
+        await dbContext.Database.MigrateAsync();
 
         var conversationId = Guid.NewGuid();
-        await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 0, createdAtUtc: 1).ConfigureAwait(false);
-        var conflict = await AssertEx.ThrowsAsync<SqliteException>(() => InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 0, createdAtUtc: 2))
-                                     .ConfigureAwait(false);
+        await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 0, createdAtUtc: 1);
+        var conflict = await AssertEx.ThrowsAsync<SqliteException>(() => InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 0, createdAtUtc: 2));
         AssertEx.Equal(expected: 2067, conflict.SqliteExtendedErrorCode);
     }
 
@@ -105,7 +103,7 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         var connection = dbContext.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         // The node runs with foreign-key enforcement OFF (no PRAGMA foreign_keys=ON on its connection); EF's provider
@@ -113,7 +111,7 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         await using (var pragma = connection.CreateCommand())
         {
             pragma.CommandText = "PRAGMA foreign_keys = OFF;";
-            await pragma.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await pragma.ExecuteNonQueryAsync();
         }
 
         await using var command = connection.CreateCommand();
@@ -131,7 +129,7 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
             3
         });
         AddParameter(command, "$created_at_utc", createdAtUtc);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<IReadOnlyList<int>> ReadSequencesAsync(NodeChatDbContext dbContext, Guid conversationId)
@@ -139,15 +137,15 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         var connection = dbContext.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT sequence FROM messages WHERE conversation_id = $conversation_id ORDER BY sequence;";
         AddParameter(command, "$conversation_id", conversationId.ToString());
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         var sequences = new List<int>();
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        while (await reader.ReadAsync())
         {
             sequences.Add(reader.GetInt32(0));
         }

@@ -28,7 +28,7 @@ public sealed class NodeChatMutationGuard(INodeChatPersistenceService persistenc
     public async Task EnsureMutableAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         // Read ONLY the origin column. The guard never touches INodeKeyRegistry / epoch keys.
-        var origin = await _persistence.GetConversationOriginAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        var origin = await _persistence.GetConversationOriginAsync(conversationId, cancellationToken);
 
         if (string.Equals(origin, NodeChatOriginValues.Remote, StringComparison.Ordinal))
         {

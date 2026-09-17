@@ -31,14 +31,14 @@ public sealed class GetGgufDownloadStatusEndpoint(IGgufDownloadCoordinator downl
         if (string.IsNullOrWhiteSpace(modelName))
         {
             AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var status = _downloadCoordinator.GetStatus(modelName);
         if (status is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -55,6 +55,6 @@ public sealed class GetGgufDownloadStatusEndpoint(IGgufDownloadCoordinator downl
                 StartedAtUtc = status.StartedAtUtc,
                 UpdatedAtUtc = status.UpdatedAtUtc
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

@@ -240,7 +240,7 @@ public sealed class StreamIdleWatchdogTests
                 if (_index == 2)
                 {
                     // No cancellation-token registration at all: the only way out is the test releasing the gate.
-                    var moved = await stuckMoveNext.ConfigureAwait(false);
+                    var moved = await stuckMoveNext;
                     Current = 2;
                     return moved;
                 }
@@ -311,7 +311,7 @@ public sealed class StreamIdleWatchdogTests
 
             public async ValueTask DisposeAsync()
             {
-                await _neverCompletes.Task.ConfigureAwait(false);
+                await _neverCompletes.Task;
             }
         }
     }

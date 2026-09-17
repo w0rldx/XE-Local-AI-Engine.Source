@@ -162,12 +162,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             _ = _cancellationRegistry.TryCancel(correlation);
         }
 
-        await run.Cancellation.CancelAsync().ConfigureAwait(false);
+        await run.Cancellation.CancelAsync();
         if (run.Completion is { } completion)
         {
             using var grace = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             grace.CancelAfter(StopGrace);
-            var landed = await Task.WhenAny(completion, Task.Delay(Timeout.InfiniteTimeSpan, grace.Token)).ConfigureAwait(false);
+            var landed = await Task.WhenAny(completion, Task.Delay(Timeout.InfiniteTimeSpan, grace.Token));
             if (landed != completion)
             {
                 _logger.LogWarning("Work session {SessionId} did not land within the stop grace period; its terminal will be written when the step ends.", sessionId);
@@ -190,7 +190,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     /// </summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _shutdown.CancelAsync().ConfigureAwait(false);
+        await _shutdown.CancelAsync();
         foreach (var (_, run) in _runs)
         {
             if (run.Correlation is { } correlation)
@@ -207,7 +207,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             return;
         }
 
-        await _shutdown.CancelAsync().ConfigureAwait(false);
+        await _shutdown.CancelAsync();
         _shutdown.Dispose();
         foreach (var (_, run) in _runs)
         {
@@ -221,7 +221,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     {
         try
         {
-            await RunSessionAsync(sessionId, run).ConfigureAwait(false);
+            await RunSessionAsync(sessionId, run);
         }
         catch (OperationCanceledException)
         {
@@ -230,7 +230,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         catch (Exception exception)
         {
             _logger.LogError(exception, "Work session {SessionId} execution failed.", sessionId);
-            await TerminalizeFailureAsync(sessionId, "The work session could not continue because a step failed unexpectedly.").ConfigureAwait(false);
+            await TerminalizeFailureAsync(sessionId, "The work session could not continue because a step failed unexpectedly.");
         }
         finally
         {
@@ -248,7 +248,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         var stepsThisRun = 0;
         while (!run.Cancellation.IsCancellationRequested)
         {
-            var state = await WithStoreAsync(store => LoadStateAsync(store, sessionId)).ConfigureAwait(false);
+            var state = await WithStoreAsync(store => LoadStateAsync(store, sessionId));
             if (state.Session.Status is AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Cancelled or AgentWorkSessionStatus.Failed)
             {
                 return;
@@ -260,16 +260,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                             WorkSessionVersions.Any,
                             AgentWorkSessionStatus.Running,
                             WorkSessionStateBlockComposer.ResolveCurrentTask(state)?.Id),
-                        CancellationToken.None))
-                    .ConfigureAwait(false);
-                await _publisher.PublishAsync(sessionId, moved.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None).ConfigureAwait(false);
+                        CancellationToken.None));
+                await _publisher.PublishAsync(sessionId, moved.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None);
                 state = state with
                 {
                     Session = moved
                 };
             }
 
-            var outcome = await RunStepAsync(run, state, stepsThisRun).ConfigureAwait(false);
+            var outcome = await RunStepAsync(run, state, stepsThisRun);
             stepsThisRun++;
             if (outcome == StepOutcome.Settled)
             {
@@ -278,7 +277,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         }
 
         // The loop was stopped between steps rather than mid-turn, so no terminal has been written yet.
-        await SettleStoppedRunAsync(sessionId, run).ConfigureAwait(false);
+        await SettleStoppedRunAsync(sessionId, run);
     }
 
     private async Task SettleStoppedRunAsync(Guid sessionId, SessionRun run)
@@ -291,13 +290,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
         if (reason == WorkSessionStopReason.Pause)
         {
-            await CheckpointAsync(sessionId).ConfigureAwait(false);
+            await CheckpointAsync(sessionId);
         }
 
         await SettleAsync(sessionId,
                 reason == WorkSessionStopReason.Cancel ? AgentWorkSessionStatus.Cancelled : AgentWorkSessionStatus.Paused,
-                reason == WorkSessionStopReason.Cancel ? "The operator cancelled the work session." : "The operator paused the work session.")
-            .ConfigureAwait(false);
+                reason == WorkSessionStopReason.Cancel ? "The operator cancelled the work session." : "The operator paused the work session.");
     }
 
     private async Task<StepOutcome> RunStepAsync(SessionRun run, WorkSessionState state, int stepsThisRun)
@@ -314,9 +312,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // Guard the conversation before anything is written. A session whose conversation was deleted through another
         // path can never take another step, and failing here is legible where an exception out of the send path is not.
         var persistence = turnScope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
-        if (await persistence.GetConversationOriginAsync(state.Session.ConversationId, CancellationToken.None).ConfigureAwait(false) is null)
+        if (await persistence.GetConversationOriginAsync(state.Session.ConversationId, CancellationToken.None) is null)
         {
-            await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, "The conversation this work session owns no longer exists.").ConfigureAwait(false);
+            await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, "The conversation this work session owns no longer exists.");
             return StepOutcome.Settled;
         }
 
@@ -334,8 +332,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             toolGate = await turnScope.ServiceProvider.GetRequiredService<WorkSessionToolGate>()
-                                      .InspectAllowListAsync(state.Session.AgentDefinitionId, run.Runtime?.ModelProfile, CancellationToken.None)
-                                      .ConfigureAwait(false);
+                                      .InspectAllowListAsync(state.Session.AgentDefinitionId, run.Runtime?.ModelProfile, CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or KeyNotFoundException)
         {
@@ -369,10 +366,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                         WorkSessionEventTypes.StepEnded,
                         WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ToolGate),
                         ToolGateOutcome),
-                    CancellationToken.None))
-                .ConfigureAwait(false);
-            await CheckpointAsync(sessionId).ConfigureAwait(false);
-            await SettleAsync(sessionId, AgentWorkSessionStatus.Paused, refusal).ConfigureAwait(false);
+                    CancellationToken.None));
+            await CheckpointAsync(sessionId);
+            await SettleAsync(sessionId, AgentWorkSessionStatus.Paused, refusal);
             return StepOutcome.Settled;
         }
 
@@ -386,8 +382,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // otherwise be measured under the model the LAST step ran on. Null when the agent was deleted or the gate read
         // failed, which is exactly when the bound's transcript fallback is the best answer available.
         await turnScope.ServiceProvider.GetRequiredService<ConversationStepContextBound>()
-                       .ApplyAsync(state.Session.ConversationId, _options.StepContextBudgetTokens, toolGate?.EffectiveModel, CancellationToken.None)
-                       .ConfigureAwait(false);
+                       .ApplyAsync(state.Session.ConversationId, _options.StepContextBudgetTokens, toolGate?.EffectiveModel, CancellationToken.None);
 
         // Published BEFORE the send, not after. By the time a step terminalizes, the invocation resume registry has
         // dropped its entry, so a client told about the step only then re-attaches to an empty stream and never sees the
@@ -397,9 +392,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     WorkSessionEventTypes.StepStarted,
                     WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Started),
                     step.ToString(CultureInfo.InvariantCulture)),
-                CancellationToken.None))
-            .ConfigureAwait(false);
-        await _publisher.PublishAsync(sessionId, started.Sequence, WorkSessionChangeKind.Step, CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None));
+        await _publisher.PublishAsync(sessionId, started.Sequence, WorkSessionChangeKind.Step, CancellationToken.None);
 
         var correlation = new NodeChatMessageCorrelation(state.Session.ConversationId, Guid.NewGuid(), Guid.NewGuid());
         using var guard = new StepCancellationGuard(_cancellationRegistry, correlation, _timeProvider);
@@ -455,7 +449,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         ChatStreamEvent terminal;
         try
         {
-            terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId, step).ConfigureAwait(false);
+            terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId, step);
         }
         catch (WorkSessionUndeclaredWriteException refusal)
         {
@@ -467,14 +461,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // Failed rather than Paused: a paused workflow session is resumed by its owning run, so a pause would loop
             // until the resume budget ran out and report a budget it did not really exhaust. Failed settles it once,
             // and the run's next poll blocks the node run with this rule's own class and this sentence.
-            return await SettleWriteGateAsync(sessionId, step, refusal.Message).ConfigureAwait(false);
+            return await SettleWriteGateAsync(sessionId, step, refusal.Message);
         }
         finally
         {
             run.Correlation = null;
         }
 
-        return await SettleStepAsync(run, guard, sessionId, step, stepsThisRun, started.Sequence, terminal, callBudget).ConfigureAwait(false);
+        return await SettleStepAsync(run, guard, sessionId, step, stepsThisRun, started.Sequence, terminal, callBudget);
     }
 
     /// <summary>Drains one step's stream to its terminal, mapping parks onto the session status as they happen.</summary>
@@ -485,7 +479,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         int step)
     {
         var parked = false;
-        await foreach (var streamEvent in stream.SendMessageAsync(request, CancellationToken.None).ConfigureAwait(false))
+        await foreach (var streamEvent in stream.SendMessageAsync(request, CancellationToken.None))
         {
             switch (streamEvent.Type)
             {
@@ -496,8 +490,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     await MoveAsync(sessionId,
                             streamEvent.Type == ChatStreamEventTypes.ApprovalRequested
                                 ? AgentWorkSessionStatus.WaitingForApproval
-                                : AgentWorkSessionStatus.WaitingForInput)
-                        .ConfigureAwait(false);
+                                : AgentWorkSessionStatus.WaitingForInput);
                     break;
 
                 case ChatStreamEventTypes.AssistantDelta:
@@ -506,7 +499,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     {
                         parked = false;
                         guard.DisarmPark();
-                        await MoveAsync(sessionId, AgentWorkSessionStatus.Running).ConfigureAwait(false);
+                        await MoveAsync(sessionId, AgentWorkSessionStatus.Running);
                     }
 
                     break;
@@ -551,7 +544,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     // nothing.
                     parked = true;
                     guard.ArmPark(TimeSpan.FromSeconds(_options.MaxParkedSeconds), toolName: null);
-                    await MoveAsync(sessionId, AgentWorkSessionStatus.WaitingForApproval).ConfigureAwait(false);
+                    await MoveAsync(sessionId, AgentWorkSessionStatus.WaitingForApproval);
                     _logger.LogWarning("Work session {SessionId} step {Step} lost the event for a parked tool call to a stream drop; the park clock was armed off the reconcile.",
                         sessionId,
                         step);
@@ -608,7 +601,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 || string.Equals(terminalEvent.Error, ProviderCallBudget.CeilingExceededMessage, StringComparison.Ordinal)))
         {
             _logger.LogInformation("Work session {SessionId} step {Step} reached its provider-call budget; ending the step and continuing.", sessionId, step);
-            await AppendStepEndedAsync(sessionId, step, nameof(ProviderCallBudget), consumption).ConfigureAwait(false);
+            await AppendStepEndedAsync(sessionId, step, nameof(ProviderCallBudget), consumption);
             endedRecorded = true;
             terminal = ChatStreamEventTypes.AssistantCompleted;
         }
@@ -628,14 +621,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                             WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
                             step.ToString(CultureInfo.InvariantCulture),
                             consumption),
-                        CancellationToken.None))
-                    .ConfigureAwait(false);
-                await CheckpointAsync(sessionId).ConfigureAwait(false);
-                await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, "A work session step failed.").ConfigureAwait(false);
+                        CancellationToken.None));
+                await CheckpointAsync(sessionId);
+                await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, "A work session step failed.");
                 return StepOutcome.Settled;
 
             case ChatStreamEventTypes.AssistantCancelled:
-                return await SettleCancelledStepAsync(run, guard, sessionId, step).ConfigureAwait(false);
+                return await SettleCancelledStepAsync(run, guard, sessionId, step);
 
             default:
                 break;
@@ -646,33 +638,32 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // Written BEFORE AdvanceStepAsync so the row lands on the step it describes rather than on the next one.
         if (!endedRecorded)
         {
-            await AppendStepEndedAsync(sessionId, step, StepCompletedOutcome, consumption).ConfigureAwait(false);
+            await AppendStepEndedAsync(sessionId, step, StepCompletedOutcome, consumption);
         }
 
-        var summary = await WithStoreAsync(store => ReadCompletionSummaryAsync(store, sessionId, stepStartedSequence)).ConfigureAwait(false);
-        var advanced = await WithStoreAsync(store => store.AdvanceStepAsync(sessionId, WorkSessionVersions.Any, CancellationToken.None)).ConfigureAwait(false);
-        await _publisher.PublishAsync(sessionId, advanced.Sequence, WorkSessionChangeKind.Step, CancellationToken.None).ConfigureAwait(false);
+        var summary = await WithStoreAsync(store => ReadCompletionSummaryAsync(store, sessionId, stepStartedSequence));
+        var advanced = await WithStoreAsync(store => store.AdvanceStepAsync(sessionId, WorkSessionVersions.Any, CancellationToken.None));
+        await _publisher.PublishAsync(sessionId, advanced.Sequence, WorkSessionChangeKind.Step, CancellationToken.None);
 
         if (summary is not null)
         {
-            await CheckpointAsync(sessionId).ConfigureAwait(false);
-            await SettleAsync(sessionId, AgentWorkSessionStatus.Completed, summary).ConfigureAwait(false);
+            await CheckpointAsync(sessionId);
+            await SettleAsync(sessionId, AgentWorkSessionStatus.Completed, summary);
             return StepOutcome.Settled;
         }
 
         if (stepsThisRun + 1 >= _options.MaxStepsPerRun)
         {
-            await CheckpointAsync(sessionId).ConfigureAwait(false);
+            await CheckpointAsync(sessionId);
             await SettleAsync(sessionId,
                     AgentWorkSessionStatus.Paused,
-                    string.Create(CultureInfo.InvariantCulture, $"The run reached its step budget of {_options.MaxStepsPerRun} steps."))
-                .ConfigureAwait(false);
+                    string.Create(CultureInfo.InvariantCulture, $"The run reached its step budget of {_options.MaxStepsPerRun} steps."));
             return StepOutcome.Settled;
         }
 
         if (advanced.Step % _options.CheckpointEveryNSteps == 0)
         {
-            await CheckpointAsync(sessionId).ConfigureAwait(false);
+            await CheckpointAsync(sessionId);
         }
 
         // A stop that landed while this step was finishing is handled by the loop condition, so the run settles through
@@ -693,8 +684,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
                     outcome,
                     detailJson),
-                CancellationToken.None))
-            .ConfigureAwait(false);
+                CancellationToken.None));
     }
 
     /// <summary>
@@ -744,11 +734,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     {
         if (run.StopReason == WorkSessionStopReason.Cancel)
         {
-            await SettleAsync(sessionId, AgentWorkSessionStatus.Cancelled, "The operator cancelled the work session.").ConfigureAwait(false);
+            await SettleAsync(sessionId, AgentWorkSessionStatus.Cancelled, "The operator cancelled the work session.");
             return StepOutcome.Settled;
         }
 
-        await CheckpointAsync(sessionId).ConfigureAwait(false);
+        await CheckpointAsync(sessionId);
 
         var reason = "The operator paused the work session.";
         if (guard.ParkExpired)
@@ -759,8 +749,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                         WorkSessionEventTypes.ParkTimedOut,
                         WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ParkExpired),
                         guard.ParkedToolName),
-                    CancellationToken.None))
-                .ConfigureAwait(false);
+                    CancellationToken.None));
 
             // Recorded as a finding, not only as an event, so the next step's state block re-asks it. The park itself is
             // in-memory and survives neither this timeout nor a restart; this sentence is what makes the question
@@ -772,15 +761,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                         WorkSessionOperationId.For(sessionId, step, $"park-question:{findingId:N}"),
                         AgentWorkSessionFindingKind.OpenQuestion,
                         ParkedQuestionText(guard.ParkedToolName)),
-                    CancellationToken.None))
-                .ConfigureAwait(false);
+                    CancellationToken.None));
         }
         else if (guard.DeadlineExpired)
         {
             reason = "The work session step ran past its time budget.";
         }
 
-        await SettleAsync(sessionId, AgentWorkSessionStatus.Paused, reason).ConfigureAwait(false);
+        await SettleAsync(sessionId, AgentWorkSessionStatus.Paused, reason);
         return StepOutcome.Settled;
     }
 
@@ -799,7 +787,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     private async Task<string?> ReadCompletionSummaryAsync(IAgentWorkSessionStore store, Guid sessionId, long stepStartedSequence)
     {
         const string Fallback = "The agent declared the work session complete.";
-        var events = await store.ListEventsAsync(sessionId, stepStartedSequence, CancellationToken.None).ConfigureAwait(false);
+        var events = await store.ListEventsAsync(sessionId, stepStartedSequence, CancellationToken.None);
         var recorded = events.LastOrDefault(static candidate => candidate.EventType == WorkSessionEventTypes.CompletionRequested);
         if (recorded is null)
         {
@@ -829,8 +817,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var composer = scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>();
-            var result = await composer.ComposeAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
-            await _publisher.PublishAsync(sessionId, result.Sequence, WorkSessionChangeKind.Checkpoint, CancellationToken.None).ConfigureAwait(false);
+            var result = await composer.ComposeAsync(sessionId, CancellationToken.None);
+            await _publisher.PublishAsync(sessionId, result.Sequence, WorkSessionChangeKind.Checkpoint, CancellationToken.None);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or KeyNotFoundException)
         {
@@ -846,9 +834,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             var moved = await WithStoreAsync(store =>
-                    store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, target), CancellationToken.None))
-                .ConfigureAwait(false);
-            await _publisher.PublishAsync(sessionId, moved.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None).ConfigureAwait(false);
+                    store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, target), CancellationToken.None));
+            await _publisher.PublishAsync(sessionId, moved.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None);
         }
         catch (WorkSessionInvalidTransitionException exception)
         {
@@ -861,9 +848,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         try
         {
             var settled = await WithStoreAsync(store => store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, target, CurrentTaskId: null, reason),
-                    CancellationToken.None))
-                .ConfigureAwait(false);
-            await _publisher.PublishAsync(sessionId, settled.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None));
+            await _publisher.PublishAsync(sessionId, settled.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None);
         }
         catch (WorkSessionInvalidTransitionException exception)
         {
@@ -890,10 +876,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.WriteGate),
                     WorkSessionEventTypes.WriteGateOutcome,
                     WorkSessionEventTypes.WriteGateDetail(refusal)),
-                CancellationToken.None))
-            .ConfigureAwait(false);
-        await CheckpointAsync(sessionId).ConfigureAwait(false);
-        await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, refusal).ConfigureAwait(false);
+                CancellationToken.None));
+        await CheckpointAsync(sessionId);
+        await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, refusal);
         return StepOutcome.Settled;
     }
 
@@ -901,7 +886,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     {
         try
         {
-            await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, reason).ConfigureAwait(false);
+            await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, reason);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or KeyNotFoundException)
         {
@@ -917,16 +902,16 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     private async Task<T> WithStoreAsync<T>(Func<IAgentWorkSessionStore, Task<T>> operation)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        return await operation(scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()).ConfigureAwait(false);
+        return await operation(scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>());
     }
 
     private static async Task<WorkSessionState> LoadStateAsync(IAgentWorkSessionStore store, Guid sessionId)
     {
-        var session = await store.GetAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
-        var tasks = await store.ListTasksAsync(sessionId, sinceSequence: 0, CancellationToken.None).ConfigureAwait(false);
-        var findings = await store.ListFindingsAsync(sessionId, sinceSequence: 0, CancellationToken.None).ConfigureAwait(false);
-        var artifacts = await store.ListArtifactsAsync(sessionId, sinceSequence: 0, CancellationToken.None).ConfigureAwait(false);
-        var checkpoint = await store.GetLatestCheckpointAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
+        var session = await store.GetAsync(sessionId, CancellationToken.None);
+        var tasks = await store.ListTasksAsync(sessionId, sinceSequence: 0, CancellationToken.None);
+        var findings = await store.ListFindingsAsync(sessionId, sinceSequence: 0, CancellationToken.None);
+        var artifacts = await store.ListArtifactsAsync(sessionId, sinceSequence: 0, CancellationToken.None);
+        var checkpoint = await store.GetLatestCheckpointAsync(sessionId, CancellationToken.None);
         return new WorkSessionState(session, tasks, findings, artifacts, checkpoint);
     }
 

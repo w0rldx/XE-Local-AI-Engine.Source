@@ -32,20 +32,20 @@ public sealed class ExternalProviderEndpointSecurityTests
         await using var factory = CreateFactory(store, administrationService, probeService);
         using var client = factory.CreateClient();
 
-        using var listResponse = await client.GetAsync("/api/local/v1/external-providers/connections").ConfigureAwait(false);
-        using var getResponse = await client.GetAsync("/api/local/v1/external-providers/connections/unsloth-box").ConfigureAwait(false);
+        using var listResponse = await client.GetAsync("/api/local/v1/external-providers/connections");
+        using var getResponse = await client.GetAsync("/api/local/v1/external-providers/connections/unsloth-box");
         using var saveResponse = await client.PutAsJsonAsync("/api/local/v1/external-providers/connections/unsloth-box",
             new SaveExternalProviderConnectionRequest
             {
                 DisplayName = "Unsloth box",
                 BaseUrl = "http://127.0.0.1:18099",
                 Locality = "Local"
-            }).ConfigureAwait(false);
-        using var deleteResponse = await client.DeleteAsync("/api/local/v1/external-providers/connections/unsloth-box").ConfigureAwait(false);
+            });
+        using var deleteResponse = await client.DeleteAsync("/api/local/v1/external-providers/connections/unsloth-box");
         using var probeResponse = await client.PostAsJsonAsync("/api/local/v1/external-providers/probe", new ExternalProviderProbeRequest
         {
             BaseUrl = "http://127.0.0.1:18099"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, getResponse.StatusCode);

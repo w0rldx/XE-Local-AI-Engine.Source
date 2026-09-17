@@ -21,21 +21,21 @@ public sealed class AddAgentWorkSessionsMigrationTests
     [Test]
     public async Task Migrate_CreatesTheSixTablesWithTheirColumnsAndUniqueIndexes()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("agent-work-sessions.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("agent-work-sessions.sqlite", PreviousMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.False(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must not exist before the migration.");
+            AssertEx.False(await probe.TableExistsAsync(table), $"{table} must not exist before the migration.");
         }
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist after the migration.");
+            AssertEx.True(await probe.TableExistsAsync(table), $"{table} must exist after the migration.");
         }
 
-        var sessionColumns = await probe.ColumnsAsync("agent_work_sessions").ConfigureAwait(false);
+        var sessionColumns = await probe.ColumnsAsync("agent_work_sessions");
         foreach (var column in new[]
                  {
                      "id",
@@ -58,7 +58,7 @@ public sealed class AddAgentWorkSessionsMigrationTests
             AssertEx.True(sessionColumns.Contains(column), $"agent_work_sessions must carry '{column}'.");
         }
 
-        var eventColumns = await probe.ColumnsAsync("agent_work_session_events").ConfigureAwait(false);
+        var eventColumns = await probe.ColumnsAsync("agent_work_session_events");
         foreach (var column in new[]
                  {
                      "id",
@@ -75,34 +75,31 @@ public sealed class AddAgentWorkSessionsMigrationTests
             AssertEx.True(eventColumns.Contains(column), $"agent_work_session_events must carry '{column}'.");
         }
 
-        AssertEx.True(await probe.IndexExistsAsync("agent_work_sessions", "ux_agent_work_sessions_conversation_id", unique: true, "conversation_id").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("agent_work_sessions", "ux_agent_work_sessions_conversation_id", unique: true, "conversation_id"),
             "One session per conversation is a unique index, not a convention.");
-        AssertEx.True(await probe.IndexExistsAsync("agent_work_session_events", "ux_agent_work_session_events_session_sequence", unique: true, "session_id", "sequence")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("agent_work_session_events", "ux_agent_work_session_events_session_sequence", unique: true, "session_id", "sequence"),
             "The event watermark must be unique per session.");
-        AssertEx.True(await probe.IndexExistsAsync("agent_work_session_events", "ux_agent_work_session_events_operation", unique: true, "session_id", "operation_id")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("agent_work_session_events", "ux_agent_work_session_events_operation", unique: true, "session_id", "operation_id"),
             "One event per operation id is what makes a replayed step idempotent.");
-        AssertEx.True(await probe.IndexExistsAsync("agent_work_session_artifacts", "ux_agent_work_session_artifacts_session_name", unique: true, "session_id", "name")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("agent_work_session_artifacts", "ux_agent_work_session_artifacts_session_name", unique: true, "session_id", "name"),
             "An artifact name is the replace key, so it must be unique per session.");
     }
 
     [Test]
     public async Task Rollback_DropsTheSixTablesAndLeavesTheRestOfTheSchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("agent-work-sessions-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("agent-work-sessions-rollback.sqlite", ThisMigrationId);
 
-        await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreviousMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.False(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must be gone after the rollback.");
+            AssertEx.False(await probe.TableExistsAsync(table), $"{table} must be gone after the rollback.");
         }
 
         // Nothing else may go with them: the migration only ever created tables, so `Down` has nothing else to touch.
-        AssertEx.True(await probe.TableExistsAsync("mcp_agent_runs").ConfigureAwait(false), "The rollback must not disturb neighbouring tables.");
-        AssertEx.True(await probe.TableExistsAsync("development_projects").ConfigureAwait(false), "The rollback must not disturb the Development tables.");
-        AssertEx.True(await probe.TableExistsAsync("development_events").ConfigureAwait(false), "The rollback must not disturb the Development event log.");
+        AssertEx.True(await probe.TableExistsAsync("mcp_agent_runs"), "The rollback must not disturb neighbouring tables.");
+        AssertEx.True(await probe.TableExistsAsync("development_projects"), "The rollback must not disturb the Development tables.");
+        AssertEx.True(await probe.TableExistsAsync("development_events"), "The rollback must not disturb the Development event log.");
     }
 }

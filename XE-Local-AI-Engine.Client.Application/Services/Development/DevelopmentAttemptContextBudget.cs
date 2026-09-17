@@ -69,8 +69,8 @@ internal readonly record struct DevelopmentAttemptContextBudget(int ContextToken
         int? window;
         try
         {
-            await provider.WarmModelAsync(modelId, cancellationToken).ConfigureAwait(false);
-            window = await provider.GetRuntimeInfoAsync(modelId, cancellationToken).ConfigureAwait(false) is { EffectiveContextTokens: > 0 } info
+            await provider.WarmModelAsync(modelId, cancellationToken);
+            window = await provider.GetRuntimeInfoAsync(modelId, cancellationToken) is { EffectiveContextTokens: > 0 } info
                 ? info.EffectiveContextTokens
                 : null;
         }

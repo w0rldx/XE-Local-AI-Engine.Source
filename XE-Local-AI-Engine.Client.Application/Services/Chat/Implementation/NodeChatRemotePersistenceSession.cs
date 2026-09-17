@@ -30,12 +30,12 @@ public sealed class NodeChatRemotePersistenceSession(
             return true;
         }
 
-        var flush = await _invocationPump.FlushDeltaAsync(_correlation, state, _cursor, cancellationToken).ConfigureAwait(false);
+        var flush = await _invocationPump.FlushDeltaAsync(_correlation, state, _cursor, cancellationToken);
         _cursor = flush.Cursor;
 
         if (NodeChatInvocationPump.IsTerminal(state.Status))
         {
-            await _invocationPump.TerminalizeAsync(_correlation, state, requestedModel).ConfigureAwait(false);
+            await _invocationPump.TerminalizeAsync(_correlation, state, requestedModel);
             _terminalPersisted = true;
         }
 
@@ -53,7 +53,7 @@ public sealed class NodeChatRemotePersistenceSession(
             return;
         }
 
-        await _invocationPump.TerminalizeInterruptedAsync(_correlation, _cursor, wasCancelled).ConfigureAwait(false);
+        await _invocationPump.TerminalizeInterruptedAsync(_correlation, _cursor, wasCancelled);
         _terminalPersisted = true;
     }
 }

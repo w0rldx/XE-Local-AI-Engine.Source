@@ -169,10 +169,10 @@ public sealed class TranscriptionRuntimeEndpointTests
         {
             accepted = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal("runtime-busy", body.GetProperty("reason").GetString());
         // The snapshot is the point: "busy" alone does not tell the operator whether to wait or to retry.
         AssertEx.Equal(expected: 1, body.GetProperty("activity").GetProperty("activeTranscriptionCount").GetInt32());
@@ -194,10 +194,10 @@ public sealed class TranscriptionRuntimeEndpointTests
         {
             accepted = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.False(body.GetProperty("activity").GetProperty("isBusy").GetBoolean());
         AssertEx.Equal(expected: 1, service.EjectCallCount);
     }
@@ -242,7 +242,7 @@ public sealed class TranscriptionRuntimeEndpointTests
         }
 
         factory.AddNonOperatorBearerToken(forbidden);
-        using var forbiddenResponse = await client.SendAsync(forbidden).ConfigureAwait(false);
+        using var forbiddenResponse = await client.SendAsync(forbidden);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode,
             $"'{route}' must refuse an authenticated non-operator.");
@@ -259,7 +259,7 @@ public sealed class TranscriptionRuntimeEndpointTests
         }
 
         factory.AddNodeBearerToken(allowed);
-        using var allowedResponse = await client.SendAsync(allowed).ConfigureAwait(false);
+        using var allowedResponse = await client.SendAsync(allowed);
 
         AssertEx.NotEqual(HttpStatusCode.Forbidden, allowedResponse.StatusCode,
             $"'{route}' must admit an operator.");
@@ -272,7 +272,7 @@ public sealed class TranscriptionRuntimeEndpointTests
         await using var factory = FactoryWith(new StubTranscriptionRuntimeService());
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync($"{ApiPrefix}/transcription/runtime").ConfigureAwait(false);
+        using var response = await client.GetAsync($"{ApiPrefix}/transcription/runtime");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -280,9 +280,9 @@ public sealed class TranscriptionRuntimeEndpointTests
     private static async Task<JsonElement> GetJsonAsync(TestServerWebAppFactory factory, HttpClient client, string route)
     {
         using var request = Authorized(factory, HttpMethod.Get, route, body: null);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, $"'{route}' must answer 200 for an operator.");
-        return await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
     }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string route, object? body)

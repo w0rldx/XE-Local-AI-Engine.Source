@@ -172,14 +172,14 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         var worktreePath = Path.Combine(rootPath, "worktree");
         Directory.CreateDirectory(repositoryPath);
 
-        await RunGitAsync(repositoryPath, "init", "--initial-branch=main").ConfigureAwait(false);
-        await RunGitAsync(repositoryPath, "config", "user.email", "development-recovery@localhost.test").ConfigureAwait(false);
-        await RunGitAsync(repositoryPath, "config", "user.name", "Development Restart Recovery").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "tracked.txt"), "base\n").ConfigureAwait(false);
-        await RunGitAsync(repositoryPath, "add", "tracked.txt").ConfigureAwait(false);
-        await RunGitAsync(repositoryPath, "commit", "-m", "base").ConfigureAwait(false);
-        var protectedBranchCommit = await RunGitAsync(repositoryPath, "rev-parse", "main").ConfigureAwait(false);
-        await RunGitAsync(repositoryPath, "worktree", "add", "-b", "development-recovery", worktreePath, "main").ConfigureAwait(false);
+        await RunGitAsync(repositoryPath, "init", "--initial-branch=main");
+        await RunGitAsync(repositoryPath, "config", "user.email", "development-recovery@localhost.test");
+        await RunGitAsync(repositoryPath, "config", "user.name", "Development Restart Recovery");
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "tracked.txt"), "base\n");
+        await RunGitAsync(repositoryPath, "add", "tracked.txt");
+        await RunGitAsync(repositoryPath, "commit", "-m", "base");
+        var protectedBranchCommit = await RunGitAsync(repositoryPath, "rev-parse", "main");
+        await RunGitAsync(repositoryPath, "worktree", "add", "-b", "development-recovery", worktreePath, "main");
 
         return new DevelopmentRestartRecoveryHarness(rootPath, repositoryPath, worktreePath, protectedBranchCommit);
     }
@@ -190,7 +190,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         var attempt = new DevelopmentAttempt(Guid.NewGuid(), Task.Id, DevelopmentAttemptStatus.Running);
         Attempts.Add(attempt);
         AppendEvent(attempt.Id, "AttemptStarted");
-        await AttachWorkspaceManifestAsync(attempt.Id).ConfigureAwait(false);
+        await AttachWorkspaceManifestAsync(attempt.Id);
 
         switch (boundary)
         {
@@ -203,10 +203,10 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
                 ReadToolExecutions++;
                 break;
             case DevelopmentInterruptionBoundary.AfterWorkspaceWriteBeforeToolResult:
-                await ExecuteFixedWriteCommandAsync().ConfigureAwait(false);
+                await ExecuteFixedWriteCommandAsync();
                 break;
             case DevelopmentInterruptionBoundary.AfterValidationArtifactBeforeTerminalization:
-                await ExecuteFixedValidationCommandAsync(attempt.Id).ConfigureAwait(false);
+                await ExecuteFixedValidationCommandAsync(attempt.Id);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(boundary), boundary, null);
@@ -232,7 +232,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
             interruptedAttempts++;
         }
 
-        var currentWorkspace = await CaptureWorkspaceAsync().ConfigureAwait(false);
+        var currentWorkspace = await CaptureWorkspaceAsync();
         var invalidatedArtifacts = 0;
         var evidence = Artifacts.Where(IsApprovalEvidence).Where(artifact => artifact.IsValid).ToArray();
 
@@ -281,35 +281,35 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         var replacement = new DevelopmentAttempt(Guid.NewGuid(), Task.Id, DevelopmentAttemptStatus.Running, predecessorAttemptId);
         Attempts.Add(replacement);
         AppendEvent(replacement.Id, "ReplacementAttemptStarted");
-        await AttachWorkspaceManifestAsync(replacement.Id).ConfigureAwait(false);
+        await AttachWorkspaceManifestAsync(replacement.Id);
         return replacement;
     }
 
     public async Task AttachReviewEvidenceAsync(Guid attemptId)
     {
-        var subject = await CaptureWorkspaceAsync().ConfigureAwait(false);
+        var subject = await CaptureWorkspaceAsync();
         AttachArtifact(attemptId, DevelopmentArtifactKind.ReviewReport, subject, "approved");
     }
 
     public async Task MutateWorkspaceOutsideCoordinatorAsync(string content)
     {
-        await File.WriteAllTextAsync(Path.Combine(WorktreePath, "tracked.txt"), content).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(WorktreePath, "tracked.txt"), content);
     }
 
     public async Task CommitWorkspaceMutationOutsideCoordinatorAsync(string content)
     {
-        await MutateWorkspaceOutsideCoordinatorAsync(content).ConfigureAwait(false);
-        await RunGitAsync(WorktreePath, "add", "tracked.txt").ConfigureAwait(false);
-        await RunGitAsync(WorktreePath, "commit", "-m", "unexpected base mutation").ConfigureAwait(false);
+        await MutateWorkspaceOutsideCoordinatorAsync(content);
+        await RunGitAsync(WorktreePath, "add", "tracked.txt");
+        await RunGitAsync(WorktreePath, "commit", "-m", "unexpected base mutation");
     }
 
     public async Task<WorkspaceSnapshot> CaptureWorkspaceAsync()
     {
-        var baseCommit = await RunGitAsync(WorktreePath, "rev-parse", "HEAD").ConfigureAwait(false);
-        var patch = await RunGitAsync(WorktreePath, "diff", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--").ConfigureAwait(false);
-        var status = await RunGitAsync(WorktreePath, "status", "--porcelain=v1", "--untracked-files=all").ConfigureAwait(false);
+        var baseCommit = await RunGitAsync(WorktreePath, "rev-parse", "HEAD");
+        var patch = await RunGitAsync(WorktreePath, "diff", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--");
+        var status = await RunGitAsync(WorktreePath, "status", "--porcelain=v1", "--untracked-files=all");
         var changedFiles = ParseChangedFiles(status);
-        var manifest = await BuildManifestAsync(changedFiles).ConfigureAwait(false);
+        var manifest = await BuildManifestAsync(changedFiles);
         var subjectHash = Hash(patch + "\n--manifest--\n" + manifest);
         var manifestHash = Hash(manifest);
         return new WorkspaceSnapshot(baseCommit, subjectHash, manifestHash, changedFiles);
@@ -317,7 +317,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
 
     public async Task<string> ReadProtectedBranchCommitAsync()
     {
-        return await RunGitAsync(RepositoryPath, "rev-parse", "main").ConfigureAwait(false);
+        return await RunGitAsync(RepositoryPath, "rev-parse", "main");
     }
 
     public ValueTask DisposeAsync()
@@ -355,19 +355,19 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
     private async Task ExecuteFixedWriteCommandAsync()
     {
         WriteCommandExecutions++;
-        await File.WriteAllTextAsync(Path.Combine(WorktreePath, "tracked.txt"), "base\nchanged by fixed command\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(WorktreePath, "tracked.txt"), "base\nchanged by fixed command\n");
     }
 
     private async Task ExecuteFixedValidationCommandAsync(Guid attemptId)
     {
         ValidationCommandExecutions++;
-        var subject = await CaptureWorkspaceAsync().ConfigureAwait(false);
+        var subject = await CaptureWorkspaceAsync();
         AttachArtifact(attemptId, DevelopmentArtifactKind.ValidationReport, subject, "validation-passed");
     }
 
     private async Task AttachWorkspaceManifestAsync(Guid attemptId)
     {
-        var subject = await CaptureWorkspaceAsync().ConfigureAwait(false);
+        var subject = await CaptureWorkspaceAsync();
         AttachArtifact(attemptId, DevelopmentArtifactKind.WorkspaceManifest, subject, "workspace-manifest");
     }
 
@@ -396,7 +396,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         {
             var fullPath = Path.Combine(WorktreePath, relativePath);
             var contentHash = File.Exists(fullPath)
-                ? Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(fullPath).ConfigureAwait(false)))
+                ? Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(fullPath)))
                 : "DELETED";
             builder.Append(relativePath).Append('\t').Append(contentHash).Append('\n');
         }
@@ -444,9 +444,9 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         process.Start();
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        var output = await standardOutput.ConfigureAwait(false);
-        var error = await standardError.ConfigureAwait(false);
+        await process.WaitForExitAsync();
+        var output = await standardOutput;
+        var error = await standardError;
 
         if (process.ExitCode != 0)
         {

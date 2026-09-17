@@ -31,7 +31,7 @@ public sealed class ChatStreamEventSinkTests
         sink.TryWrite(Delta("dropped"));
         sink.Complete();
 
-        var events = await DrainAsync(sink).ConfigureAwait(false);
+        var events = await DrainAsync(sink);
 
         // The dropped frame is gone and is NOT replaced by a partial: the repair is a re-subscribe, whose first frame
         // is an authoritative snapshot. Anything else would have to invent a merge the client cannot perform.
@@ -60,7 +60,7 @@ public sealed class ChatStreamEventSinkTests
         AssertEx.False(sink.TryWrite(Delta("12345678")), "A write that would exceed the character budget must be refused.");
         sink.Complete();
 
-        var events = await DrainAsync(sink).ConfigureAwait(false);
+        var events = await DrainAsync(sink);
 
         AssertEx.ContainsSingle(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantReconcile);
         AssertEx.ContainsSingle(events, streamEvent => streamEvent.Delta == "12345678");
@@ -92,7 +92,7 @@ public sealed class ChatStreamEventSinkTests
         AssertEx.True(sink.TryWrite(Delta("87654321")), "Once the first event is drained its characters must be back in the budget.");
 
         sink.Complete();
-        await drain.ConfigureAwait(false);
+        await drain;
 
         AssertEx.Equal(expected: 2, events.Count);
         AssertEx.True(events.All(streamEvent => streamEvent.Type != ChatStreamEventTypes.AssistantReconcile), "Nothing was dropped, so nothing may reconcile.");
@@ -114,7 +114,7 @@ public sealed class ChatStreamEventSinkTests
         sink.TryWrite(Delta("dropped-3"));
         sink.Complete();
 
-        var events = await DrainAsync(sink).ConfigureAwait(false);
+        var events = await DrainAsync(sink);
 
         AssertEx.Equal(expected: 2, events.Count);
         AssertEx.Equal(ChatStreamEventTypes.AssistantReconcile, events[0].Type);
@@ -136,7 +136,7 @@ public sealed class ChatStreamEventSinkTests
         AssertEx.False(sink.TryWrite(Delta("oversized")), "An event larger than the whole character budget must be refused.");
         sink.Complete();
 
-        var events = await DrainAsync(sink).ConfigureAwait(false);
+        var events = await DrainAsync(sink);
 
         AssertEx.Equal(expected: 1, events.Count);
         AssertEx.Equal(ChatStreamEventTypes.AssistantReconcile, events[0].Type);
@@ -152,8 +152,8 @@ public sealed class ChatStreamEventSinkTests
         // them may fault: the pump treats a write exception as a persistence fault and terminalizes the row Failed.
         AssertEx.True(sink.TryWrite(Delta("after-detach")), "A detached write must report success rather than fail its producer.");
         using var cancelled = new CancellationTokenSource();
-        await cancelled.CancelAsync().ConfigureAwait(false);
-        await sink.WriteAsync(Delta("after-detach"), cancelled.Token).ConfigureAwait(false);
+        await cancelled.CancelAsync();
+        await sink.WriteAsync(Delta("after-detach"), cancelled.Token);
 
         // And the queue itself must NOT be completed — a ChannelClosedException reaching the pump reads exactly like
         // a persistence fault, which is the bug this ordering exists to prevent.
@@ -167,12 +167,11 @@ public sealed class ChatStreamEventSinkTests
         });
 
         await AssertEx.StaysIncompleteAsync(drain,
-                          "Detach must leave the queue open; completing it would surface as a persistence fault in the pump.")
-                      .ConfigureAwait(false);
+                          "Detach must leave the queue open; completing it would surface as a persistence fault in the pump.");
 
         // Complete is the only thing that ends the stream, and it still does after a detach.
         sink.Complete();
-        await AssertEx.CompletesAsync(drain, TestBudgets.Contended, "Complete must end the stream even after a detach.").ConfigureAwait(false);
+        await AssertEx.CompletesAsync(drain, TestBudgets.Contended, "Complete must end the stream even after a detach.");
     }
 
     [Test]
@@ -186,7 +185,7 @@ public sealed class ChatStreamEventSinkTests
         sink.TryWrite(Delta("two"));
         sink.Complete();
 
-        var events = await DrainAsync(sink).ConfigureAwait(false);
+        var events = await DrainAsync(sink);
 
         AssertEx.Equal(expected: 2, events.Count);
         AssertEx.Equal("one", events[0].Delta);
@@ -213,7 +212,7 @@ public sealed class ChatStreamEventSinkTests
     private static async Task<List<ChatStreamEvent>> DrainAsync(ChatStreamEventSink sink)
     {
         var events = new List<ChatStreamEvent>();
-        await foreach (var streamEvent in sink.ReadAllAsync().ConfigureAwait(false))
+        await foreach (var streamEvent in sink.ReadAllAsync())
         {
             events.Add(streamEvent);
         }

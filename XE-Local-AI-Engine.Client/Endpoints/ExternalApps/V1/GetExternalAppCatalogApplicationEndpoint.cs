@@ -26,13 +26,13 @@ public sealed class GetExternalAppCatalogApplicationEndpoint(IApplicationCatalog
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var manifest = await _catalog.GetApplicationAsync(req.ApplicationId, ct).ConfigureAwait(false);
+        var manifest = await _catalog.GetApplicationAsync(req.ApplicationId, ct);
         if (manifest is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(ExternalAppMapper.ToManifestView(manifest), ct).ConfigureAwait(false);
+        await Send.OkAsync(ExternalAppMapper.ToManifestView(manifest), ct);
     }
 }

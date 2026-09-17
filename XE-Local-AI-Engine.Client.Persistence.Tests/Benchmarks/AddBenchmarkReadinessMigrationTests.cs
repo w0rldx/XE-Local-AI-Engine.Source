@@ -41,15 +41,15 @@ public sealed class AddBenchmarkReadinessMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsEveryReadinessColumn()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness.sqlite");
 
-        var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("benchmark_runs");
         foreach (var column in RunColumns)
         {
             AssertEx.True(runColumns.Contains(column), $"benchmark_runs must record {column}.");
         }
 
-        var projectColumns = await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false);
+        var projectColumns = await probe.ColumnsAsync("benchmark_projects");
         foreach (var column in ProjectColumns)
         {
             AssertEx.True(projectColumns.Contains(column), $"benchmark_projects must record {column}.");
@@ -65,89 +65,87 @@ public sealed class AddBenchmarkReadinessMigrationTests
     [Test]
     public async Task Migrate_ToLatest_LeavesEveryNewColumnHistorySafe()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-defaults.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-defaults.sqlite");
 
         foreach (var column in RunColumns.Where(static column => !string.Equals(column, "is_warmup", StringComparison.Ordinal)))
         {
-            AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_runs", column).ConfigureAwait(false),
+            AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_runs", column),
                 $"{column} must stay NULL on rows frozen before it was measured, never be backfilled with an invented value.");
         }
 
         foreach (var column in ProjectColumns)
         {
-            AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_projects", column).ConfigureAwait(false),
+            AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_projects", column),
                 $"An absent {column} means the frozen default, which is NULL — never a defaulted number.");
         }
 
         // SQLite renders the boolean default as the literal 0 it stores it as.
-        AssertEx.Equal("0", await probe.ColumnDefaultAsync("benchmark_runs", "is_warmup").ConfigureAwait(false),
+        AssertEx.Equal("0", await probe.ColumnDefaultAsync("benchmark_runs", "is_warmup"),
             "Every existing run must read as a measured run, never as a warm-up.");
     }
 
     [Test]
     public async Task Migrate_ToLatest_IndexesTheRepeatGroup()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-index.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-index.sqlite");
 
-        AssertEx.True(await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id"),
             "Reading one group's runs back must not scan the project's whole run history.");
     }
 
     [Test]
     public async Task OutputBudget_MustStayInsideTheProjectContext()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-output-budget-constraint.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-output-budget-constraint.sqlite");
 
         // A budget at or above the window could never be honoured, so the database refuses it rather than letting it
         // masquerade as "no budget".
-        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, maxOutputTokens: 4096)).ConfigureAwait(false);
-        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, maxOutputTokens: 0)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, maxOutputTokens: 4096));
+        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, maxOutputTokens: 0));
 
-        await InsertProjectAsync(probe, maxOutputTokens: 4095).ConfigureAwait(false);
-        await InsertProjectAsync(probe, maxOutputTokens: null).ConfigureAwait(false);
+        await InsertProjectAsync(probe, maxOutputTokens: 4095);
+        await InsertProjectAsync(probe, maxOutputTokens: null);
     }
 
     [Test]
     public async Task GenerationTimeout_MustStayInsideItsBounds()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-invocation-timeout-bounds.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-invocation-timeout-bounds.sqlite");
 
-        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, timeoutSeconds: 59)).ConfigureAwait(false);
-        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, timeoutSeconds: 7201)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, timeoutSeconds: 59));
+        await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, timeoutSeconds: 7201));
 
-        await InsertProjectAsync(probe, timeoutSeconds: 60).ConfigureAwait(false);
-        await InsertProjectAsync(probe, timeoutSeconds: 7200).ConfigureAwait(false);
-        await InsertProjectAsync(probe, timeoutSeconds: null).ConfigureAwait(false);
+        await InsertProjectAsync(probe, timeoutSeconds: 60);
+        await InsertProjectAsync(probe, timeoutSeconds: 7200);
+        await InsertProjectAsync(probe, timeoutSeconds: null);
     }
 
     [Test]
     public async Task Migrate_Down_RemovesEveryReadinessColumnAndKeepsTheRows()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-down.sqlite").ConfigureAwait(false);
-        await InsertProjectAsync(probe, maxOutputTokens: 2048, timeoutSeconds: 600).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-down.sqlite");
+        await InsertProjectAsync(probe, maxOutputTokens: 2048, timeoutSeconds: 600);
 
-        await probe.MigrateToAsync(PreviousMigration).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreviousMigration);
 
-        var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("benchmark_runs");
         foreach (var column in RunColumns)
         {
             AssertEx.False(runColumns.Contains(column), $"Down must drop benchmark_runs.{column}.");
         }
 
-        var projectColumns = await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false);
+        var projectColumns = await probe.ColumnsAsync("benchmark_projects");
         foreach (var column in ProjectColumns)
         {
             AssertEx.False(projectColumns.Contains(column), $"Down must drop benchmark_projects.{column}.");
         }
 
-        AssertEx.False(await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id")
-                                  .ConfigureAwait(false),
+        AssertEx.False(await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id"),
             "Down must drop the repeat-group index with the column it covers.");
 
         // SQLite drops a column by rebuilding the table from the migration's target model, so a row surviving the
         // rebuild is what proves the model this Down was generated against is the merged one.
-        AssertEx.Equal(expected: 1L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_projects;").ConfigureAwait(false));
+        AssertEx.Equal(expected: 1L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_projects;"));
     }
 
     private static Task InsertProjectAsync(MigrationSchemaProbe probe, int? maxOutputTokens = null, int? timeoutSeconds = null) =>

@@ -75,7 +75,7 @@ public sealed class TrainingRunWorkspace
         var tempPath = string.Concat(path, ".", Guid.NewGuid().ToString("N"), ".tmp");
         try
         {
-            await File.WriteAllBytesAsync(tempPath, encrypted, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(tempPath, encrypted, cancellationToken);
             File.Move(tempPath, path, overwrite: true);
         }
         catch
@@ -88,11 +88,11 @@ public sealed class TrainingRunWorkspace
     /// <summary>Decrypts the frozen copy into the run's owner-only work directory and returns the path written.</summary>
     public async Task<string> MaterializeWorkCopyAsync(Guid datasetId, Guid freezeId, Guid runId, CancellationToken cancellationToken)
     {
-        var plaintext = await ReadFrozenDatasetAsync(datasetId, freezeId, cancellationToken).ConfigureAwait(false);
+        var plaintext = await ReadFrozenDatasetAsync(datasetId, freezeId, cancellationToken);
         var workDirectory = WorkDirectory(runId);
         CreateOwnerOnlyDirectory(workDirectory);
         var target = WorkDatasetPath(runId);
-        await File.WriteAllBytesAsync(target, plaintext, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(target, plaintext, cancellationToken);
         ApplyOwnerOnly(target);
         return target;
     }
@@ -100,7 +100,7 @@ public sealed class TrainingRunWorkspace
     /// <summary>Reads and decrypts the immutable corpus in memory for evaluation; no plaintext scratch file is created.</summary>
     public async Task<ReadOnlyMemory<byte>> ReadFrozenDatasetAsync(Guid datasetId, Guid freezeId, CancellationToken cancellationToken)
     {
-        var frozen = await File.ReadAllBytesAsync(FrozenDatasetPath(datasetId, freezeId), cancellationToken).ConfigureAwait(false);
+        var frozen = await File.ReadAllBytesAsync(FrozenDatasetPath(datasetId, freezeId), cancellationToken);
         return _protector.Decrypt(Guid.Empty, freezeId, FrozenDatasetColumn, frozen);
     }
 

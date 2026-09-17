@@ -27,6 +27,6 @@ public sealed class ValidationProblemProbeEndpoint : Endpoint<ValidationProblemP
         await Send.OkAsync(new ValidationProblemProbeResponse
         {
             Name = req.Name!
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

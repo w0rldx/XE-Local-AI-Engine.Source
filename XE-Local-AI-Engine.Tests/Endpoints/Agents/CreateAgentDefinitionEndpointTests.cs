@@ -29,7 +29,7 @@ public sealed class CreateAgentDefinitionEndpointTests
         };
         factory.AddNodeBearerToken(createRequest);
 
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
 
         AssertEx.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         AssertEx.NotNull(createResponse.Headers.Location);
@@ -39,7 +39,7 @@ public sealed class CreateAgentDefinitionEndpointTests
         using var getRequest = new HttpRequestMessage(HttpMethod.Get, createResponse.Headers.Location);
         factory.AddNodeBearerToken(getRequest);
 
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
     }

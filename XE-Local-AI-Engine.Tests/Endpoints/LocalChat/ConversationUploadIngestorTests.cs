@@ -41,8 +41,7 @@ public sealed class ConversationUploadIngestorTests
 
         var conversationId = Guid.NewGuid();
         using var content = new MemoryStream([0x89, 0x50, 0x4E, 0x47]);
-        var info = await ingestor.IngestAsync(conversationId, content, "photo.jpg", ".jpg", "text/plain", CancellationToken.None)
-                                 .ConfigureAwait(false);
+        var info = await ingestor.IngestAsync(conversationId, content, "photo.jpg", ".jpg", "text/plain", CancellationToken.None);
 
         AssertEx.NotNull(info);
         var input = AssertEx.NotNull(captured);
@@ -70,8 +69,7 @@ public sealed class ConversationUploadIngestorTests
         var ingestor = new ConversationUploadIngestor(store, extractor, gate);
 
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
-        _ = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "text/markdown", CancellationToken.None)
-                          .ConfigureAwait(false);
+        _ = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "text/markdown", CancellationToken.None);
 
         var input = AssertEx.NotNull(captured);
         AssertEx.Equal(DocumentExtractionStatus.Extracted, input.ExtractionStatus);
@@ -93,7 +91,7 @@ public sealed class ConversationUploadIngestorTests
         var ingestor = new ConversationUploadIngestor(store, extractor, gate);
 
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
-        _ = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "   ", CancellationToken.None).ConfigureAwait(false);
+        _ = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "   ", CancellationToken.None);
 
         AssertEx.Equal("application/octet-stream", AssertEx.NotNull(captured).MimeType);
     }
@@ -112,8 +110,7 @@ public sealed class ConversationUploadIngestorTests
             var ingestor = new ConversationUploadIngestor(store, extractor, gate);
             using var content = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
 
-            var info = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "text/plain", CancellationToken.None)
-                                     .ConfigureAwait(false);
+            var info = await ingestor.IngestAsync(Guid.NewGuid(), content, "notes.txt", ".txt", "text/plain", CancellationToken.None);
 
             // Null is the busy signal the endpoint turns into 503 + Retry-After; nothing was buffered or persisted.
             AssertEx.Null(info);

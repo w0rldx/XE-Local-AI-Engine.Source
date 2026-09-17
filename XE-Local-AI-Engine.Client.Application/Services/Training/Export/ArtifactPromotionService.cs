@@ -46,7 +46,7 @@ public sealed class ArtifactPromotionService(
             throw new TrainingExportRejectedException("A model name is required.");
         }
 
-        var artifact = await _runStore.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+        var artifact = await _runStore.GetArtifactAsync(artifactId, cancellationToken)
                        ?? throw new TrainingExportRejectedException("The artifact was not found.");
         if (artifact.CommittedModelName is { } existing)
         {
@@ -84,20 +84,20 @@ public sealed class ArtifactPromotionService(
             throw new TrainingExportRejectedException("The artifact has no current successful quality decision or audited override.");
         }
 
-        await EnsureInstalledBaseAsync(artifact, cancellationToken).ConfigureAwait(false);
+        await EnsureInstalledBaseAsync(artifact, cancellationToken);
 
-        var currentDigest = await ComputeSha256Async(artifact.Path, cancellationToken).ConfigureAwait(false);
+        var currentDigest = await ComputeSha256Async(artifact.Path, cancellationToken);
         if (!string.Equals(currentDigest, artifact.Sha256, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(currentDigest, decision.ArtifactSha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new TrainingExportRejectedException("The staged artifact changed after its quality decision.");
         }
 
-        var lineage = await BuildLineageAsync(artifact, cancellationToken).ConfigureAwait(false);
+        var lineage = await BuildLineageAsync(artifact, cancellationToken);
         var quantization = TrainingExportPaths.QuantizationOf(artifact.Path)
                            ?? throw new TrainingExportRejectedException("The staged file does not carry a recognizable quantization.");
 
-        await using var reservation = await ReserveAsync(modelName, quantization, cancellationToken).ConfigureAwait(false);
+        await using var reservation = await ReserveAsync(modelName, quantization, cancellationToken);
         var identity = reservation.Identity;
         var destination = new GgufImportDestination(identity.CanonicalModelName,
             identity.CanonicalQuantization,
@@ -107,8 +107,7 @@ public sealed class ArtifactPromotionService(
             ProjectorRelativePath: null,
             lineage);
 
-        var prepared = await _importer.PrepareAsync(new GgufImportSource(artifact.Path), destination, progress: null, cancellationToken)
-                                      .ConfigureAwait(false);
+        var prepared = await _importer.PrepareAsync(new GgufImportSource(artifact.Path), destination, progress: null, cancellationToken);
         if (!string.Equals(prepared.RegistryEntry.Sha256, artifact.Sha256, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(prepared.RegistryEntry.Sha256, decision.ArtifactSha256, StringComparison.OrdinalIgnoreCase)
             || prepared.RegistryEntry.SizeBytes != artifact.SizeBytes)
@@ -116,7 +115,7 @@ public sealed class ArtifactPromotionService(
             var rejection = new TrainingExportRejectedException("The staged artifact changed while the registry import was being prepared.");
             try
             {
-                await _importer.DiscardPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+                await _importer.DiscardPreparedAsync(prepared, CancellationToken.None);
             }
             catch (Exception cleanupException)
             {
@@ -133,13 +132,13 @@ public sealed class ArtifactPromotionService(
         {
             // Not cancellable: between the sidecar move and the registry insert there is no state a cancel could
             // leave that is better than a completed commit.
-            receipt = await _importer.CommitAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+            receipt = await _importer.CommitAsync(prepared, CancellationToken.None);
         }
         catch (GgufImportCommitException exception)
         {
             try
             {
-                await _importer.RollbackCommittedAsync(exception.CommitReceipt, CancellationToken.None).ConfigureAwait(false);
+                await _importer.RollbackCommittedAsync(exception.CommitReceipt, CancellationToken.None);
             }
             catch (Exception rollbackException)
             {
@@ -152,15 +151,14 @@ public sealed class ArtifactPromotionService(
         }
         catch
         {
-            await _importer.DiscardPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+            await _importer.DiscardPreparedAsync(prepared, CancellationToken.None);
             throw;
         }
 
         try
         {
             _ = await _runStore.SetArtifactCommittedNameAsync(artifact.Id, artifact.Version, receipt.RegistryEntry.ModelName,
-                                   CancellationToken.None)
-                               .ConfigureAwait(false);
+                                   CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -169,7 +167,7 @@ public sealed class ArtifactPromotionService(
             _logger.LogError(exception, "The promotion of artifact {ArtifactId} could not be recorded; rolling the registry entry back.", artifact.Id);
             try
             {
-                await _importer.RollbackCommittedAsync(receipt, CancellationToken.None).ConfigureAwait(false);
+                await _importer.RollbackCommittedAsync(receipt, CancellationToken.None);
             }
             catch (Exception rollbackException)
             {
@@ -185,16 +183,16 @@ public sealed class ArtifactPromotionService(
     private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
     }
 
     private async Task EnsureInstalledBaseAsync(TrainingArtifactRecord artifact, CancellationToken cancellationToken)
     {
-        var run = await _runStore.GetAsync(artifact.RunId, cancellationToken).ConfigureAwait(false)
+        var run = await _runStore.GetAsync(artifact.RunId, cancellationToken)
                   ?? throw new TrainingExportRejectedException("The run behind this artifact was not found.");
         var baseName = run.LinkedInstalledModelName
                        ?? throw new TrainingExportRejectedException("This run has no installed base counterpart, so the artifact cannot be promoted.");
-        var installed = await _models.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await _models.ListInstalledModelsAsync(cancellationToken);
         if (!installed.Any(model => model.IsAvailable
                                     && string.Equals(model.ModelName, baseName, StringComparison.Ordinal)
                                     && string.Equals(model.ModelContentFingerprint, run.LinkedModelContentFingerprint, StringComparison.Ordinal)))
@@ -208,8 +206,7 @@ public sealed class ArtifactPromotionService(
         try
         {
             return await _preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent(GgufAcquisitionOperationKind.Import, modelName.Trim(), quantization),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                       cancellationToken);
         }
         catch (ArgumentException exception)
         {
@@ -223,7 +220,7 @@ public sealed class ArtifactPromotionService(
 
     private async Task<TrainedModelLineage> BuildLineageAsync(TrainingArtifactRecord artifact, CancellationToken cancellationToken)
     {
-        var run = await _runStore.GetAsync(artifact.RunId, cancellationToken).ConfigureAwait(false)
+        var run = await _runStore.GetAsync(artifact.RunId, cancellationToken)
                   ?? throw new TrainingExportRejectedException("The run behind this artifact was not found.");
         string? baseModelName = null;
         if (artifact.Kind == TrainingArtifactKind.AdapterGguf)
@@ -233,7 +230,7 @@ public sealed class ArtifactPromotionService(
                 : throw new TrainingExportRejectedException("This run is not linked to an installed model, so its adapter has no base model to be applied to. Export a merged model instead.");
         }
 
-        var checkpoint = await _baseArtifacts.GetAsync(run.BaseArtifactId, cancellationToken).ConfigureAwait(false);
+        var checkpoint = await _baseArtifacts.GetAsync(run.BaseArtifactId, cancellationToken);
         return new TrainedModelLineage(checkpoint?.RepoId,
             checkpoint?.Revision,
             // Nullable by contract: a run created before the linked-model fingerprint was recorded still has full

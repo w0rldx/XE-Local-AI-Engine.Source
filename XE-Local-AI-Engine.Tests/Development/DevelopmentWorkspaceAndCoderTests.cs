@@ -119,7 +119,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task ApplyPatch_WhenRenameHeaderTargetsProtectedPath_RejectsWithoutMutation()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "protected-rename-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -127,7 +127,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         const string patch = """
                              diff --git a/README.md b/README.md
@@ -144,7 +144,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task ApplyPatch_WhenAnyExtendedHeaderTargetsProtectedPath_RejectsWholePatch()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "protected-headers-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -152,7 +152,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         string[] patches =
         [
@@ -167,13 +167,13 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ApplyPatchAsync(patch));
         }
 
-        AssertEx.Equal("base\n", await File.ReadAllTextAsync(Path.Combine(session.HostWorktreePath, "README.md")).ConfigureAwait(false));
+        AssertEx.Equal("base\n", await File.ReadAllTextAsync(Path.Combine(session.HostWorktreePath, "README.md")));
     }
 
     [Test]
     public async Task ApplyPatch_WhenChangedFileExceedsWriteBound_RejectsWithoutMutation()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "patch-write-bound-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue(maxFileWriteBytes: 16));
@@ -181,7 +181,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         const string patch = """
                              diff --git a/large.txt b/large.txt
@@ -200,7 +200,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task ReadFile_WhenFileExceedsReadBound_FailsClosed()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "read-bound-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue(maxCommandOutputBytes: 16, maxFileWriteBytes: 64));
@@ -208,9 +208,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
-        _ = await tools.WriteFileAsync("large.txt", "0123456789abcdefg").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("large.txt", "0123456789abcdefg");
 
         await AssertEx.ThrowsAsync<InvalidDataException>(() => tools.ReadFileAsync("large.txt"));
     }
@@ -229,7 +229,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task ReadFile_WhenPathNamesASecretFile_RefusesWithoutReadingIt()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "read-exclusion-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -237,14 +237,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
         const string secret = "AWS_SECRET_ACCESS_KEY=devmodesentinelvalue";
-        _ = await tools.WriteFileAsync(".env", secret + "\n").ConfigureAwait(false);
-        _ = await tools.WriteFileAsync("deploy/node.key", secret + "\n").ConfigureAwait(false);
-        _ = await tools.WriteFileAsync("certs/server.pem", secret + "\n").ConfigureAwait(false);
-        _ = await tools.WriteFileAsync("secrets/nested/file.txt", secret + "\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync(".env", secret + "\n");
+        _ = await tools.WriteFileAsync("deploy/node.key", secret + "\n");
+        _ = await tools.WriteFileAsync("certs/server.pem", secret + "\n");
+        _ = await tools.WriteFileAsync("secrets/nested/file.txt", secret + "\n");
 
         foreach (var path in new[]
                  {
@@ -259,9 +259,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         }
 
         // An ordinary source file under an ordinary directory is untouched — the guard must not cost the coder its job.
-        _ = await tools.WriteFileAsync("src/feature.cs", "// ordinary source\n").ConfigureAwait(false);
-        AssertEx.Contains(await tools.ReadFileAsync("src/feature.cs").ConfigureAwait(false), "ordinary source");
-        AssertEx.Contains(await tools.ReadFileAsync("secrets/nested/file.txt").ConfigureAwait(false), "devmodesentinelvalue");
+        _ = await tools.WriteFileAsync("src/feature.cs", "// ordinary source\n");
+        AssertEx.Contains(await tools.ReadFileAsync("src/feature.cs"), "ordinary source");
+        AssertEx.Contains(await tools.ReadFileAsync("secrets/nested/file.txt"), "devmodesentinelvalue");
     }
 
     /// <summary>
@@ -273,7 +273,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task ReadFile_WhenPathIsGeneratedBuildOutput_StillReadsIt()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "build-output-read-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -281,7 +281,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
         string[] buildOutputs =
@@ -295,8 +295,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         foreach (var path in buildOutputs)
         {
-            _ = await tools.WriteFileAsync(path, "restore diagnostic for " + path + "\n").ConfigureAwait(false);
-            AssertEx.Contains(await tools.ReadFileAsync(path).ConfigureAwait(false), "restore diagnostic for " + path);
+            _ = await tools.WriteFileAsync(path, "restore diagnostic for " + path + "\n");
+            AssertEx.Contains(await tools.ReadFileAsync(path), "restore diagnostic for " + path);
         }
     }
 
@@ -312,7 +312,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task ApplyPatch_RejectsRenamingFromASecretButStillAllowsCreatingOne()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "rename-bypass-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -320,9 +320,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
-        _ = await tools.WriteFileAsync(".env", "AWS_SECRET_ACCESS_KEY=renamebypasssentinel\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync(".env", "AWS_SECRET_ACCESS_KEY=renamebypasssentinel\n");
 
         const string renameOut = """
                                  diff --git a/.env b/notes.txt
@@ -361,7 +361,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                                      +AWS_SECRET_ACCESS_KEY=
                                      """ + "\n";
 
-        _ = await tools.ApplyPatchAsync(createExample).ConfigureAwait(false);
+        _ = await tools.ApplyPatchAsync(createExample);
         AssertEx.True(File.Exists(Path.Combine(session.HostWorktreePath, ".env.example")),
             "creating a .env.* file has no secret source and must remain allowed");
     }
@@ -381,7 +381,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [RunOn(OS.Linux)]
     public async Task SearchAndList_ExcludeSecretFilesButStillReturnOrdinaryContent()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "search-exclusion-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -389,16 +389,16 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
         const string sentinel = "devmodesentinelvalue";
-        _ = await tools.WriteFileAsync(".env", "AWS_SECRET_ACCESS_KEY=" + sentinel + "\n").ConfigureAwait(false);
-        _ = await tools.WriteFileAsync("deploy/node.key", sentinel + "\n").ConfigureAwait(false);
-        _ = await tools.WriteFileAsync("src/feature.cs", "// " + sentinel + " is referenced here\n").ConfigureAwait(false);
-        _ = await tools.WriteFileAsync("obj/project.assets.json", "{ \"note\": \"" + sentinel + "\" }\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync(".env", "AWS_SECRET_ACCESS_KEY=" + sentinel + "\n");
+        _ = await tools.WriteFileAsync("deploy/node.key", sentinel + "\n");
+        _ = await tools.WriteFileAsync("src/feature.cs", "// " + sentinel + " is referenced here\n");
+        _ = await tools.WriteFileAsync("obj/project.assets.json", "{ \"note\": \"" + sentinel + "\" }\n");
 
-        var matches = await tools.SearchTextAsync(sentinel, path: null).ConfigureAwait(false);
+        var matches = await tools.SearchTextAsync(sentinel, path: null);
         AssertEx.False(matches.Contains(".env", StringComparison.Ordinal), "search_text must not surface .env");
         AssertEx.False(matches.Contains("node.key", StringComparison.Ordinal), "search_text must not surface node.key");
         AssertEx.Contains(matches, "src/feature.cs");
@@ -406,7 +406,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         // Build output is not a credential: it must remain searchable.
         AssertEx.Contains(matches, "obj/project.assets.json");
 
-        var listing = await tools.ListFilesAsync(path: null).ConfigureAwait(false);
+        var listing = await tools.ListFilesAsync(path: null);
         AssertEx.False(listing.Contains(".env", StringComparison.Ordinal), "list_files must not advertise .env");
         AssertEx.False(listing.Contains("node.key", StringComparison.Ordinal), "list_files must not advertise node.key");
         AssertEx.Contains(listing, "src/feature.cs");
@@ -435,7 +435,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [RunOn(OS.Linux)]
     public async Task ListFiles_WhenSuppressedTreesOutrunTheOutputCap_StillReturnsTheActionableFiles()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "list-truncation-data");
         Directory.CreateDirectory(data);
 
@@ -446,7 +446,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
         // The files the agent is actually there to work on, spread across several root entries.
@@ -461,7 +461,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         {
             var target = Path.Combine(session.HostWorktreePath, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            await File.WriteAllTextAsync(target, "// content\n").ConfigureAwait(false);
+            await File.WriteAllTextAsync(target, "// content\n");
         }
 
         // Git metadata on its own exceeds the cap, and so does a credential directory — the two suppression sources
@@ -471,7 +471,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.True(gitBulk > OutputCap, "the Git metadata must outrun the output cap for this to reproduce");
         AssertEx.True(secretBulk > OutputCap, "the credential directory must outrun the output cap for this to reproduce");
 
-        var listing = await tools.ListFilesAsync(path: null).ConfigureAwait(false);
+        var listing = await tools.ListFilesAsync(path: null);
 
         foreach (var relative in actionable)
         {
@@ -540,7 +540,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             new FakeModelTrustResolver(),
             NullLogger<DevelopmentCoderModel>.Instance);
 
-        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8).ConfigureAwait(false);
+        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8);
 
         var options = AssertEx.NotNull(chat.Options);
         AssertEx.True(AssertEx.NotNull(options.AdditionalProperties).TryGetValue<int>(SamplingOptionKeys.NumCtx, out var numCtx),
@@ -574,7 +574,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             new FakeModelTrustResolver(),
             NullLogger<DevelopmentCoderModel>.Instance);
 
-        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), maxOutputTokens: 0, maxToolCalls: 8).ConfigureAwait(false);
+        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), maxOutputTokens: 0, maxToolCalls: 8);
 
         var budget = AssertEx.NotNull(chat.Budget);
         AssertEx.Equal(expected: 65_536, budget.DefaultContextTokens);
@@ -597,7 +597,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var logger = new RecordingLogger<DevelopmentCoderModel>();
         var model = new DevelopmentCoderModel(chat, cloud, LocalModelResolver(LocalModel("local-model")), new FakeModelTrustResolver(), logger);
 
-        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8).ConfigureAwait(false);
+        _ = await model.RunAsync("local-model", "prompt", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8);
 
         var budget = AssertEx.NotNull(chat.Budget);
         AssertEx.Equal(MaxOutput * 2, budget.DefaultContextTokens, "the fallback is the pre-existing synthetic window, unchanged.");
@@ -645,14 +645,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var exactChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: (int)Ceiling);
         var exact = new DevelopmentCoderModel(exactChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentCoderModel>.Instance);
-        var result = await exact.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls).ConfigureAwait(false);
+        var result = await exact.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls);
         AssertEx.Equal<long?>(40_000, result.InputTokens);
         AssertEx.Equal<long?>(Ceiling, result.OutputTokens);
 
         // The regression the old expectation inverted: more than ONE call's budget is normal for a tool loop.
         using var multiRoundChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: PerCall + 1);
         var multiRound = new DevelopmentCoderModel(multiRoundChat, cloud, resolver, new FakeModelTrustResolver(), NullLogger<DevelopmentCoderModel>.Instance);
-        var accepted = await multiRound.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls).ConfigureAwait(false);
+        var accepted = await multiRound.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls);
         AssertEx.Equal<long?>(PerCall + 1, accepted.OutputTokens);
 
         using var overChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: (int)Ceiling + 1);
@@ -673,14 +673,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [UnsupportedOSPlatform("windows")]
     public async Task EvidenceExport_WhenAlreadyCancelled_DoesNotStartGit()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var runtime = Path.Combine(_root, "cancel-runtime");
         var fakeBin = Path.Combine(_root, "fake-bin");
         var marker = Path.Combine(_root, "git-started");
         Directory.CreateDirectory(runtime);
         Directory.CreateDirectory(fakeBin);
         var fakeGit = Path.Combine(fakeBin, "git");
-        await File.WriteAllTextAsync(fakeGit, $"#!/bin/sh\ntouch '{marker}'\nsleep 5\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(fakeGit, $"#!/bin/sh\ntouch '{marker}'\nsleep 5\n");
         File.SetUnixFileMode(fakeGit,
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var originalPath = Environment.GetEnvironmentVariable("PATH");
@@ -712,7 +712,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                     ManifestVersion = 1
                 });
             using var cancelled = new CancellationTokenSource();
-            await cancelled.CancelAsync().ConfigureAwait(false);
+            await cancelled.CancelAsync();
 
             await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.ExportAsync(session, cancelled.Token));
             AssertEx.False(File.Exists(marker), "an already-cancelled export must not start the first Git process");
@@ -726,56 +726,56 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task WorkspaceToolsAndEvidence_CreateDetachedReusableWorktreeWithFixedCommandsAndExactHashes()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
         var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository);
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical));
-        var protectedBefore = await RunProcessAsync(repository, "git", "rev-parse", "refs/heads/main").ConfigureAwait(false);
+        var protectedBefore = await RunProcessAsync(repository, "git", "rev-parse", "refs/heads/main");
         EnsureSuccess(protectedBefore);
         DevelopmentWorkspaceSession first;
 
         using (var sandbox = CreateSandbox())
         {
             var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-            first = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+            first = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
             var tools = new DevelopmentWorkspaceTools(sandbox, first, options, GenericProfile);
 
-            _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n").ConfigureAwait(false);
-            AssertEx.Equal("bounded change\n", await tools.ReadFileAsync("src/feature.txt").ConfigureAwait(false));
+            _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n");
+            AssertEx.Equal("bounded change\n", await tools.ReadFileAsync("src/feature.txt"));
             await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.WriteFileAsync("../outside.txt", "blocked"));
             await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.WriteFileAsync(".git/config", "blocked"));
             await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.RunCommandAsync("model_supplied_shell"));
 
-            var status = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus).ConfigureAwait(false);
+            var status = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
             AssertEx.Contains(status, "src/feature.txt", StringComparison.Ordinal);
             var evidenceService = new DevelopmentPatchEvidenceService(options);
-            var evidence = await evidenceService.ExportAsync(first).ConfigureAwait(false);
+            var evidence = await evidenceService.ExportAsync(first);
             AssertEx.Equal(first.BaseCommit, evidence.BaseCommit);
             AssertEx.NotNullOrEmpty(evidence.PatchHash);
             AssertEx.NotNullOrEmpty(evidence.ManifestHash);
             AssertEx.NotNullOrEmpty(evidence.SubjectHash);
             AssertEx.Contains(evidence.ChangedFiles, item => item.Path == "src/feature.txt" && item.ChangeType == "added");
-            var replayEvidence = await evidenceService.ExportAsync(first).ConfigureAwait(false);
+            var replayEvidence = await evidenceService.ExportAsync(first);
             AssertEx.Equal(evidence.PatchHash, replayEvidence.PatchHash);
             AssertEx.Equal(evidence.ManifestHash, replayEvidence.ManifestHash);
             AssertEx.Equal(evidence.SubjectHash, replayEvidence.SubjectHash);
 
-            await sandbox.KillAsync(first.SandboxHandle).ConfigureAwait(false);
+            await sandbox.KillAsync(first.SandboxHandle);
             AssertEx.True(Directory.Exists(first.HostWorktreePath), "killing a sandbox must preserve the managed Git worktree");
         }
 
         using var replacementSandbox = CreateSandbox();
         var replacementProvider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var replacement = await replacementProvider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var replacement = await replacementProvider.PrepareAsync(snapshot, Binding(snapshot, repository));
         AssertEx.Equal(first.HostWorktreePath, replacement.HostWorktreePath);
         var replacementTools = new DevelopmentWorkspaceTools(replacementSandbox, replacement, options, GenericProfile);
-        AssertEx.Equal("bounded change\n", await replacementTools.ReadFileAsync("src/feature.txt").ConfigureAwait(false));
+        AssertEx.Equal("bounded change\n", await replacementTools.ReadFileAsync("src/feature.txt"));
 
-        var symbolic = await RunProcessAsync(replacement.HostWorktreePath, "git", "symbolic-ref", "--quiet", "HEAD").ConfigureAwait(false);
+        var symbolic = await RunProcessAsync(replacement.HostWorktreePath, "git", "symbolic-ref", "--quiet", "HEAD");
         AssertEx.NotEqual(notExpected: 0, symbolic.ExitCode, "the managed worktree must be detached from the protected base branch");
-        var protectedAfter = await RunProcessAsync(repository, "git", "rev-parse", "refs/heads/main").ConfigureAwait(false);
+        var protectedAfter = await RunProcessAsync(repository, "git", "rev-parse", "refs/heads/main");
         EnsureSuccess(protectedAfter);
         AssertEx.Equal(protectedBefore.StandardOutput.Trim(), protectedAfter.StandardOutput.Trim());
     }
@@ -794,7 +794,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task WorkspaceProvider_GivesTwoTasksInOneProjectSeparateWorkspaces()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "sibling-tasks-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -811,8 +811,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var firstSession = await provider.PrepareAsync(first, Binding(first, repository)).ConfigureAwait(false);
-        var secondSession = await provider.PrepareAsync(second, Binding(second, repository)).ConfigureAwait(false);
+        var firstSession = await provider.PrepareAsync(first, Binding(first, repository));
+        var secondSession = await provider.PrepareAsync(second, Binding(second, repository));
 
         AssertEx.NotEqual(firstSession.HostWorktreePath, secondSession.HostWorktreePath, "two tasks of one project must not share a worktree");
         AssertEx.Equal(AssertEx.NotNull(Path.GetDirectoryName(firstSession.HostWorktreePath)),
@@ -825,7 +825,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         // Not just differently named: genuinely separate trees.
         var tools = new DevelopmentWorkspaceTools(sandbox, firstSession, options, GenericProfile);
-        _ = await tools.WriteFileAsync("src/feature.txt", "the first task's work\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("src/feature.txt", "the first task's work\n");
         AssertEx.True(File.Exists(Path.Combine(firstSession.HostWorktreePath, "src", "feature.txt")));
         AssertEx.False(File.Exists(Path.Combine(secondSession.HostWorktreePath, "src", "feature.txt")),
             "a sibling task must not see, or be able to overwrite, work that is not its own");
@@ -839,19 +839,19 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task WorkspaceProvider_CreatesStandaloneCloneWithNoRemoteNoSharedObjectsAndDetachedHead()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
 
         // Extra commits so shallowness is observable: a source repository with a single commit would produce a
         // one-commit workspace either way, which would let the silently-ignored --depth trap pass this test.
         for (var index = 0; index < 2; index++)
         {
-            await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), $"base {index}\n").ConfigureAwait(false);
-            EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md").ConfigureAwait(false));
-            EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", $"extra {index}").ConfigureAwait(false));
+            await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), $"base {index}\n");
+            EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md"));
+            EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", $"extra {index}"));
         }
 
         // A remote on the source repository: the clone inherits `origin` and it must not survive.
-        EnsureSuccess(await RunProcessAsync(repository, "git", "remote", "add", "origin", "https://example.invalid/upstream.git").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "remote", "add", "origin", "https://example.invalid/upstream.git"));
 
         var data = Path.Combine(_root, "standalone-data");
         Directory.CreateDirectory(data);
@@ -861,7 +861,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var workspace = session.HostWorktreePath;
 
         // .git is a real directory, not the pointer file a linked worktree gets — git works at all inside a bind mount.
@@ -876,31 +876,31 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         // Shallow: proves the file:// transport was used. Given a plain local path git ignores --depth with only a
         // warning and hardlinks the whole history, which is the exact coupling the standalone clone prevents.
-        var count = await RunProcessAsync(workspace, "git", "rev-list", "--count", "HEAD").ConfigureAwait(false);
+        var count = await RunProcessAsync(workspace, "git", "rev-list", "--count", "HEAD");
         EnsureSuccess(count);
         AssertEx.Equal("1", count.StandardOutput.Trim(),
             "the managed workspace must be a shallow clone — a full history means --depth was silently ignored");
 
         // No remote: the trusted source repository is not reachable by name from the workspace.
-        var remotes = await RunProcessAsync(workspace, "git", "remote").ConfigureAwait(false);
+        var remotes = await RunProcessAsync(workspace, "git", "remote");
         EnsureSuccess(remotes);
         AssertEx.Equal(string.Empty, remotes.StandardOutput.Trim(),
             "the managed workspace must not inherit any remote back to the trusted source repository");
 
         // Detached at the recorded base commit.
-        var symbolic = await RunProcessAsync(workspace, "git", "symbolic-ref", "--quiet", "HEAD").ConfigureAwait(false);
+        var symbolic = await RunProcessAsync(workspace, "git", "symbolic-ref", "--quiet", "HEAD");
         AssertEx.NotEqual(notExpected: 0, symbolic.ExitCode, "a clone leaves HEAD attached; the managed workspace must be detached");
-        var head = await RunProcessAsync(workspace, "git", "rev-parse", "--verify", "HEAD^{commit}").ConfigureAwait(false);
+        var head = await RunProcessAsync(workspace, "git", "rev-parse", "--verify", "HEAD^{commit}");
         EnsureSuccess(head);
         AssertEx.Equal(session.BaseCommit, head.StandardOutput.Trim());
 
         // The common Git directory resolves INSIDE the workspace and is not the trusted source's — the inverted
         // meaning of the --git-common-dir check for a standalone clone.
-        var commonDirectory = await RunProcessAsync(workspace, "git", "rev-parse", "--git-common-dir").ConfigureAwait(false);
+        var commonDirectory = await RunProcessAsync(workspace, "git", "rev-parse", "--git-common-dir");
         EnsureSuccess(commonDirectory);
         var resolvedCommon = Path.TrimEndingDirectorySeparator(Path.GetFullPath(commonDirectory.StandardOutput.Trim(), workspace));
         AssertEx.Equal(Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(workspace, ".git"))), resolvedCommon);
-        var trustedCommon = await RunProcessAsync(repository, "git", "rev-parse", "--git-common-dir").ConfigureAwait(false);
+        var trustedCommon = await RunProcessAsync(repository, "git", "rev-parse", "--git-common-dir");
         EnsureSuccess(trustedCommon);
         AssertEx.NotEqual(Path.TrimEndingDirectorySeparator(Path.GetFullPath(trustedCommon.StandardOutput.Trim(), repository)), resolvedCommon);
 
@@ -926,7 +926,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [RunOn(OS.Linux)]
     public async Task EvidenceExport_WhenWorkspaceConfigPlantsFsmonitor_DoesNotExecuteItOnTheHost()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "fsmonitor-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -934,9 +934,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
-        _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n").ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n");
 
         var directMarker = Path.Combine(_root, "fsmonitor-direct");
         var includedMarker = Path.Combine(_root, "fsmonitor-included");
@@ -946,10 +946,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             "git",
             "config",
             "core.fsmonitor",
-            $"touch '{directMarker}'; false").ConfigureAwait(false));
+            $"touch '{directMarker}'; false"));
 
         var evidence = new DevelopmentPatchEvidenceService(options);
-        _ = await evidence.ExportAsync(session).ConfigureAwait(false);
+        _ = await evidence.ExportAsync(session);
         AssertEx.False(File.Exists(directMarker),
             "a repository-local core.fsmonitor must not execute during host-side evidence export");
 
@@ -957,15 +957,15 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         // already gone by this point. `git config --unset` on an absent key exits 5, so the tear-down step is best
         // effort rather than EnsureSuccess'd — the property under test is unchanged, only the fixture's assumption that
         // the file survives the export.
-        _ = await RunProcessAsync(session.HostWorktreePath, "git", "config", "--unset", "core.fsmonitor").ConfigureAwait(false);
-        AssertEx.False((await File.ReadAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "config")).ConfigureAwait(false))
+        _ = await RunProcessAsync(session.HostWorktreePath, "git", "config", "--unset", "core.fsmonitor");
+        AssertEx.False((await File.ReadAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "config")))
             .Contains("fsmonitor", StringComparison.OrdinalIgnoreCase),
             "the export must leave no fsmonitor definition behind in the workspace config");
         await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, ".git", "included.config"),
-            $"[core]\n\tfsmonitor = \"touch '{includedMarker}'; false\"\n").ConfigureAwait(false);
-        EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "config", "include.path", "included.config").ConfigureAwait(false));
+            $"[core]\n\tfsmonitor = \"touch '{includedMarker}'; false\"\n");
+        EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "config", "include.path", "included.config"));
 
-        _ = await evidence.ExportAsync(session).ConfigureAwait(false);
+        _ = await evidence.ExportAsync(session);
         AssertEx.False(File.Exists(includedMarker),
             "an include.path chain must not reintroduce an executable core.fsmonitor on the host");
     }
@@ -973,7 +973,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task WorkspaceProvider_RejectsPreservedWorktreeWhoseHeadNoLongerMatchesPersistedBase()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "tampered-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -983,7 +983,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using (var sandbox = CreateSandbox())
         {
             var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-            session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+            session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
 
             // Identity is supplied per-command because the managed workspace is now a standalone clone: `git clone`
             // does not copy the source repository's local config, so the identity the fixture set there is absent here.
@@ -998,8 +998,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                 "--allow-empty",
                 "--no-gpg-sign",
                 "-m",
-                "unexpected-head").ConfigureAwait(false));
-            await sandbox.KillAsync(session.SandboxHandle).ConfigureAwait(false);
+                "unexpected-head"));
+            await sandbox.KillAsync(session.SandboxHandle);
         }
 
         using var replacementSandbox = CreateSandbox();
@@ -1010,7 +1010,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task EvidenceExport_WhenExactPatchExceedsBound_FailsClosed()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "bounded-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue(maxPatchBytes: 128));
@@ -1018,9 +1018,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
-        _ = await tools.WriteFileAsync("large.txt", new string('x', 1024)).ConfigureAwait(false);
+        _ = await tools.WriteFileAsync("large.txt", new string('x', 1024));
 
         var evidence = new DevelopmentPatchEvidenceService(options);
         await AssertEx.ThrowsAsync<InvalidDataException>(() => evidence.ExportAsync(session));
@@ -1029,7 +1029,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task CoderRunner_PersistsTypedExactEvidenceAndTerminalizesOnce()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "runner-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -1072,7 +1072,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             NullLogger<DevelopmentCoderAttemptRunner>.Instance,
             TimeProvider.System);
 
-        var result = await runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)).ConfigureAwait(false);
+        var result = await runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository));
         AssertEx.NotNullOrEmpty(result.SubjectHash);
         AssertEx.Contains(result.ChangedFiles, "feature.txt");
         _ = store.Received(6).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
@@ -1103,7 +1103,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task CoderRunner_WhenTheSubmissionCheckRejectsTheAttempt_StillLeavesThePromptArtifact()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "failed-prompt-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -1140,8 +1140,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             NullLogger<DevelopmentCoderAttemptRunner>.Instance,
             TimeProvider.System);
 
-        var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)))
-                                      .ConfigureAwait(false);
+        var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)));
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
         var prompt = attached.Single();
@@ -1161,7 +1160,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task CoderRunner_WhenTheAttemptIsCancelledBeforeTheModelRuns_StillLeavesThePromptArtifact()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "cancelled-prompt-data");
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -1205,8 +1204,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             NullLogger<DevelopmentCoderAttemptRunner>.Instance,
             TimeProvider.System);
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository), cancellation.Token))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository), cancellation.Token));
 
         var prompt = attached.Single();
         AssertEx.Equal(Client.Persistence.Entities.DevelopmentArtifactKind.Prompt, prompt.Kind);
@@ -1224,11 +1222,11 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [Test]
     public async Task CoderRunner_WhenTheTestWritePolicyRefuses_TerminalizesWithThePolicysOwnSentence()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         Directory.CreateDirectory(Path.Combine(repository, "tests"));
-        await File.WriteAllTextAsync(Path.Combine(repository, "tests", "FeatureTests.cs"), "// the test that exists at the base commit\n").ConfigureAwait(false);
-        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "tests/FeatureTests.cs").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "tests").ConfigureAwait(false));
+        await File.WriteAllTextAsync(Path.Combine(repository, "tests", "FeatureTests.cs"), "// the test that exists at the base commit\n");
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "tests/FeatureTests.cs"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "tests"));
 
         var data = Path.Combine(_root, "policy-runner-data");
         Directory.CreateDirectory(data);
@@ -1252,8 +1250,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             NullLogger<DevelopmentCoderAttemptRunner>.Instance,
             TimeProvider.System);
 
-        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)));
 
         _ = store.Received(1)
                  .TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command =>
@@ -1282,8 +1279,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         await RunTwoAttemptsOnOneTaskAsync("carried-accept-data",
                 new ScriptedCoderModel([("README.md", "changed\n")], ["README.md"]),
-                second)
-            .ConfigureAwait(false);
+                second);
 
         AssertEx.Contains(second.Prompt, "Files in this shared workspace that already differ from the base commit");
         AssertEx.Contains(second.Prompt, "README.md");
@@ -1304,8 +1300,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     {
         await RunTwoAttemptsOnOneTaskAsync("carried-rename-data",
                 new ScriptedCoderModel([], ["renamed.md"], Rename("README.md", "renamed.md")),
-                new ScriptedCoderModel([("feature.txt", "implemented\n")], ["README.md", "feature.txt"], Rename("renamed.md", "README.md")))
-            .ConfigureAwait(false);
+                new ScriptedCoderModel([("feature.txt", "implemented\n")], ["README.md", "feature.txt"], Rename("renamed.md", "README.md")));
     }
 
     /// <summary>A pure rename patch, which is what git emits for a move with no content change.</summary>
@@ -1319,8 +1314,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() =>
                                           RunTwoAttemptsOnOneTaskAsync("carried-overreport-data",
                                               new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
-                                              new ScriptedCoderModel([("second.txt", "more\n")], ["feature.txt", "second.txt", "README.md"])))
-                                      .ConfigureAwait(false);
+                                              new ScriptedCoderModel([("second.txt", "more\n")], ["feature.txt", "second.txt", "README.md"])));
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
         AssertEx.Contains(exception.OperatorReason, "Submitted but not changed: README.md");
@@ -1333,8 +1327,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() =>
                                           RunTwoAttemptsOnOneTaskAsync("carried-underreport-data",
                                               new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt"]),
-                                              new ScriptedCoderModel([("second.txt", "more\n")], ["second.txt"])))
-                                      .ConfigureAwait(false);
+                                              new ScriptedCoderModel([("second.txt", "more\n")], ["second.txt"])));
 
         AssertEx.Equal(DevelopmentAttemptFailureCodes.ChangedFileManifestMismatch, exception.FailureCode);
         AssertEx.Contains(exception.OperatorReason, "Changed but not submitted: feature.txt");
@@ -1346,7 +1339,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     /// </summary>
     private async Task RunTwoAttemptsOnOneTaskAsync(string dataDirectoryName, ScriptedCoderModel first, ScriptedCoderModel second)
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, dataDirectoryName);
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -1378,8 +1371,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options, NullLogger<DevelopmentCoderAttemptRunner>.Instance,
                 TimeProvider.System);
 
-        _ = await Runner(first).RunAsync(firstAttempt.AttemptId, binding).ConfigureAwait(false);
-        _ = await Runner(second).RunAsync(secondAttempt.AttemptId, binding).ConfigureAwait(false);
+        _ = await Runner(first).RunAsync(firstAttempt.AttemptId, binding);
+        _ = await Runner(second).RunAsync(secondAttempt.AttemptId, binding);
     }
 
     private static DevelopmentOptions OptionsValue(int maxPatchBytes = 1024 * 1024,
@@ -1419,19 +1412,18 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     [RunOn(OS.Linux)]
     public async Task WorkspaceProvider_WritesBuildConfigurationBarrierAboveTheWorkspaceAndNotInsideIt()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "barrier-data");
         Directory.CreateDirectory(data);
 
         // An ancestor that would otherwise be inherited, exactly as the live defect had it.
         await File.WriteAllTextAsync(Path.Combine(data, "Directory.Packages.props"),
-                      "<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>")
-                  .ConfigureAwait(false);
+                      "<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>");
 
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
 
         var workspaceParent = Path.GetDirectoryName(session.HostWorktreePath)!;
         foreach (var fileName in new[]
@@ -1447,17 +1439,17 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                 $"{fileName} must not be written inside the workspace, where it would become a changed file");
         }
 
-        AssertEx.True((await File.ReadAllTextAsync(Path.Combine(workspaceParent, "Directory.Packages.props")).ConfigureAwait(false))
+        AssertEx.True((await File.ReadAllTextAsync(Path.Combine(workspaceParent, "Directory.Packages.props")))
             .Contains("<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>", StringComparison.Ordinal));
 
         // The workspace stays clean: the barrier is invisible to the repository's own Git state.
-        var status = await RunProcessAsync(session.HostWorktreePath, "git", "status", "--porcelain").ConfigureAwait(false);
+        var status = await RunProcessAsync(session.HostWorktreePath, "git", "status", "--porcelain");
         EnsureSuccess(status);
         AssertEx.Equal(string.Empty, status.StandardOutput.Trim());
 
         // A deleted barrier is restored on the next prepare rather than silently reopening the defect.
         File.Delete(Path.Combine(workspaceParent, "Directory.Packages.props"));
-        _ = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        _ = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         AssertEx.True(File.Exists(Path.Combine(workspaceParent, "Directory.Packages.props")));
     }
 
@@ -1503,12 +1495,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
-        EnsureSuccess(await RunProcessAsync(repository, "git", "init", "--initial-branch=main", ".").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.email", "development-workspace@example.invalid").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.name", "Development Workspace Test").ConfigureAwait(false));
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
-        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "base").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "init", "--initial-branch=main", "."));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.email", "development-workspace@example.invalid"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.name", "Development Workspace Test"));
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "base"));
         return repository;
     }
 
@@ -1539,8 +1531,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         process.Start();
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        return new CommandResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
+        await process.WaitForExitAsync();
+        return new CommandResult(process.ExitCode, await stdout, await stderr);
     }
 
     private static void EnsureSuccess(CommandResult result)
@@ -1615,7 +1607,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(tools);
-            _ = await tools.WriteFileAsync("tests/FeatureTests.cs", "// nothing to see here\n", cancellationToken).ConfigureAwait(false);
+            _ = await tools.WriteFileAsync("tests/FeatureTests.cs", "// nothing to see here\n", cancellationToken);
             return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Made the tests pass.",
                     ["tests/FeatureTests.cs"],
                     [],
@@ -1648,15 +1640,15 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         {
             ArgumentNullException.ThrowIfNull(tools);
             Prompt = prompt;
-            DiffAtStart = await tools.GetDiffAsync(cancellationToken).ConfigureAwait(false);
+            DiffAtStart = await tools.GetDiffAsync(cancellationToken);
             if (patch is not null)
             {
-                _ = await tools.ApplyPatchAsync(patch, cancellationToken).ConfigureAwait(false);
+                _ = await tools.ApplyPatchAsync(patch, cancellationToken);
             }
 
             foreach (var (path, content) in writes)
             {
-                _ = await tools.WriteFileAsync(path, content, cancellationToken).ConfigureAwait(false);
+                _ = await tools.WriteFileAsync(path, content, cancellationToken);
             }
 
             return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Scripted attempt.", changedFiles, [], Notes: null),
@@ -1676,8 +1668,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             DevelopmentCloudRoleRoute? cloudRoute = null,
             CancellationToken cancellationToken = default)
         {
-            _ = await tools.WriteFileAsync("feature.txt", "implemented\n", cancellationToken).ConfigureAwait(false);
-            _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus, cancellationToken).ConfigureAwait(false);
+            _ = await tools.WriteFileAsync("feature.txt", "implemented\n", cancellationToken);
+            _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus, cancellationToken);
             return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Implemented bounded feature.",
                     ["feature.txt"],
                     [DevelopmentCommandIds.GitStatus],
@@ -1698,8 +1690,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         public async Task<IReadOnlySet<string>> ListChangedPathsAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
         {
-            var paths = await inner.ListChangedPathsAsync(session, cancellationToken).ConfigureAwait(false);
-            await cancellation.CancelAsync().ConfigureAwait(false);
+            var paths = await inner.ListChangedPathsAsync(session, cancellationToken);
+            await cancellation.CancelAsync();
             return paths;
         }
     }
@@ -1730,7 +1722,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            _ = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            _ = await GetResponseAsync(messages, options, cancellationToken);
             yield return new ChatResponseUpdate(ChatRole.Assistant, "done");
             yield return new ChatResponseUpdate(ChatRole.Assistant,
             [
@@ -1817,14 +1809,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            var response = await GetResponseAsync(messages, options, cancellationToken);
             var submit = AssertEx.NotNull(options?.Tools?.OfType<AIFunction>().SingleOrDefault(static tool => tool.Name == "submit_implementation"));
             _ = await submit.InvokeAsync(new AIFunctionArguments
             {
                 ["summary"] = "done",
                 ["changedFiles"] = Array.Empty<string>(),
                 ["commandIds"] = Array.Empty<string>()
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken);
             foreach (var update in response.ToChatResponseUpdates())
             {
                 yield return update;
@@ -1850,7 +1842,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                 ["summary"] = "done",
                 ["changedFiles"] = Array.Empty<string>(),
                 ["commandIds"] = Array.Empty<string>()
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken);
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, "done"))
             {
                 Usage = new UsageDetails
@@ -1867,7 +1859,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            var response = await GetResponseAsync(messages, options, cancellationToken);
             foreach (var update in response.ToChatResponseUpdates())
             {
                 yield return update;

@@ -31,27 +31,27 @@ public sealed class GetLocalModelDetailsEndpoint(
         // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and probe
         // the decoded canonical name to keep "validated name == probed name" true.
         var decodedModelName = ModelRouteName.Decode(req.ModelName);
-        if (!await ValidateModelNameAsync(decodedModelName, ct).ConfigureAwait(false))
+        if (!await ValidateModelNameAsync(decodedModelName, ct))
         {
             return;
         }
 
         var modelName = decodedModelName!.Trim();
-        var resolution = await _detailsResolver.ResolveAsync(modelName, ct).ConfigureAwait(false);
+        var resolution = await _detailsResolver.ResolveAsync(modelName, ct);
 
         switch (resolution)
         {
             case LocalModelDetailsResolution.External external:
-                await Send.OkAsync(external.Registration.ToDetailsResponse(), ct).ConfigureAwait(false);
+                await Send.OkAsync(external.Registration.ToDetailsResponse(), ct);
                 return;
             case LocalModelDetailsResolution.Gguf gguf:
-                await Send.OkAsync(gguf.Descriptor.ToDetailsResponse(modelName, gguf.EffectiveContextTokens), ct).ConfigureAwait(false);
+                await Send.OkAsync(gguf.Descriptor.ToDetailsResponse(modelName, gguf.EffectiveContextTokens), ct);
                 return;
             case LocalModelDetailsResolution.Ollama ollama:
-                await Send.OkAsync(ollama.Details.ToResponse(modelName), ct).ConfigureAwait(false);
+                await Send.OkAsync(ollama.Details.ToResponse(modelName), ct);
                 return;
             default:
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                await Send.NotFoundAsync(ct);
                 return;
         }
     }
@@ -65,7 +65,7 @@ public sealed class GetLocalModelDetailsEndpoint(
         }
 
         AddError(validationError);
-        await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        await Send.ErrorsAsync(cancellation: ct);
         return false;
     }
 }

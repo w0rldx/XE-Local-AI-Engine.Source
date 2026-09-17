@@ -90,11 +90,11 @@ internal sealed class DevWorkflowNodeTelemetrySource(
 
         if (nodeRun.WorkSessionId is { } sessionId && nodeRun.WorkSessionAvailable)
         {
-            return await CollectFromWorkSessionAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            return await CollectFromWorkSessionAsync(sessionId, cancellationToken);
         }
 
         return nodeRun.DevelopmentTaskId is { } developmentTaskId
-            ? await CollectFromDevelopmentTaskAsync(developmentTaskId, nodeRun.StartedAtUtc, cancellationToken).ConfigureAwait(false)
+            ? await CollectFromDevelopmentTaskAsync(developmentTaskId, nodeRun.StartedAtUtc, cancellationToken)
             : null;
     }
 
@@ -106,9 +106,9 @@ internal sealed class DevWorkflowNodeTelemetrySource(
     /// </summary>
     private async Task<DevWorkflowNodeTelemetry> CollectFromWorkSessionAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var session = await _workSessions.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        var steps = await CollectStepConsumptionAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        var envelopes = await CollectEnvelopesAsync(session.ConversationId, cancellationToken).ConfigureAwait(false);
+        var session = await _workSessions.GetAsync(sessionId, cancellationToken);
+        var steps = await CollectStepConsumptionAsync(sessionId, cancellationToken);
+        var envelopes = await CollectEnvelopesAsync(session.ConversationId, cancellationToken);
 
         // As of the most recent SUCCESSFUL load of the model that served this run, which is not necessarily a load this
         // run caused: a warm run reports the earlier load's figures, and model_readiness_ms is what tells the two apart
@@ -155,7 +155,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(
             return null;
         }
 
-        var attempts = await _development.ListAttemptsAsync(developmentTaskId, cancellationToken).ConfigureAwait(false);
+        var attempts = await _development.ListAttemptsAsync(developmentTaskId, cancellationToken);
 
         long? inputTokens = null;
         long? outputTokens = null;
@@ -174,7 +174,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(
     /// </summary>
     private async Task<StepTotals> CollectStepConsumptionAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var events = await _workSessions.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var events = await _workSessions.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken);
 
         int? providerCalls = null;
         long? estimatedInputTokens = null;
@@ -221,8 +221,7 @@ internal sealed class DevWorkflowNodeTelemetrySource(
         for (var page = 0; page < MaxEnvelopePages; page++)
         {
             var envelopes = await _executionLogs
-                                  .ListRunEnvelopesAsync(conversationId, EnvelopePageSize, page * EnvelopePageSize, cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .ListRunEnvelopesAsync(conversationId, EnvelopePageSize, page * EnvelopePageSize, cancellationToken);
             foreach (var envelope in envelopes)
             {
                 inputTokens = Add(inputTokens, envelope.PromptTokens);

@@ -31,27 +31,26 @@ public sealed class BenchmarkInferenceProfileEndpoint(IInferenceProfileService i
         if (req.ProfileId == Guid.Empty)
         {
             AddError("A profile id is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var result = await _inferenceProfileService
-                           .BenchmarkAsync(req.ProfileId, req.AllowPreSpawnVramPressure, ct)
-                           .ConfigureAwait(false);
+                           .BenchmarkAsync(req.ProfileId, req.AllowPreSpawnVramPressure, ct);
 
         // A skip is not a failure: the model was busy, nothing was measured and nothing was evicted. It still returns
         // 400 (the response DTO carries no skip state), so the WORDING is what tells the operator to simply retry.
         if (result.Skipped)
         {
             AddError(result.FailureReason ?? "Skipped: the model is in use; the benchmark did not run. Retry when the model is idle.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (!result.Success || result.Profile is null)
         {
             AddError(result.FailureReason ?? "The profile could not be benchmarked.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -61,6 +60,6 @@ public sealed class BenchmarkInferenceProfileEndpoint(IInferenceProfileService i
                 Metrics = result.Metrics?.ToDto(),
                 Profile = result.Profile.ToDto()
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

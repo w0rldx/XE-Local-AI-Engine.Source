@@ -22,8 +22,7 @@ public sealed partial class DevelopmentStore
         var events = await _dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.ProjectId == projectId)
                                      .OrderBy(entity => entity.Sequence)
-                                     .ToListAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .ToListAsync(cancellationToken);
         return events.Select(static entity => new DevelopmentEventSnapshot(entity.Id,
                          entity.ProjectId,
                          entity.TaskId,
@@ -51,7 +50,6 @@ public sealed partial class DevelopmentStore
                                      Attempt = attempt
                                  })
                              .SingleOrDefaultAsync(cancellationToken)
-                             .ConfigureAwait(false)
                        ?? throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found.");
 
         return new DevelopmentExecutionSnapshot(snapshot.Project.Id,
@@ -82,9 +80,9 @@ public sealed partial class DevelopmentStore
             // keeps attempts that predate the column behaving exactly as before, and lets a project whose profile was
             // backfilled after the attempt started still resolve one.
             snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson,
-            await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false),
-            await WorkflowPolicyTextAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false),
-            await OperatorInstructionAsync(snapshot.Task.Id, cancellationToken).ConfigureAwait(false));
+            await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken),
+            await WorkflowPolicyTextAsync(snapshot.Task.Id, cancellationToken),
+            await OperatorInstructionAsync(snapshot.Task.Id, cancellationToken));
     }
 
     /// <summary>
@@ -117,8 +115,7 @@ public sealed partial class DevelopmentStore
                                                           || entity.EventType == "ReviewFinalized"
                                                           || entity.EventType == "ValidationFinalized"))
                                      .OrderByDescending(entity => entity.Sequence)
-                                     .FirstOrDefaultAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(cancellationToken);
         if (latest is not { DetailJson: { } detail, ResultMetadataJson: { } metadata })
         {
             return null;
@@ -183,8 +180,7 @@ public sealed partial class DevelopmentStore
         var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.TaskId == taskId && entity.EventType == "WorkflowPolicyApplied" && entity.DetailJson != null)
                                      .OrderByDescending(entity => entity.Sequence)
-                                     .FirstOrDefaultAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(cancellationToken);
         if (latest?.DetailJson is not { Length: > 0 } detail)
         {
             return null;
@@ -237,16 +233,14 @@ public sealed partial class DevelopmentStore
                                        .Where(entity => entity.TaskId == taskId && entity.EventType == "WorkflowPolicyApplied")
                                        .OrderByDescending(entity => entity.Sequence)
                                        .Select(entity => (long?)entity.Sequence)
-                                       .FirstOrDefaultAsync(cancellationToken)
-                                       .ConfigureAwait(false) ?? 0L;
+                                       .FirstOrDefaultAsync(cancellationToken) ?? 0L;
         var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.TaskId == taskId
                                                       && entity.Sequence > boundary
                                                       && entity.EventType == "TaskTransitioned"
                                                       && entity.Outcome == OperatorTransitionOutcome)
                                      .OrderByDescending(entity => entity.Sequence)
-                                     .FirstOrDefaultAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(cancellationToken);
         var said = ReasonOf(latest?.DetailJson);
         return string.IsNullOrWhiteSpace(said) ? null : said;
     }
@@ -255,8 +249,7 @@ public sealed partial class DevelopmentStore
     {
         var projects = await _dbContext.DevelopmentProjects.AsNoTracking()
                                        .OrderByDescending(entity => entity.UpdatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return projects.Select(ProjectSnapshot).ToArray();
     }
 
@@ -264,7 +257,6 @@ public sealed partial class DevelopmentStore
     {
         var project = await _dbContext.DevelopmentProjects.AsNoTracking()
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
-                                      .ConfigureAwait(false)
                       ?? throw new DevelopmentNotFoundException($"Development project '{projectId}' was not found.");
         return ProjectSnapshot(project);
     }
@@ -276,7 +268,6 @@ public sealed partial class DevelopmentStore
     {
         var project = await _dbContext.DevelopmentProjects
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
-                                      .ConfigureAwait(false)
                       ?? throw new DevelopmentNotFoundException($"Development project '{projectId}' was not found.");
         if (project.SelectedFolderId == selectedFolderId)
         {
@@ -294,7 +285,7 @@ public sealed partial class DevelopmentStore
         project.Version++;
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -311,7 +302,6 @@ public sealed partial class DevelopmentStore
         EnsureNotBlank(commandProfileJson, nameof(commandProfileJson));
         var project = await _dbContext.DevelopmentProjects
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
-                                      .ConfigureAwait(false)
                       ?? throw new DevelopmentNotFoundException($"Development project '{projectId}' was not found.");
 
         // Fill-only. An existing profile is the operator-confirmed agreement for the life of the project, so a backfill
@@ -328,7 +318,7 @@ public sealed partial class DevelopmentStore
         project.Version++;
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -342,7 +332,6 @@ public sealed partial class DevelopmentStore
     {
         var task = await _dbContext.DevelopmentTasks.AsNoTracking()
                                    .SingleOrDefaultAsync(entity => entity.Id == taskId, cancellationToken)
-                                   .ConfigureAwait(false)
                    ?? throw new DevelopmentNotFoundException($"Development task '{taskId}' was not found.");
         return TaskSnapshot(task);
     }
@@ -353,8 +342,7 @@ public sealed partial class DevelopmentStore
                                     .Where(entity => entity.ProjectId == projectId)
                                     .OrderBy(entity => entity.CreatedAtUtc)
                                     .ThenBy(entity => entity.Id)
-                                    .ToListAsync(cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ToListAsync(cancellationToken);
         return tasks.Select(TaskSnapshot).ToArray();
     }
 
@@ -377,8 +365,7 @@ public sealed partial class DevelopmentStore
                                    entity.InputTokens,
                                    entity.OutputTokens,
                                    entity.Version))
-                               .ToListAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsAsync(Guid taskId, CancellationToken cancellationToken = default)
@@ -387,8 +374,7 @@ public sealed partial class DevelopmentStore
                                         .Where(entity => entity.TaskId == taskId)
                                         .OrderBy(entity => entity.CreatedAtUtc)
                                         .ThenBy(entity => entity.Id)
-                                        .ToListAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ToListAsync(cancellationToken);
         return artifacts.Select(ArtifactSnapshot).ToArray();
     }
 
@@ -396,7 +382,6 @@ public sealed partial class DevelopmentStore
     {
         var artifact = await _dbContext.DevelopmentArtifacts.AsNoTracking()
                                        .SingleOrDefaultAsync(entity => entity.Id == artifactId, cancellationToken)
-                                       .ConfigureAwait(false)
                        ?? throw new DevelopmentNotFoundException($"Development artifact '{artifactId}' was not found.");
         return ArtifactSnapshot(artifact);
     }

@@ -28,12 +28,12 @@ public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService
 
     public override async Task HandleAsync(ScheduledJobRunRouteRequest req, CancellationToken ct)
     {
-        var outcome = await _scheduledJobManagementService.CancelRunAsync(req.RunId, ct).ConfigureAwait(false);
+        var outcome = await _scheduledJobManagementService.CancelRunAsync(req.RunId, ct);
 
         switch (outcome)
         {
             case RunCancellationOutcome.NotFound:
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                await Send.NotFoundAsync(ct);
                 return;
 
             case RunCancellationOutcome.AlreadyTerminal:
@@ -43,18 +43,17 @@ public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService
                               new Dictionary<string, object?>(StringComparer.Ordinal)
                               {
                                   ["outcome"] = outcome.ToString()
-                              })
-                          .ConfigureAwait(false);
+                              });
                 return;
 
             default:
                 // Requested / RequestedButNotRunning — the request was recorded; report the stamped timestamp.
-                var run = await _scheduledJobManagementService.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+                var run = await _scheduledJobManagementService.GetRunAsync(req.RunId, ct);
                 await Send.ResultAsync(Results.Accepted(uri: null, new ScheduledJobRunCancelResponse
                 {
                     Outcome = outcome.ToString(),
                     CancellationRequestedAtUtc = run?.CancellationRequestedAtUtc
-                })).ConfigureAwait(false);
+                }));
                 return;
         }
     }

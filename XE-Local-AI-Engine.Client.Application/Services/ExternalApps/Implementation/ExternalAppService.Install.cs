@@ -33,8 +33,8 @@ internal sealed partial class ExternalAppService
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
-        var manifest = await RequireApplicationAsync(services.Catalog, applicationId, cancellationToken).ConfigureAwait(false);
-        var admission = await EvaluateInstallAsync(services, manifest, cancellationToken).ConfigureAwait(false);
+        var manifest = await RequireApplicationAsync(services.Catalog, applicationId, cancellationToken);
+        var admission = await EvaluateInstallAsync(services, manifest, cancellationToken);
 
         return new InstallPreview(manifest.Id,
             manifest.ManifestVersion,
@@ -61,8 +61,8 @@ internal sealed partial class ExternalAppService
         var services = ScopedServices.From(scope.ServiceProvider);
 
         // 1–4: the catalog, the runtime, what the manifest requires of it, and this machine's resources.
-        var manifest = await RequireApplicationAsync(services.Catalog, command.ApplicationId, cancellationToken).ConfigureAwait(false);
-        var admission = await EvaluateInstallAsync(services, manifest, cancellationToken).ConfigureAwait(false);
+        var manifest = await RequireApplicationAsync(services.Catalog, command.ApplicationId, cancellationToken);
+        var admission = await EvaluateInstallAsync(services, manifest, cancellationToken);
         if (admission.BlockedReason is { } blocked && blocked != ExternalAppBlockedReason.AlreadyInstalled)
         {
             // AlreadyInstalled is deliberately NOT refused here: the authoritative check is the one inside the
@@ -89,7 +89,7 @@ internal sealed partial class ExternalAppService
         IDisposable? lease = null;
         try
         {
-            lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId)).ConfigureAwait(false)
+            lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
                     ?? throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
 
             var createdAtUtc = Now();
@@ -101,8 +101,7 @@ internal sealed partial class ExternalAppService
                     admission.Runtime.Provider,
                     instanceId,
                     createdAtUtc,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
 
             if (!_runner.TryStart(instanceId,
                     ExternalAppOperationKind.Install,
@@ -157,10 +156,10 @@ internal sealed partial class ExternalAppService
         long createdAtUtc,
         CancellationToken cancellationToken)
     {
-        using var applicationLease = await _gate.TryEnterAsync(ExternalAppInstanceGate.ApplicationKey(command.ApplicationId)).ConfigureAwait(false)
+        using var applicationLease = await _gate.TryEnterAsync(ExternalAppInstanceGate.ApplicationKey(command.ApplicationId))
                                      ?? throw new ExternalAppOperationInFlightException("Another install of this application is already being admitted.");
 
-        var existing = await store.ListByApplicationAsync(command.ApplicationId, cancellationToken).ConfigureAwait(false);
+        var existing = await store.ListByApplicationAsync(command.ApplicationId, cancellationToken);
         if (existing.Count > 0)
         {
             throw new ExternalAppAlreadyInstalledException($"The application '{command.ApplicationId}' is already installed; this version supports one instance of each.");
@@ -188,7 +187,7 @@ internal sealed partial class ExternalAppService
             // revoke step, because a token whose instance no longer exists names nothing the verifier can find.
             ContainerBridgeToken.Mint(instanceId));
 
-        var written = await store.CreateAsync(create, cancellationToken).ConfigureAwait(false);
+        var written = await store.CreateAsync(create, cancellationToken);
         if (!written.Applied)
         {
             throw new ExternalAppConcurrencyException("The instance row could not be created; another writer reached it first.");
@@ -197,8 +196,7 @@ internal sealed partial class ExternalAppService
         await PublishAsync(instanceId,
                 written.Sequence,
                 ExternalAppInstanceEventKind.PermissionAccepted,
-                ExternalAppInstanceStatus.Installing)
-            .ConfigureAwait(false);
+                ExternalAppInstanceStatus.Installing);
 
         return written.Version;
     }
@@ -216,8 +214,8 @@ internal sealed partial class ExternalAppService
 
         try
         {
-            var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken);
+            runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken);
 
             var published = await RebuildAsync(runtime,
                     resolution.Daemon.IsRootless,
@@ -226,10 +224,9 @@ internal sealed partial class ExternalAppService
                     variables,
                     // Read back rather than carried from admission: the mint happens
                     // inside the row write, which is the only place it is durable.
-                    await ResolveBridgeGrantAsync(instanceId, cancellationToken).ConfigureAwait(false),
+                    await ResolveBridgeGrantAsync(instanceId, cancellationToken),
                     commitBeforeStart: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
 
             // Two events and two sequences for one status: "this application is installed" and "it is running" are
             // different facts, and a history that merged them could not say which of the two a later failure undid.
@@ -242,18 +239,17 @@ internal sealed partial class ExternalAppService
                 ClearFailure = true
             };
 
-            if (await ApplyAsync(services.Store, cursor, installed, cancellationToken).ConfigureAwait(false))
+            if (await ApplyAsync(services.Store, cursor, installed, cancellationToken))
             {
                 _ = await ApplyAsync(services.Store,
                         cursor,
                         Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
             }
         }
         catch (ExternalAppPipelineException failure)
         {
-            await FailAsync(services.Store, runtime, cursor, failure.Failure).ConfigureAwait(false);
+            await FailAsync(services.Store, runtime, cursor, failure.Failure);
         }
         catch (OperationCanceledException) when (_runner.IsShuttingDown)
         {
@@ -261,7 +257,7 @@ internal sealed partial class ExternalAppService
         }
         catch (OperationCanceledException)
         {
-            await FailAsync(services.Store, runtime, cursor, Cancelled()).ConfigureAwait(false);
+            await FailAsync(services.Store, runtime, cursor, Cancelled());
         }
 #pragma warning disable CA1031 // A pipeline settles its own row; letting anything escape would strand the instance transient.
         catch (Exception exception)
@@ -270,14 +266,13 @@ internal sealed partial class ExternalAppService
             await FailAsync(services.Store,
                     runtime,
                     cursor,
-                    ExternalAppFailureTranslator.Translate(ExternalAppFailurePhase.Resolution, exception))
-                .ConfigureAwait(false);
+                    ExternalAppFailureTranslator.Translate(ExternalAppFailurePhase.Resolution, exception));
         }
         finally
         {
             if (runtime is not null)
             {
-                await runtime.DisposeAsync().ConfigureAwait(false);
+                await runtime.DisposeAsync();
             }
         }
     }
@@ -290,10 +285,10 @@ internal sealed partial class ExternalAppService
         ApplicationManifest manifest,
         CancellationToken cancellationToken)
     {
-        var existing = await services.Store.ListByApplicationAsync(manifest.Id, cancellationToken).ConfigureAwait(false);
-        var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var existing = await services.Store.ListByApplicationAsync(manifest.Id, cancellationToken);
+        var resolution = await services.Resolver.ResolveAsync(cancellationToken: cancellationToken);
         var missing = resolution.Capabilities.FindMissing(manifest.Requires);
-        var resources = await _resourceGate.EvaluateAsync(manifest, _layout.Root, cancellationToken).ConfigureAwait(false);
+        var resources = await _resourceGate.EvaluateAsync(manifest, _layout.Root, cancellationToken);
 
         return new InstallAdmission(BlockingReason(existing.Count > 0, BridgeUnavailableFor(manifest), resolution, manifest, missing, resources),
             resolution,
@@ -396,7 +391,7 @@ internal sealed partial class ExternalAppService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationId);
 
-        return await catalog.GetApplicationAsync(applicationId, cancellationToken).ConfigureAwait(false)
+        return await catalog.GetApplicationAsync(applicationId, cancellationToken)
                ?? throw new ExternalAppNotFoundException($"The catalog declares no application '{applicationId}'.");
     }
 

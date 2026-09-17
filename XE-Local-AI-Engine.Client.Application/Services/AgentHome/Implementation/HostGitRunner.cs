@@ -95,7 +95,7 @@ internal sealed class HostGitRunner
         {
             try
             {
-                await process.StandardInput.BaseStream.WriteAsync(input, timeoutCts.Token).ConfigureAwait(false);
+                await process.StandardInput.BaseStream.WriteAsync(input, timeoutCts.Token);
             }
             catch (IOException exception)
             {
@@ -121,7 +121,7 @@ internal sealed class HostGitRunner
 
         try
         {
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeoutCts.Token);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -130,8 +130,8 @@ internal sealed class HostGitRunner
             return new HostGitResult(ExitCode: -1, string.Empty, "git timed out.");
         }
 
-        var standardOutput = await stdoutTask.ConfigureAwait(false);
-        var standardError = await stderrTask.ConfigureAwait(false);
+        var standardOutput = await stdoutTask;
+        var standardError = await stderrTask;
         if (standardOutput.Truncated || standardError.Truncated)
         {
             return new HostGitResult(ExitCode: -1, standardOutput.Text, "git produced more output than its configured bound.");
@@ -153,13 +153,13 @@ internal sealed class HostGitRunner
     {
         if (maxBytes is not { } cap)
         {
-            return new BoundedRead(await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false), Truncated: false);
+            return new BoundedRead(await reader.ReadToEndAsync(cancellationToken), Truncated: false);
         }
 
         var buffer = new char[8192];
         var text = new StringBuilder();
         var truncated = false;
-        while (await reader.ReadAsync(buffer, cancellationToken).ConfigureAwait(false) is var read && read > 0)
+        while (await reader.ReadAsync(buffer, cancellationToken) is var read && read > 0)
         {
             if (truncated || text.Length + read > cap)
             {

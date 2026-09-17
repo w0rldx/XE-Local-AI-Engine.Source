@@ -35,7 +35,7 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task ListLocalModels_WhenAvailable_ReturnsModelsAndSelection()
     {
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         context.SettingsStore.Settings = new StoredNodeSettings
         {
             DefaultModelName = "llama3:8b"
@@ -43,8 +43,8 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(models.IsAvailable);
@@ -59,12 +59,12 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task ListLocalModels_WhenAvailable_EnrichesItemsWithClassification()
     {
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var model = models.Items.Single(item => item.ModelName == "llama3:8b");
@@ -80,7 +80,7 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task SetModelKind_WhenValid_PersistsOverrideAndReportsEffectiveKind()
     {
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         using var client = context.Factory.CreateClient();
 
         using var putRequest = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
@@ -88,8 +88,8 @@ public sealed class LocalModelEndpointTests
         {
             Kind = "Embedding"
         });
-        using var putResponse = await client.SendAsync(putRequest).ConfigureAwait(false);
-        var put = await ReadJsonAsync<ModelKindResponse>(putResponse).ConfigureAwait(false);
+        using var putResponse = await client.SendAsync(putRequest);
+        var put = await ReadJsonAsync<ModelKindResponse>(putResponse);
 
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
         AssertEx.Equal("llama3:8b", put.ModelName);
@@ -101,8 +101,8 @@ public sealed class LocalModelEndpointTests
         // The override survives and surfaces through the list endpoint as the effective kind; the list call lazily detects,
         // so the detected kind now resolves to Chat while the override keeps the effective kind on Embedding.
         using var listRequest = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(listResponse).ConfigureAwait(false);
+        using var listResponse = await client.SendAsync(listRequest);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(listResponse);
         var model = models.Items.Single(item => item.ModelName == "llama3:8b");
         AssertEx.Equal("Embedding", model.Kind);
         AssertEx.Equal("Chat", model.DetectedKind);
@@ -112,7 +112,7 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task ResetModelKind_WhenOverridden_ClearsOverrideAndRevertsToDetected()
     {
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         using var client = context.Factory.CreateClient();
 
         using var putRequest = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
@@ -120,12 +120,12 @@ public sealed class LocalModelEndpointTests
         {
             Kind = "Embedding"
         });
-        using var putResponse = await client.SendAsync(putRequest).ConfigureAwait(false);
+        using var putResponse = await client.SendAsync(putRequest);
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
 
         using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/llama3:8b/kind");
-        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
-        var deleted = await ReadJsonAsync<ModelKindResponse>(deleteResponse).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
+        var deleted = await ReadJsonAsync<ModelKindResponse>(deleteResponse);
 
         // Reset clears the override but does NOT eagerly probe /api/show (the override-only row carries a null digest, so
         // probing now would cache a stale digest and force a redundant re-probe on the next list). Detection is deferred to
@@ -138,8 +138,8 @@ public sealed class LocalModelEndpointTests
 
         // The next list lazily detects with the real digest, so the effective kind reverts to the detected Chat.
         using var listRequest = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(listResponse).ConfigureAwait(false);
+        using var listResponse = await client.SendAsync(listRequest);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(listResponse);
         var model = models.Items.Single(item => item.ModelName == "llama3:8b");
         AssertEx.Equal("Chat", model.Kind);
         AssertEx.Equal("Chat", model.DetectedKind);
@@ -149,7 +149,7 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task SetModelKind_WhenKindIsInvalid_ReturnsValidationProblem()
     {
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
@@ -157,7 +157,7 @@ public sealed class LocalModelEndpointTests
         {
             Kind = "Banana"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -175,7 +175,7 @@ public sealed class LocalModelEndpointTests
         {
             Kind = "Chat"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -190,8 +190,8 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(models.IsAvailable);
@@ -205,7 +205,7 @@ public sealed class LocalModelEndpointTests
         // The test host stubs the provider resolver to route every model to "ollama" (StubNoCodexSession), so this
         // exercises the Ollama /api/show branch. The real resolver's default is now "llamacpp"; the GGUF test below
         // overrides the resolver to assert the no-Ollama GGUF branch.
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         context.Server!.State.ModelInfo["llama3:8b"] = new Dictionary<string, object?>
         {
             ["llama.context_length"] = 8192
@@ -213,8 +213,8 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/llama3:8b/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var details = Deserialize<LocalModelDetailsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -230,11 +230,11 @@ public sealed class LocalModelEndpointTests
     {
         // A Codex cloud id has no LOCAL details — the endpoint must short-circuit to 404 instead of probing Ollama
         // /api/show (which 500s because the local runtime has no such model). Regression for the details-500 noise.
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-5.5/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var probedLocalRuntime = context.Server!.RecordedRequests
@@ -254,7 +254,7 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-4o-prod/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -272,7 +272,7 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/llama3:8b/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         await modelService.Received(1).ShowModelDetailsAsync("llama3:8b", Arg.Any<CancellationToken>());
@@ -294,8 +294,8 @@ public sealed class LocalModelEndpointTests
         {
             ModelName = "llama3:8b"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var selection = await ReadJsonAsync<SelectLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var selection = await ReadJsonAsync<SelectLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("llama3:8b", selection.SelectedModelName);
@@ -320,8 +320,8 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/orca-mini:latest");
-        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
-        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(deleteResponse).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
+        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(deleteResponse);
 
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
         AssertEx.Equal("orca-mini:latest", deleted.ModelName);
@@ -351,8 +351,8 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/ghost:model");
-        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
-        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(deleteResponse).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
+        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(deleteResponse);
 
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
         AssertEx.Equal("ghost:model", deleted.ModelName);
@@ -378,11 +378,11 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/base:model");
-        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
 
         AssertEx.Equal(HttpStatusCode.Conflict, deleteResponse.StatusCode);
         AssertEx.Contains(deleteResponse.Content.Headers.ContentType?.ToString(), "problem+json", StringComparison.OrdinalIgnoreCase);
-        var problem = await ReadJsonAsync<DeleteConflictProblemBody>(deleteResponse).ConfigureAwait(false);
+        var problem = await ReadJsonAsync<DeleteConflictProblemBody>(deleteResponse);
         AssertEx.Equal(nameof(NodeConflictProblemType.InstalledModelHasDependentAdapters), problem.ConflictType);
         AssertEx.Equal(expected: 409, problem.Status);
         AssertEx.Contains(problem.Detail, "Remove them before deleting it", StringComparison.Ordinal);
@@ -409,8 +409,8 @@ public sealed class LocalModelEndpointTests
         using var request = CreateRequest(context.Factory,
             HttpMethod.Delete,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", deleted.ModelName);
@@ -433,8 +433,8 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/llama3:8b");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("llama3:8b", deleted.ModelName);
@@ -457,7 +457,7 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/hf.co%2F..%2F..%2Fetc");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await deletionCoordinator.DidNotReceiveWithAnyArgs().CommitDeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -481,7 +481,7 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/other:model");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await provider.Received(1).DeleteModelAsync("other:model", Arg.Any<CancellationToken>());
@@ -501,8 +501,8 @@ public sealed class LocalModelEndpointTests
         using var request = CreateRequest(context.Factory,
             HttpMethod.Get,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
@@ -537,8 +537,8 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", details.ModelName);
@@ -562,7 +562,7 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/ghost-gguf:Q4_K_M/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -594,8 +594,8 @@ public sealed class LocalModelEndpointTests
         using var request = CreateRequest(context.Factory,
             HttpMethod.Get,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
@@ -623,7 +623,7 @@ public sealed class LocalModelEndpointTests
         {
             Kind = "Chat"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await classificationService.Received(1)
@@ -646,7 +646,7 @@ public sealed class LocalModelEndpointTests
         using var request = CreateRequest(context.Factory,
             HttpMethod.Delete,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/kind");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await classificationService.Received(1)
@@ -658,14 +658,14 @@ public sealed class LocalModelEndpointTests
         var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
         {
             Models = models.Length > 0 ? models : ["chat"]
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         try
         {
             return new LocalModelEndpointTestContext(server);
         }
         catch
         {
-            await server.DisposeAsync().ConfigureAwait(false);
+            await server.DisposeAsync();
             throw;
         }
     }
@@ -729,8 +729,8 @@ public sealed class LocalModelEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 
     private sealed class StubNodeSettingsStore(StoredNodeSettings settings) : INodeSettingsStore
@@ -814,14 +814,14 @@ public sealed class LocalModelEndpointTests
 
         public async ValueTask DisposeAsync()
         {
-            await Factory.DisposeAsync().ConfigureAwait(false);
+            await Factory.DisposeAsync();
 
             _ownedModelService?.Dispose();
             _ollamaClient?.Dispose();
 
             if (Server is not null)
             {
-                await Server.DisposeAsync().ConfigureAwait(false);
+                await Server.DisposeAsync();
             }
         }
 

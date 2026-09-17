@@ -110,15 +110,15 @@ public sealed class LlamaGrammarLiveSmokeTests
                 Timeout = TimeSpan.FromMinutes(10)
             };
 
-            await WaitForHealthAsync(http, process, output).ConfigureAwait(false);
+            await WaitForHealthAsync(http, process, output);
 
-            var sanitized = await PostChatCompletionAsync(http, sanitizedBody).ConfigureAwait(false);
+            var sanitized = await PostChatCompletionAsync(http, sanitizedBody);
             AssertEx.Equal(HttpStatusCode.OK,
                 sanitized.Status,
                 "the SANITIZED production tool offer must compile into a grammar on a live llama-server. "
                 + $"Server said: {Excerpt(sanitized.Body)}");
 
-            var unsanitized = await PostChatCompletionAsync(http, unsanitizedBody).ConfigureAwait(false);
+            var unsanitized = await PostChatCompletionAsync(http, unsanitizedBody);
             AssertEx.False(unsanitized.Status == HttpStatusCode.OK, InertRunMessage(unsanitized.Body));
             AssertEx.Equal(HttpStatusCode.BadRequest,
                 unsanitized.Status,
@@ -129,7 +129,7 @@ public sealed class LlamaGrammarLiveSmokeTests
                 "the 400 must be the GRAMMAR failure this pass exists to prevent, not some unrelated rejection. "
                 + $"Server said: {Excerpt(unsanitized.Body)}");
 
-            await WriteEvidenceAsync(server, model, sanitized, unsanitized).ConfigureAwait(false);
+            await WriteEvidenceAsync(server, model, sanitized, unsanitized);
         }
         finally
         {
@@ -274,7 +274,7 @@ public sealed class LlamaGrammarLiveSmokeTests
 
             try
             {
-                using var response = await http.GetAsync(new Uri("health", UriKind.Relative)).ConfigureAwait(false);
+                using var response = await http.GetAsync(new Uri("health", UriKind.Relative));
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     return;
@@ -290,7 +290,7 @@ public sealed class LlamaGrammarLiveSmokeTests
             }
 
             // real-timer: waits on a real spawned llama-server loading a model; /health is the only readiness signal.
-            await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
         }
 
         throw new InvalidOperationException($"llama-server did not report healthy within {budget.TotalSeconds.ToString(CultureInfo.InvariantCulture)}s "
@@ -308,8 +308,8 @@ public sealed class LlamaGrammarLiveSmokeTests
         payload["max_tokens"] = 8;
 
         using var content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
-        using var response = await http.PostAsync(new Uri("v1/chat/completions", UriKind.Relative), content).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await http.PostAsync(new Uri("v1/chat/completions", UriKind.Relative), content);
+        var body = await response.Content.ReadAsStringAsync();
         return new LiveResponse(response.StatusCode, body);
     }
 
@@ -370,8 +370,7 @@ public sealed class LlamaGrammarLiveSmokeTests
         var fullPath = Path.GetFullPath(evidencePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)
                                   ?? throw new InvalidOperationException($"{EvidencePathVariable} has no parent directory."));
-        await File.WriteAllTextAsync(fullPath, JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine)
-                  .ConfigureAwait(false);
+        await File.WriteAllTextAsync(fullPath, JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine);
     }
 
     private sealed record LiveResponse(HttpStatusCode Status, string Body);

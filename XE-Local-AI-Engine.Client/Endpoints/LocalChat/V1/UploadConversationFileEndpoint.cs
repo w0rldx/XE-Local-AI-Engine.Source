@@ -33,21 +33,21 @@ public sealed class UploadConversationFileEndpoint(IConversationUploadIngestor i
         if (file is null)
         {
             AddError("A file is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (file.Length == 0)
         {
             AddError("The file is empty.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (file.Length > _maxUploadBytes)
         {
             AddError($"The file exceeds the maximum upload size of {_maxUploadBytes / (1024L * 1024L)} MB.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -55,7 +55,7 @@ public sealed class UploadConversationFileEndpoint(IConversationUploadIngestor i
         if (originalName is null)
         {
             AddError("The file name is invalid.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -63,12 +63,12 @@ public sealed class UploadConversationFileEndpoint(IConversationUploadIngestor i
         if (!_ingestor.IsSupportedExtension(extension))
         {
             AddError($"Files of type '{extension}' are not supported.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         await using var content = file.OpenReadStream();
-        var info = await _ingestor.IngestAsync(req.ConversationId, content, originalName, extension, file.ContentType, ct).ConfigureAwait(false);
+        var info = await _ingestor.IngestAsync(req.ConversationId, content, originalName, extension, file.ContentType, ct);
         if (info is null)
         {
             // The extraction admission gate is full — fail fast with a busy status + Retry-After rather than letting
@@ -76,10 +76,10 @@ public sealed class UploadConversationFileEndpoint(IConversationUploadIngestor i
             HttpContext.Response.Headers.RetryAfter = "5";
             await Send.StringAsync("The server is busy processing uploads. Please retry shortly.",
                 StatusCodes.Status503ServiceUnavailable,
-                cancellation: ct).ConfigureAwait(false);
+                cancellation: ct);
             return;
         }
 
-        await Send.OkAsync(info.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(info.ToResponse(), ct);
     }
 }

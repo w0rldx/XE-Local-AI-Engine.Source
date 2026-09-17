@@ -84,7 +84,7 @@ public sealed class ByteBudgetedCacheTests
                 Interlocked.Add(ref keysComputed, missing.Count);
 
                 // Hold the single owner inside the computation until every caller has claimed or queued behind it.
-                await release.Task.ConfigureAwait(false);
+                await release.Task;
                 return [42];
             },
             cache,
@@ -121,7 +121,7 @@ public sealed class ByteBudgetedCacheTests
                     return [];
                 }
 
-                await release.Task.ConfigureAwait(false);
+                await release.Task;
 
                 // The owner signals a degrade (a short/partial embedding response); nobody may be left waiting on it.
                 return null;

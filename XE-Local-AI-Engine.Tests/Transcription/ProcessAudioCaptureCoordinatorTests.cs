@@ -240,7 +240,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
 
         // Settle first: a version that scheduled the loop before honouring the stop would have had every chance to
         // run it by now, so this reads as red rather than as a lucky scheduling.
-        await AssertEx.SettleAsync().ConfigureAwait(false);
+        await AssertEx.SettleAsync();
         AssertEx.Equal(0, harness.Source.CaptureCalls,
             "No recorder was built for a capture that was already stopped. Deterministic, not scheduler-dependent: Attach returns without scheduling the loop at all once a stop has been recorded.");
     }
@@ -265,7 +265,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             var sessionId = Guid.NewGuid();
 
             var start = Task.Run(() => harness.Coordinator.Start(sessionId, processId: 4321));
-            var stop = Task.Run(async () => await harness.Coordinator.StopAsync(sessionId, CancellationToken.None).ConfigureAwait(false));
+            var stop = Task.Run(async () => await harness.Coordinator.StopAsync(sessionId, CancellationToken.None));
 
             var outcome = await start.WaitAsync(Bound);
             _ = await stop.WaitAsync(Bound);
@@ -391,7 +391,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             {
                 // Exactly what the real registry's overflow path does: cancel the producer token first, then end.
                 // It does NOT throw, so a pump that "handles the overload error" would never see one.
-                await state.Cancellation.CancelAsync().ConfigureAwait(false);
+                await state.Cancellation.CancelAsync();
                 return;
             }
 
@@ -400,7 +400,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
                 // Deliberately NOT cancellable. This models a push sitting behind an inference that does not
                 // observe the producer token; a gate that unblocked on cancellation would let a StopAsync which
                 // awaits the capture task finish anyway, and the proof would be vacuous.
-                await PushGate.Task.ConfigureAwait(false);
+                await PushGate.Task;
             }
         }
 
@@ -482,15 +482,15 @@ public sealed class ProcessAudioCaptureCoordinatorTests
 
             for (var frame = 0; frame < FramesToPush && !cancellationToken.IsCancellationRequested; frame++)
             {
-                await registry.PushAudioAsync(sessionId, TranscriptChannel.Others, new byte[320], cancellationToken).ConfigureAwait(false);
+                await registry.PushAudioAsync(sessionId, TranscriptChannel.Others, new byte[320], cancellationToken);
             }
 
             // Runs until stopped — a registration on the token rather than any kind of timer, so nothing here waits
             // on the clock.
             var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            await using (cancellationToken.Register(() => stopped.TrySetResult()).ConfigureAwait(false))
+            await using (cancellationToken.Register(() => stopped.TrySetResult()))
             {
-                await stopped.Task.ConfigureAwait(false);
+                await stopped.Task;
             }
 
             cancellationToken.ThrowIfCancellationRequested();

@@ -50,7 +50,7 @@ public sealed class CachedNodeSettingsStore : INodeSettingsStore
         }
 
         var observedVersion = ObserveWriteVersion();
-        var loaded = await _inner.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var loaded = await _inner.LoadAsync(cancellationToken);
         PublishIfUnchanged(loaded, observedVersion);
         return loaded;
     }
@@ -85,7 +85,7 @@ public sealed class CachedNodeSettingsStore : INodeSettingsStore
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        await _inner.SaveAsync(settings, cancellationToken).ConfigureAwait(false);
+        await _inner.SaveAsync(settings, cancellationToken);
         Invalidate();
     }
 
@@ -97,7 +97,7 @@ public sealed class CachedNodeSettingsStore : INodeSettingsStore
     /// </remarks>
     public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
     {
-        var persisted = await _inner.UpdateAsync(mutate, cancellationToken).ConfigureAwait(false);
+        var persisted = await _inner.UpdateAsync(mutate, cancellationToken);
         Invalidate();
         return persisted;
     }

@@ -131,7 +131,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         const int MaxAttempts = 2;
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            var session = await store.FindByConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
+            var session = await store.FindByConversationAsync(conversationId, cancellationToken);
             if (session is null)
             {
                 return NotInWorkSession;
@@ -153,7 +153,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
             WorkSessionToolOutcome outcome;
             try
             {
-                outcome = await ExecuteCoreAsync(request, session, store, cancellationToken).ConfigureAwait(false);
+                outcome = await ExecuteCoreAsync(request, session, store, cancellationToken);
             }
             catch (WorkSessionConcurrencyException) when (attempt < MaxAttempts - 1)
             {
@@ -170,7 +170,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
 
             if (outcome.Sequence is { } sequence)
             {
-                await _publisher.PublishAsync(session.Id, sequence, outcome.Kind, cancellationToken).ConfigureAwait(false);
+                await _publisher.PublishAsync(session.Id, sequence, outcome.Kind, cancellationToken);
             }
 
             return outcome.Message;

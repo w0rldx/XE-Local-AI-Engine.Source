@@ -40,13 +40,13 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         ArgumentNullException.ThrowIfNull(input);
 
         var name = IIntegrationTriggerService.NormalizeName(input.Name);
-        var rejection = await RejectTargetAsync(input.TargetAgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var rejection = await RejectTargetAsync(input.TargetAgentDefinitionId, cancellationToken);
         if (rejection is not null)
         {
             return rejection;
         }
 
-        if (await _triggers.GetByNameAsync(name, cancellationToken).ConfigureAwait(false) is not null)
+        if (await _triggers.GetByNameAsync(name, cancellationToken) is not null)
         {
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.NameConflict, Trigger: null, NameConflictMessage);
         }
@@ -62,8 +62,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
                                                  input.TargetAgentDefinitionId,
                                                  input.SessionPolicy,
                                                  input.AcceptedInputKinds),
-                                             cancellationToken)
-                                         .ConfigureAwait(false);
+                                             cancellationToken);
 
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.Saved, created, Message: null);
         }
@@ -79,13 +78,13 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var existing = await _triggers.GetByIdAsync(triggerId, cancellationToken).ConfigureAwait(false);
+        var existing = await _triggers.GetByIdAsync(triggerId, cancellationToken);
         if (existing is null)
         {
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.NotFound, Trigger: null, Message: null);
         }
 
-        var rejection = await RejectTargetAsync(input.TargetAgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var rejection = await RejectTargetAsync(input.TargetAgentDefinitionId, cancellationToken);
         if (rejection is not null)
         {
             return rejection;
@@ -99,8 +98,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
                                              input.TargetAgentDefinitionId,
                                              input.SessionPolicy,
                                              input.AcceptedInputKinds),
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
+                                         cancellationToken);
         if (!updated)
         {
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.VersionConflict,
@@ -108,7 +106,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
                 "The trigger changed since it was loaded. Reload it and try again.");
         }
 
-        var reloaded = await _triggers.GetByIdAsync(triggerId, cancellationToken).ConfigureAwait(false);
+        var reloaded = await _triggers.GetByIdAsync(triggerId, cancellationToken);
         return reloaded is null
             ? new IntegrationTriggerResult(IntegrationTriggerOutcome.NotFound, Trigger: null, Message: null)
             : new IntegrationTriggerResult(IntegrationTriggerOutcome.Saved, reloaded, Message: null);
@@ -126,7 +124,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
     /// </summary>
     private async Task<IntegrationTriggerResult?> RejectTargetAsync(Guid agentDefinitionId, CancellationToken cancellationToken)
     {
-        var definition = await _agents.GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await _agents.GetByIdAsync(agentDefinitionId, cancellationToken);
         if (definition is null)
         {
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.AgentMissing, Trigger: null, AgentMissingMessage);

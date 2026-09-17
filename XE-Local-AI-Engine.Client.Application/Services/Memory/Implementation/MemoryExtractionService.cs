@@ -45,7 +45,7 @@ internal sealed class MemoryExtractionService(
             return MemoryExtractionOutcome.NoModelConfigured();
         }
 
-        var proposals = await _extractionAgent.ProposeAsync(run, cancellationToken).ConfigureAwait(false);
+        var proposals = await _extractionAgent.ProposeAsync(run, cancellationToken);
 
         // Enforce the candidate cap server-side as a hard limit (the prompt only requests it). This bounds review load
         // regardless of what the model returns.
@@ -61,7 +61,7 @@ internal sealed class MemoryExtractionService(
 
         // Dedup against the agent's existing live memories so repeat runs don't flood the staging list. The lessons text
         // is held only in memory for this compare — never written to the execution log.
-        var existing = await _playbookActionStore.ListByAgentAsync(run.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var existing = await _playbookActionStore.ListByAgentAsync(run.AgentDefinitionId, cancellationToken);
         var dedupKeys = BuildDedupKeys(existing);
 
         var sourceFeedbackIds = new[]
@@ -124,7 +124,7 @@ internal sealed class MemoryExtractionService(
         // outage). The embed text never leaves the node and is never persisted (see MemorySemanticDeduplicator).
         var semantic = await _semanticDeduplicator.FindSemanticDuplicatesAsync(BuildSemanticExisting(existing),
             [.. accepted.Select(static candidate => new MemoryDedupCandidate(candidate.Scope, candidate.Behavior))],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         var created = new List<PlaybookActionRecord>();
         var semanticDuplicates = 0;
@@ -149,7 +149,7 @@ internal sealed class MemoryExtractionService(
                     sourceFeedbackIds,
                     candidate.Confidence,
                     MemoryScope: candidate.Scope),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             created.Add(record);
         }

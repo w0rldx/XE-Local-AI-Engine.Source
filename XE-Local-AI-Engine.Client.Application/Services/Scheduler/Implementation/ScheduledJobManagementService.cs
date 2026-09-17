@@ -95,9 +95,9 @@ public sealed class ScheduledJobManagementService(
 
         // Operator-created jobs are persisted enabled and scheduled immediately; disabling is the dedicated action.
         var storeInput = ToStoreInput(input, enabled: true, ScheduledJobCreator.User);
-        var record = await _definitionStore.AddAsync(storeInput, cancellationToken).ConfigureAwait(false);
+        var record = await _definitionStore.AddAsync(storeInput, cancellationToken);
 
-        await ReconcileScheduleAsync(record, descriptor, cancellationToken).ConfigureAwait(false);
+        await ReconcileScheduleAsync(record, descriptor, cancellationToken);
 
         _logger.LogInformation("Created scheduled job {ScheduledJobId} from template {TemplateId} ({ScheduleKind}, enabled={Enabled}).",
             record.Id,
@@ -105,7 +105,7 @@ public sealed class ScheduledJobManagementService(
             record.ScheduleKind,
             record.Enabled);
 
-        await SafePublishDefinitionAsync(record.Id, "created").ConfigureAwait(false);
+        await SafePublishDefinitionAsync(record.Id, "created");
 
         return record;
     }
@@ -118,7 +118,7 @@ public sealed class ScheduledJobManagementService(
 
         var descriptor = Validate(input);
 
-        var existing = await _definitionStore.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return null;
@@ -127,14 +127,14 @@ public sealed class ScheduledJobManagementService(
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
         // enabled flag and original creator through to the store regardless of what the request body claims.
         var storeInput = ToStoreInput(input, existing.Enabled, existing.CreatedBy);
-        var updated = await _definitionStore.UpdateAsync(id, storeInput, cancellationToken).ConfigureAwait(false);
+        var updated = await _definitionStore.UpdateAsync(id, storeInput, cancellationToken);
         if (updated is null)
         {
             return null;
         }
 
         // Delete-and-recreate is the simplest correct path: the new definition fully determines the Quartz job/trigger.
-        await ReconcileScheduleAsync(updated, descriptor, cancellationToken).ConfigureAwait(false);
+        await ReconcileScheduleAsync(updated, descriptor, cancellationToken);
 
         _logger.LogInformation("Updated scheduled job {ScheduledJobId} (template {TemplateId}, {ScheduleKind}, enabled={Enabled}).",
             updated.Id,
@@ -142,7 +142,7 @@ public sealed class ScheduledJobManagementService(
             updated.ScheduleKind,
             updated.Enabled);
 
-        await SafePublishDefinitionAsync(updated.Id, "updated").ConfigureAwait(false);
+        await SafePublishDefinitionAsync(updated.Id, "updated");
 
         return updated;
     }
@@ -156,7 +156,7 @@ public sealed class ScheduledJobManagementService(
             // Resolve the template BEFORE the durable flag is flipped. A registered template is required to build the
             // dispatch job, so a definition referencing an unknown template can never be scheduled — persisting
             // Enabled=true first would leave a job that reads as enabled but never fires. Unknown id still returns null.
-            var existing = await _definitionStore.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+            var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
             if (existing is null)
             {
                 return null;
@@ -168,20 +168,20 @@ public sealed class ScheduledJobManagementService(
             }
         }
 
-        var updated = await _definitionStore.SetEnabledAsync(id, enabled, cancellationToken).ConfigureAwait(false);
+        var updated = await _definitionStore.SetEnabledAsync(id, enabled, cancellationToken);
         if (updated is null)
         {
             return null;
         }
 
-        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
+        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
         var jobKey = BuildJobKey(updated.Id);
 
         if (enabled)
         {
             try
             {
-                await ScheduleAsync(scheduler, updated, cancellationToken).ConfigureAwait(false);
+                await ScheduleAsync(scheduler, updated, cancellationToken);
             }
             catch (Exception)
             {
@@ -191,13 +191,13 @@ public sealed class ScheduledJobManagementService(
                 // Nothing re-schedules an enabled-but-unscheduled job later: ReconcileDurableJobsAsync only refreshes
                 // JobDetail rows that already exist and never (re)creates a trigger. Flip the durable flag back so the
                 // stored state matches reality and the operator can retry, then surface the original failure.
-                _ = await _definitionStore.SetEnabledAsync(id, enabled: false, CancellationToken.None).ConfigureAwait(false);
+                _ = await _definitionStore.SetEnabledAsync(id, enabled: false, CancellationToken.None);
                 throw;
             }
         }
         else
         {
-            _ = await scheduler.DeleteJob(jobKey, cancellationToken).ConfigureAwait(false);
+            _ = await scheduler.DeleteJob(jobKey, cancellationToken);
         }
 
         _logger.LogInformation("{Action} scheduled job {ScheduledJobId} (template {TemplateId}).",
@@ -205,7 +205,7 @@ public sealed class ScheduledJobManagementService(
             updated.Id,
             updated.TemplateId);
 
-        await SafePublishDefinitionAsync(updated.Id, enabled ? "enabled" : "disabled").ConfigureAwait(false);
+        await SafePublishDefinitionAsync(updated.Id, enabled ? "enabled" : "disabled");
 
         return updated;
     }
@@ -214,15 +214,15 @@ public sealed class ScheduledJobManagementService(
     {
         // Store-first soft-delete preserves run history; DeleteJob on the scheduler is idempotent, so a missing Quartz
         // job is not an error. The whole operation is idempotent: a second delete of the same id simply returns false.
-        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
-        _ = await scheduler.DeleteJob(BuildJobKey(id), cancellationToken).ConfigureAwait(false);
+        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
+        _ = await scheduler.DeleteJob(BuildJobKey(id), cancellationToken);
 
-        var deleted = await _definitionStore.SoftDeleteAsync(id, cancellationToken).ConfigureAwait(false);
+        var deleted = await _definitionStore.SoftDeleteAsync(id, cancellationToken);
 
         if (deleted)
         {
             _logger.LogInformation("Soft-deleted scheduled job {ScheduledJobId} and unscheduled its Quartz job.", id);
-            await SafePublishDefinitionAsync(id, "deleted").ConfigureAwait(false);
+            await SafePublishDefinitionAsync(id, "deleted");
         }
 
         return deleted;
@@ -232,7 +232,7 @@ public sealed class ScheduledJobManagementService(
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         CancellationToken cancellationToken = default)
     {
-        var definition = await _definitionStore.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var definition = await _definitionStore.GetByIdAsync(id, cancellationToken);
         if (definition is null || definition.DeletedAtUtc is not null)
         {
             throw new ScheduledJobValidationException("Scheduled job not found.");
@@ -254,9 +254,9 @@ public sealed class ScheduledJobManagementService(
             throw new ScheduledJobValidationException("This template does not allow manual triggering.");
         }
 
-        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
+        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
         var jobKey = BuildJobKey(definition.Id);
-        if (!await scheduler.CheckExists(jobKey, cancellationToken).ConfigureAwait(false))
+        if (!await scheduler.CheckExists(jobKey, cancellationToken))
         {
             throw new ScheduledJobValidationException("This job is not currently scheduled and cannot be triggered.");
         }
@@ -271,7 +271,7 @@ public sealed class ScheduledJobManagementService(
         // surfaces the real, actionable error.
         try
         {
-            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken).ConfigureAwait(false), replace: true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken), replace: true, cancellationToken);
         }
         catch (SchedulerException ex)
         {
@@ -299,7 +299,7 @@ public sealed class ScheduledJobManagementService(
             }
         }
 
-        await scheduler.TriggerJob(jobKey, fireDataMap, cancellationToken).ConfigureAwait(false);
+        await scheduler.TriggerJob(jobKey, fireDataMap, cancellationToken);
 
         _logger.LogInformation("Manually triggered scheduled job {ScheduledJobId} (template {TemplateId}, overrides={OverrideCount}).",
             definition.Id,
@@ -315,8 +315,8 @@ public sealed class ScheduledJobManagementService(
         // trigger's schedule and NEVER fires a job: AddJob with a durable, trigger-less detail only rewrites the stored
         // detail, leaving any existing trigger intact. Definitions whose template is no longer registered are skipped
         // (they cannot be rebuilt) rather than faulting the whole sweep.
-        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
-        var definitions = await _definitionStore.ListAsync(includeDeleted: false, cancellationToken).ConfigureAwait(false);
+        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
+        var definitions = await _definitionStore.ListAsync(includeDeleted: false, cancellationToken);
 
         var healedCount = 0;
         foreach (var definition in definitions)
@@ -335,14 +335,14 @@ public sealed class ScheduledJobManagementService(
             }
 
             var jobKey = BuildJobKey(definition.Id);
-            if (!await scheduler.CheckExists(jobKey, cancellationToken).ConfigureAwait(false))
+            if (!await scheduler.CheckExists(jobKey, cancellationToken))
             {
                 // No persisted JobDetail yet (e.g. the scheduler is enabling for the first time after the definition was
                 // stored). Leave creation to CreateJobAsync/SetEnabledAsync — reconciliation only refreshes existing rows.
                 continue;
             }
 
-            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken).ConfigureAwait(false), replace: true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken), replace: true, cancellationToken);
             healedCount++;
         }
 
@@ -367,7 +367,7 @@ public sealed class ScheduledJobManagementService(
 
     public async Task<RunCancellationOutcome> CancelRunAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        var run = await _runStore.GetByIdAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await _runStore.GetByIdAsync(runId, cancellationToken);
         if (run is null)
         {
             return RunCancellationOutcome.NotFound;
@@ -381,7 +381,7 @@ public sealed class ScheduledJobManagementService(
         // Record intent first so the dispatcher can distinguish an operator cancel (→ Cancelled) from an auto-interrupt
         // timeout (→ TimedOut) when its handler's token trips.
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        _ = await _runStore.RequestCancellationAsync(runId, now, cancellationToken).ConfigureAwait(false);
+        _ = await _runStore.RequestCancellationAsync(runId, now, cancellationToken);
 
         // No fire-instance id means the run never reached Quartz execution (or pre-dates it); it can only be reconciled.
         if (string.IsNullOrEmpty(run.QuartzFireInstanceId))
@@ -390,8 +390,8 @@ public sealed class ScheduledJobManagementService(
             return RunCancellationOutcome.RequestedButNotRunning;
         }
 
-        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
-        var wasInterrupted = await scheduler.Interrupt(run.QuartzFireInstanceId, cancellationToken).ConfigureAwait(false);
+        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
+        var wasInterrupted = await scheduler.Interrupt(run.QuartzFireInstanceId, cancellationToken);
 
         _logger.LogInformation("Cancellation requested for run {RunId} (job {ScheduledJobId}); Quartz interrupt active={WasInterrupted}.",
             runId,
@@ -418,7 +418,7 @@ public sealed class ScheduledJobManagementService(
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             await _eventPublisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, action, occurredAt),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -535,14 +535,14 @@ public sealed class ScheduledJobManagementService(
         CancellationToken cancellationToken)
     {
         _ = descriptor;
-        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
+        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
 
         // Idempotent unschedule: clears any prior job/trigger so an update fully replaces the previous schedule.
-        _ = await scheduler.DeleteJob(BuildJobKey(record.Id), cancellationToken).ConfigureAwait(false);
+        _ = await scheduler.DeleteJob(BuildJobKey(record.Id), cancellationToken);
 
         if (record.Enabled)
         {
-            await ScheduleAsync(scheduler, record, cancellationToken).ConfigureAwait(false);
+            await ScheduleAsync(scheduler, record, cancellationToken);
         }
     }
 
@@ -551,22 +551,22 @@ public sealed class ScheduledJobManagementService(
         CancellationToken cancellationToken)
     {
         // Ensure no stale job/trigger remains before (re)scheduling.
-        _ = await scheduler.DeleteJob(BuildJobKey(record.Id), cancellationToken).ConfigureAwait(false);
+        _ = await scheduler.DeleteJob(BuildJobKey(record.Id), cancellationToken);
 
-        var jobDetail = await BuildJobDetailAsync(record, cancellationToken).ConfigureAwait(false);
+        var jobDetail = await BuildJobDetailAsync(record, cancellationToken);
 
         if (record.ScheduleKind == ScheduleKind.Manual)
         {
             // A Manual job is a durable on-demand job with NO trigger — it never auto-fires, only TriggerNowAsync fires
             // it. AddJob requires the detail to be durable (BuildJobDetail already calls StoreDurably), so it registers
             // a trigger-less job. Do not build a trigger for Manual.
-            await scheduler.AddJob(jobDetail, replace: true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(jobDetail, replace: true, cancellationToken);
             return;
         }
 
         var trigger = BuildTrigger(record, _timeProvider); // pass TimeProvider for SimpleInterval StartAt default
 
-        _ = await scheduler.ScheduleJob(jobDetail, trigger, cancellationToken).ConfigureAwait(false);
+        _ = await scheduler.ScheduleJob(jobDetail, trigger, cancellationToken);
     }
 
     private static JobKey BuildJobKey(Guid definitionId)
@@ -597,7 +597,7 @@ public sealed class ScheduledJobManagementService(
         // Per-job max-runtime: the operator's explicit value when set, otherwise the template's derived ceiling.
         // The plugin parses MaxRunTime as a millisecond long from its string form (TryGetLongValueFromString →
         // TimeSpan.FromMilliseconds); with neither, the global default applies.
-        var maxRuntimeSeconds = await ResolveMaxRuntimeSecondsAsync(record, cancellationToken).ConfigureAwait(false);
+        var maxRuntimeSeconds = await ResolveMaxRuntimeSecondsAsync(record, cancellationToken);
 
         if (maxRuntimeSeconds is > 0)
         {
@@ -637,7 +637,7 @@ public sealed class ScheduledJobManagementService(
             return null;
         }
 
-        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
         return (nodeSettings.MaxMessageRequestTimeoutSeconds * DerivedMaxRuntimeTurnBudget) + DerivedMaxRuntimeOverheadSeconds;
     }
 

@@ -30,8 +30,8 @@ public sealed class CodexEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/cloud/codex/login");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var login = Deserialize<CodexLoginResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -52,8 +52,8 @@ public sealed class CodexEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/cloud/codex/status");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var status = Deserialize<CodexStatusResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -79,8 +79,8 @@ public sealed class CodexEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/cloud/codex/status");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var status = Deserialize<CodexStatusResponse>(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        var status = Deserialize<CodexStatusResponse>(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(status.SignedIn, "an expired access token must report SignedIn=false");
@@ -101,8 +101,8 @@ public sealed class CodexEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/cloud/codex/status");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var status = Deserialize<CodexStatusResponse>(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        var status = Deserialize<CodexStatusResponse>(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(status.SignedIn);
@@ -117,8 +117,8 @@ public sealed class CodexEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/cloud/codex/logout");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var status = Deserialize<CodexStatusResponse>(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        var status = Deserialize<CodexStatusResponse>(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(status.SignedIn);
@@ -134,9 +134,9 @@ public sealed class CodexEndpointTests
         using var client = factory.CreateClient();
 
         // No operator bearer token attached → all codex routes must reject.
-        using var loginResponse = await client.PostAsync("/api/local/v1/cloud/codex/login", content: null).ConfigureAwait(false);
-        using var statusResponse = await client.GetAsync("/api/local/v1/cloud/codex/status").ConfigureAwait(false);
-        using var logoutResponse = await client.PostAsync("/api/local/v1/cloud/codex/logout", content: null).ConfigureAwait(false);
+        using var loginResponse = await client.PostAsync("/api/local/v1/cloud/codex/login", content: null);
+        using var statusResponse = await client.GetAsync("/api/local/v1/cloud/codex/status");
+        using var logoutResponse = await client.PostAsync("/api/local/v1/cloud/codex/logout", content: null);
 
         AssertEx.True(IsRejected(loginResponse.StatusCode), $"login was {loginResponse.StatusCode}");
         AssertEx.True(IsRejected(statusResponse.StatusCode), $"status was {statusResponse.StatusCode}");

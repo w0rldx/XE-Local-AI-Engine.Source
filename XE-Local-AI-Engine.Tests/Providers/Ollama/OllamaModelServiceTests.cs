@@ -24,9 +24,9 @@ public sealed class OllamaModelServiceTests
         // The shared client's SelectedModel is "chat"; the eject targets "qwen3:8b". OllamaSharp's
         // RequestModelUnloadAsync extension recorded "chat" here (it uses client.SelectedModel), which never freed the
         // requested model. The fix sends the REQUESTED model to /api/generate with keep_alive=0 so Ollama evicts it.
-        await using var context = await CreateContextAsync("chat", "qwen3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("chat", "qwen3:8b");
 
-        await context.Service.UnloadModelAsync("qwen3:8b").ConfigureAwait(false);
+        await context.Service.UnloadModelAsync("qwen3:8b");
 
         AssertEx.ContainsSingle(context.Server.RecordedRequests,
             request => request.Path == "/api/generate" && request.ModelName == "qwen3:8b");
@@ -37,9 +37,9 @@ public sealed class OllamaModelServiceTests
     {
         // The fake answers /api/generate for any model name, mirroring Ollama treating an unload of a not-held model as a
         // harmless no-op, so the eject action stays safe to retry.
-        await using var context = await CreateContextAsync("chat").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("chat");
 
-        await context.Service.UnloadModelAsync("not-loaded:latest").ConfigureAwait(false);
+        await context.Service.UnloadModelAsync("not-loaded:latest");
 
         AssertEx.ContainsSingle(context.Server.RecordedRequests,
             request => request.Path == "/api/generate" && request.ModelName == "not-loaded:latest");
@@ -59,7 +59,7 @@ public sealed class OllamaModelServiceTests
               .Returns(FailingStream(new HttpRequestException("Not Found", inner: null, HttpStatusCode.NotFound)));
         using var service = new OllamaModelService(client);
 
-        await service.UnloadModelAsync("ghost:latest").ConfigureAwait(false);
+        await service.UnloadModelAsync("ghost:latest");
 
         _ = client.Received(1).GenerateAsync(Arg.Is<GenerateRequest>(request => request.Model == "ghost:latest"), Arg.Any<CancellationToken>());
     }
@@ -74,7 +74,7 @@ public sealed class OllamaModelServiceTests
               .Returns(FailingStream(new HttpRequestException("Server Error", inner: null, HttpStatusCode.InternalServerError)));
         using var service = new OllamaModelService(client);
 
-        var thrown = await AssertEx.ThrowsAsync<HttpRequestException>(() => service.UnloadModelAsync("qwen3:8b")).ConfigureAwait(false);
+        var thrown = await AssertEx.ThrowsAsync<HttpRequestException>(() => service.UnloadModelAsync("qwen3:8b"));
 
         AssertEx.Equal(HttpStatusCode.InternalServerError, thrown.StatusCode);
     }
@@ -89,7 +89,7 @@ public sealed class OllamaModelServiceTests
               .Returns(FailingStream(new OllamaException("model is currently loading")));
         using var service = new OllamaModelService(client);
 
-        await AssertEx.ThrowsAsync<OllamaException>(() => service.UnloadModelAsync("qwen3:8b")).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OllamaException>(() => service.UnloadModelAsync("qwen3:8b"));
     }
 
     [Test]
@@ -99,7 +99,7 @@ public sealed class OllamaModelServiceTests
         var client = LoopbackClientWith("qwen3:8b", "llama3.2:3b");
         using var service = new OllamaModelService(client);
 
-        AssertEx.True(await service.IsLoopbackModelInstalledAsync("QWEN3:8B").ConfigureAwait(false),
+        AssertEx.True(await service.IsLoopbackModelInstalledAsync("QWEN3:8B"),
             "the name match is case-insensitive, matching the classification and picker surfaces");
     }
 
@@ -120,7 +120,7 @@ public sealed class OllamaModelServiceTests
               ]));
         using var service = new OllamaModelService(client);
 
-        AssertEx.True(await service.IsLoopbackModelInstalledAsync("qwen3:8b").ConfigureAwait(false),
+        AssertEx.True(await service.IsLoopbackModelInstalledAsync("qwen3:8b"),
             "a daemon that reports the name in \"model\" must still count as installed");
     }
 
@@ -130,7 +130,7 @@ public sealed class OllamaModelServiceTests
         var client = LoopbackClientWith("llama3.2:3b");
         using var service = new OllamaModelService(client);
 
-        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b").ConfigureAwait(false));
+        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b"));
     }
 
     [Test]
@@ -142,7 +142,7 @@ public sealed class OllamaModelServiceTests
         client.Uri.Returns(new Uri("http://198.51.100.7:11434"));
         using var service = new OllamaModelService(client);
 
-        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b").ConfigureAwait(false));
+        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b"));
 
         _ = client.DidNotReceive().ListLocalModelsAsync(Arg.Any<CancellationToken>());
     }
@@ -157,7 +157,7 @@ public sealed class OllamaModelServiceTests
               .Returns<Task<IEnumerable<Model>>>(_ => throw new HttpRequestException("Connection refused"));
         using var service = new OllamaModelService(client);
 
-        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b").ConfigureAwait(false));
+        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b"));
     }
 
     private static IOllamaApiClient LoopbackClientWith(params string[] installedModelNames)
@@ -180,7 +180,7 @@ public sealed class OllamaModelServiceTests
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        await Task.CompletedTask.ConfigureAwait(false);
+        await Task.CompletedTask;
         throw failure;
 #pragma warning disable CS0162 // Unreachable: the compiler needs a yield to make this an iterator.
         yield break;
@@ -192,7 +192,7 @@ public sealed class OllamaModelServiceTests
         var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
         {
             Models = models.Length > 0 ? models : ["chat"]
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
 
         var ollamaClient = new OllamaApiClient(server.BaseAddress)
         {
@@ -222,7 +222,7 @@ public sealed class OllamaModelServiceTests
         {
             Service.Dispose();
             OllamaClient.Dispose();
-            await Server.DisposeAsync().ConfigureAwait(false);
+            await Server.DisposeAsync();
         }
     }
 }

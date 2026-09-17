@@ -25,10 +25,10 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkExportQuery exports
 
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
-        var export = await _exports.GetJsonAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var export = await _exports.GetJsonAsync(req.ProjectId, ct);
         if (export is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
@@ -71,8 +71,7 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkExportQuery exports
                       RepeatGroups = groups,
                       LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, export.Facts),
                       PairwiseFit = BenchmarkExportProjection.ToResponse(export.PairwiseFit)
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 
     private static BenchmarkJudgePolicyResponse ToJudgePolicy(BenchmarkJudgePolicyRevisionRecord? revision)
@@ -101,10 +100,10 @@ public sealed class ExportBenchmarkProjectCsvEndpoint(IBenchmarkExportQuery expo
 
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
-        var export = await _exports.GetCsvAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var export = await _exports.GetCsvAsync(req.ProjectId, ct);
         if (export is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
@@ -115,7 +114,6 @@ public sealed class ExportBenchmarkProjectCsvEndpoint(IBenchmarkExportQuery expo
         await Send.BytesAsync(Encoding.UTF8.GetBytes(csv),
                       BenchmarkExportProjection.FileName(export.Project.Name, now, "csv"),
                       "text/csv",
-                      cancellation: ct)
-                  .ConfigureAwait(false);
+                      cancellation: ct);
     }
 }

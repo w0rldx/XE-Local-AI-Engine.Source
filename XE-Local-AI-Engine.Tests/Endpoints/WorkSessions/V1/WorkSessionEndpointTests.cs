@@ -46,7 +46,7 @@ public sealed class WorkSessionEndpointTests
         using var client = factory.CreateClient();
         using var request = Request(method, route);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require the operator token.");
     }
@@ -58,7 +58,7 @@ public sealed class WorkSessionEndpointTests
         service.GetAsync(SessionId, Arg.Any<CancellationToken>()).Returns(Detail());
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", Session).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", Session);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await service.Received(1).GetAsync(SessionId, Arg.Any<CancellationToken>());
@@ -72,8 +72,8 @@ public sealed class WorkSessionEndpointTests
                .Returns([new WorkSessionSummary(SessionId, "title", AgentWorkSessionKind.Research, AgentWorkSessionStatus.Paused, AgentId, 4, 99)]);
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", Root).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", Root);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -93,7 +93,7 @@ public sealed class WorkSessionEndpointTests
         var service = SubstituteWithEmptyFeeds();
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/{feed}?sinceSeq=17").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/{feed}?sinceSeq=17");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         switch (feed)
@@ -119,7 +119,7 @@ public sealed class WorkSessionEndpointTests
         var service = SubstituteWithEmptyFeeds();
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/events?sinceSeq=3&limit=25").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/events?sinceSeq=3&limit=25");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await service.Received(1).ListEventsAsync(SessionId, 3, 25, Arg.Any<CancellationToken>());
@@ -135,8 +135,8 @@ public sealed class WorkSessionEndpointTests
                .Returns([TaskRow(sequence: 9), TaskRow(sequence: 2)]);
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/tasks").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/tasks");
+        var body = await response.Content.ReadAsStringAsync();
 
         using var document = JsonDocument.Parse(body);
         AssertEx.Equal(9L, document.RootElement.GetProperty("lastSequence").GetInt64());
@@ -150,8 +150,8 @@ public sealed class WorkSessionEndpointTests
                .Returns([Event(sequence: 1), Event(sequence: 2)]);
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/events?limit=2").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/events?limit=2");
+        var body = await response.Content.ReadAsStringAsync();
 
         using var document = JsonDocument.Parse(body);
         AssertEx.True(document.RootElement.GetProperty("hasMore").GetBoolean());
@@ -167,8 +167,8 @@ public sealed class WorkSessionEndpointTests
         service.ListEventsAsync(SessionId, 0, 50, Arg.Any<CancellationToken>()).Returns([Event(sequence: 1, operationId)]);
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/events?limit=50").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/events?limit=50");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -185,8 +185,7 @@ public sealed class WorkSessionEndpointTests
         using var response = await SendAsync(factory,
                 "POST",
                 Root,
-                """{"title":"Study","objective":"Find out","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
-            .ConfigureAwait(false);
+                """{"title":"Study","objective":"Find out","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(response.Headers.Location);
@@ -208,7 +207,7 @@ public sealed class WorkSessionEndpointTests
         var service = Substitute.For<IWorkSessionService>();
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "POST", Root, body).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Root, body);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await service.DidNotReceive().CreateAsync(Arg.Any<CreateWorkSessionRequestModel>(), Arg.Any<CancellationToken>());
@@ -224,8 +223,7 @@ public sealed class WorkSessionEndpointTests
         using var response = await SendAsync(factory,
                 "POST",
                 Root,
-                $$"""{"title":"{{title}}","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
-            .ConfigureAwait(false);
+                $$"""{"title":"{{title}}","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -239,7 +237,7 @@ public sealed class WorkSessionEndpointTests
         var service = SubstituteWithEmptyFeeds();
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/events?{query}").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/events?{query}");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await service.DidNotReceive().ListEventsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
@@ -251,7 +249,7 @@ public sealed class WorkSessionEndpointTests
         var service = SubstituteWithEmptyFeeds();
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/tasks?sinceSeq=-1").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/tasks?sinceSeq=-1");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -291,12 +289,12 @@ public sealed class WorkSessionEndpointTests
         service.PostFollowUpAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, method, route, body).ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route, body);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 for an unknown session.");
         AssertEx.Null(response.Content.Headers.ContentType, $"{method} {route} must not attach a content type to a bodyless 404.");
         AssertEx.Equal(string.Empty,
-            await response.Content.ReadAsStringAsync().ConfigureAwait(false),
+            await response.Content.ReadAsStringAsync(),
             $"{method} {route} must preserve the existing bodyless 404 contract.");
     }
 
@@ -307,7 +305,7 @@ public sealed class WorkSessionEndpointTests
         service.UpdateAsync(SessionId, Arg.Any<UpdateWorkSessionRequestModel>(), Arg.Any<CancellationToken>()).Returns(Detail());
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "PATCH", Session, """{"title":"renamed"}""").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PATCH", Session, """{"title":"renamed"}""");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await service.Received(1)
@@ -326,8 +324,8 @@ public sealed class WorkSessionEndpointTests
                .ThrowsAsyncForAnyArgs(new WorkSessionInvalidTransitionException("A work session in Running cannot be started from here."));
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "POST", $"{Session}/start").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", $"{Session}/start");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -343,8 +341,8 @@ public sealed class WorkSessionEndpointTests
                .ThrowsAsyncForAnyArgs(new WorkSessionConcurrencyException("The work session moved on."));
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "PATCH", Session, """{"title":"renamed"}""").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PATCH", Session, """{"title":"renamed"}""");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -362,9 +360,8 @@ public sealed class WorkSessionEndpointTests
         using var response = await SendAsync(factory,
                 "POST",
                 Root,
-                """{"title":"t","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
-            .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                """{"title":"t","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, "generalErrors", StringComparison.Ordinal);
@@ -382,10 +379,10 @@ public sealed class WorkSessionEndpointTests
                .Returns(new WorkSessionArtifactContent(Artifact(), "# report", IsBase64: false));
         await using var factory = EnabledFactory(service);
 
-        using var listResponse = await SendAsync(factory, "GET", $"{Session}/artifacts").ConfigureAwait(false);
-        var listJson = await listResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
-        using var contentResponse = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content").ConfigureAwait(false);
-        var contentJson = await contentResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var listResponse = await SendAsync(factory, "GET", $"{Session}/artifacts");
+        var listJson = await listResponse.Content.ReadAsStringAsync();
+        using var contentResponse = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content");
+        var contentJson = await contentResponse.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, contentResponse.StatusCode);
@@ -409,7 +406,7 @@ public sealed class WorkSessionEndpointTests
                .ThrowsAsyncForAnyArgs(CreateWorkSessionNotFoundException("could not be read"));
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
@@ -425,7 +422,7 @@ public sealed class WorkSessionEndpointTests
         service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact(sizeBytes: 4096));
         await using var factory = EnabledFactory(service, ("WorkSessions:MaxArtifactBytes", "1024"));
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content");
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         await service.DidNotReceive().ReadArtifactContentAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
@@ -443,8 +440,8 @@ public sealed class WorkSessionEndpointTests
                .Returns(new WorkSessionArtifactContent(Artifact(mediaType: mediaType), "payload", isBase64));
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content");
+        var body = await response.Content.ReadAsStringAsync();
 
         using var document = JsonDocument.Parse(body);
         AssertEx.Equal(isBase64, document.RootElement.GetProperty("isBase64").GetBoolean());
@@ -472,7 +469,7 @@ public sealed class WorkSessionEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{Session}/{verb}");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.True(response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Accepted,
             $"POST {verb} with no body answered {(int)response.StatusCode}.");
@@ -491,8 +488,8 @@ public sealed class WorkSessionEndpointTests
         using var response = await SendAsync(factory, "POST", $"{Session}/messages", JsonSerializer.Serialize(new
         {
             text = Text
-        })).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        }));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         await service.Received(1).PostFollowUpAsync(SessionId, Text, Arg.Any<CancellationToken>());
@@ -509,7 +506,7 @@ public sealed class WorkSessionEndpointTests
                .ThrowsAsyncForAnyArgs(new WorkSessionValidationException("That follow-up is too large (300 KB, limit 256 KB)."));
         await using var factory = EnabledFactory(service);
 
-        using var response = await SendAsync(factory, "POST", $"{Session}/messages", """{"text":"oversized"}""").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", $"{Session}/messages", """{"text":"oversized"}""");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -539,7 +536,7 @@ public sealed class WorkSessionEndpointTests
             }
         };
 
-        using var response = await SendAsync(factory, method, route, method == "POST" ? "{}" : null).ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route, method == "POST" ? "{}" : null);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 on a disabled node, never 500.");
         AssertEx.Empty(service.ReceivedCalls());
@@ -614,7 +611,7 @@ public sealed class WorkSessionEndpointTests
         using var client = factory.CreateClient();
         using var request = Request(method, route, body);
         factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage Request(string method, string route, string? body = null)

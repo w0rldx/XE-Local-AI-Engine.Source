@@ -18,17 +18,17 @@ public sealed class LocalModelDeletionCoordinatorTests
     [Test]
     public async Task CommitThenPurge_RemovesRegistryMapAndOperationArtifacts()
     {
-        await using var context = await CreateContextAsync().ConfigureAwait(false);
+        await using var context = await CreateContextAsync();
 
-        var committed = await context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false);
+        var committed = await context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None);
 
         AssertEx.False(File.Exists(context.WeightPath));
-        AssertEx.Null(await context.Registry.FindAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Null(await context.Registry.FindAsync(context.ModelName, CancellationToken.None));
         AssertEx.False(context.MapStore.HasMapping(context.ModelName));
         var journal = Path.Combine(context.Directory.Path, ".operations", "delete", committed.OperationId.ToString("N"), "journal.json");
         AssertEx.True(File.Exists(journal));
 
-        await context.Coordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None).ConfigureAwait(false);
+        await context.Coordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None);
 
         AssertEx.False(File.Exists(journal));
         AssertEx.False(File.Exists(Path.Combine(context.Directory.Path, committed.StageReceipt.StagedMembers.Single().QuarantineRelativePath)));
@@ -38,7 +38,7 @@ public sealed class LocalModelDeletionCoordinatorTests
     [Test]
     public async Task CacheInvalidationFailure_RestoresRegistryMapAndMember()
     {
-        await using var context = await CreateContextAsync().ConfigureAwait(false);
+        await using var context = await CreateContextAsync();
         var calls = 0;
         context.ProviderResolver.When(static resolver => resolver.InvalidateModelProviderMap()).Do(_ =>
         {
@@ -49,11 +49,10 @@ public sealed class LocalModelDeletionCoordinatorTests
         });
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
-                          .ConfigureAwait(false);
+                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
 
         AssertEx.True(File.Exists(context.WeightPath));
-        AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None));
         AssertEx.True(context.MapStore.HasMapping(context.ModelName));
         var deleteRoot = Path.Combine(context.Directory.Path, ".operations", "delete");
         AssertEx.False(Directory.Exists(deleteRoot) && Directory.EnumerateFiles(deleteRoot, "journal.json", SearchOption.AllDirectories).Any());
@@ -62,7 +61,7 @@ public sealed class LocalModelDeletionCoordinatorTests
     [Test]
     public async Task RollbackFailure_SurfacesTheOriginalFailureAndRetainsTheJournal()
     {
-        await using var context = await CreateContextAsync().ConfigureAwait(false);
+        await using var context = await CreateContextAsync();
         var calls = 0;
         context.ProviderResolver.When(static resolver => resolver.InvalidateModelProviderMap()).Do(_ =>
         {
@@ -77,8 +76,7 @@ public sealed class LocalModelDeletionCoordinatorTests
         // The compensation failure must not become the caller's exception: the endpoint discriminates on the
         // ORIGINAL type to answer its 409, and the journal left behind is what startup recovery replays.
         var thrown = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-                                       context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
-                                   .ConfigureAwait(false);
+                                       context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
 
         AssertEx.Equal("injected cache failure", thrown.Message);
         var deleteRoot = Path.Combine(context.Directory.Path, ".operations", "delete");
@@ -89,13 +87,13 @@ public sealed class LocalModelDeletionCoordinatorTests
     [Test]
     public async Task ReconcileCommittedJournal_PurgesAfterSimulatedResponseCrash()
     {
-        await using var context = await CreateContextAsync().ConfigureAwait(false);
-        var committed = await context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false);
+        await using var context = await CreateContextAsync();
+        var committed = await context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None);
         var quarantine = Path.Combine(context.Directory.Path, committed.StageReceipt.StagedMembers.Single().QuarantineRelativePath);
         AssertEx.True(File.Exists(quarantine));
 
-        await ((ILocalModelDeletionJournalReconciler)context.Coordinator).ReconcileAsync(CancellationToken.None).ConfigureAwait(false);
-        await ((ILocalModelDeletionJournalReconciler)context.Coordinator).ReconcileAsync(CancellationToken.None).ConfigureAwait(false);
+        await ((ILocalModelDeletionJournalReconciler)context.Coordinator).ReconcileAsync(CancellationToken.None);
+        await ((ILocalModelDeletionJournalReconciler)context.Coordinator).ReconcileAsync(CancellationToken.None);
 
         AssertEx.False(File.Exists(quarantine));
         var deleteRoot = Path.Combine(context.Directory.Path, ".operations", "delete");
@@ -105,11 +103,11 @@ public sealed class LocalModelDeletionCoordinatorTests
     [Test]
     public async Task CommitDelete_WhenAnAdapterAppliesToTheModel_IsRefusedWithoutMutation()
     {
-        await using var context = await CreateContextAsync().ConfigureAwait(false);
+        await using var context = await CreateContextAsync();
 
         // An adapter carries no weights of its own, so deleting its base would strand it permanently.
         var adapterPath = Path.Combine(context.Directory.Path, "tuned-adapter-Q4_K_M.gguf");
-        await File.WriteAllBytesAsync(adapterPath, [9, 9, 9, 9]).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(adapterPath, [9, 9, 9, 9]);
         await context.Registry.UpsertAsync(new GgufModelRegistryEntry
         {
             ModelName = "local/tuned:Q4_K_M",
@@ -124,16 +122,15 @@ public sealed class LocalModelDeletionCoordinatorTests
             Role = GgufRole.Chat,
             AdapterFileName = Path.GetFileName(adapterPath),
             BaseModelName = context.ModelName
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
 
         // The TYPE is the contract: ConflictExceptionHandler discriminates on it to answer 409
         // InstalledModelHasDependentAdapters instead of the 500 a bare InvalidOperationException would produce.
         _ = await AssertEx.ThrowsAsync<InstalledModelDependentAdaptersException>(() =>
-                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None))
-                          .ConfigureAwait(false);
+                              context.Coordinator.CommitDeleteAsync(context.ModelName, CancellationToken.None));
 
         AssertEx.True(File.Exists(context.WeightPath), "A refused delete must not touch the base weights.");
-        AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.NotNull(await context.Registry.FindAsync(context.ModelName, CancellationToken.None));
         AssertEx.True(context.MapStore.HasMapping(context.ModelName));
         var deleteRoot = Path.Combine(context.Directory.Path, ".operations", "delete");
         AssertEx.False(Directory.Exists(deleteRoot) && Directory.EnumerateFiles(deleteRoot, "journal.json", SearchOption.AllDirectories).Any(),
@@ -143,9 +140,9 @@ public sealed class LocalModelDeletionCoordinatorTests
     [Test]
     public async Task CommitDelete_WhenTheAdapterItselfIsDeleted_Succeeds()
     {
-        await using var context = await CreateContextAsync().ConfigureAwait(false);
+        await using var context = await CreateContextAsync();
         var adapterPath = Path.Combine(context.Directory.Path, "tuned-adapter-Q4_K_M.gguf");
-        await File.WriteAllBytesAsync(adapterPath, [9, 9, 9, 9]).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(adapterPath, [9, 9, 9, 9]);
         const string adapterName = "local/tuned:Q4_K_M";
         await context.Registry.UpsertAsync(new GgufModelRegistryEntry
         {
@@ -161,10 +158,10 @@ public sealed class LocalModelDeletionCoordinatorTests
             Role = GgufRole.Chat,
             AdapterFileName = Path.GetFileName(adapterPath),
             BaseModelName = context.ModelName
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         context.MapStore.Seed(adapterName);
 
-        _ = await context.Coordinator.CommitDeleteAsync(adapterName, CancellationToken.None).ConfigureAwait(false);
+        _ = await context.Coordinator.CommitDeleteAsync(adapterName, CancellationToken.None);
 
         AssertEx.False(File.Exists(adapterPath));
         AssertEx.True(File.Exists(context.WeightPath), "Deleting an adapter must leave its base installed.");
@@ -189,7 +186,7 @@ public sealed class LocalModelDeletionCoordinatorTests
                 3,
                 7
             };
-            await File.WriteAllBytesAsync(weightPath, bytes).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(weightPath, bytes);
             var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
             const string modelName = "local/coordinator:Q4_K_M";
             await registry.UpsertAsync(new GgufModelRegistryEntry
@@ -204,7 +201,7 @@ public sealed class LocalModelDeletionCoordinatorTests
                 SourceRevision = "revision",
                 DownloadedAtUtc = DateTimeOffset.UnixEpoch,
                 Role = GgufRole.Chat
-            }, CancellationToken.None).ConfigureAwait(false);
+            }, CancellationToken.None);
             var mapStore = new TestProviderMapStore();
             mapStore.Seed(modelName);
             var snapshotStore = new InstalledGgufSnapshotStore(registry, options);

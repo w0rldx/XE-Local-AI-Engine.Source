@@ -32,7 +32,7 @@ public sealed class NodeChatRemotePersistenceCoordinator(
                 package.ClientNodeId.ToString(),
                 nowUtc,
                 NodeChatOriginValues.Remote),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         // Node mints a FRESH assistant message id; RequestId == InvocationId so the run's state stream correlates.
         // The user turn is synthesized from the last ConversationContext entry (the just-sent user message). The
@@ -48,7 +48,7 @@ public sealed class NodeChatRemotePersistenceCoordinator(
                     userTurn,
                     nowUtc,
                     Origin: NodeChatOriginValues.Remote),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
 
         // No AgentDefinitionId is stamped here (unlike the local NodeChatStreamService send path): a
@@ -63,14 +63,14 @@ public sealed class NodeChatRemotePersistenceCoordinator(
                 nowUtc,
                 package.ModelProfile,
                 Origin: NodeChatOriginValues.Remote),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         // The streaming mark is guarded (StreamingSources): it is an atomic no-op if the row already left the
         // Pending/Queued set — e.g. a cancel terminalized the placeholder before we got here. In that case the returned
         // row carries the true terminal status, NOT Streaming; opening a persistence session then would drive the pump
         // against an already-terminal row (every later flush/terminalize is guard-rejected, so the work is pointless).
         // Abort honestly by returning null so the dispatcher runs the invocation without a node-local mirror.
-        var streaming = await _persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+        var streaming = await _persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken);
         if (!string.Equals(streaming.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))
         {
             return null;

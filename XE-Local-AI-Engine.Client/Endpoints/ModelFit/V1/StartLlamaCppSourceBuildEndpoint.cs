@@ -27,15 +27,14 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
     {
         if (!OperatingSystem.IsLinux())
         {
-            await BlockAsync("not-linux", "In-app source builds are available on Linux only.").ConfigureAwait(false);
+            await BlockAsync("not-linux", "In-app source builds are available on Linux only.");
             return;
         }
 
         if (await LlamaCppPrebuiltRuntimeMutationGuard
-                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct)
-                  .ConfigureAwait(false))
+                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct))
         {
-            await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage).ConfigureAwait(false);
+            await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage);
             return;
         }
 
@@ -43,7 +42,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
         // server-selected fields are already populated, and the strict official-source rules would reject it.
         try
         {
-            var result = await runtime.StartSourceBuildAsync(request.ToContract(), ct).ConfigureAwait(false);
+            var result = await runtime.StartSourceBuildAsync(request.ToContract(), ct);
             var blocked = LlamaCppSourceBuildStartEndpointSupport.MapBlocked(result.Outcome,
                 LlamaCppSourceBuildStartEndpointSupport.SourceBuildKind);
             if (blocked is not null)
@@ -58,7 +57,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
                     RunningProcessCount = result.Outcome == LlamaCppSourceBuildStartOutcome.ProcessesRunning
                         ? result.RunningProcessCount
                         : null
-                })).ConfigureAwait(false);
+                }));
                 return;
             }
 
@@ -66,11 +65,11 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
             {
                 Started = true,
                 Status = runtime.GetSourceBuildStatus().ToResponse()
-            }, ct).ConfigureAwait(false);
+            }, ct);
         }
         catch (LlamaRuntimeException exception)
         {
-            await BlockAsync("prerequisites", exception.Message).ConfigureAwait(false);
+            await BlockAsync("prerequisites", exception.Message);
         }
     }
 

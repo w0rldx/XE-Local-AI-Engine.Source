@@ -21,7 +21,7 @@ public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint(LlamaCppRuntimeO
     public override async Task HandleAsync(GetLlamaCppSourceBuildPrerequisitesRequest request, CancellationToken ct)
     {
         var backend = request.Backend.ToContract();
-        var report = await runtime.ProbeSourceBuildPrerequisitesAsync(backend, ct).ConfigureAwait(false);
-        await Send.OkAsync(report.ToResponse(backend), ct).ConfigureAwait(false);
+        var report = await runtime.ProbeSourceBuildPrerequisitesAsync(backend, ct);
+        await Send.OkAsync(report.ToResponse(backend), ct);
     }
 }

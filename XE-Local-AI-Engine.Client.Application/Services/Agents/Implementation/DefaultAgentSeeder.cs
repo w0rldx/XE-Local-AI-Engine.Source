@@ -47,15 +47,15 @@ public sealed class DefaultAgentSeeder : IHostedService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
 
-            var seededSlugs = await store.ListSeededSlugsAsync(cancellationToken).ConfigureAwait(false);
+            var seededSlugs = await store.ListSeededSlugsAsync(cancellationToken);
             if (seededSlugs.Contains(AgentDefaults.DefaultAgentSeedSlug))
             {
                 // The Default Assistant already exists — nothing to seed (idempotent).
                 return;
             }
 
-            var input = await BuildSeedInputAsync(cancellationToken).ConfigureAwait(false);
-            var seeded = await store.AddSeededAsync(input, AgentDefaults.DefaultAgentSeedSlug, cancellationToken).ConfigureAwait(false);
+            var input = await BuildSeedInputAsync(cancellationToken);
+            var seeded = await store.AddSeededAsync(input, AgentDefaults.DefaultAgentSeedSlug, cancellationToken);
 
             _logger.LogInformation("Seeded the Default Assistant agent definition {AgentDefinitionId} (slug {SeedSlug}).",
                 seeded.Id,
@@ -88,7 +88,7 @@ public sealed class DefaultAgentSeeder : IHostedService
     {
         return new AgentDefinitionInput(AgentDefaults.DefaultAgentName,
             Description: null,
-            await LoadEmbeddedInstructionsAsync(cancellationToken).ConfigureAwait(false),
+            await LoadEmbeddedInstructionsAsync(cancellationToken),
             ModelProfile: null,
             ReasoningEffort: null,
             AgentDefinitionKind.Single,
@@ -112,6 +112,6 @@ public sealed class DefaultAgentSeeder : IHostedService
         await using var stream = assembly.GetManifestResourceStream(_options.InstructionsResource)
                                  ?? throw new InvalidOperationException($"Embedded instructions resource '{_options.InstructionsResource}' was not found.");
         using var reader = new StreamReader(stream);
-        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        return await reader.ReadToEndAsync(cancellationToken);
     }
 }

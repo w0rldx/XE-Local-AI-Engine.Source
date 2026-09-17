@@ -19,35 +19,35 @@ public sealed class AddAgentDefinitionSeedProvenanceMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_AddsTheProvenanceColumnsDefaultingToUserAuthored()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("seed-provenance.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("seed-provenance.sqlite", ThisMigrationId);
 
-        var columns = await probe.ColumnsAsync("agent_definitions").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("agent_definitions");
         AssertEx.True(columns.Contains("seed_slug"), "agent_definitions.seed_slug must be added.");
         AssertEx.True(columns.Contains("source"), "agent_definitions.source must be added.");
 
         // Source 0 is the user-authored origin: an existing definition predates seeding and must never be mistaken for
         // a template the seeder owns and may overwrite.
-        AssertEx.Equal("0", await probe.ColumnDefaultAsync("agent_definitions", "source").ConfigureAwait(false));
+        AssertEx.Equal("0", await probe.ColumnDefaultAsync("agent_definitions", "source"));
 
-        AssertEx.True(await probe.IndexExistsAsync("agent_definitions", "IX_agent_definitions_seed_slug", unique: true, "seed_slug").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("agent_definitions", "IX_agent_definitions_seed_slug", unique: true, "seed_slug"),
             "The seed slug must carry a unique index.");
     }
 
     [Test]
     public async Task Migrate_ToThisMigration_UniquelyIndexesSeededSlugsWithoutConstrainingUnseededDefinitions()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("seed-provenance-index.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("seed-provenance-index.sqlite", ThisMigrationId);
 
         // Two operator-authored definitions, neither seeded: the filter has to let both through.
-        await InsertDefinitionAsync(probe, "First", seedSlug: null).ConfigureAwait(false);
-        await InsertDefinitionAsync(probe, "Second", seedSlug: null).ConfigureAwait(false);
+        await InsertDefinitionAsync(probe, "First", seedSlug: null);
+        await InsertDefinitionAsync(probe, "Second", seedSlug: null);
 
-        await InsertDefinitionAsync(probe, "Researcher", "researcher").ConfigureAwait(false);
+        await InsertDefinitionAsync(probe, "Researcher", "researcher");
 
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertDefinitionAsync(probe, "Researcher (again)", "researcher"),
-            "A second definition claiming the same seed slug must be rejected — that is what makes re-seeding idempotent.").ConfigureAwait(false);
+            "A second definition claiming the same seed slug must be rejected — that is what makes re-seeding idempotent.");
 
-        AssertEx.Equal(expected: 3L, (await probe.LongsAsync("SELECT COUNT(*) FROM agent_definitions;").ConfigureAwait(false)).Single());
+        AssertEx.Equal(expected: 3L, (await probe.LongsAsync("SELECT COUNT(*) FROM agent_definitions;")).Single());
     }
 
     private static Task InsertDefinitionAsync(MigrationSchemaProbe probe, string name, string? seedSlug)

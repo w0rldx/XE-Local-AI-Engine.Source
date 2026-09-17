@@ -191,7 +191,7 @@ public sealed class CachedNodeSettingsStoreTests
             var snapshot = Load(cancellationToken);
             if (_holdFirstRead && _readStarted.TrySetResult())
             {
-                await _readGate.Task.ConfigureAwait(false);
+                await _readGate.Task;
             }
 
             return snapshot;
@@ -217,7 +217,7 @@ public sealed class CachedNodeSettingsStoreTests
             if (_holdFirstWrite && Interlocked.Increment(ref _writes) == 1)
             {
                 _ = _firstWriteStarted.TrySetResult();
-                await _firstWriteGate.Task.ConfigureAwait(false);
+                await _firstWriteGate.Task;
             }
         }
 
@@ -229,7 +229,7 @@ public sealed class CachedNodeSettingsStoreTests
                 mutated = mutate(_current);
             }
 
-            await SaveAsync(mutated, cancellationToken).ConfigureAwait(false);
+            await SaveAsync(mutated, cancellationToken);
             return mutated;
         }
     }

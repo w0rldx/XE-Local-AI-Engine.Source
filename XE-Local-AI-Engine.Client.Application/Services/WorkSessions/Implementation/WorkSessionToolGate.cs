@@ -109,7 +109,7 @@ internal sealed class WorkSessionToolGate
     /// </summary>
     public async Task<WorkSessionToolGateVerdict> InspectAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken)
     {
-        var resolved = await ResolveAsync(agentDefinitionId, pinnedModelOverride, cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveAsync(agentDefinitionId, pinnedModelOverride, cancellationToken);
         if (resolved.EffectiveModel is not { } effectiveModel)
         {
             return resolved;
@@ -118,7 +118,7 @@ internal sealed class WorkSessionToolGate
         // Deliberately AFTER the model resolves and only here: this can be an Ollama /api/show round-trip on a cold
         // cache. The allow-list question below is a memory-cache read, so the caller that needs only that one takes
         // InspectAllowListAsync instead and pays nothing.
-        var capabilities = await _capabilityResolver.ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
+        var capabilities = await _capabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
         return resolved with
         {
             SupportsTools = capabilities.SupportsTools
@@ -135,7 +135,7 @@ internal sealed class WorkSessionToolGate
     ///     </para>
     /// </summary>
     public async Task<WorkSessionToolGateVerdict> InspectAllowListAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken) =>
-        await ResolveAsync(agentDefinitionId, pinnedModelOverride, cancellationToken).ConfigureAwait(false);
+        await ResolveAsync(agentDefinitionId, pinnedModelOverride, cancellationToken);
 
     /// <summary>
     ///     The half both entry points share: the agent, its effective model, and the allow-list answer. Reports
@@ -143,7 +143,7 @@ internal sealed class WorkSessionToolGate
     /// </summary>
     private async Task<WorkSessionToolGateVerdict> ResolveAsync(Guid agentDefinitionId, string? pinnedModelOverride, CancellationToken cancellationToken)
     {
-        var definition = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken);
         if (definition is null)
         {
             return new WorkSessionToolGateVerdict(AgentExists: false, string.Empty, EffectiveModel: null, SupportsTools: null, IsAllowListed: false);
@@ -151,7 +151,7 @@ internal sealed class WorkSessionToolGate
 
         // The caller's pin first, then the definition's, then the node default. Same order the model itself is applied
         // in, so what this gate judges is always the model the session's turns will actually run on.
-        var effectiveModel = await ResolveEffectiveModelAsync(Pin(pinnedModelOverride) ?? definition.ModelProfile, cancellationToken).ConfigureAwait(false);
+        var effectiveModel = await ResolveEffectiveModelAsync(Pin(pinnedModelOverride) ?? definition.ModelProfile, cancellationToken);
         if (string.IsNullOrWhiteSpace(effectiveModel))
         {
             return new WorkSessionToolGateVerdict(AgentExists: true, definition.Name, EffectiveModel: null, SupportsTools: null, IsAllowListed: false);
@@ -175,7 +175,7 @@ internal sealed class WorkSessionToolGate
             return pinnedModel;
         }
 
-        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-        return await _defaultModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken).ConfigureAwait(false);
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
+        return await _defaultModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
     }
 }

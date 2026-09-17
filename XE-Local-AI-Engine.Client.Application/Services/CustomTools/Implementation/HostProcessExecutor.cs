@@ -72,8 +72,8 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
             return "The custom tool is misconfigured and could not run.";
         }
 
-        using var slot = await _concurrencyLimiter.AcquireAsync(cancellationToken).ConfigureAwait(false);
-        return await RunAsync(startInfo, config, redactor, cancellationToken).ConfigureAwait(false);
+        using var slot = await _concurrencyLimiter.AcquireAsync(cancellationToken);
+        return await RunAsync(startInfo, config, redactor, cancellationToken);
     }
 
     private static ProcessStartInfo BuildStartInfo(CommandConfig config,
@@ -185,7 +185,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
 
         try
         {
-            await process.WaitForExitAsync(linkedSource.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(linkedSource.Token);
             return FormatResult(process.ExitCode, standardOutput, standardError, redactor, timedOut: false);
         }
         catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)

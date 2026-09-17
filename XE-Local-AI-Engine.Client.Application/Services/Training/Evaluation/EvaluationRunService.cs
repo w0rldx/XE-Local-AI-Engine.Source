@@ -57,7 +57,7 @@ public sealed class EvaluationRunService(
     public async Task<TrainingEvaluationRecord> CreateAsync(CreateEvaluationCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var run = await _runs.GetAsync(command.TrainingRunId, cancellationToken).ConfigureAwait(false)
+        var run = await _runs.GetAsync(command.TrainingRunId, cancellationToken)
                   ?? throw new EvaluationRejectedException("The training run was not found.");
 
         var freeze = Read<TrainingRunFreezeV1>(run.FreezeJson)
@@ -67,10 +67,10 @@ public sealed class EvaluationRunService(
             throw new EvaluationRejectedException("The training run held nothing back, so there is nothing to evaluate against.");
         }
 
-        _ = await _datasets.GetDatasetAsync(run.DatasetId, cancellationToken).ConfigureAwait(false)
+        _ = await _datasets.GetDatasetAsync(run.DatasetId, cancellationToken)
             ?? throw new EvaluationRejectedException("The dataset this run trained on no longer exists.");
 
-        var target = await ResolveTargetAsync(run, command, cancellationToken).ConfigureAwait(false);
+        var target = await ResolveTargetAsync(run, command, cancellationToken);
 
         var membership = new TrainingEvaluationMembershipV1
         {
@@ -89,8 +89,7 @@ public sealed class EvaluationRunService(
                                                 freeze.HoldoutSampleIds.Count,
                                                 target.Kind,
                                                 target.ArtifactId),
-                                            cancellationToken)
-                                        .ConfigureAwait(false);
+                                            cancellationToken);
         _signal.Wake();
         return created;
     }
@@ -103,16 +102,16 @@ public sealed class EvaluationRunService(
 
     public async Task<TrainingEvaluationRecord> ResumeAsync(Guid evaluationId, CancellationToken cancellationToken = default)
     {
-        var evaluation = await _evaluations.GetAsync(evaluationId, cancellationToken).ConfigureAwait(false)
+        var evaluation = await _evaluations.GetAsync(evaluationId, cancellationToken)
                          ?? throw new EvaluationRejectedException("The evaluation run was not found.");
-        var resumed = await _evaluations.ResumeAsync(evaluationId, evaluation.Version, cancellationToken).ConfigureAwait(false);
+        var resumed = await _evaluations.ResumeAsync(evaluationId, evaluation.Version, cancellationToken);
         _signal.Wake();
         return resumed;
     }
 
     public async Task<bool> CancelAsync(Guid evaluationId, CancellationToken cancellationToken = default)
     {
-        var evaluation = await _evaluations.GetAsync(evaluationId, cancellationToken).ConfigureAwait(false);
+        var evaluation = await _evaluations.GetAsync(evaluationId, cancellationToken);
         if (evaluation is null
             || evaluation.Status is TrainingEvaluationStatus.Succeeded or TrainingEvaluationStatus.Failed or TrainingEvaluationStatus.Cancelled)
         {
@@ -126,8 +125,7 @@ public sealed class EvaluationRunService(
             return true;
         }
 
-        _ = await _evaluations.CompleteAsync(evaluationId, TrainingWorkStatus.Cancelled, "Cancelled before the evaluation started.", cancellationToken)
-                              .ConfigureAwait(false);
+        _ = await _evaluations.CompleteAsync(evaluationId, TrainingWorkStatus.Cancelled, "Cancelled before the evaluation started.", cancellationToken);
         _signal.Wake();
         return true;
     }
@@ -148,7 +146,7 @@ public sealed class EvaluationRunService(
         {
             var artifactId = command.ArtifactId
                              ?? throw new EvaluationRejectedException("A staged artifact id is required for tuned evaluation.");
-            var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+            var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken)
                            ?? throw new EvaluationRejectedException("The staged artifact was not found.");
             if (artifact.RunId != run.Id || artifact.DiscardedAtUtc is not null || artifact.Kind == TrainingArtifactKind.HfAdapterDir
                 || !File.Exists(artifact.Path)
@@ -164,7 +162,7 @@ public sealed class EvaluationRunService(
         var selected = string.IsNullOrWhiteSpace(command.ModelNameOverride) ? run.LinkedInstalledModelName : command.ModelNameOverride.Trim();
         var modelName = selected
                         ?? throw new EvaluationRejectedException("This run was not started from an installed model, so its base model cannot be evaluated.");
-        var installed = await _models.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await _models.ListInstalledModelsAsync(cancellationToken);
         var descriptor = installed.FirstOrDefault(model => string.Equals(model.ModelName, modelName, StringComparison.Ordinal) && model.IsAvailable)
                          ?? throw new EvaluationRejectedException($"'{modelName}' is not an installed model on this node.");
         return new EvaluationTargetIdentity(modelName, descriptor.ModelContentFingerprint,

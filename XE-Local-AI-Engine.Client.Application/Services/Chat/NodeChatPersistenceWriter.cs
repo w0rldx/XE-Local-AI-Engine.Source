@@ -54,10 +54,10 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory,
         var gate = RentGate(conversationId);
         try
         {
-            await gate.Lock.EnterWriteAsync(cancellationToken).ConfigureAwait(false);
+            await gate.Lock.EnterWriteAsync(cancellationToken);
             try
             {
-                return await RunScopedAsync(persistenceOperation, cancellationToken).ConfigureAwait(false);
+                return await RunScopedAsync(persistenceOperation, cancellationToken);
             }
             finally
             {
@@ -83,10 +83,10 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory,
         var gate = RentGate(conversationId);
         try
         {
-            await gate.Lock.EnterReadAsync(cancellationToken).ConfigureAwait(false);
+            await gate.Lock.EnterReadAsync(cancellationToken);
             try
             {
-                return await RunScopedAsync(persistenceOperation, cancellationToken).ConfigureAwait(false);
+                return await RunScopedAsync(persistenceOperation, cancellationToken);
             }
             finally
             {
@@ -114,16 +114,16 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory,
         var gate = RentGate(conversationId);
         try
         {
-            await gate.Lock.EnterReadAsync(cancellationToken).ConfigureAwait(false);
+            await gate.Lock.EnterReadAsync(cancellationToken);
             try
             {
                 var messageLock = gate.RentMessageLock(messageId);
                 try
                 {
-                    await messageLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    await messageLock.WaitAsync(cancellationToken);
                     try
                     {
-                        return await RunScopedAsync(persistenceOperation, cancellationToken).ConfigureAwait(false);
+                        return await RunScopedAsync(persistenceOperation, cancellationToken);
                     }
                     finally
                     {
@@ -167,7 +167,7 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory,
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         try
         {
-            return await persistenceOperation(dbContext, cancellationToken).ConfigureAwait(false);
+            return await persistenceOperation(dbContext, cancellationToken);
         }
         catch (Exception exception)
         {

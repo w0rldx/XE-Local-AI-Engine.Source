@@ -75,8 +75,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         bool forceRefresh = false,
         CancellationToken cancellationToken = default)
     {
-        var (resolution, _) = await ResolveWithEndpointAsync(instanceOverride, forceRefresh, confirmingDaemonId: null, cancellationToken)
-            .ConfigureAwait(false);
+        var (resolution, _) = await ResolveWithEndpointAsync(instanceOverride, forceRefresh, confirmingDaemonId: null, cancellationToken);
         return resolution;
     }
 
@@ -90,8 +89,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         var (resolution, _) = await ResolveWithEndpointAsync(instanceOverride: null,
                 forceRefresh: true,
                 expectedDaemonId,
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         return resolution;
     }
 
@@ -101,8 +99,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         var (resolution, endpoint) = await ResolveWithEndpointAsync(instanceOverride,
                 forceRefresh: false,
                 confirmingDaemonId: null,
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
 
         if (!resolution.Ready)
         {
@@ -143,9 +140,9 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         string? confirmingDaemonId,
         CancellationToken cancellationToken)
     {
-        var selection = await ResolveSelectionAsync(instanceOverride, cancellationToken).ConfigureAwait(false);
+        var selection = await ResolveSelectionAsync(instanceOverride, cancellationToken);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken);
         try
         {
             var options = _options.CurrentValue;
@@ -159,7 +156,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
                 return (_cached, _cachedEndpoint);
             }
 
-            var (resolution, endpoint) = await ProbeAsync(options, confirmingDaemonId, cancellationToken).ConfigureAwait(false);
+            var (resolution, endpoint) = await ProbeAsync(options, confirmingDaemonId, cancellationToken);
 
             _cached = resolution;
             _cachedEndpoint = endpoint;
@@ -191,7 +188,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
             return explicitSelection;
         }
 
-        var stored = await _settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await _settingsStore.LoadAsync(cancellationToken);
         if (!ContainerRuntimeSelectionParser.TryParse(stored.ContainerRuntimeSelection, out var selection)
             && !string.IsNullOrWhiteSpace(stored.ContainerRuntimeSelection))
         {
@@ -253,7 +250,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
             _attestationStore,
             _timeProvider,
             _logger,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         return (Reported(Describe(outcome, endpoint, options)), endpoint);
     }

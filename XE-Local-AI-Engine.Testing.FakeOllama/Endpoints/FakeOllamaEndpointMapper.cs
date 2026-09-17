@@ -49,7 +49,7 @@ internal static class FakeOllamaEndpointMapper
             return null;
         }
 
-        return await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted).ConfigureAwait(false);
+        return await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted);
     }
 
     internal static string? GetString(JsonElement element, string name)
@@ -76,14 +76,14 @@ internal static class FakeOllamaEndpointMapper
                 await context.Response.WriteAsJsonAsync(new
                 {
                     error = $"model '{model ?? "unknown"}' not found"
-                }, SerializerOptions, context.RequestAborted).ConfigureAwait(false);
+                }, SerializerOptions, context.RequestAborted);
                 return true;
             case FakeOllamaFailure.Timeout:
-                await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted).ConfigureAwait(false);
+                await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
                 return true;
             case FakeOllamaFailure.MalformedJson:
                 context.Response.ContentType = "application/json";
-                await context.Response.WriteAsync("{not_json", context.RequestAborted).ConfigureAwait(false);
+                await context.Response.WriteAsync("{not_json", context.RequestAborted);
                 return true;
             case FakeOllamaFailure.EmptyResponse:
                 context.Response.StatusCode = StatusCodes.Status200OK;
@@ -93,7 +93,7 @@ internal static class FakeOllamaEndpointMapper
                 await context.Response.WriteAsJsonAsync(new
                 {
                     error = "fake ollama injected failure"
-                }, SerializerOptions, context.RequestAborted).ConfigureAwait(false);
+                }, SerializerOptions, context.RequestAborted);
                 return true;
             case FakeOllamaFailure.PartialStream:
                 await WriteNdjsonAsync(context, new[]
@@ -112,7 +112,7 @@ internal static class FakeOllamaEndpointMapper
                         response = " stream",
                         done = false
                     }
-                }).ConfigureAwait(false);
+                });
                 return true;
             default:
                 throw new InvalidOperationException($"Unsupported fake Ollama failure: {failure}.");
@@ -125,9 +125,9 @@ internal static class FakeOllamaEndpointMapper
         foreach (var item in items)
         {
             var line = JsonSerializer.Serialize(item, SerializerOptions);
-            await context.Response.WriteAsync(line, context.RequestAborted).ConfigureAwait(false);
-            await context.Response.WriteAsync("\n", context.RequestAborted).ConfigureAwait(false);
-            await context.Response.Body.FlushAsync(context.RequestAborted).ConfigureAwait(false);
+            await context.Response.WriteAsync(line, context.RequestAborted);
+            await context.Response.WriteAsync("\n", context.RequestAborted);
+            await context.Response.Body.FlushAsync(context.RequestAborted);
         }
     }
 

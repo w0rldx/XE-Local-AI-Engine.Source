@@ -48,9 +48,9 @@ internal sealed class CapabilityReportComposer
     /// <summary>Gathers local hardware facts (RAM, GPU, CPU) used by both cloud and local report assembly.</summary>
     public async Task<HardwareSnapshot> DetectHardwareAsync(CancellationToken cancellationToken)
     {
-        var ramMb = await DetectRamMbAsync(cancellationToken).ConfigureAwait(false);
-        var gpuInfo = await TryDetectGpuInfoAsync(cancellationToken).ConfigureAwait(false);
-        var cpuClass = await DetectCpuClassAsync(cancellationToken).ConfigureAwait(false);
+        var ramMb = await DetectRamMbAsync(cancellationToken);
+        var gpuInfo = await TryDetectGpuInfoAsync(cancellationToken);
+        var cpuClass = await DetectCpuClassAsync(cancellationToken);
         return new HardwareSnapshot(ramMb, gpuInfo, cpuClass);
     }
 
@@ -211,7 +211,7 @@ internal sealed class CapabilityReportComposer
             return null;
         }
 
-        var memInfo = await File.ReadAllLinesAsync("/proc/meminfo", cancellationToken).ConfigureAwait(false);
+        var memInfo = await File.ReadAllLinesAsync("/proc/meminfo", cancellationToken);
         foreach (var line in memInfo)
         {
             if (!line.StartsWith("MemTotal:", StringComparison.OrdinalIgnoreCase))
@@ -234,7 +234,7 @@ internal sealed class CapabilityReportComposer
         cancellationToken.ThrowIfCancellationRequested();
 
         var logicalCores = Environment.ProcessorCount;
-        var cpuModel = await TryReadLinuxCpuModelAsync(cancellationToken).ConfigureAwait(false);
+        var cpuModel = await TryReadLinuxCpuModelAsync(cancellationToken);
 
         return string.IsNullOrWhiteSpace(cpuModel)
             ? $"{logicalCores} logical cores"
@@ -248,7 +248,7 @@ internal sealed class CapabilityReportComposer
             return null;
         }
 
-        var cpuInfo = await File.ReadAllLinesAsync("/proc/cpuinfo", cancellationToken).ConfigureAwait(false);
+        var cpuInfo = await File.ReadAllLinesAsync("/proc/cpuinfo", cancellationToken);
         foreach (var line in cpuInfo)
         {
             if (!line.StartsWith("model name", StringComparison.OrdinalIgnoreCase))
@@ -311,9 +311,9 @@ internal sealed class CapabilityReportComposer
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            var output = await outputTask.ConfigureAwait(false);
-            var error = await errorTask.ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellationToken);
+            var output = await outputTask;
+            var error = await errorTask;
 
             if (process.ExitCode != 0)
             {

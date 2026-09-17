@@ -26,13 +26,13 @@ public sealed class CancelImageJobEndpoint(IImageJobCoordinator coordinator)
 
     public override async Task HandleAsync(ImageJobRouteRequest req, CancellationToken ct)
     {
-        var cancelled = await _coordinator.CancelAsync(req.JobId, ct).ConfigureAwait(false);
+        var cancelled = await _coordinator.CancelAsync(req.JobId, ct);
         if (!cancelled)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

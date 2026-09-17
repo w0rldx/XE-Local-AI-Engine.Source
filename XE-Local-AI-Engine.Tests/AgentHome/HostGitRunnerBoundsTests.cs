@@ -38,20 +38,19 @@ public sealed class HostGitRunnerBoundsTests : IDisposable
     [Test]
     public async Task RunAsync_WhenOutputExceedsItsBound_AnswersAFailedRunInsteadOfAccumulatingIt()
     {
-        var repository = await RepositoryAsync().ConfigureAwait(false);
+        var repository = await RepositoryAsync();
         var runner = new HostGitRunner(timeoutSeconds: 30);
 
         var bounded = await runner.RunAsync(repository,
                                       AgentHomeGit.Arguments("status", "--porcelain=v1"),
                                       CancellationToken.None,
                                       standardInput: null,
-                                      maxStandardOutputBytes: 4)
-                                  .ConfigureAwait(false);
+                                      maxStandardOutputBytes: 4);
 
         AssertEx.Equal(expected: -1, bounded.ExitCode);
         AssertEx.Contains(bounded.StandardError, "more output than its configured bound");
 
-        var unbounded = await runner.RunAsync(repository, AgentHomeGit.Arguments("status", "--porcelain=v1"), CancellationToken.None).ConfigureAwait(false);
+        var unbounded = await runner.RunAsync(repository, AgentHomeGit.Arguments("status", "--porcelain=v1"), CancellationToken.None);
         AssertEx.Equal(expected: 0, unbounded.ExitCode, "the same command without a bound is untouched — this is opt-in per call.");
         AssertEx.Contains(unbounded.StandardOutput, "untracked.txt");
     }
@@ -73,15 +72,14 @@ public sealed class HostGitRunnerBoundsTests : IDisposable
     [Test]
     public async Task RunAsync_WhenGitExitsWithoutReadingItsInput_AnswersAFailedRunInsteadOfThrowing()
     {
-        var repository = await RepositoryAsync().ConfigureAwait(false);
+        var repository = await RepositoryAsync();
         var runner = new HostGitRunner(timeoutSeconds: 30);
 
         // A megabyte: every pipe buffer this runs on is far smaller, so the write is still in flight when git exits.
         var result = await runner.RunAsync(repository,
                                      AgentHomeGit.Arguments("--version"),
                                      CancellationToken.None,
-                                     standardInput: new byte[1024 * 1024])
-                                 .ConfigureAwait(false);
+                                     standardInput: new byte[1024 * 1024]);
 
         AssertEx.Equal(expected: -1, result.ExitCode, $"a git that never saw the input did not succeed at it: {result.StandardError}");
         AssertEx.Contains(result.StandardError, "stopped reading its input");
@@ -92,8 +90,8 @@ public sealed class HostGitRunnerBoundsTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, "untracked.txt"), "noise\n").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await File.WriteAllTextAsync(Path.Combine(repository, "untracked.txt"), "noise\n");
         return repository;
     }
 }

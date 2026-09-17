@@ -34,41 +34,41 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task ClaimNextAsync_DispatchesFidelityAndComparisonInFifoOrder()
     {
-        await using var context = await CreateSchemaAsync("claim-four-kinds.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("claim-four-kinds.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
 
-        var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Primary, primary.Kind);
 
-        var fidelityAttemptId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        var comparisonId = await InsertComparisonWorkAsync(context, project.Id, revision.Id, run.Id).ConfigureAwait(false);
+        var fidelityAttemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        var comparisonId = await InsertComparisonWorkAsync(context, project.Id, revision.Id, run.Id);
 
-        var fidelity = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var fidelity = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Fidelity, fidelity.Kind);
         AssertEx.Equal<Guid?>(fidelityAttemptId, fidelity.FidelityAttemptId);
         AssertEx.Null(fidelity.ComparisonId, "A fidelity claim must not carry a comparison id.");
         AssertEx.Equal(BenchmarkJudgeAttemptStatus.Running,
-            (await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == fidelityAttemptId).ConfigureAwait(false)).Status,
+            (await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == fidelityAttemptId)).Status,
             "Claiming a fidelity item moves its attempt to Running.");
 
-        var comparison = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var comparison = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Comparison, comparison.Kind);
         AssertEx.Equal<Guid?>(comparisonId, comparison.ComparisonId);
         AssertEx.Equal(BenchmarkJudgeAttemptStatus.Running,
-            (await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId).ConfigureAwait(false)).Status,
+            (await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId)).Status,
             "Claiming a comparison item moves the comparison to Running.");
     }
 
     [Test]
     public async Task ClaimNextAsync_FidelityItemNamingNoAttempt_ThrowsNotFound()
     {
-        await using var context = await CreateSchemaAsync("claim-fidelity-orphan.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("claim-fidelity-orphan.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
 
         // The CHECK forbids a NULL attempt id, so the reachable version of "orphan" is an id naming no row.
         context.BenchmarkWorkItems.Add(new BenchmarkWorkItem
@@ -81,44 +81,44 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
             Version = 1,
             EnqueuedAtUtc = 1
         });
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.SaveChangesAsync();
 
         // Its own exception code, not the judge's: an operator reading the log has to be able to tell which arm failed.
-        _ = await AssertEx.ThrowsAsync<BenchmarkNotFoundException>(() => store.ClaimNextAsync()).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<BenchmarkNotFoundException>(() => store.ClaimNextAsync());
     }
 
     [Test]
     public async Task ClaimNextAsync_FidelityAttemptAlreadyTerminal_ThrowsInvalidFidelityTransition()
     {
-        await using var context = await CreateSchemaAsync("claim-fidelity-terminal.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("claim-fidelity-terminal.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
 
-        var attempt = await context.BenchmarkFidelityAttempts.SingleAsync(entity => entity.Id == attemptId).ConfigureAwait(false);
+        var attempt = await context.BenchmarkFidelityAttempts.SingleAsync(entity => entity.Id == attemptId);
         attempt.Status = BenchmarkJudgeAttemptStatus.Cancelled;
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.SaveChangesAsync();
 
-        var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.ClaimNextAsync()).ConfigureAwait(false);
+        var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.ClaimNextAsync());
         AssertEx.Equal("InvalidFidelityTransition", conflict.Code);
     }
 
     [Test]
     public async Task ClaimNextAsync_ComparisonAlreadyTerminal_ThrowsInvalidComparisonTransition()
     {
-        await using var context = await CreateSchemaAsync("claim-comparison-terminal.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("claim-comparison-terminal.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        var comparisonId = await InsertComparisonWorkAsync(context, project.Id, revision.Id, run.Id, BenchmarkJudgeAttemptStatus.Failed).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        var comparisonId = await InsertComparisonWorkAsync(context, project.Id, revision.Id, run.Id, BenchmarkJudgeAttemptStatus.Failed);
 
-        var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.ClaimNextAsync()).ConfigureAwait(false);
+        var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.ClaimNextAsync());
         AssertEx.Equal("InvalidComparisonTransition", conflict.Code);
         AssertEx.Equal(BenchmarkJudgeAttemptStatus.Failed,
-            (await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId).ConfigureAwait(false)).Status);
+            (await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId)).Status);
     }
 
     /// <summary>
@@ -128,25 +128,24 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task ClaimNextAsync_Fidelity_ProjectsRunningOnTheRunAndTerminalizesBack()
     {
-        await using var context = await CreateSchemaAsync("claim-fidelity-running.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("claim-fidelity-running.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
 
-        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Fidelity, claimed.Kind);
         context.ChangeTracker.Clear();
         AssertEx.Equal("running",
-            (await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false)).FidelityStatus);
+            (await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id)).FidelityStatus);
 
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983))
-                       .ConfigureAwait(false);
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983));
 
         context.ChangeTracker.Clear();
         AssertEx.Equal("succeeded",
-            (await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false)).FidelityStatus,
+            (await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id)).FidelityStatus,
             "Terminalization still returns the projection to a terminal state.");
     }
 
@@ -158,26 +157,26 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task ClaimNextAsync_Comparison_LeavesBothRunsVersionsAlone()
     {
-        await using var context = await CreateSchemaAsync("claim-comparison-versions.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("claim-comparison-versions.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var first = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        var second = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var first = await store.StartRunAsync(CreateRun(project));
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var second = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
 
-        var before = await context.BenchmarkRuns.AsNoTracking().OrderBy(entity => entity.CreatedAtUtc).ToListAsync().ConfigureAwait(false);
+        var before = await context.BenchmarkRuns.AsNoTracking().OrderBy(entity => entity.CreatedAtUtc).ToListAsync();
         var canonical = string.CompareOrdinal(first.Id.ToString(), second.Id.ToString()) < 0
             ? (Left: first.Id, Right: second.Id)
             : (Left: second.Id, Right: first.Id);
-        _ = await InsertComparisonWorkAsync(context, project.Id, revision.Id, canonical.Left, pair: canonical).ConfigureAwait(false);
+        _ = await InsertComparisonWorkAsync(context, project.Id, revision.Id, canonical.Left, pair: canonical);
 
-        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Comparison, claimed.Kind);
 
         context.ChangeTracker.Clear();
-        var after = await context.BenchmarkRuns.AsNoTracking().OrderBy(entity => entity.CreatedAtUtc).ToListAsync().ConfigureAwait(false);
+        var after = await context.BenchmarkRuns.AsNoTracking().OrderBy(entity => entity.CreatedAtUtc).ToListAsync();
         AssertEx.Equal(before[0].Version, after[0].Version, "The canonical run of the pair keeps the CAS token its caller is holding.");
         AssertEx.Equal(before[1].Version, after[1].Version, "The other run of the pair is not touched either.");
     }
@@ -185,28 +184,27 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task Recovery_RunningFidelityAttempt_FailsTheRunsFidelityStatusAndKeepsTheNumbers()
     {
-        await using var context = await CreateSchemaAsync("recover-fidelity.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("recover-fidelity.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
 
         // A first measurement that succeeded, then a second one killed mid-flight.
-        var first = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        var firstClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var first = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        var firstClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, firstClaim.Version, first,
-                           PerplexityMean: 6.7983, PerplexityStdErr: 0.07405, PerplexityChunks: 200, PerplexityContextTokens: 512, CorpusId: "wikitext2-raw-test@abc"))
-                       .ConfigureAwait(false);
-        var second = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+                           PerplexityMean: 6.7983, PerplexityStdErr: 0.07405, PerplexityChunks: 200, PerplexityContextTokens: 512, CorpusId: "wikitext2-raw-test@abc"));
+        var second = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
 
-        _ = await store.RecoverRunsOnStartupAsync().ConfigureAwait(false);
+        _ = await store.RecoverRunsOnStartupAsync();
 
         context.ChangeTracker.Clear();
-        var interrupted = await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == second).ConfigureAwait(false);
+        var interrupted = await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == second);
         AssertEx.Equal(BenchmarkJudgeAttemptStatus.Failed, interrupted.Status, "A fidelity attempt whose process died must not stay Running forever.");
 
-        var recovered = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false);
+        var recovered = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id);
         AssertEx.Equal<Guid?>(first, recovered.FidelityAttemptId, "The projection keeps pointing at the attempt that actually succeeded.");
         AssertEx.Equal<double?>(6.7983, recovered.PerplexityMean, "An interrupted re-measurement must not erase the previous number.");
 
@@ -217,46 +215,43 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         AssertEx.Empty(await context.BenchmarkWorkItems.AsNoTracking()
                                     .Where(item => item.Kind == BenchmarkWorkKind.Fidelity
                                                    && (item.Status == BenchmarkWorkStatus.Queued || item.Status == BenchmarkWorkStatus.Running))
-                                    .ToListAsync()
-                                    .ConfigureAwait(false));
+                                    .ToListAsync());
     }
 
     [Test]
     public async Task DeleteRunAsync_RemovesTheRunsFidelityAttempts()
     {
-        await using var context = await CreateSchemaAsync("delete-fidelity-attempts.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("delete-fidelity-attempts.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync());
         _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version,
-                           Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 1, 4096, 100, 12, 120))
-                       .ConfigureAwait(false);
-        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983))
-                       .ConfigureAwait(false);
+                           Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 1, 4096, 100, 12, 120));
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983));
 
-        await store.DeleteRunAsync(run.Id, AssertEx.NotNull(await store.GetRunAsync(run.Id).ConfigureAwait(false)).Version).ConfigureAwait(false);
+        await store.DeleteRunAsync(run.Id, AssertEx.NotNull(await store.GetRunAsync(run.Id)).Version);
 
         // Foreign keys are off, so an attempt row nothing deletes simply survives its run forever — and it carries an
         // encrypted receipt, which makes it a leak rather than a tidiness problem.
         context.ChangeTracker.Clear();
-        AssertEx.Empty(await context.BenchmarkFidelityAttempts.AsNoTracking().Where(entity => entity.RunId == run.Id).ToListAsync().ConfigureAwait(false));
+        AssertEx.Empty(await context.BenchmarkFidelityAttempts.AsNoTracking().Where(entity => entity.RunId == run.Id).ToListAsync());
     }
 
     [Test]
     public async Task RequeueFidelityAsync_PutsTheClaimedItemBackInTheQueueRatherThanFailingIt()
     {
-        await using var context = await CreateSchemaAsync("requeue-fidelity.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("requeue-fidelity.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        var attemptId = await store.EnqueueFidelityAsync(run.Id, "kld").ConfigureAwait(false);
-        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "kld");
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
 
-        var requeued = await store.RequeueFidelityAsync(run.Id, claimed.Version, "another process holds the base logits").ConfigureAwait(false);
+        var requeued = await store.RequeueFidelityAsync(run.Id, claimed.Version, "another process holds the base logits");
 
         // Still queued, with the reason beside it: "waiting on another process" and "this will not happen" must not
         // read the same, and a fidelity work item pins attempt = 1, so a failure here would have no retry behind it.
@@ -266,9 +261,9 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
             "The reason travels with the item so a reader can tell waiting from failed.");
         context.ChangeTracker.Clear();
         AssertEx.Equal(BenchmarkJudgeAttemptStatus.Queued,
-            (await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == attemptId).ConfigureAwait(false)).Status);
+            (await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == attemptId)).Status);
 
-        var reclaimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var reclaimed = AssertEx.NotNull(await store.ClaimNextAsync());
         AssertEx.Equal(BenchmarkWorkKind.Fidelity, reclaimed.Kind);
         AssertEx.Equal<Guid?>(attemptId, reclaimed.FidelityAttemptId, "The consumer picks the same measurement up again on its next claim.");
     }
@@ -276,40 +271,39 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task RequeueFidelityAsync_OnAnAlreadyTerminalAttempt_ChangesNothing()
     {
-        await using var context = await CreateSchemaAsync("requeue-fidelity-terminal.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("requeue-fidelity-terminal.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983))
-                       .ConfigureAwait(false);
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983));
 
         // A requeue racing a completion must not start a second measurement of a cell that already has its number.
-        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.RequeueFidelityAsync(run.Id, claimed.Version, "too late")).ConfigureAwait(false);
-        AssertEx.Null(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.RequeueFidelityAsync(run.Id, claimed.Version, "too late"));
+        AssertEx.Null(await store.ClaimNextAsync());
     }
 
     [Test]
     public async Task Recovery_RunningComparison_TerminalizesFailed()
     {
-        await using var context = await CreateSchemaAsync("recover-comparison.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("recover-comparison.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        var comparisonId = await InsertComparisonWorkAsync(context, project.Id, revision.Id, run.Id).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        var comparisonId = await InsertComparisonWorkAsync(context, project.Id, revision.Id, run.Id);
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
 
-        _ = await store.RecoverRunsOnStartupAsync().ConfigureAwait(false);
+        _ = await store.RecoverRunsOnStartupAsync();
 
         context.ChangeTracker.Clear();
-        var comparison = await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId).ConfigureAwait(false);
+        var comparison = await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId);
         AssertEx.Equal(BenchmarkJudgeAttemptStatus.Failed, comparison.Status);
 
         // Terminal-failed, so the filtered live-slot index now permits the reconciler to re-enqueue this slot.
-        var work = await context.BenchmarkWorkItems.AsNoTracking().SingleAsync(entity => entity.ComparisonId == comparisonId).ConfigureAwait(false);
+        var work = await context.BenchmarkWorkItems.AsNoTracking().SingleAsync(entity => entity.ComparisonId == comparisonId);
         AssertEx.Equal(BenchmarkWorkStatus.Failed, work.Status);
     }
 
@@ -321,34 +315,34 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task Recovery_OrphanRunningAttemptWithTerminalWorkItem_IsSwept()
     {
-        await using var context = await CreateSchemaAsync("recover-orphans.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("recover-orphans.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        var fidelityId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        var comparisonId = await InsertComparisonWorkAsync(context, project.Id, revision.Id, run.Id).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        var fidelityId = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        var comparisonId = await InsertComparisonWorkAsync(context, project.Id, revision.Id, run.Id);
 
         context.ChangeTracker.Clear();
-        var fidelity = await context.BenchmarkFidelityAttempts.SingleAsync(entity => entity.Id == fidelityId).ConfigureAwait(false);
+        var fidelity = await context.BenchmarkFidelityAttempts.SingleAsync(entity => entity.Id == fidelityId);
         fidelity.Status = BenchmarkJudgeAttemptStatus.Running;
-        var comparison = await context.BenchmarkComparisons.SingleAsync(entity => entity.Id == comparisonId).ConfigureAwait(false);
+        var comparison = await context.BenchmarkComparisons.SingleAsync(entity => entity.Id == comparisonId);
         comparison.Status = BenchmarkJudgeAttemptStatus.Running;
-        foreach (var work in await context.BenchmarkWorkItems.Where(entity => entity.Kind != BenchmarkWorkKind.Primary).ToListAsync().ConfigureAwait(false))
+        foreach (var work in await context.BenchmarkWorkItems.Where(entity => entity.Kind != BenchmarkWorkKind.Primary).ToListAsync())
         {
             work.Status = BenchmarkWorkStatus.Failed;
         }
 
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.SaveChangesAsync();
 
-        _ = await store.RecoverRunsOnStartupAsync().ConfigureAwait(false);
+        _ = await store.RecoverRunsOnStartupAsync();
 
         context.ChangeTracker.Clear();
         AssertEx.Equal(BenchmarkJudgeAttemptStatus.Failed,
-            (await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == fidelityId).ConfigureAwait(false)).Status,
+            (await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == fidelityId)).Status,
             "The fidelity pre-sweep must reach an attempt whose work item is already terminal.");
         AssertEx.Equal(BenchmarkJudgeAttemptStatus.Failed,
-            (await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId).ConfigureAwait(false)).Status,
+            (await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId)).Status,
             "The comparison pre-sweep must do the same.");
     }
 
@@ -361,14 +355,14 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task FidelityProjection_IsOnlyRefreshedFromTheHighestSucceededAttempt()
     {
-        await using var context = await CreateSchemaAsync("fidelity-projection.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("fidelity-projection.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
 
-        var first = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        var firstClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var first = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        var firstClaim = AssertEx.NotNull(await store.ClaimNextAsync());
 
         // A NEWER measurement lands and succeeds while the older one is still running.
         context.ChangeTracker.Clear();
@@ -383,38 +377,36 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
             EnqueuedAtUtc = 1,
             Version = 1
         });
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.SaveChangesAsync();
 
-        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, firstClaim.Version, first, PerplexityMean: 99.0))
-                       .ConfigureAwait(false);
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, firstClaim.Version, first, PerplexityMean: 99.0));
 
         context.ChangeTracker.Clear();
-        var afterStaleSuccess = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false);
+        var afterStaleSuccess = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id);
         AssertEx.Null(afterStaleSuccess.PerplexityMean, "An attempt below the highest succeeded sequence must not become the projection.");
         AssertEx.Equal<Guid?>(null, afterStaleSuccess.FidelityAttemptId);
         AssertEx.Equal("succeeded", afterStaleSuccess.FidelityStatus, "The attempt itself still succeeded — only the projection refused it.");
 
         // And the ordinary path still projects: a fresh attempt above every succeeded sequence wins.
-        var latest = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        var latestClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var latest = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        var latestClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, latestClaim.Version, latest,
-                           PerplexityMean: 6.7983, PerplexityStdErr: 0.07405, PerplexityChunks: 200, PerplexityContextTokens: 512, CorpusId: "wikitext2-raw-test@abc"))
-                       .ConfigureAwait(false);
+                           PerplexityMean: 6.7983, PerplexityStdErr: 0.07405, PerplexityChunks: 200, PerplexityContextTokens: 512, CorpusId: "wikitext2-raw-test@abc"));
 
         context.ChangeTracker.Clear();
-        var projected = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false);
+        var projected = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id);
         AssertEx.Equal<Guid?>(latest, projected.FidelityAttemptId);
         AssertEx.Equal<double?>(6.7983, projected.PerplexityMean);
         AssertEx.Equal<double?>(0.07405, projected.PerplexityStdErr);
         AssertEx.Equal("wikitext2-raw-test@abc", projected.PerplexityCorpusId);
 
         // A failure after that leaves the numbers exactly where they are and only records the reason.
-        var failing = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
-        var failingClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        _ = await store.MarkFidelityFailedAsync(run.Id, failingClaim.Version, "llama-perplexity produced no final estimate.").ConfigureAwait(false);
+        var failing = await store.EnqueueFidelityAsync(run.Id, "ppl");
+        var failingClaim = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkFidelityFailedAsync(run.Id, failingClaim.Version, "llama-perplexity produced no final estimate.");
 
         context.ChangeTracker.Clear();
-        var afterFailure = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false);
+        var afterFailure = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id);
         AssertEx.Equal<Guid?>(latest, afterFailure.FidelityAttemptId, "A failed re-measurement leaves the projection pointing at the last success.");
         AssertEx.Equal<double?>(6.7983, afterFailure.PerplexityMean);
         AssertEx.Equal("failed", afterFailure.FidelityStatus);
@@ -431,14 +423,14 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task Freeze_WithFidelityEnabled_QueuesNothingAndMarksTheCellsItWillNeverMeasure()
     {
-        await using var context = await CreateSchemaAsync("fidelity-freeze.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("fidelity-freeze.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var (project, _) = await CreateJudgeProjectAsync(store);
 
         context.ChangeTracker.Clear();
-        var entity = await context.BenchmarkProjects.SingleAsync(candidate => candidate.Id == project.Id).ConfigureAwait(false);
+        var entity = await context.BenchmarkProjects.SingleAsync(candidate => candidate.Id == project.Id);
         entity.FidelityEnabled = true;
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
         var groupId = Guid.NewGuid();
@@ -460,16 +452,14 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
                                    RepeatIndex = 2
                                }
                            ],
-                           project.Version)
-                       .ConfigureAwait(false);
+                           project.Version);
 
         context.ChangeTracker.Clear();
         AssertEx.Empty(await context.BenchmarkWorkItems.AsNoTracking()
                                     .Where(item => item.Kind == BenchmarkWorkKind.Fidelity)
-                                    .ToListAsync()
-                                    .ConfigureAwait(false));
+                                    .ToListAsync());
 
-        var stored = await context.BenchmarkRuns.AsNoTracking().Where(run => run.ProjectId == project.Id).OrderBy(run => run.CreatedAtUtc).ToListAsync().ConfigureAwait(false);
+        var stored = await context.BenchmarkRuns.AsNoTracking().Where(run => run.ProjectId == project.Id).OrderBy(run => run.CreatedAtUtc).ToListAsync();
         AssertEx.Equal("skipped", stored.Single(run => run.IsWarmup).FidelityStatus, "A warm-up records that it was skipped, not that it was never asked.");
         AssertEx.Equal<string?>(null, stored.Single(run => run.RepeatIndex == 1).FidelityStatus, "The measured cell is not queued until it has an answer to measure.");
         AssertEx.Equal("skipped", stored.Single(run => run.RepeatIndex == 2).FidelityStatus);
@@ -482,63 +472,60 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task Fidelity_IsSeededOnPrimarySuccessAndOnNoOtherOutcome()
     {
-        await using var context = await CreateSchemaAsync("fidelity-on-success.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("fidelity-on-success.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var (project, _) = await CreateJudgeProjectAsync(store);
 
         context.ChangeTracker.Clear();
-        var entity = await context.BenchmarkProjects.SingleAsync(candidate => candidate.Id == project.Id).ConfigureAwait(false);
+        var entity = await context.BenchmarkProjects.SingleAsync(candidate => candidate.Id == project.Id);
         entity.FidelityEnabled = true;
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var failed = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        var failedClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        _ = await store.MarkPrimaryFailedAsync(failed.Id, failedClaim.Version, "the runtime never became ready").ConfigureAwait(false);
+        var failed = await store.StartRunAsync(CreateRun(project));
+        var failedClaim = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimaryFailedAsync(failed.Id, failedClaim.Version, "the runtime never became ready");
 
-        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        var cancelled = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        var cancelledClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        _ = await store.MarkPrimaryCancelledAsync(cancelled.Id, cancelledClaim.Version).ConfigureAwait(false);
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var cancelled = await store.StartRunAsync(CreateRun(project));
+        var cancelledClaim = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimaryCancelledAsync(cancelled.Id, cancelledClaim.Version);
 
         context.ChangeTracker.Clear();
         AssertEx.Empty(await context.BenchmarkWorkItems.AsNoTracking()
                                     .Where(item => item.Kind == BenchmarkWorkKind.Fidelity)
-                                    .ToListAsync()
-                                    .ConfigureAwait(false));
-        AssertEx.Empty(await context.BenchmarkFidelityAttempts.AsNoTracking().ToListAsync().ConfigureAwait(false));
+                                    .ToListAsync());
+        AssertEx.Empty(await context.BenchmarkFidelityAttempts.AsNoTracking().ToListAsync());
 
-        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        var succeeded = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        var succeededClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var succeeded = await store.StartRunAsync(CreateRun(project));
+        var succeededClaim = AssertEx.NotNull(await store.ClaimNextAsync());
         _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(succeeded.Id, succeededClaim.Run.Version,
-                           Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 1, 4096, 100, 12, 120))
-                       .ConfigureAwait(false);
+                           Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 1, 4096, 100, 12, 120));
 
         context.ChangeTracker.Clear();
         var items = await context.BenchmarkWorkItems.AsNoTracking()
                                  .Where(item => item.Kind == BenchmarkWorkKind.Fidelity)
-                                 .ToListAsync()
-                                 .ConfigureAwait(false);
+                                 .ToListAsync();
         AssertEx.Equal(expected: 1, items.Count, "Exactly the run that produced an answer is measured.");
         AssertEx.Equal(succeeded.Id, items[0].RunId);
-        AssertEx.Equal("queued", (await context.BenchmarkRuns.AsNoTracking().SingleAsync(run => run.Id == succeeded.Id).ConfigureAwait(false)).FidelityStatus);
+        AssertEx.Equal("queued", (await context.BenchmarkRuns.AsNoTracking().SingleAsync(run => run.Id == succeeded.Id)).FidelityStatus);
     }
 
     [Test]
     public async Task EnqueueFidelityAsync_WhileOneIsAlreadyQueued_IsRefused()
     {
-        await using var context = await CreateSchemaAsync("fidelity-double-enqueue.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("fidelity-double-enqueue.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
-        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-        _ = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
+        var (project, _) = await CreateJudgeProjectAsync(store);
+        var run = await store.StartRunAsync(CreateRun(project));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.EnqueueFidelityAsync(run.Id, "ppl");
 
-        var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.EnqueueFidelityAsync(run.Id, "ppl")).ConfigureAwait(false);
+        var conflict = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.EnqueueFidelityAsync(run.Id, "ppl"));
         AssertEx.Equal("FidelityAlreadyQueued", conflict.Code);
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.EnqueueFidelityAsync(run.Id, "hellaswag")).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.EnqueueFidelityAsync(run.Id, "hellaswag"));
     }
 
     /// <summary>
@@ -549,35 +536,35 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     [Test]
     public async Task CountActiveWorkAsync_CountsEveryKindOfOneProjectAndNothingTerminalOrForeign()
     {
-        await using var context = await CreateSchemaAsync("count-active-work.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("count-active-work.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System);
-        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        var runs = await store.StartRunsAsync([CreateRun(project), CreateRun(project)], project.Version).ConfigureAwait(false);
-        _ = await store.EnqueueFidelityAsync(runs[0].Id, "ppl").ConfigureAwait(false);
-        _ = await InsertComparisonWorkAsync(context, project.Id, revision.Id, runs[0].Id).ConfigureAwait(false);
+        var (project, revision) = await CreateJudgeProjectAsync(store);
+        var runs = await store.StartRunsAsync([CreateRun(project), CreateRun(project)], project.Version);
+        _ = await store.EnqueueFidelityAsync(runs[0].Id, "ppl");
+        _ = await InsertComparisonWorkAsync(context, project.Id, revision.Id, runs[0].Id);
 
         // A cancelled run's work is terminal, so it is not what makes a project busy.
-        _ = await store.CancelAsync(runs[1].Id, runs[1].Version).ConfigureAwait(false);
+        _ = await store.CancelAsync(runs[1].Id, runs[1].Version);
 
         // And another project's queue is not this project's — with foreign keys off, the join is the only thing saying so.
-        var (other, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
-        _ = await store.StartRunAsync(CreateRun(other)).ConfigureAwait(false);
+        var (other, _) = await CreateJudgeProjectAsync(store);
+        _ = await store.StartRunAsync(CreateRun(other));
 
-        var active = await store.CountActiveWorkAsync(project.Id).ConfigureAwait(false);
+        var active = await store.CountActiveWorkAsync(project.Id);
 
         AssertEx.Equal(expected: 3, active.Values.Sum());
         AssertEx.Equal(expected: 1, active[BenchmarkWorkKind.Primary]);
         AssertEx.Equal(expected: 1, active[BenchmarkWorkKind.Fidelity]);
         AssertEx.Equal(expected: 1, active[BenchmarkWorkKind.Comparison]);
-        AssertEx.Equal(expected: 1, (await store.CountActiveWorkAsync(other.Id).ConfigureAwait(false)).Values.Sum());
+        AssertEx.Equal(expected: 1, (await store.CountActiveWorkAsync(other.Id)).Values.Sum());
     }
 
     private async Task<NodeChatDbContext> CreateSchemaAsync(string fileName)
     {
         Directory.CreateDirectory(_rootPath);
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
-        await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
         return context;
     }
 
@@ -620,16 +607,16 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
             Version = 1,
             EnqueuedAtUtc = 2
         });
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
         return comparison.Id;
     }
 
     private static async Task<(BenchmarkProjectRecord Project, BenchmarkJudgePolicyRevisionRecord Revision)> CreateJudgeProjectAsync(BenchmarkStore store)
     {
-        var project = await store.CreateProjectAsync(CreateProject()).ConfigureAwait(false);
-        var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyBytes, PolicyHash).ConfigureAwait(false);
-        return (AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false)), activation.Revision);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var activation = await store.ActivateJudgePolicyAsync(project.Id, project.Version, PolicyBytes, PolicyHash);
+        return (AssertEx.NotNull(await store.GetProjectAsync(project.Id)), activation.Revision);
     }
 
     private static BenchmarkProjectInput CreateProject() =>

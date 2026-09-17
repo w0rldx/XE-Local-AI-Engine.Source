@@ -318,7 +318,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         try
         {
-            await Task.WhenAll(ending).WaitAsync(ShutdownDrainTimeout).ConfigureAwait(false);
+            await Task.WhenAll(ending).WaitAsync(ShutdownDrainTimeout);
         }
         catch (TimeoutException)
         {
@@ -377,15 +377,15 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             {
                 // An abort must not wait behind an inference. Cancelling frees every lane at its next cancellation
                 // point, which is what makes stopping prompt even while the transcriber is mid-call.
-                await session.Abort.CancelAsync().ConfigureAwait(false);
+                await session.Abort.CancelAsync();
             }
 
-            await StopProducerAsync(session).ConfigureAwait(false);
+            await StopProducerAsync(session);
 
             // A graceful end that could not finalize its last window is NOT a completed transcript. Telling the
             // operator otherwise hands them a success for a recording that is missing its final seconds, and the
             // retained audio is gone by then.
-            var outcome = await DrainAndFlushAsync(session, reason).ConfigureAwait(false)
+            var outcome = await DrainAndFlushAsync(session, reason)
                 ? reason
                 : LiveEndReason.Failed;
             var errorCode = outcome == reason ? null : FlushFailedErrorCode;
@@ -394,10 +394,10 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             // The point of no return, taken THROUGH the commit gate: a commit already inside the pipeline finishes,
             // and no commit may start after it. An abandoned lane that answers later is dropped rather than
             // persisted and published for a session the client has been told is over.
-            await FinalizeAsync(session).ConfigureAwait(false);
+            await FinalizeAsync(session);
 
-            await CompleteAsync(session, outcome, errorCode, errorMessage).ConfigureAwait(false);
-            await _publisher.PublishStatusAsync(session.Id, outcome, CancellationToken.None).ConfigureAwait(false);
+            await CompleteAsync(session, outcome, errorCode, errorMessage);
+            await _publisher.PublishStatusAsync(session.Id, outcome, CancellationToken.None);
         }
 #pragma warning disable CA1031 // Ending a session is the last chance to release it; nothing above may escape.
         catch (Exception exception)
@@ -432,7 +432,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         }
 
         // Cancelled BEFORE StopAsync is called: a producer that already stops on its token has nothing left to do.
-        await session.ProducerCts.CancelAsync().ConfigureAwait(false);
+        await session.ProducerCts.CancelAsync();
 
         if (producer is null)
         {
@@ -442,7 +442,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         try
         {
             using var bound = new CancellationTokenSource(ProducerStopTimeout, _timeProvider);
-            await producer.StopAsync(bound.Token).AsTask().WaitAsync(bound.Token).ConfigureAwait(false);
+            await producer.StopAsync(bound.Token).AsTask().WaitAsync(bound.Token);
         }
 #pragma warning disable CA1031 // A producer that fails or hangs is abandoned, never allowed to hold the session.
         catch (Exception exception)
@@ -479,7 +479,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             {
                 // Explicitly not propagating: this drain is what the abort tokens already triggered, so passing
                 // session.Abort.Token or lane.Abort.Token would abandon the lane the flush below must not race.
-                await chain.WaitAsync(LaneDrainTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
+                await chain.WaitAsync(LaneDrainTimeout, _timeProvider, CancellationToken.None);
             }
             catch (TimeoutException)
             {
@@ -500,7 +500,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             {
                 // THIS lane only. Cancelling the session's source here would hand a cancelled token to a sibling
                 // that drained cleanly, so one wedged lane would discard another lane's flushable speech.
-                await lane.Abort.CancelAsync().ConfigureAwait(false);
+                await lane.Abort.CancelAsync();
                 finalizedCleanly &= reason != LiveEndReason.Completed;
                 continue;
             }
@@ -514,8 +514,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
             try
             {
-                var tick = await lane.Segmenter.FlushAsync(lane.Abort.Token).ConfigureAwait(false);
-                await CommitAsync(session, lane, tick).ConfigureAwait(false);
+                var tick = await lane.Segmenter.FlushAsync(lane.Abort.Token);
+                await CommitAsync(session, lane, tick);
                 NoteProgress(session, lane, tick);
             }
 #pragma warning disable CA1031 // A lane that cannot finalize must not stop the session ending or the status push.
@@ -535,7 +535,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     /// </summary>
     private static async Task FinalizeAsync(LiveSession session)
     {
-        await session.CommitGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await session.CommitGate.WaitAsync(CancellationToken.None);
         try
         {
             lock (session.Gate)
@@ -569,8 +569,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<ITranscriptionService>()
-                   .CompleteLiveAsync(session.Id, status, durationMs, detectedLanguage, errorCode, errorMessage, CancellationToken.None)
-                   .ConfigureAwait(false);
+                   .CompleteLiveAsync(session.Id, status, durationMs, detectedLanguage, errorCode, errorMessage, CancellationToken.None);
     }
 
     private async Task ConsumeAsync(LiveSession session, Lane lane, byte[] pcm16, Task previous)
@@ -583,7 +582,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         try
         {
             // Ordering, not a result: the previous frame's own handler already dealt with however it ended.
-            await previous.ConfigureAwait(false);
+            await previous;
         }
 #pragma warning disable CA1031 // See above: this await exists only to keep frames in arrival order.
         catch (Exception)
@@ -594,8 +593,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         try
         {
-            var tick = await lane.Segmenter.PushAsync(pcm16, lane.Abort.Token).ConfigureAwait(false);
-            await CommitAsync(session, lane, tick).ConfigureAwait(false);
+            var tick = await lane.Segmenter.PushAsync(pcm16, lane.Abort.Token);
+            await CommitAsync(session, lane, tick);
             NoteProgress(session, lane, tick);
         }
         catch (OperationCanceledException)
@@ -626,7 +625,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         {
             // CancellationToken.None throughout: a commit that has been allocated a sequence must reach the database
             // and the socket, or the client's watermark skips a number it will never see again.
-            await session.CommitGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            await session.CommitGate.WaitAsync(CancellationToken.None);
             try
             {
                 if (IsFinalized(session))
@@ -652,8 +651,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                                    commit.EndMs,
                                    commit.Text,
                                    commit.Confidence,
-                                   CancellationToken.None)
-                               .ConfigureAwait(false);
+                                   CancellationToken.None);
                 }
 
                 await _publisher.PublishSegmentAsync(session.Id,
@@ -663,7 +661,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                     commit.EndMs,
                     commit.Text,
                     commit.Confidence,
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None);
             }
             finally
             {
@@ -678,7 +676,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         // Under the commit gate, exactly like a segment: checking finalization outside it left a window in which a
         // lane could pass the check, pause, and publish provisional text after the terminal status had gone out.
-        await session.CommitGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await session.CommitGate.WaitAsync(CancellationToken.None);
         try
         {
             if (IsFinalized(session))
@@ -687,7 +685,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             }
 
             lane.LastPartial = tick.Partial;
-            await _publisher.PublishPartialAsync(session.Id, lane.Channel, tick.Partial, CancellationToken.None).ConfigureAwait(false);
+            await _publisher.PublishPartialAsync(session.Id, lane.Channel, tick.Partial, CancellationToken.None);
         }
         finally
         {

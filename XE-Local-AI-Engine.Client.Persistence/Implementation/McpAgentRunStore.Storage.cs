@@ -34,12 +34,12 @@ public sealed partial class McpAgentRunStore
         var connection = new SqliteConnection(_connectionString);
         try
         {
-            await NodeSqlitePragmas.OpenAndConfigureAsync(connection, cancellationToken).ConfigureAwait(false);
+            await NodeSqlitePragmas.OpenAndConfigureAsync(connection, cancellationToken);
             return connection;
         }
         catch
         {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            await connection.DisposeAsync();
             throw;
         }
     }
@@ -52,8 +52,8 @@ public sealed partial class McpAgentRunStore
     {
         await using var command = CreateCommand(connection, transaction, SelectColumns + " WHERE request_id = $requestId;");
         Add(command, "$requestId", requestId.ToString("D", CultureInfo.InvariantCulture));
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadRow(reader, includePayload) : null;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadRow(reader, includePayload) : null;
     }
 
     private static McpAgentRunRow ReadRow(SqliteDataReader reader, bool includePayload)
@@ -143,7 +143,7 @@ public sealed partial class McpAgentRunStore
         SqliteTransaction transaction,
         CancellationToken cancellationToken)
     {
-        var ledger = await TryLoadLedgerAsync(connection, transaction, cancellationToken).ConfigureAwait(false)
+        var ledger = await TryLoadLedgerAsync(connection, transaction, cancellationToken)
                      ?? throw new InvalidOperationException("The MCP run ledger singleton is missing.");
         ValidateLedgerVersion(ledger);
         return ledger;
@@ -158,8 +158,8 @@ public sealed partial class McpAgentRunStore
                                                                              tombstone_logical_bytes, updated_at_utc
                                                                          FROM mcp_agent_run_ledger WHERE id = 1;
                                                                          """);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
         {
             return null;
         }
@@ -194,8 +194,8 @@ public sealed partial class McpAgentRunStore
         Add(command, "$queued", (int)McpAgentRunStatus.Queued);
         Add(command, "$running", (int)McpAgentRunStatus.Running);
         Add(command, "$accountingVersion", AccountingVersion);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        _ = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        _ = await reader.ReadAsync(cancellationToken);
         var minVersion = reader.GetInt32(6);
         var maxVersion = reader.GetInt32(7);
         if (minVersion != AccountingVersion || maxVersion != AccountingVersion)
@@ -271,7 +271,7 @@ public sealed partial class McpAgentRunStore
         Add(command, "$activeBytes", counters.ActivePayloadBytes);
         Add(command, "$tombstoneBytes", counters.TombstoneLogicalBytes);
         Add(command, "$updatedAtUtc", counters.UpdatedAtUtc);
-        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static void ValidateLedgerVersion(McpAgentRunLedgerCounters ledger)

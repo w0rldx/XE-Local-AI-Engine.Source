@@ -31,7 +31,7 @@ public sealed class SaveNodeSettingsEndpoint(INodeSettingsAdministrationService 
         // request, not the current stored state, and some rules need the EFFECTIVE runtime value (stored > appsettings
         // seed > default) for a knob the request omitted. The policy stops at the first violation, matching the
         // one-error-at-a-time response this endpoint has always sent.
-        var result = await _administrationService.SaveTrustedMergedAsync(current => req.ToStoredSettings(current), ct).ConfigureAwait(false);
+        var result = await _administrationService.SaveTrustedMergedAsync(current => req.ToStoredSettings(current), ct);
         if (result.Conflicted)
         {
             // Nothing was written: the stored record changed under every validation attempt. Operator-facing, and the
@@ -39,7 +39,7 @@ public sealed class SaveNodeSettingsEndpoint(INodeSettingsAdministrationService 
             await Send.ResultAsync(Results.Conflict(new NodeSettingsConflictResponse
             {
                 Message = "Node settings changed while this save was being validated. Reload and retry."
-            })).ConfigureAwait(false);
+            }));
             return;
         }
 
@@ -50,11 +50,11 @@ public sealed class SaveNodeSettingsEndpoint(INodeSettingsAdministrationService 
                 AddPolicyError(policyError);
             }
 
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        await Send.OkAsync(result.Settings.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(result.Settings.ToResponse(), ct);
     }
 
     // Maps a policy violation back onto the request property it belongs to, so the 400 body keeps naming the same

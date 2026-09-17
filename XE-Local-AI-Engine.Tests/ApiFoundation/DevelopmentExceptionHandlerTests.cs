@@ -32,8 +32,8 @@ public sealed class DevelopmentExceptionHandlerTests
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{Guid.NewGuid()}");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.Equal(string.Empty, body, "the 404 the Development endpoints used to send carried no body, and the global handler must not add one.");
@@ -56,7 +56,7 @@ public sealed class DevelopmentExceptionHandlerTests
         };
         var handler = new DevelopmentNotFoundExceptionHandler();
 
-        AssertEx.False(await handler.TryHandleAsync(context, new KeyNotFoundException("an unrelated dictionary miss"), CancellationToken.None).ConfigureAwait(false));
+        AssertEx.False(await handler.TryHandleAsync(context, new KeyNotFoundException("an unrelated dictionary miss"), CancellationToken.None));
     }
 
     [Test]
@@ -71,8 +71,7 @@ public sealed class DevelopmentExceptionHandlerTests
         };
         var handler = new DevelopmentNotFoundExceptionHandler();
 
-        AssertEx.True(await handler.TryHandleAsync(context, new DevelopmentNotFoundException("Development project 'x' was not found."), CancellationToken.None)
-                                   .ConfigureAwait(false));
+        AssertEx.True(await handler.TryHandleAsync(context, new DevelopmentNotFoundException("Development project 'x' was not found."), CancellationToken.None));
         AssertEx.Equal(expected: 404, context.Response.StatusCode);
         AssertEx.Equal(expected: 0L, context.Response.Body.Length);
     }
@@ -105,12 +104,12 @@ public sealed class DevelopmentExceptionHandlerTests
         };
         var handler = new DevelopmentConflictExceptionHandler(NullLogger<DevelopmentConflictExceptionHandler>.Instance);
 
-        AssertEx.True(await handler.TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(await handler.TryHandleAsync(context, exception, CancellationToken.None));
         AssertEx.Equal(expected: 409, context.Response.StatusCode);
         AssertEx.Contains(context.Response.ContentType, "problem+json", StringComparison.OrdinalIgnoreCase);
 
         context.Response.Body.Position = 0;
-        using var document = await JsonDocument.ParseAsync(context.Response.Body).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(context.Response.Body);
         var root = document.RootElement;
 
         // The status-derived pair, pinned so "the body did not change" is checkable rather than asserted. Note the
@@ -164,7 +163,7 @@ public sealed class DevelopmentExceptionHandlerTests
             };
             var handler = new DevelopmentConflictExceptionHandler(NullLogger<DevelopmentConflictExceptionHandler>.Instance);
 
-            AssertEx.False(await handler.TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false),
+            AssertEx.False(await handler.TryHandleAsync(context, exception, CancellationToken.None),
                 $"{exception.GetType().Name} does not have one status across the endpoints that raise it.");
         }
     }

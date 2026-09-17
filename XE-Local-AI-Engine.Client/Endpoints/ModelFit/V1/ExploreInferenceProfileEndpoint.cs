@@ -40,39 +40,39 @@ public sealed class ExploreInferenceProfileEndpoint(IInferenceProfileService inf
         if (string.IsNullOrWhiteSpace(req.ModelName))
         {
             AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (ModelFitMapper.TryParseRole(req.Role) is not { } role)
         {
             AddError("Role is not supported.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (req.ContextTokens is { } contextTokens && contextTokens is < MinExploreContextTokens or > MaxExploreContextTokens)
         {
             AddError($"Context tokens must be between {MinExploreContextTokens} and {MaxExploreContextTokens}.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var result = await _inferenceProfileService.ExploreAsync(req.ModelName.Trim(), role, req.ContextTokens, ct).ConfigureAwait(false);
+        var result = await _inferenceProfileService.ExploreAsync(req.ModelName.Trim(), role, req.ContextTokens, ct);
 
         // A skip is not a failure: the model was busy, nothing was measured and nothing was evicted. It still returns
         // 400 (the response DTO carries no skip state), so the WORDING is what tells the operator to simply retry.
         if (result.Skipped)
         {
             AddError(result.FailureReason ?? "Skipped: the model is in use; profiling did not run. Retry when the model is idle.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (!result.Success || result.Profile is null)
         {
             AddError(result.FailureReason ?? "The model could not be explored.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -80,6 +80,6 @@ public sealed class ExploreInferenceProfileEndpoint(IInferenceProfileService inf
             {
                 Profile = result.Profile.ToDto()
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

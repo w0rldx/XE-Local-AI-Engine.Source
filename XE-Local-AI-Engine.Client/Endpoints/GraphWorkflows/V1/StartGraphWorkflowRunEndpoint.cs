@@ -41,7 +41,7 @@ public sealed class StartGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs)
 
         if (GraphWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail));
             return;
         }
 
@@ -50,15 +50,15 @@ public sealed class StartGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs)
             // Re-serialized rather than passed as the raw body slice: what the run stores has to be the value of the
             // `input` member, not the request that carried it.
             var input = req.Input is { } payload ? JsonSerializer.Serialize(payload) : null;
-            var detail = await _runs.StartAsync(req.DefinitionId, req.RequestId, input, req.DefinitionVersion, ct).ConfigureAwait(false);
-            await Send.ResultAsync(Results.Accepted(value: new StartGraphWorkflowRunResponse(detail.Run.Id))).ConfigureAwait(false);
+            var detail = await _runs.StartAsync(req.DefinitionId, req.RequestId, input, req.DefinitionVersion, ct);
+            await Send.ResultAsync(Results.Accepted(value: new StartGraphWorkflowRunResponse(detail.Run.Id)));
         }
         catch (GraphWorkflowValidationException exception)
         {
             // Replayed here rather than in the global single-message handler, for the same reason the definition
             // routes do it: a graph that cannot start says every wrong thing about itself at once.
             GraphWorkflowValidationErrors.AddTo(this, exception.Result);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }

@@ -13,9 +13,9 @@ public sealed class AddConversationCompactionSummaryMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsCompactionSummaryColumnsToConversations()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("compaction-summary.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("compaction-summary.sqlite");
 
-        var columns = await probe.ColumnsAsync("conversations").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("conversations");
         AssertEx.True(columns.IsSupersetOf(new[]
         {
             "compaction_summary",

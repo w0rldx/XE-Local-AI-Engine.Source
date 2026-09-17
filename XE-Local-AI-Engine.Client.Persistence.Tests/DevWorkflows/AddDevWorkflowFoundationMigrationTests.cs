@@ -24,21 +24,21 @@ public sealed class AddDevWorkflowFoundationMigrationTests
     [Test]
     public async Task Migrate_CreatesTheEightTablesWithTheirColumnsAndIndexes()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-foundation.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-foundation.sqlite", PreviousMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.False(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must not exist before the migration.");
+            AssertEx.False(await probe.TableExistsAsync(table), $"{table} must not exist before the migration.");
         }
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist after the migration.");
+            AssertEx.True(await probe.TableExistsAsync(table), $"{table} must exist after the migration.");
         }
 
-        var runColumns = await probe.ColumnsAsync("dev_workflow_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("dev_workflow_runs");
         foreach (var column in new[]
                  {
                      "id",
@@ -64,7 +64,7 @@ public sealed class AddDevWorkflowFoundationMigrationTests
 
         // The full node-run column set ships now, inert columns included: five nullable fields cost nothing and save a
         // migration when the parallelism and policy slices land.
-        var nodeRunColumns = await probe.ColumnsAsync("dev_workflow_node_runs").ConfigureAwait(false);
+        var nodeRunColumns = await probe.ColumnsAsync("dev_workflow_node_runs");
         foreach (var column in new[]
                  {
                      "id",
@@ -98,7 +98,7 @@ public sealed class AddDevWorkflowFoundationMigrationTests
             AssertEx.True(nodeRunColumns.Contains(column), $"dev_workflow_node_runs must carry '{column}'.");
         }
 
-        var artifactColumns = await probe.ColumnsAsync("dev_workflow_artifacts").ConfigureAwait(false);
+        var artifactColumns = await probe.ColumnsAsync("dev_workflow_artifacts");
         foreach (var column in new[]
                  {
                      "lineage_id",
@@ -115,29 +115,23 @@ public sealed class AddDevWorkflowFoundationMigrationTests
             AssertEx.True(artifactColumns.Contains(column), $"dev_workflow_artifacts must carry '{column}'.");
         }
 
-        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_node_runs", "ux_dev_workflow_node_runs_run_node", unique: true, "run_id", "node_key").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_node_runs", "ux_dev_workflow_node_runs_run_node", unique: true, "run_id", "node_key"),
             "One row per (run, node key) is the node run's identity, so it is a unique index.");
-        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_run_events", "ux_dev_workflow_run_events_run_sequence", unique: true, "run_id", "sequence")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_run_events", "ux_dev_workflow_run_events_run_sequence", unique: true, "run_id", "sequence"),
             "The event watermark must be unique per run.");
-        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_run_events", "ux_dev_workflow_run_events_operation", unique: true, "run_id", "operation_id")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_run_events", "ux_dev_workflow_run_events_operation", unique: true, "run_id", "operation_id"),
             "One event per operation id is what makes a replayed step idempotent.");
-        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_runs", "ux_dev_workflow_runs_live_per_work_item", unique: true, "work_item_id").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_runs", "ux_dev_workflow_runs_live_per_work_item", unique: true, "work_item_id"),
             "One live run per work item is a database constraint, which cannot lose a race the way a read-modify-write can.");
-        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_artifacts", "ux_dev_workflow_artifacts_lineage_version", unique: true, "lineage_id", "version")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_artifacts", "ux_dev_workflow_artifacts_lineage_version", unique: true, "lineage_id", "version"),
             "The lineage is the version key.");
         AssertEx.True(await probe
-                            .IndexExistsAsync("dev_workflow_artifacts", "ix_dev_workflow_artifacts_run_node_name", unique: false, "run_id", "producing_node_key", "name")
-                            .ConfigureAwait(false),
+                            .IndexExistsAsync("dev_workflow_artifacts", "ix_dev_workflow_artifacts_run_node_name", unique: false, "run_id", "producing_node_key", "name"),
             "Lineage resolution is (run, producing node key, name), and it must be one indexed read.");
-        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_decisions", "ux_dev_workflow_decisions_node_run_attempt", unique: true, "node_run_id", "attempt")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("dev_workflow_decisions", "ux_dev_workflow_decisions_node_run_attempt", unique: true, "node_run_id", "attempt"),
             "One decision per node-run ATTEMPT, not per node run.");
         AssertEx.True(await probe
-                            .IndexExistsAsync("dev_workflow_artifact_uses", "ux_dev_workflow_artifact_uses_node_artifact", unique: true, "node_run_id", "artifact_id")
-                            .ConfigureAwait(false),
+                            .IndexExistsAsync("dev_workflow_artifact_uses", "ux_dev_workflow_artifact_uses_node_artifact", unique: true, "node_run_id", "artifact_id"),
             "A consumed-by edge is captured idempotently.");
     }
 
@@ -145,15 +139,15 @@ public sealed class AddDevWorkflowFoundationMigrationTests
     [Test]
     public async Task MigratedSchema_MatchesWhatEnsureCreatedBuilds()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-schema-parity.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-schema-parity.sqlite");
 
         using var fixture = new DevWorkflowTestFixture();
-        await using var created = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var created = await fixture.CreateSchemaAsync();
 
         foreach (var table in Tables)
         {
-            var migrated = await probe.ColumnsAsync(table).ConfigureAwait(false);
-            var ensured = await EnsureCreatedColumnsAsync(fixture, table).ConfigureAwait(false);
+            var migrated = await probe.ColumnsAsync(table);
+            var ensured = await EnsureCreatedColumnsAsync(fixture, table);
             AssertEx.Empty(migrated.Except(ensured, StringComparer.Ordinal), $"{table}: the migration created column(s) EnsureCreated does not.");
             AssertEx.Empty(ensured.Except(migrated, StringComparer.Ordinal), $"{table}: EnsureCreated created column(s) the migration does not.");
         }
@@ -162,30 +156,30 @@ public sealed class AddDevWorkflowFoundationMigrationTests
     [Test]
     public async Task Rollback_DropsTheEightTablesAndLeavesTheRestOfTheSchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-foundation-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-foundation-rollback.sqlite", ThisMigrationId);
 
-        await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreviousMigrationId);
 
         foreach (var table in Tables)
         {
-            AssertEx.False(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must be gone after the rollback.");
+            AssertEx.False(await probe.TableExistsAsync(table), $"{table} must be gone after the rollback.");
         }
 
         // Nothing else may go with them: the migration only ever created tables, so `Down` has nothing else to touch.
-        AssertEx.True(await probe.TableExistsAsync("agent_work_sessions").ConfigureAwait(false), "The rollback must not disturb the work-session tables.");
-        AssertEx.True(await probe.TableExistsAsync("development_tasks").ConfigureAwait(false), "The rollback must not disturb the Development tables.");
+        AssertEx.True(await probe.TableExistsAsync("agent_work_sessions"), "The rollback must not disturb the work-session tables.");
+        AssertEx.True(await probe.TableExistsAsync("development_tasks"), "The rollback must not disturb the Development tables.");
     }
 
     private static async Task<IReadOnlySet<string>> EnsureCreatedColumnsAsync(DevWorkflowTestFixture fixture, string table)
     {
         var columns = new HashSet<string>(StringComparer.Ordinal);
         await using var connection = new SqliteConnection($"Data Source={fixture.DatabasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM pragma_table_info($table);";
         command.Parameters.AddWithValue("$table", table);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             _ = columns.Add(reader.GetString(ordinal: 0));
         }

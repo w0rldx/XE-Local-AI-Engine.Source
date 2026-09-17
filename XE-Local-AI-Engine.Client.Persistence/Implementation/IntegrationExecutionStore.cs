@@ -41,7 +41,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
 
     public async Task<IntegrationExecutionSnapshot?> GetByIdAsync(Guid executionId, CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.IntegrationExecutions.AsNoTracking().SingleOrDefaultAsync(row => row.Id == executionId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.IntegrationExecutions.AsNoTracking().SingleOrDefaultAsync(row => row.Id == executionId, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
@@ -50,8 +50,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         // Both columns: the unique index over (principal_id, request_id) guarantees this matches at most one row, and
         // scoping by principal is what stops a replay ever seeing another integrator's execution.
         var entity = await _dbContext.IntegrationExecutions.AsNoTracking()
-                                     .SingleOrDefaultAsync(row => row.PrincipalId == principalId && row.RequestId == requestId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .SingleOrDefaultAsync(row => row.PrincipalId == principalId && row.RequestId == requestId, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
@@ -66,8 +65,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
                              .ThenByDescending(row => row.Id)
                              .Skip(Math.Max(val1: 0, filter.Offset))
                              .Take(Math.Max(val1: 0, filter.Limit))
-                             .ToListAsync(cancellationToken)
-                             .ConfigureAwait(false);
+                             .ToListAsync(cancellationToken);
         return [.. entities.Select(ToSnapshot)];
     }
 
@@ -120,7 +118,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken);
         if (entity is null || entity.Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(entity.Status))
         {
             return false;
@@ -163,7 +161,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
 
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -188,7 +186,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken);
         if (entity is null || entity.Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(entity.Status))
         {
             return false;
@@ -225,13 +223,13 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         // ONE transaction around the status CAS, the terminal event, the audit row and both watermarks: the watermarks
         // move through SQL rather than through a loaded value, so two writers racing on the same row cannot each apply
         // their own stale MAX and lose the higher one.
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.EndedAtUtc, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.EndedAtUtc, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -266,7 +264,6 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         // tracked copy would only carry a stale LastSequence into the next call on this scoped context.
         var entity = await _dbContext.IntegrationExecutions.AsNoTracking()
                                      .SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken)
-                                     .ConfigureAwait(false)
                      ?? throw new InvalidOperationException($"Integration execution '{command.ExecutionId}' does not exist.");
 
         _ = _dbContext.IntegrationExecutionEvents.Add(new IntegrationExecutionEvent
@@ -279,13 +276,13 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             OccurredAtUtc = command.OccurredAtUtc
         });
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await MoveWatermarksAsync(command.ExecutionId, entity.SessionId, command.Sequence, command.OccurredAtUtc, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (Exception)
         {
@@ -304,8 +301,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         var entity = await _dbContext.IntegrationExecutions.AsNoTracking()
                                      .Where(row => row.SessionId == sessionId && row.Status == IntegrationExecutionStatus.Running)
                                      .OrderByDescending(row => row.ReceivedAtUtc)
-                                     .FirstOrDefaultAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
@@ -322,7 +318,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         // caller's own pre-check. Plaintext UTF-8, never the encrypted column's length.
         var length = (long)Encoding.UTF8.GetByteCount(append.DetailJson);
 
-        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == append.ExecutionId, cancellationToken).ConfigureAwait(false)
+        var entity = await _dbContext.IntegrationExecutions.SingleOrDefaultAsync(row => row.Id == append.ExecutionId, cancellationToken)
                      ?? throw new InvalidOperationException($"Integration execution '{append.ExecutionId}' does not exist.");
 
         // Check-and-reserve INSIDE the transaction that inserts the row. This is the authoritative cap; over it,
@@ -345,13 +341,13 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         entity.OutputBytes += length;
         entity.OutputCount++;
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await MoveWatermarksAsync(append.ExecutionId, entity.SessionId, append.Sequence, append.OccurredAtUtc, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await MoveWatermarksAsync(append.ExecutionId, entity.SessionId, append.Sequence, append.OccurredAtUtc, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (Exception)
         {
@@ -381,8 +377,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
                                      .Where(row => row.ExecutionId == executionId && row.Sequence > sinceSequence)
                                      .OrderBy(row => row.Sequence)
                                      .Take(limit)
-                                     .ToListAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .ToListAsync(cancellationToken);
 
         return
         [
@@ -415,14 +410,12 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         _ = await _dbContext.IntegrationExecutions.Where(row => row.Id == executionId)
                             .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastSequence,
                                     row => row.LastSequence > sequence ? row.LastSequence : sequence),
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                                cancellationToken);
 
         _ = await _dbContext.IntegrationSessions.Where(row => row.Id == sessionId)
                             .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastSequence, sequence)
                                                                   .SetProperty(row => row.LastActivityUtc, atUtc),
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                                cancellationToken);
     }
 
     /// <summary>

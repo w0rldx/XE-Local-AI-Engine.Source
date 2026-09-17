@@ -81,7 +81,7 @@ public sealed class SandboxedMcpStdioTransportTests
             Options.Create(new LocalContainerOptions()),
             NullLoggerFactory.Instance);
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => transport.ConnectAsync()).ConfigureAwait(false);
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => transport.ConnectAsync());
 
         AssertEx.Contains(exception.Message, "Sandboxed");
         AssertEx.Contains(exception.Message, "Privileged host");

@@ -30,26 +30,25 @@ public sealed class RemoveTrainingRuntimeEndpoint(TrainingRuntimeOrchestrationSe
         {
             // The install tears its own tree down on cancellation; reporting the in-progress status back is honest,
             // and the client polls or listens on the hub for the terminal transition.
-            await Send.OkAsync(runtime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+            await Send.OkAsync(runtime.GetStatus().ToResponse(), ct);
             return;
         }
 
         try
         {
-            if (!await runtime.RemoveAsync(ct).ConfigureAwait(false))
+            if (!await runtime.RemoveAsync(ct))
             {
                 await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
-                              "A training runtime install is in progress. Cancel it before removing the runtime."))
-                          .ConfigureAwait(false);
+                              "A training runtime install is in progress. Cancel it before removing the runtime."));
                 return;
             }
         }
         catch (TrainingRuntimeException exception)
         {
-            await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked("remove-failed", exception.Message)).ConfigureAwait(false);
+            await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked("remove-failed", exception.Message));
             return;
         }
 
-        await Send.OkAsync(runtime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(runtime.GetStatus().ToResponse(), ct);
     }
 }

@@ -44,17 +44,17 @@ internal static class NodeLocalModelGate
 
         // Cheapest discriminator AND the one the other two cannot supply: an `ext:` id, a cloud id and a typo are all
         // absent from the registry, so they are refused before any resolver is consulted.
-        if (!await ggufModelStore.ExistsAsync(canonicalName, cancellationToken).ConfigureAwait(false))
+        if (!await ggufModelStore.ExistsAsync(canonicalName, cancellationToken))
         {
             return false;
         }
 
-        if (await modelTrustResolver.ResolveAsync(canonicalName, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
+        if (await modelTrustResolver.ResolveAsync(canonicalName, cancellationToken) != ModelTrustLocality.Local)
         {
             return false;
         }
 
-        var providerName = await localModelProviderResolver.ResolveProviderNameForModelAsync(canonicalName, cancellationToken).ConfigureAwait(false);
+        var providerName = await localModelProviderResolver.ResolveProviderNameForModelAsync(canonicalName, cancellationToken);
         return string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
     }
 }

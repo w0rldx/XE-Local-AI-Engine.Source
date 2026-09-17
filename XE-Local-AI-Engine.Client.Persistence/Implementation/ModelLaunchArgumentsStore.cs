@@ -20,8 +20,7 @@ public sealed class ModelLaunchArgumentsStore(NodeChatDbContext dbContext, TimeP
 
         var entity = await _dbContext.ModelLaunchArguments
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(row => row.ModelName == modelName, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.ModelName == modelName, cancellationToken);
 
         return entity?.RawArguments;
     }
@@ -31,8 +30,7 @@ public sealed class ModelLaunchArgumentsStore(NodeChatDbContext dbContext, TimeP
         var entities = await _dbContext.ModelLaunchArguments
                                        .AsNoTracking()
                                        .OrderBy(row => row.ModelName)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -45,8 +43,7 @@ public sealed class ModelLaunchArgumentsStore(NodeChatDbContext dbContext, TimeP
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         var entity = await _dbContext.ModelLaunchArguments
-                                     .FirstOrDefaultAsync(row => row.ModelName == modelName, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.ModelName == modelName, cancellationToken);
 
         if (entity is null)
         {
@@ -65,7 +62,7 @@ public sealed class ModelLaunchArgumentsStore(NodeChatDbContext dbContext, TimeP
             entity.UpdatedAtUtc = now;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -75,8 +72,7 @@ public sealed class ModelLaunchArgumentsStore(NodeChatDbContext dbContext, TimeP
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
         var entity = await _dbContext.ModelLaunchArguments
-                                     .FirstOrDefaultAsync(row => row.ModelName == modelName, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.ModelName == modelName, cancellationToken);
 
         if (entity is null)
         {
@@ -84,7 +80,7 @@ public sealed class ModelLaunchArgumentsStore(NodeChatDbContext dbContext, TimeP
         }
 
         _ = _dbContext.ModelLaunchArguments.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 

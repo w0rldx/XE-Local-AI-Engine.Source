@@ -61,8 +61,7 @@ internal sealed class GraphWorkflowInlineExecutor(IOptions<GraphWorkflowOptions>
                                GraphWorkflowVersions.Any,
                                GraphWorkflowNodeRunStatus.Running,
                                InputJson: inputJson),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
 
         string document;
         try
@@ -84,8 +83,7 @@ internal sealed class GraphWorkflowInlineExecutor(IOptions<GraphWorkflowOptions>
                                    GraphWorkflowNodeRunStatus.Failed,
                                    FailureClass: GraphWorkflowFailureClass.OutputTooLarge,
                                    TerminalReason: exception.Message),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             return 2;
         }
 
@@ -94,8 +92,7 @@ internal sealed class GraphWorkflowInlineExecutor(IOptions<GraphWorkflowOptions>
                                GraphWorkflowVersions.Any,
                                GraphWorkflowNodeRunStatus.Succeeded,
                                OutputJson: document),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 2;
     }
 

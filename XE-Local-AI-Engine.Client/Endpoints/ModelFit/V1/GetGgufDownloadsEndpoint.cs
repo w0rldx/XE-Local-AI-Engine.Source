@@ -44,6 +44,6 @@ public sealed class GetGgufDownloadsEndpoint(IGgufDownloadCoordinator downloadCo
         await Send.OkAsync(new ListGgufDownloadsResponse
         {
             Items = items
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

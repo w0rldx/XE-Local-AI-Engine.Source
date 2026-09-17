@@ -39,7 +39,7 @@ internal sealed class IntegrationTestFixture : IDisposable
     public async Task<NodeChatDbContext> CreateSchemaAsync()
     {
         var context = CreateContext();
-        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureCreatedAsync();
         return context;
     }
 
@@ -125,31 +125,31 @@ internal sealed class IntegrationTestFixture : IDisposable
     public async Task<object?> RawScalarAsync(string sql, Action<SqliteCommand>? configure = null)
     {
         await using var connection = new SqliteConnection($"Data Source={DatabasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
 #pragma warning disable CA2100 // The SQL is a fixed literal in the calling suite; every value binds through `configure`.
         command.CommandText = sql;
 #pragma warning restore CA2100
         configure?.Invoke(command);
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is DBNull ? null : value;
     }
 
     public async Task RawExecuteAsync(string sql, Action<SqliteCommand>? configure = null)
     {
         await using var connection = new SqliteConnection($"Data Source={DatabasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
 #pragma warning disable CA2100 // Same: fixed literal, bound parameters.
         command.CommandText = sql;
 #pragma warning restore CA2100
         configure?.Invoke(command);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     public async Task<long> RawTableCountAsync(string table)
     {
-        var count = await RawScalarAsync($"SELECT COUNT(*) FROM {table};").ConfigureAwait(false);
+        var count = await RawScalarAsync($"SELECT COUNT(*) FROM {table};");
         return Convert.ToInt64(count, CultureInfo.InvariantCulture);
     }
 }

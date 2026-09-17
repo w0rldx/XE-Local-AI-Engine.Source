@@ -47,7 +47,7 @@ public sealed class ModelTrustResolver : IModelTrustResolver
             return _cloudFactory.IsCloudProviderSelected(modelId) ? ModelTrustLocality.Cloud : ModelTrustLocality.Local;
         }
 
-        var registration = await TryResolveExternalCoreAsync(modelId, cancellationToken).ConfigureAwait(false);
+        var registration = await TryResolveExternalCoreAsync(modelId, cancellationToken);
         return ToLocality(registration);
     }
 
@@ -55,7 +55,7 @@ public sealed class ModelTrustResolver : IModelTrustResolver
     public async Task<ExternalProviderModelRegistration?> TryResolveExternalAsync(string? modelId, CancellationToken cancellationToken = default)
     {
         return ExternalModelId.HasExternalScheme(modelId)
-            ? await TryResolveExternalCoreAsync(modelId, cancellationToken).ConfigureAwait(false)
+            ? await TryResolveExternalCoreAsync(modelId, cancellationToken)
             : null;
     }
 
@@ -90,7 +90,7 @@ public sealed class ModelTrustResolver : IModelTrustResolver
     {
         try
         {
-            return await _registry.TryResolveAsync(modelId, cancellationToken).ConfigureAwait(false);
+            return await _registry.TryResolveAsync(modelId, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

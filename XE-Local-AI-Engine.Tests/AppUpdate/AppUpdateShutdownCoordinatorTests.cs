@@ -54,7 +54,7 @@ public sealed class AppUpdateShutdownCoordinatorTests
             for (var index = _completed.Count - 1; index >= 0; index--)
             {
                 var (callback, state) = _completed[index];
-                await callback(state).ConfigureAwait(false);
+                await callback(state);
             }
         }
     }

@@ -26,12 +26,12 @@ public sealed class NodeChatPersistenceWriterTests
         {
             TrackEntered(ref activeSections, ref maxActiveSections);
             firstEntered.SetResult();
-            await releaseFirst.Task.WaitAsync(token).ConfigureAwait(false);
+            await releaseFirst.Task.WaitAsync(token);
             Interlocked.Decrement(ref activeSections);
             return true;
         });
 
-        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
         var second = writer.ExecuteConversationExclusiveAsync(conversationId, (_, _) =>
         {
@@ -41,11 +41,10 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        await AssertEx.StaysIncompleteAsync(secondEntered.Task, "A second exclusive write on the same conversation must wait for the first.")
-                      .ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(secondEntered.Task, "A second exclusive write on the same conversation must wait for the first.");
 
         releaseFirst.SetResult();
-        await Task.WhenAll(first, second).ConfigureAwait(false);
+        await Task.WhenAll(first, second);
 
         AssertEx.Equal(expected: 1, maxActiveSections, "Two exclusive writes on one conversation must never overlap.");
     }
@@ -62,11 +61,11 @@ public sealed class NodeChatPersistenceWriterTests
         var first = writer.ExecuteConversationExclusiveAsync(Guid.NewGuid(), async (_, token) =>
         {
             firstEntered.SetResult();
-            await releaseFirst.Task.WaitAsync(token).ConfigureAwait(false);
+            await releaseFirst.Task.WaitAsync(token);
             return true;
         });
 
-        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
         var second = writer.ExecuteConversationExclusiveAsync(Guid.NewGuid(), (_, _) =>
         {
@@ -74,11 +73,10 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        await AssertEx.CompletesAsync(secondEntered.Task, TestBudgets.Contended, "Exclusive writes on different conversations must run independently.")
-                      .ConfigureAwait(false);
+        await AssertEx.CompletesAsync(secondEntered.Task, TestBudgets.Contended, "Exclusive writes on different conversations must run independently.");
 
         releaseFirst.SetResult();
-        await Task.WhenAll(first, second).ConfigureAwait(false);
+        await Task.WhenAll(first, second);
     }
 
     [Test]
@@ -94,11 +92,11 @@ public sealed class NodeChatPersistenceWriterTests
         var first = writer.ExecuteMessageUpdateAsync(conversationId, Guid.NewGuid(), async (_, token) =>
         {
             firstEntered.SetResult();
-            await releaseFirst.Task.WaitAsync(token).ConfigureAwait(false);
+            await releaseFirst.Task.WaitAsync(token);
             return true;
         });
 
-        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
         var second = writer.ExecuteMessageUpdateAsync(conversationId, Guid.NewGuid(), (_, _) =>
         {
@@ -106,11 +104,10 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        await AssertEx.CompletesAsync(secondEntered.Task, TestBudgets.Contended, "Payload updates to different messages must run in parallel (shared conversation lock).")
-                      .ConfigureAwait(false);
+        await AssertEx.CompletesAsync(secondEntered.Task, TestBudgets.Contended, "Payload updates to different messages must run in parallel (shared conversation lock).");
 
         releaseFirst.SetResult();
-        await Task.WhenAll(first, second).ConfigureAwait(false);
+        await Task.WhenAll(first, second);
     }
 
     [Test]
@@ -130,12 +127,12 @@ public sealed class NodeChatPersistenceWriterTests
         {
             TrackEntered(ref activeSections, ref maxActiveSections);
             firstEntered.SetResult();
-            await releaseFirst.Task.WaitAsync(token).ConfigureAwait(false);
+            await releaseFirst.Task.WaitAsync(token);
             Interlocked.Decrement(ref activeSections);
             return true;
         });
 
-        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
         var second = writer.ExecuteMessageUpdateAsync(conversationId, messageId, (_, _) =>
         {
@@ -145,11 +142,10 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        await AssertEx.StaysIncompleteAsync(secondEntered.Task, "Two updates to the same message must serialize on the per-message lock.")
-                      .ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(secondEntered.Task, "Two updates to the same message must serialize on the per-message lock.");
 
         releaseFirst.SetResult();
-        await Task.WhenAll(first, second).ConfigureAwait(false);
+        await Task.WhenAll(first, second);
 
         AssertEx.Equal(expected: 1, maxActiveSections, "Same-message updates must not overlap.");
     }
@@ -167,11 +163,11 @@ public sealed class NodeChatPersistenceWriterTests
         var update = writer.ExecuteMessageUpdateAsync(conversationId, Guid.NewGuid(), async (_, token) =>
         {
             updateEntered.SetResult();
-            await releaseUpdate.Task.WaitAsync(token).ConfigureAwait(false);
+            await releaseUpdate.Task.WaitAsync(token);
             return true;
         });
 
-        await updateEntered.Task.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        await updateEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
         // A conversation-exclusive op (e.g. delete) must wait for the in-flight shared message update to finish.
         var exclusive = writer.ExecuteConversationExclusiveAsync(conversationId, (_, _) =>
@@ -180,11 +176,10 @@ public sealed class NodeChatPersistenceWriterTests
             return Task.FromResult(true);
         });
 
-        await AssertEx.StaysIncompleteAsync(exclusiveEntered.Task, "A conversation-exclusive op must not run while a message update holds the shared lock.")
-                      .ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(exclusiveEntered.Task, "A conversation-exclusive op must not run while a message update holds the shared lock.");
 
         releaseUpdate.SetResult();
-        await Task.WhenAll(update, exclusive).ConfigureAwait(false);
+        await Task.WhenAll(update, exclusive);
         AssertEx.True(exclusiveEntered.Task.IsCompleted, "The exclusive op must run once the message update releases the shared lock.");
     }
 
@@ -195,8 +190,8 @@ public sealed class NodeChatPersistenceWriterTests
         var writer = CreateWriter(provider);
         var conversationId = Guid.NewGuid();
 
-        var firstContextId = await writer.ExecuteConversationExclusiveAsync(conversationId, (dbContext, _) => Task.FromResult(dbContext.ContextId.InstanceId)).ConfigureAwait(false);
-        var secondContextId = await writer.ExecuteConversationExclusiveAsync(conversationId, (dbContext, _) => Task.FromResult(dbContext.ContextId.InstanceId)).ConfigureAwait(false);
+        var firstContextId = await writer.ExecuteConversationExclusiveAsync(conversationId, (dbContext, _) => Task.FromResult(dbContext.ContextId.InstanceId));
+        var secondContextId = await writer.ExecuteConversationExclusiveAsync(conversationId, (dbContext, _) => Task.FromResult(dbContext.ContextId.InstanceId));
 
         AssertEx.NotEqual(firstContextId, secondContextId, "Each operation should resolve a fresh NodeChatDbContext from a fresh scope.");
     }

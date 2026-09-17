@@ -26,14 +26,14 @@ public sealed class ExternalAppServiceInstallTests
                 storage: [new ApplicationStorage("data", "/var/lib/app")])
         ]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
 
         AssertEx.Equal(ExternalAppInstanceStatus.Installing, admitted.Status);
         AssertEx.Equal(ExternalAppDesiredState.Stopped, admitted.DesiredState);
 
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         AssertEx.Equal(ExternalAppDesiredState.Running, row.DesiredState);
         AssertEx.Null(row.FailureCategory);
         AssertEx.False(row.NeedsRecreate, "A freshly installed instance has nothing to recreate.");
@@ -46,7 +46,7 @@ public sealed class ExternalAppServiceInstallTests
         AssertEx.Equal(expected: 8080, published[0].ContainerPort);
         AssertEx.True(published[0].HostPort > 0, "The observed host port must be a real port.");
 
-        var kinds = (await harness.ReadEventsAsync(admitted.Id).ConfigureAwait(false)).Select(entry => entry.Kind);
+        var kinds = (await harness.ReadEventsAsync(admitted.Id)).Select(entry => entry.Kind);
         AssertEx.Equal("PermissionAccepted, Installed, Started", string.Join(", ", kinds));
 
         AssertEx.Equal(expected: 3, harness.Publisher.Events.Count);
@@ -60,9 +60,9 @@ public sealed class ExternalAppServiceInstallTests
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")],
             permissions: new ApplicationPermissions(Internet: true, LocalNetwork: false, "none", "required"));
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest)));
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.GpuNotSupported));
         AssertEx.Empty(harness.Runtime.CreatedContainerIds, "Nothing is created for an application this engine cannot run.");
@@ -74,9 +74,9 @@ public sealed class ExternalAppServiceInstallTests
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")],
             requires: ["containers", "gpuDevices"]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest)));
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.RuntimeIncompatible));
         AssertEx.Contains(failure.Message, "gpuDevices");
@@ -87,10 +87,10 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         harness.Resolver.Resolution = FakeContainerRuntimeResolver.UnavailableResolution("Nothing answered at unix:///var/run/docker.sock.");
 
-        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest)));
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.RuntimeUnavailable));
 
@@ -104,10 +104,9 @@ public sealed class ExternalAppServiceInstallTests
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")],
             resources: new ApplicationResources(MinimumMemoryMb: 8192, RecommendedMemoryMb: 16384, CpuHint: 2, PidsLimit: 512));
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, availableRamBytes: 1024L * 1024 * 1024)
-                                                                 .ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, availableRamBytes: 1024L * 1024 * 1024);
 
-        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest)));
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.InsufficientMemory));
     }
@@ -128,13 +127,13 @@ public sealed class ExternalAppServiceInstallTests
                 })
         ]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: false).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: false);
 
-        var preview = await harness.Service.PreviewInstallAsync(manifest.Id).ConfigureAwait(false);
+        var preview = await harness.Service.PreviewInstallAsync(manifest.Id);
         AssertEx.False(preview.CanInstall, "The catalog page must not offer an install the pipeline cannot finish.");
         AssertEx.Equal(ExternalAppBlockedReason.BridgeUnavailable, preview.BlockedReason);
 
-        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest)));
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.BridgeUnavailable));
         AssertEx.Contains(failure.Message, "container bridge", message: "The operator has to read which feature is missing.");
@@ -151,9 +150,9 @@ public sealed class ExternalAppServiceInstallTests
             ],
             variables: [ExternalAppTestManifests.Variable("ADMIN_PASSWORD", required: true, type: "secret")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest)));
 
         AssertEx.Contains(failure.Names, "ADMIN_PASSWORD");
         AssertEx.Contains(failure.Message, "ADMIN_PASSWORD");
@@ -164,13 +163,13 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(Command(manifest,
             variables: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["ADMlN_PASSWORD"] = "hunter2"
-            }))).ConfigureAwait(false);
+            })));
 
         // A mistyped key is most often the name of the field holding a password. Dropping it would install the
         // application with a blank one.
@@ -184,10 +183,9 @@ public sealed class ExternalAppServiceInstallTests
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)], capAdd: ["CHOWN"])],
             permissions: new ApplicationPermissions(Internet: true, LocalNetwork: true, "readOnly", "none"));
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var failure = await AssertEx.ThrowsAsync<ExternalAppPermissionChangeRequiresAcknowledgementException>(() => harness.Service.InstallAsync(Command(manifest, acceptPermissions: false)))
-                                    .ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<ExternalAppPermissionChangeRequiresAcknowledgementException>(() => harness.Service.InstallAsync(Command(manifest, acceptPermissions: false)));
 
         AssertEx.Contains(failure.AddedPermissions, "internet");
         AssertEx.Contains(failure.AddedPermissions, "localNetwork");
@@ -202,12 +200,12 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         var failure = await AssertEx.ThrowsAsync<ExternalAppManifestChangedException>(() => harness.Service.InstallAsync(Command(manifest) with
         {
             ManifestSha256 = new string('b', 64)
-        })).ConfigureAwait(false);
+        }));
 
         AssertEx.Equal(manifest.ManifestSha256, failure.ManifestSha256);
         AssertEx.Equal(manifest.ManifestVersion, failure.ManifestVersion);
@@ -218,12 +216,12 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")], manifestVersion: 3);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         _ = await AssertEx.ThrowsAsync<ExternalAppManifestChangedException>(() => harness.Service.InstallAsync(Command(manifest) with
         {
             ManifestVersion = 2
-        })).ConfigureAwait(false);
+        }));
     }
 
     [Test]
@@ -231,12 +229,12 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var first = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        _ = await harness.SettleAsync(first.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        var first = await harness.Service.InstallAsync(Command(manifest));
+        _ = await harness.SettleAsync(first.Id, ExternalAppInstanceStatus.Running);
 
-        _ = await AssertEx.ThrowsAsync<ExternalAppAlreadyInstalledException>(() => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ExternalAppAlreadyInstalledException>(() => harness.Service.InstallAsync(Command(manifest)));
     }
 
     /// <summary>
@@ -249,10 +247,10 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var first = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        _ = await harness.SettleAsync(first.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        var first = await harness.Service.InstallAsync(Command(manifest));
+        _ = await harness.SettleAsync(first.Id, ExternalAppInstanceStatus.Running);
 
         // The installed instance's key and the application key install takes around its check: both bounded by what
         // is installed, which is what makes any growth from here a leak.
@@ -260,7 +258,7 @@ public sealed class ExternalAppServiceInstallTests
 
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            _ = await AssertEx.ThrowsAsync<ExternalAppAlreadyInstalledException>(() => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+            _ = await AssertEx.ThrowsAsync<ExternalAppAlreadyInstalledException>(() => harness.Service.InstallAsync(Command(manifest)));
         }
 
         AssertEx.Equal(tracked, harness.Gate.TrackedCount, "Each refused install left the gate it minted for an id no instance will ever have.");
@@ -271,11 +269,11 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", storage: [new ApplicationStorage("data", "/var/lib/app")])]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         harness.Runtime.PullFailure = new DockerRuntimeException("The registry refused the pull.");
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.ImagePullFailed, row.FailureCategory);
         AssertEx.Empty(harness.Runtime.CreatedContainerIds, "A failed pull creates no container.");
@@ -289,7 +287,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         // The daemon claims it created a privileged container. Nothing the engine asked for could produce that, and
         // a container in that state is one whose confinement was never established.
@@ -298,8 +296,8 @@ public sealed class ExternalAppServiceInstallTests
             Privileged = true
         };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.PolicyViolation, row.FailureCategory);
         AssertEx.NotEmpty(harness.Runtime.RemovedContainerIds);
@@ -314,12 +312,12 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         harness.Runtime.RunFailure = _ => throw new ContainerPolicyException(ContainerPolicyException.ForeignNetworkReason,
             "The network name is in use by a foreign container network.");
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.PolicyViolation, row.FailureCategory);
     }
@@ -338,10 +336,10 @@ public sealed class ExternalAppServiceInstallTests
             ])
         ]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.StorageError, row.FailureCategory);
         AssertEx.Empty(harness.Runtime.CreatedContainerIds, "Storage is materialised before any container is created.");
@@ -360,10 +358,10 @@ public sealed class ExternalAppServiceInstallTests
             ExternalAppTestManifests.Service("web-2", storage: [shared, shared], image: ExternalAppTestManifests.SecondImage)
         ]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.ConfigurationMissing, row.FailureCategory);
         AssertEx.False(Directory.Exists(Path.Combine(row.StoragePath, "files")),
@@ -375,11 +373,11 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", storage: [new ApplicationStorage("data", "/var/lib/app")])]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         harness.Runtime.WritableProbeOutcome = (_, _) => false;
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.StorageError, row.FailureCategory);
         AssertEx.Contains(row.FailureSummary, "rootless");
@@ -390,7 +388,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = HealthyDependencyManifest();
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         // The daemon keeps answering "starting". The engine is not allowed to decide that is good enough.
         harness.Runtime.InspectionMutator = inspection =>
@@ -402,10 +400,10 @@ public sealed class ExternalAppServiceInstallTests
                 }
             };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        await AdvancePastTheReadyDeadlineAsync(harness, admitted.Id).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        await AdvancePastTheReadyDeadlineAsync(harness, admitted.Id);
 
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
         AssertEx.Equal(ExternalAppFailureCategory.HealthCheckFailed, row.FailureCategory);
     }
 
@@ -419,7 +417,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = HealthyDependencyManifest();
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         harness.Runtime.InspectionMutator = inspection =>
             inspection with
             {
@@ -429,10 +427,10 @@ public sealed class ExternalAppServiceInstallTests
                 }
             };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        await AdvancePastTheReadyDeadlineAsync(harness, admitted.Id).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        await AdvancePastTheReadyDeadlineAsync(harness, admitted.Id);
 
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
         AssertEx.Equal(ExternalAppFailureCategory.HealthCheckFailed, row.FailureCategory);
     }
 
@@ -441,7 +439,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = HealthyDependencyManifest();
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         harness.Runtime.InspectionMutator = inspection =>
             inspection with
             {
@@ -451,10 +449,10 @@ public sealed class ExternalAppServiceInstallTests
                 }
             };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
 
         // The clock is never advanced: an unhealthy answer is a verdict, not a slow start.
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
         AssertEx.Equal(ExternalAppFailureCategory.HealthCheckFailed, row.FailureCategory);
     }
 
@@ -463,7 +461,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         harness.Runtime.ExitState = _ => new ContainerRunState
         {
             Running = false,
@@ -473,9 +471,9 @@ public sealed class ExternalAppServiceInstallTests
             Health = ContainerHealthState.None
         };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
 
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
         AssertEx.Equal(ExternalAppFailureCategory.HealthCheckFailed, row.FailureCategory);
         AssertEx.Contains(row.FailureSummary, "exited");
     }
@@ -490,7 +488,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = PortRaceManifest();
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         var requested = new List<ContainerSpecification>();
         var raced = 0;
@@ -510,8 +508,8 @@ public sealed class ExternalAppServiceInstallTests
             return new DockerRuntimeException("The host port is already allocated.");
         };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
 
         AssertEx.Equal(expected: 1, raced);
 
@@ -529,7 +527,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = PortRaceManifest();
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         harness.Runtime.RunFailure = specification =>
         {
@@ -542,8 +540,8 @@ public sealed class ExternalAppServiceInstallTests
             return new DockerRuntimeException("The host port is already allocated.");
         };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.PortUnavailable, row.FailureCategory);
     }
@@ -557,7 +555,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = PortRaceManifest();
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         var squatted = new List<int>();
         harness.Gated.StartFailure = containerId =>
@@ -579,8 +577,8 @@ public sealed class ExternalAppServiceInstallTests
             return new DockerRuntimeException("The host port is already allocated.");
         };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
 
         AssertEx.NotEmpty(squatted, "The test never produced the start-phase race it exists to cover.");
 
@@ -601,7 +599,7 @@ public sealed class ExternalAppServiceInstallTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)])]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         // The request still says loopback; only the applied binding is off it.
         harness.Runtime.InspectionMutator = static inspection => inspection with
@@ -615,8 +613,8 @@ public sealed class ExternalAppServiceInstallTests
             ]
         };
 
-        var admitted = await harness.Service.InstallAsync(Command(manifest)).ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(manifest));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.PolicyViolation, row.FailureCategory);
         var failureSummary = AssertEx.NotNull(row.FailureSummary);
@@ -647,7 +645,7 @@ public sealed class ExternalAppServiceInstallTests
             ],
             variables: [ExternalAppTestManifests.Variable("ADMIN_PASSWORD", required: true, type: "secret")]);
 
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
 
         var specifications = new List<ContainerSpecification>();
         harness.Runtime.RunFailure = specification =>
@@ -665,9 +663,8 @@ public sealed class ExternalAppServiceInstallTests
                                         new Dictionary<string, string>(StringComparer.Ordinal)
                                         {
                                             ["ADMIN_PASSWORD"] = secret
-                                        }))
-                                    .ConfigureAwait(false);
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+                                        }));
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
 
         // The control: without these two, the test would pass on an install that never saw the secret at all.
         AssertEx.Contains(row.VariablesJson, secret);
@@ -685,7 +682,7 @@ public sealed class ExternalAppServiceInstallTests
             AssertEx.False(entry.Exception?.ToString().Contains(secret, StringComparison.Ordinal) == true, "A logged exception carried the secret.");
         }
 
-        var events = await harness.ReadEventsAsync(admitted.Id).ConfigureAwait(false);
+        var events = await harness.ReadEventsAsync(admitted.Id);
         AssertEx.NotEmpty(events, "The failure path must have published events for this scan to mean anything.");
         foreach (var published in events)
         {
@@ -731,7 +728,7 @@ public sealed class ExternalAppServiceInstallTests
                 return harness.ReadAsync(instanceId).GetAwaiter().GetResult() is { Status: ExternalAppInstanceStatus.Failed };
             },
             TestBudgets.Contended,
-            "Advancing the clock past the service-ready deadline never settled the instance.").ConfigureAwait(false);
+            "Advancing the clock past the service-ready deadline never settled the instance.");
     }
 
     private static InstallCommand Command(ApplicationManifest manifest,

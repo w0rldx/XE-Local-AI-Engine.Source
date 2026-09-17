@@ -42,12 +42,12 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
                     Goal = request.Goal ?? string.Empty,
                     AllowedActions = request.AllowedActions ?? []
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             // Report a run-relative output location, never the absolute worker-host path, so the model never sees the
             // worker content-root structure. The
             // workspace summary carries aliases and counts only — never host paths (workspace copy).
-            var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+            var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
             return string.Create(CultureInfo.InvariantCulture,
                 $"AgentHome run {run.RunId} {DescribeOutcome(run, commandTimeoutSeconds)} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
         }

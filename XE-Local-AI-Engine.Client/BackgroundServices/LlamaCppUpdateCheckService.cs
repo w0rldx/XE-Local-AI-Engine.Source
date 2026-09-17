@@ -68,19 +68,19 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
         {
             if (_startupDelay > TimeSpan.Zero)
             {
-                await Task.Delay(_startupDelay, stoppingToken).ConfigureAwait(false);
+                await Task.Delay(_startupDelay, stoppingToken);
             }
 
             // The gate goes AFTER the startup delay so a node parked on an undecided profile is not also holding the
             // delay open, and BEFORE the one-shot check so CheckOnceAsync stays the pure check.
-            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken).ConfigureAwait(false);
-            if (!await _nodeRuntimeSettings.GetAutoCheckRuntimeUpdatesAsync(stoppingToken).ConfigureAwait(false))
+            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken);
+            if (!await _nodeRuntimeSettings.GetAutoCheckRuntimeUpdatesAsync(stoppingToken))
             {
                 _logger.LogDebug("The automatic llama.cpp runtime update check is disabled by the node's external-access settings.");
                 return;
             }
 
-            await CheckOnceAsync(stoppingToken).ConfigureAwait(false);
+            await CheckOnceAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -93,16 +93,16 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
     {
         try
         {
-            var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken).ConfigureAwait(false);
-            var installed = await _installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
+            var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
+            var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
             var installedTag = installed?.Tag;
 
-            var recommendedResult = await _catalog.ResolveRecommendedAsync(recommendedTag, cancellationToken).ConfigureAwait(false);
+            var recommendedResult = await _catalog.ResolveRecommendedAsync(recommendedTag, cancellationToken);
 
             // Also resolve the true upstream-latest tag so developer mode has it on the startup snapshot — without any
             // ?refresh round-trip (mirrors GetLlamaCppRuntimeEndpoint.ComputeFreshSnapshotAsync). Offline-tolerant: a
             // no-live-data result yields a null upstream tag, never a throw.
-            var upstreamResult = await _catalog.ResolveUpstreamLatestAsync(cancellationToken).ConfigureAwait(false);
+            var upstreamResult = await _catalog.ResolveUpstreamLatestAsync(cancellationToken);
 
             // No live data (offline / rate-limited / unresolved) — record an offline snapshot, advertise no update.
             if (recommendedResult.HasNoLiveData || recommendedResult.Tag is null)

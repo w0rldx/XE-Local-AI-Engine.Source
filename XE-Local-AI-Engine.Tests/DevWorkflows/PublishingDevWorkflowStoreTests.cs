@@ -59,7 +59,7 @@ public sealed class PublishingDevWorkflowStoreTests
         {
             var (store, publisher) = Create();
 
-            await probe.Invoke(store).ConfigureAwait(false);
+            await probe.Invoke(store);
 
             await publisher.Received(1).PublishAsync(RunId, Sequence, probe.Kind, Arg.Any<CancellationToken>());
             AssertEx.Equal(expected: 1,
@@ -73,7 +73,7 @@ public sealed class PublishingDevWorkflowStoreTests
     {
         var (store, publisher) = Create();
 
-        _ = await store.ListNodeRunsAsync(RunId).ConfigureAwait(false);
+        _ = await store.ListNodeRunsAsync(RunId);
 
         AssertEx.Empty(publisher.ReceivedCalls());
     }
@@ -177,12 +177,12 @@ public sealed class PublishingDevWorkflowStoreTests
         };
         var (store, publisher) = Create(offered, Hang, collectionSlots: resets);
 
-        _ = await store.RouteRetryAsync(route).ConfigureAwait(false);
+        _ = await store.RouteRetryAsync(route);
 
         // Offering is EVENTUAL: the decorator hands each collection to the thread pool so a collector that blocks
         // before its first await cannot hold the route, which means the tenth reset may not have reached the collector
         // yet at the instant the route commits.
-        await offered.AllEntered.WaitAsync(Hang).ConfigureAwait(false);
+        await offered.AllEntered.WaitAsync(Hang);
         AssertEx.Equal(resets, offered.Calls, "Every reset is offered while the budget lasts; only the budget is shared.");
         AssertEx.Equal(expected: 1,
             offered.Deadlines.Distinct().Count(),
@@ -201,10 +201,10 @@ public sealed class PublishingDevWorkflowStoreTests
         var (spent, _) = Create(stalled, budget, collectionSlots: resets);
 
         var elapsed = Stopwatch.StartNew();
-        _ = await spent.RouteRetryAsync(route).ConfigureAwait(false);
+        _ = await spent.RouteRetryAsync(route);
         elapsed.Stop();
 
-        await stalled.AllEntered.WaitAsync(Hang).ConfigureAwait(false);
+        await stalled.AllEntered.WaitAsync(Hang);
         AssertEx.Equal(expected: 1, stalled.Calls, "A reset reached after the shared budget expired must not schedule a collection at all.");
 
         // A generous bound, for the same reason the gated tests below use one: the collector stalls for a MINUTE, so
@@ -238,11 +238,11 @@ public sealed class PublishingDevWorkflowStoreTests
         var harness = CreateHarness(telemetry, budget, collectionSlots: 1);
 
         // The first settle takes the only slot, is abandoned at the deadline, and is still holding it.
-        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
-        await telemetry.AllEntered.WaitAsync(Hang).ConfigureAwait(false);
+        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked));
+        await telemetry.AllEntered.WaitAsync(Hang);
 
         var elapsed = Stopwatch.StartNew();
-        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked));
         elapsed.Stop();
 
         AssertEx.Equal(expected: 1, telemetry.Calls, "A settle that finds every slot in use must not start a second collection.");
@@ -262,11 +262,11 @@ public sealed class PublishingDevWorkflowStoreTests
         var giveUpAt = DateTimeOffset.UtcNow + Hang;
         while (telemetry.Calls < 2 && DateTimeOffset.UtcNow < giveUpAt)
         {
-            _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+            _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked));
             if (telemetry.Calls < 2)
             {
                 // real-timer: the pool slot returns from a background finally, after the gate opens rather than with it.
-                await Task.Delay(25).ConfigureAwait(false);
+                await Task.Delay(25);
             }
         }
 
@@ -280,8 +280,8 @@ public sealed class PublishingDevWorkflowStoreTests
         var telemetry = new StubDevWorkflowNodeTelemetrySource();
         var (store, _) = Create(telemetry, TimeSpan.FromSeconds(5));
 
-        _ = await store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
-        _ = await store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked));
+        _ = await store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked));
 
         AssertEx.Equal(expected: 2, telemetry.Deadlines.Distinct().Count(), "One settle, one budget — a slow settle may not shorten the next one's.");
     }
@@ -309,7 +309,7 @@ public sealed class PublishingDevWorkflowStoreTests
         var harness = CreateHarness(telemetry, budget);
 
         var elapsed = Stopwatch.StartNew();
-        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
+        _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked));
         elapsed.Stop();
 
         // A generous bound on purpose: nothing but the test opens that gate, so ANY bounded completion is the claim.
@@ -321,16 +321,14 @@ public sealed class PublishingDevWorkflowStoreTests
                              Arg.Any<CancellationToken>());
         await AssertEx.EventuallyAsync(() => harness.Scopes.Created == 1,
                           Hang,
-                          "The collection reads on a scope it owns, not on the one the mutation is about to write through.")
-                      .ConfigureAwait(false);
+                          "The collection reads on a scope it owns, not on the one the mutation is about to write through.");
         AssertEx.Equal(expected: 0, harness.Scopes.Disposed, "And it still holds it: the settle abandoned the wait, not the collection's resources.");
 
         // The late arm: the collection finishes long after the transition it would have enriched, and writes nothing.
         var callsBefore = harness.Inner.ReceivedCalls().Count();
         gate.SetResult();
-        await telemetry.Finished.ConfigureAwait(false);
-        await AssertEx.EventuallyAsync(() => harness.Scopes.Disposed == 1, Hang, "The abandoned collection disposes its own scope when it finally lands.")
-                      .ConfigureAwait(false);
+        await telemetry.Finished;
+        await AssertEx.EventuallyAsync(() => harness.Scopes.Disposed == 1, Hang, "The abandoned collection disposes its own scope when it finally lands.");
         AssertEx.Equal(callsBefore, harness.Inner.ReceivedCalls().Count(), "A late collection is dropped — it must not reach the store at all.");
     }
 
@@ -350,7 +348,7 @@ public sealed class PublishingDevWorkflowStoreTests
             [ReAttempt()]);
 
         var elapsed = Stopwatch.StartNew();
-        _ = await harness.Store.RouteRetryAsync(route).ConfigureAwait(false);
+        _ = await harness.Store.RouteRetryAsync(route);
         elapsed.Stop();
 
         AssertEx.True(elapsed.Elapsed < Hang,
@@ -362,8 +360,8 @@ public sealed class PublishingDevWorkflowStoreTests
 
         var callsBefore = harness.Inner.ReceivedCalls().Count();
         gate.SetResult();
-        await telemetry.Finished.ConfigureAwait(false);
-        await AssertEx.EventuallyAsync(() => harness.Scopes.Disposed == 1, Hang, "It gives the scope back once it lands.").ConfigureAwait(false);
+        await telemetry.Finished;
+        await AssertEx.EventuallyAsync(() => harness.Scopes.Disposed == 1, Hang, "It gives the scope back once it lands.");
         AssertEx.Equal(callsBefore, harness.Inner.ReceivedCalls().Count(), "And its answer reaches nothing.");
     }
 

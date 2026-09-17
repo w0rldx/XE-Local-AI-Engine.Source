@@ -59,9 +59,9 @@ public sealed class TestServerWebAppFactoryTimingTests
         Directory.CreateDirectory(workspace);
         try
         {
-            await MeasureFakeOllamaAloneAsync(samples).ConfigureAwait(false);
+            await MeasureFakeOllamaAloneAsync(samples);
             MeasureTemplateCopy(samples, workspace);
-            await MeasureHostsAsync(samples).ConfigureAwait(false);
+            await MeasureHostsAsync(samples);
         }
         finally
         {
@@ -90,8 +90,8 @@ public sealed class TestServerWebAppFactoryTimingTests
     {
         for (var iteration = 0; iteration < Iterations; iteration++)
         {
-            await MeasureOneHostAsync(samples, iteration, usePreMigratedDatabase: true, PhaseHostBuild, measureEveryPhase: true).ConfigureAwait(false);
-            await MeasureOneHostAsync(samples, iteration, usePreMigratedDatabase: false, PhaseHostBuildFreshControl, measureEveryPhase: false).ConfigureAwait(false);
+            await MeasureOneHostAsync(samples, iteration, usePreMigratedDatabase: true, PhaseHostBuild, measureEveryPhase: true);
+            await MeasureOneHostAsync(samples, iteration, usePreMigratedDatabase: false, PhaseHostBuildFreshControl, measureEveryPhase: false);
         }
     }
 
@@ -133,11 +133,11 @@ public sealed class TestServerWebAppFactoryTimingTests
                 Record(samples, iteration, PhaseBuilderCompose, preBuild);
                 Record(samples, iteration, PhaseBuildAndStart, hostBuild.Elapsed - preBuild);
 
-                await MeasureRequestPhasesAsync(samples, iteration, factory).ConfigureAwait(false);
+                await MeasureRequestPhasesAsync(samples, iteration, factory);
             }
 
             var dispose = Stopwatch.StartNew();
-            await factory.DisposeAsync().ConfigureAwait(false);
+            await factory.DisposeAsync();
             dispose.Stop();
             if (measureEveryPhase)
             {
@@ -147,7 +147,7 @@ public sealed class TestServerWebAppFactoryTimingTests
         finally
         {
             // Idempotent: a no-op when the timed call above already ran.
-            await factory.DisposeAsync().ConfigureAwait(false);
+            await factory.DisposeAsync();
         }
     }
 
@@ -159,7 +159,7 @@ public sealed class TestServerWebAppFactoryTimingTests
         Record(samples, iteration, PhaseCreateClient, createClient.Elapsed);
 
         var request = Stopwatch.StartNew();
-        using var response = await client.GetAsync(new Uri("/health/live", UriKind.Relative)).ConfigureAwait(false);
+        using var response = await client.GetAsync(new Uri("/health/live", UriKind.Relative));
         request.Stop();
         Record(samples, iteration, PhaseFirstRequest, request.Elapsed);
         AssertEx.True(response.IsSuccessStatusCode, $"/health/live answered {(int)response.StatusCode}.");
@@ -174,12 +174,12 @@ public sealed class TestServerWebAppFactoryTimingTests
             var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
             {
                 Models = ["qwen3.5:0.8b", "qwen3-embedding:0.6b"]
-            }).ConfigureAwait(false);
+            });
             start.Stop();
             Record(samples, iteration, PhaseFakeOllamaAlone, start.Elapsed);
 
             var dispose = Stopwatch.StartNew();
-            await server.DisposeAsync().ConfigureAwait(false);
+            await server.DisposeAsync();
             dispose.Stop();
             Record(samples, iteration, PhaseFakeOllamaDisposeAlone, dispose.Elapsed);
         }

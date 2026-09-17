@@ -23,7 +23,7 @@ public sealed class GetExternalAppRuntimeEndpoint(IContainerRuntimeResolver reso
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var resolution = await _resolver.ResolveAsync(cancellationToken: ct).ConfigureAwait(false);
-        await Send.OkAsync(ExternalAppMapper.ToRuntimeResponse(resolution, foreignInstallContainers: 0), ct).ConfigureAwait(false);
+        var resolution = await _resolver.ResolveAsync(cancellationToken: ct);
+        await Send.OkAsync(ExternalAppMapper.ToRuntimeResponse(resolution, foreignInstallContainers: 0), ct);
     }
 }

@@ -48,7 +48,7 @@ public sealed class ModelProviderMapLeaseCoordinator(KeyedCompositeLockDomain lo
     {
         var normalizedNames = NormalizeNames(modelNames);
         var mapKeys = normalizedNames.Select(ModelCoordinationKeys.ProviderMap).ToArray();
-        var inner = await _lockDomain.AcquireReadAsync(mapKeys, cancellationToken).ConfigureAwait(false);
+        var inner = await _lockDomain.AcquireReadAsync(mapKeys, cancellationToken);
         return new ModelProviderMapReadLease(normalizedNames, mapKeys, inner);
     }
 
@@ -63,7 +63,7 @@ public sealed class ModelProviderMapLeaseCoordinator(KeyedCompositeLockDomain lo
     {
         var normalizedNames = NormalizeNames(modelNames);
         var mapKeys = normalizedNames.Select(ModelCoordinationKeys.ProviderMap).ToArray();
-        var inner = await _lockDomain.AcquireMutationAsync(mapKeys, cancellationToken).ConfigureAwait(false);
+        var inner = await _lockDomain.AcquireMutationAsync(mapKeys, cancellationToken);
         return new ModelProviderMapMutationLease(normalizedNames, mapKeys, kind, inner);
     }
 
@@ -113,7 +113,7 @@ public class ModelProviderMapReadLease : IModelProviderMapReadLease
         var inner = Interlocked.Exchange(ref _inner, null);
         if (inner is not null)
         {
-            await inner.DisposeAsync().ConfigureAwait(false);
+            await inner.DisposeAsync();
         }
     }
 }

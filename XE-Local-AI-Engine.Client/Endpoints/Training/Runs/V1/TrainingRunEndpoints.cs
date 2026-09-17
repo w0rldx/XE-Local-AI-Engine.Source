@@ -40,9 +40,8 @@ public sealed class CreateTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
                                      req.LicenseConfirmed,
                                      req.Options?.ToDomain(),
                                      req.LinkedModelName),
-                                 ct)
-                             .ConfigureAwait(false);
-        await Send.OkAsync(run.ToResponse(), ct).ConfigureAwait(false);
+                                 ct);
+        await Send.OkAsync(run.ToResponse(), ct);
     }
 }
 
@@ -58,14 +57,14 @@ public sealed class ListTrainingRunsEndpoint(ITrainingRunService runs) : Endpoin
 
     public override async Task HandleAsync(ListTrainingRunsRequest req, CancellationToken ct)
     {
-        var page = await _runs.ListAsync(new TrainingRunQuery(req.Page, req.PageSize, req.DatasetId), ct).ConfigureAwait(false);
+        var page = await _runs.ListAsync(new TrainingRunQuery(req.Page, req.PageSize, req.DatasetId), ct);
         await Send.OkAsync(new ListTrainingRunsResponse
         {
             Items = page.Items.Select(item => item.ToResponse()).ToArray(),
             TotalCount = page.TotalCount,
             Page = req.Page,
             PageSize = req.PageSize
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -81,14 +80,14 @@ public sealed class GetTrainingRunEndpoint(ITrainingRunService runs) : Endpoint<
 
     public override async Task HandleAsync(TrainingRunByIdRequest req, CancellationToken ct)
     {
-        var run = await _runs.GetAsync(req.RunId, ct).ConfigureAwait(false);
+        var run = await _runs.GetAsync(req.RunId, ct);
         if (run is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(run.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(run.ToResponse(), ct);
     }
 }
 
@@ -107,13 +106,13 @@ public sealed class CancelTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
 
     public override async Task HandleAsync(TrainingRunByIdRequest req, CancellationToken ct)
     {
-        if (!await _runs.CancelAsync(req.RunId, ct).ConfigureAwait(false))
+        if (!await _runs.CancelAsync(req.RunId, ct))
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -139,11 +138,11 @@ public sealed class GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalcul
 
     public override async Task HandleAsync(TrainingRunDefaultsRequest req, CancellationToken ct)
     {
-        var computed = await _defaults.ComputeAsync(req.BaseArtifactId, ct).ConfigureAwait(false);
-        var license = await _licenseGate.GetAsync(req.BaseArtifactId, ct).ConfigureAwait(false);
+        var computed = await _defaults.ComputeAsync(req.BaseArtifactId, ct);
+        var license = await _licenseGate.GetAsync(req.BaseArtifactId, ct);
         var suggestions = license is null
             ? []
-            : await _linker.SuggestAsync(license.RepoId, ct).ConfigureAwait(false);
-        await Send.OkAsync(computed.ToResponse(license, suggestions), ct).ConfigureAwait(false);
+            : await _linker.SuggestAsync(license.RepoId, ct);
+        await Send.OkAsync(computed.ToResponse(license, suggestions), ct);
     }
 }

@@ -29,11 +29,11 @@ public sealed class EntraAuthCodeSignInEndpoint(IEntraAuthCodeSignInCoordinator 
         // (path-free, safe) message, by the global DomainValidationExceptionHandler. Every other failure flows to the
         // global handlers for a clean 500 — an earlier catch of the base InvalidOperationException swallowed
         // unexpected faults and leaked their raw messages.
-        var handle = await _signInCoordinator.StartAsync(ct).ConfigureAwait(false);
+        var handle = await _signInCoordinator.StartAsync(ct);
         await Send.OkAsync(new EntraAuthCodeSignInResponse
         {
             AuthorizeUrl = handle.AuthorizeUrl,
             ExpiresAtUtc = handle.ExpiresAtUtc
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

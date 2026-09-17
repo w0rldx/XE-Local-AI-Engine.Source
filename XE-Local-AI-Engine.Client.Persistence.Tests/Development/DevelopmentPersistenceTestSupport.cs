@@ -41,7 +41,7 @@ internal sealed class DevelopmentTestFixture : IDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureCreatedAsync();
         dbContext.SelectedFolders.Add(new NodeSelectedFolder
         {
             Id = SelectedFolderId,
@@ -50,7 +50,7 @@ internal sealed class DevelopmentTestFixture : IDisposable
             Mode = SelectedFolderMode.Copy,
             CreatedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         });
-        _ = await dbContext.SaveChangesAsync().ConfigureAwait(false);
+        _ = await dbContext.SaveChangesAsync();
         return provider;
     }
 
@@ -74,7 +74,7 @@ internal sealed class DevelopmentTestFixture : IDisposable
     public static async Task<(DevelopmentCreateProjectCommand Seed, long Version)> SeedTaskAwaitingApplyAsync(IDevelopmentStore store)
     {
         var seed = CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
         var version = 1L;
         foreach (var status in new[]
                  {
@@ -89,8 +89,7 @@ internal sealed class DevelopmentTestFixture : IDisposable
                                         Guid.NewGuid(),
                                         status,
                                         version,
-                                        ApprovedSubjectHash: status == DevelopmentTaskStatus.AwaitingApply ? "subject" : null))
-                                    .ConfigureAwait(false);
+                                        ApprovedSubjectHash: status == DevelopmentTaskStatus.AwaitingApply ? "subject" : null));
             version = result.Version;
         }
 

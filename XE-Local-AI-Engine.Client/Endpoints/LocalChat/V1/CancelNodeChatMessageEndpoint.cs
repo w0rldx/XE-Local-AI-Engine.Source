@@ -32,13 +32,13 @@ public sealed class CancelNodeChatMessageEndpoint(
         // The guard runs OUTSIDE the try below on purpose: NodeChatReadOnlyConversationException derives from
         // InvalidOperationException, so inside it the generic -> NotFound arm would swallow the 409 the global
         // ConflictExceptionHandler must write.
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         try
         {
             _ = _streamCancellationRegistry.TryCancel(correlation);
             var result = await _chatPersistence.CancelMessageAsync(new NodeChatCancelRequest(correlation, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
-                ct).ConfigureAwait(false);
+                ct);
 
             await Send.OkAsync(new NodeChatCancelMessageResponse
             {
@@ -47,14 +47,14 @@ public sealed class CancelNodeChatMessageEndpoint(
                 RequestId = result.Correlation.RequestId,
                 Status = result.Status,
                 Cancelled = result.Cancelled
-            }, ct).ConfigureAwait(false);
+            }, ct);
         }
         catch (NodeChatMessageCorrelationNotFoundException)
         {
             // The TYPED correlation failure only. Catching its base InvalidOperationException here reported any
             // unrelated fault raised under CancelMessageAsync as "not found", hiding it from the 500 that says
             // something is actually broken.
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
         }
     }
 }

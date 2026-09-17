@@ -91,7 +91,7 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
             return new EvalScore(Pass: false, JudgeScoredBy);
         }
 
-        return new EvalScore(await ScoreByJudgeAsync(goldenCase, candidateText ?? string.Empty, nodeLocalClient, cancellationToken).ConfigureAwait(false),
+        return new EvalScore(await ScoreByJudgeAsync(goldenCase, candidateText ?? string.Empty, nodeLocalClient, cancellationToken),
             JudgeScoredBy);
     }
 
@@ -126,8 +126,7 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
         };
 
         var response = await nodeLocalClient
-                             .GetResponseAsync<JudgeVerdict>(messages, chatOptions, cancellationToken: cancellationToken)
-                             .ConfigureAwait(false);
+                             .GetResponseAsync<JudgeVerdict>(messages, chatOptions, cancellationToken: cancellationToken);
 
         if (!response.TryGetResult(out var verdict) || verdict is null)
         {

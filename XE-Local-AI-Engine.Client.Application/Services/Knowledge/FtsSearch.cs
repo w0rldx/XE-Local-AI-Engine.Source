@@ -19,7 +19,7 @@ public sealed class FtsSearch : IFtsSearch
 
     public async Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, Guid? documentId, CancellationToken cancellationToken)
     {
-        return await SearchAsync(query, limit, documentId, KnowledgeCollectionScope.DefaultId, cancellationToken).ConfigureAwait(false);
+        return await SearchAsync(query, limit, documentId, KnowledgeCollectionScope.DefaultId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query,
@@ -35,7 +35,7 @@ public sealed class FtsSearch : IFtsSearch
         }
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         if (!KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId))
         {
@@ -63,9 +63,9 @@ public sealed class FtsSearch : IFtsSearch
         AddParameter(command, "$document_id", documentId);
         AddParameter(command, "$limit", limit);
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var hits = new List<FtsSearchHit>();
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await reader.ReadAsync(cancellationToken))
         {
             hits.Add(new FtsSearchHit(Guid.Parse(reader.GetString(0)), Guid.Parse(reader.GetString(1)), reader.GetDouble(2)));
         }

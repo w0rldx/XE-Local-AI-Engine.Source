@@ -38,12 +38,11 @@ public sealed class CreateIntegrationTriggerEndpoint(IIntegrationTriggerService 
                                                   req.TargetAgentDefinitionId,
                                                   req.SessionPolicy,
                                                   acceptedInputKinds),
-                                              ct)
-                                          .ConfigureAwait(false);
+                                              ct);
 
         if (result.Outcome != IntegrationTriggerOutcome.Saved)
         {
-            await IntegrationTriggerResponses.SendFailureAsync(this, Send, result, ct).ConfigureAwait(false);
+            await IntegrationTriggerResponses.SendFailureAsync(this, Send, result, ct);
             return;
         }
 
@@ -53,6 +52,6 @@ public sealed class CreateIntegrationTriggerEndpoint(IIntegrationTriggerService 
                 triggerId = view.Id
             },
             view,
-            cancellation: ct).ConfigureAwait(false);
+            cancellation: ct);
     }
 }

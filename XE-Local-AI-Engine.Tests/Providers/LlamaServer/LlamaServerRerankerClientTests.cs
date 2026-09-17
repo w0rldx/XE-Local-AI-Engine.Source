@@ -260,7 +260,7 @@ public sealed class LlamaServerRerankerClientTests
             {
                 // real-timer: a hang is the input. Honors the token so the client's own bounded timeout — real wall
                 // clock inside the client, with no injected TimeProvider — is what cancels the wait.
-                await Task.Delay(pause, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(pause, cancellationToken);
             }
 
             return responder(request);

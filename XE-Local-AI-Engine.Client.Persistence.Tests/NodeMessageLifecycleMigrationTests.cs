@@ -34,25 +34,25 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, InitialMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, InitialMigrationId);
 
-        await InsertHistoricalMessageAsync(databasePath, conversationId, messageId, createdAtUtc: 1234).ConfigureAwait(false);
+        await InsertHistoricalMessageAsync(databasePath, conversationId, messageId, createdAtUtc: 1234);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetMessageColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetMessageColumnsAsync(connection);
 
         AssertEx.True(columns.Contains("status"), "messages.status should be added.");
         AssertEx.True(columns.Contains("updated_at_utc"), "messages.updated_at_utc should be added.");
         AssertEx.True(columns.Contains("request_id"), "messages.request_id should be added.");
         AssertEx.True(columns.Contains("error"), "messages.error should be added.");
 
-        var migrated = await ReadMigratedMessageAsync(connection, messageId).ConfigureAwait(false);
+        var migrated = await ReadMigratedMessageAsync(connection, messageId);
 
         AssertEx.Equal(NodeMessageStatus.Completed, migrated.Status, "Existing messages should default to completed.");
         AssertEx.Equal(expected: 1234L, migrated.UpdatedAtUtc, "Existing messages should derive updated_at_utc from created_at_utc.");
@@ -65,16 +65,16 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(InitialMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(InitialMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetMessageColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetMessageColumnsAsync(connection);
 
         AssertEx.False(columns.Contains("status"), "Rollback should drop messages.status.");
         AssertEx.False(columns.Contains("updated_at_utc"), "Rollback should drop messages.updated_at_utc.");
@@ -90,7 +90,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -115,12 +115,12 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
                 Error = "provider timeout"
             });
 
-            await context.SaveChangesAsync().ConfigureAwait(false);
+            await context.SaveChangesAsync();
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            var message = await context.Messages.SingleAsync(entity => entity.MessageId == messageId).ConfigureAwait(false);
+            var message = await context.Messages.SingleAsync(entity => entity.MessageId == messageId);
 
             AssertEx.Equal(NodeMessageStatus.Streaming, message.Status);
             AssertEx.Equal(expected: 12L, message.UpdatedAtUtc);
@@ -142,7 +142,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
 
     private static async Task InsertHistoricalMessageAsync(string databasePath, Guid conversationId, Guid messageId, long createdAtUtc)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
         await using (var command = connection.CreateCommand())
         {
@@ -157,7 +157,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
             command.Parameters.AddWithValue("$last_seen_utc", createdAtUtc);
             command.Parameters.AddWithValue("$purged", value: false);
 
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync();
         }
 
         await using (var command = connection.CreateCommand())
@@ -174,14 +174,14 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
             command.Parameters.AddWithValue("$metadata_json", DBNull.Value);
             command.Parameters.AddWithValue("$created_at_utc", createdAtUtc);
 
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync();
         }
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -190,7 +190,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM messages LIMIT 0;";
 
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         var names = Enumerable.Range(start: 0, reader.FieldCount)
                               .Select(reader.GetName)
                               .ToHashSet(StringComparer.Ordinal);
@@ -204,16 +204,16 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         command.CommandText = "SELECT status, updated_at_utc, request_id, error FROM messages WHERE message_id = $message_id;";
         command.Parameters.AddWithValue("$message_id", messageId.ToString());
 
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        if (!await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
         {
             throw new AssertionException("Expected migrated message row to exist.");
         }
 
         return new MigratedMessage(reader.GetString(0),
             Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
-            await reader.IsDBNullAsync(2).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(2)),
-            await reader.IsDBNullAsync(3).ConfigureAwait(false) ? null : reader.GetString(3));
+            await reader.IsDBNullAsync(2) ? null : Guid.Parse(reader.GetString(2)),
+            await reader.IsDBNullAsync(3) ? null : reader.GetString(3));
     }
 
     private string GetDatabasePath(string fileName)

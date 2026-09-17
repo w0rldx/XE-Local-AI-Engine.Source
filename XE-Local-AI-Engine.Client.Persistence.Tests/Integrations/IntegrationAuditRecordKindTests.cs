@@ -36,7 +36,7 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
         var requestId = Guid.NewGuid();
         var agentDefinitionId = Guid.NewGuid();
 
-        await using var context = await CreateSchemaAsync("integration-audit-row.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("integration-audit-row.sqlite");
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
         await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(invocationId,
@@ -46,10 +46,9 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
                        agentDefinitionId,
                        "completed",
                        "trace-7",
-                       LatencyMs: 4_200L))
-                   .ConfigureAwait(false);
+                       LatencyMs: 4_200L));
 
-        var row = await context.AgentExecutionLogs.AsNoTracking().SingleAsync().ConfigureAwait(false);
+        var row = await context.AgentExecutionLogs.AsNoTracking().SingleAsync();
 
         AssertEx.Equal((int)AgentExecutionLogRecordKind.IntegrationInvocation, row.RecordKind);
         AssertEx.Equal(Guid.Empty, row.AgentDefinitionId, "Kind-3 rows share one retention bucket and appear in no per-agent view.");
@@ -75,7 +74,7 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
     [Arguments("cancelled")]
     public async Task AddIntegrationInvocationAsync_NonCompletedTerminalStatusPersistsSuccessFalse(string terminalStatus)
     {
-        await using var context = await CreateSchemaAsync($"integration-audit-{terminalStatus}.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync($"integration-audit-{terminalStatus}.sqlite");
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
         await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(Guid.NewGuid(),
@@ -85,10 +84,9 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
                        Guid.NewGuid(),
                        terminalStatus,
                        TraceId: null,
-                       LatencyMs: 10L))
-                   .ConfigureAwait(false);
+                       LatencyMs: 10L));
 
-        var row = await context.AgentExecutionLogs.AsNoTracking().SingleAsync().ConfigureAwait(false);
+        var row = await context.AgentExecutionLogs.AsNoTracking().SingleAsync();
         AssertEx.Equal(terminalStatus, row.TerminalStatus);
         AssertEx.False(row.Success);
     }
@@ -96,7 +94,7 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
     [Test]
     public async Task AddIntegrationInvocationAsync_RowIsInvisibleToEveryOtherReadView()
     {
-        await using var context = await CreateSchemaAsync("integration-audit-exclusion.sqlite").ConfigureAwait(false);
+        await using var context = await CreateSchemaAsync("integration-audit-exclusion.sqlite");
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
         await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput(Guid.NewGuid(),
@@ -106,25 +104,24 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
                        Guid.NewGuid(),
                        "completed",
                        TraceId: null,
-                       LatencyMs: 10L))
-                   .ConfigureAwait(false);
+                       LatencyMs: 10L));
 
         // The diagnostics view filters kind 0, the run-envelope ledger kind 1, and the usage summary aggregates kind 1
         // only — so a kind-3 row surfaces in none of them, and every reader that forgets to filter is the bug this
         // catches.
-        AssertEx.Empty(await store.ListByAgentAsync(Guid.Empty, limit: 50).ConfigureAwait(false));
-        AssertEx.Empty(await store.ListRunEnvelopesAsync(conversationId: null, limit: 50).ConfigureAwait(false));
-        AssertEx.Empty(await store.SummarizeTokenUsageAsync(fromEpochMsInclusive: null, toEpochMsExclusive: null).ConfigureAwait(false));
+        AssertEx.Empty(await store.ListByAgentAsync(Guid.Empty, limit: 50));
+        AssertEx.Empty(await store.ListRunEnvelopesAsync(conversationId: null, limit: 50));
+        AssertEx.Empty(await store.SummarizeTokenUsageAsync(fromEpochMsInclusive: null, toEpochMsExclusive: null));
 
         // Still physically present: retention prunes it on the whole-table sweep like every other kind.
-        AssertEx.Equal(expected: 1, await context.AgentExecutionLogs.CountAsync().ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await context.AgentExecutionLogs.CountAsync());
     }
 
     private async Task<NodeChatDbContext> CreateSchemaAsync(string fileName)
     {
         Directory.CreateDirectory(_rootPath);
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
-        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureCreatedAsync();
         return context;
     }
 

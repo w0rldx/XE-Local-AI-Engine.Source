@@ -14,14 +14,14 @@ public sealed class AddDevelopmentAttemptCommandProfileMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsNullablePlaintextCommandProfileJson()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-attempt-command-profile.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-attempt-command-profile.sqlite");
 
-        var columns = await probe.ColumnsAsync("development_attempts").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("development_attempts");
 
         AssertEx.True(columns.Contains("command_profile_json"),
             "development_attempts must carry the per-attempt command-profile snapshot.");
 
-        AssertEx.Null(await probe.ColumnDefaultAsync("development_attempts", "command_profile_json").ConfigureAwait(false),
+        AssertEx.Null(await probe.ColumnDefaultAsync("development_attempts", "command_profile_json"),
             "The column is deliberately not backfilled, so it must declare no default.");
     }
 }

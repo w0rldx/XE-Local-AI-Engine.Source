@@ -23,11 +23,11 @@ public sealed class ListGoldenConversationsEndpoint(IGoldenConversationService g
 
     public override async Task HandleAsync(ListGoldenConversationsRequest req, CancellationToken ct)
     {
-        var records = await _goldenConversationService.ListByAgentAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
+        var records = await _goldenConversationService.ListByAgentAsync(req.AgentDefinitionId, ct);
         await Send.OkAsync(new ListGoldenConversationsResponse
             {
                 Items = [.. records.Select(static record => record.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

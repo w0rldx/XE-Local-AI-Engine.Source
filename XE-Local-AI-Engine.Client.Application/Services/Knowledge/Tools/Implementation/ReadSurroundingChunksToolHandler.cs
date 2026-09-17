@@ -80,7 +80,7 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var expansion = scope.ServiceProvider.GetRequiredService<IContextExpansionService>();
-        var neighbors = await expansion.ExpandAsync(documentId, chunkIndex, window, collectionId, cancellationToken).ConfigureAwait(false);
+        var neighbors = await expansion.ExpandAsync(documentId, chunkIndex, window, collectionId, cancellationToken);
 
         var lowerBound = chunkIndex - before;
         var upperBound = chunkIndex + after;

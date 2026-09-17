@@ -25,16 +25,16 @@ public sealed class DefaultAgentSeederTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = new DefaultAgentSeeder(scopeFactory, Options.Create(new LocalChatAgentOptions()), NullLogger<DefaultAgentSeeder>.Instance);
 
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
+        await seeder.StartAsync(CancellationToken.None);
 
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
 
-        var slugs = await store.ListSeededSlugsAsync().ConfigureAwait(false);
+        var slugs = await store.ListSeededSlugsAsync();
         AssertEx.Contains(slugs, AgentDefaults.DefaultAgentSeedSlug);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         var defaultRows = definitions.Where(definition => definition.SeedSlug == AgentDefaults.DefaultAgentSeedSlug).ToList();
         AssertEx.Equal(expected: 1, defaultRows.Count);
 
@@ -51,7 +51,7 @@ public sealed class DefaultAgentSeederTests
         AssertEx.Equal(LoadEmbeddedChatPrompt(), seeded.Instructions);
 
         // The id is resolvable by slug — the provider/stream path depends on this projection.
-        var bySlug = AssertEx.NotNull(await store.GetBySeedSlugAsync(AgentDefaults.DefaultAgentSeedSlug).ConfigureAwait(false), "The seeded row must be resolvable by slug.");
+        var bySlug = AssertEx.NotNull(await store.GetBySeedSlugAsync(AgentDefaults.DefaultAgentSeedSlug), "The seeded row must be resolvable by slug.");
         AssertEx.Equal(seeded.Id, bySlug.Id);
     }
 

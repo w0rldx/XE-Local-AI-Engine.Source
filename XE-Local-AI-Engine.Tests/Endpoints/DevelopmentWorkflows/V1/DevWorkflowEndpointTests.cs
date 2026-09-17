@@ -62,7 +62,7 @@ public sealed class DevWorkflowEndpointTests
         using var client = factory.CreateClient();
         using var request = Request(method, route);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require the operator token.");
     }
@@ -88,7 +88,7 @@ public sealed class DevWorkflowEndpointTests
             }
         };
 
-        using var response = await SendAsync(factory, method, route, method == "POST" ? "{}" : null).ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route, method == "POST" ? "{}" : null);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 on a disabled node, never 500.");
         AssertEx.Empty(store.ReceivedCalls());
@@ -101,8 +101,8 @@ public sealed class DevWorkflowEndpointTests
         store.ListWorkItemsAsync(null, Arg.Any<CancellationToken>()).Returns([WorkItemSnapshot()]);
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", WorkItems).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", WorkItems);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -121,7 +121,7 @@ public sealed class DevWorkflowEndpointTests
         store.ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>()).Returns([]);
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", $"{WorkItems}?status=Blocked").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{WorkItems}?status=Blocked");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1).ListWorkItemsAsync(DevWorkflowWorkItemStatus.Blocked, Arg.Any<CancellationToken>());
@@ -139,7 +139,7 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", $"{WorkItems}?status={status}").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{WorkItems}?status={status}");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await store.DidNotReceive().ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>());
@@ -152,8 +152,7 @@ public sealed class DevWorkflowEndpointTests
         store.CreateWorkItemAsync(Arg.Any<CreateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>()).Returns(WorkItemSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", WorkItems, """{"title":"Ship the thing","request":"Research and plan it."}""")
-            .ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", WorkItems, """{"title":"Ship the thing","request":"Research and plan it."}""");
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(response.Headers.Location);
@@ -172,7 +171,7 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", WorkItems, body).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", WorkItems, body);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await store.DidNotReceive().CreateWorkItemAsync(Arg.Any<CreateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>());
@@ -186,8 +185,8 @@ public sealed class DevWorkflowEndpointTests
         store.ListRunSummariesAsync(WorkItemId, Arg.Any<DevWorkflowRunStatus?>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns([RunSummary()]);
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", WorkItem).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", WorkItem);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -205,7 +204,7 @@ public sealed class DevWorkflowEndpointTests
         store.ListRunSummariesAsync(WorkItemId, Arg.Any<DevWorkflowRunStatus?>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns([]);
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PATCH", WorkItem, """{"title":"renamed"}""").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PATCH", WorkItem, """{"title":"renamed"}""");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1)
@@ -221,7 +220,7 @@ public sealed class DevWorkflowEndpointTests
         var runs = Substitute.For<IDevWorkflowRunService>();
         await using var factory = EnabledFactory(Store(), runs);
 
-        using var response = await SendAsync(factory, "DELETE", WorkItem).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "DELETE", WorkItem);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
         await runs.Received(1).DeleteWorkItemAsync(WorkItemId, Arg.Any<CancellationToken>());
@@ -234,8 +233,8 @@ public sealed class DevWorkflowEndpointTests
         runs.DeleteWorkItemAsync(WorkItemId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new DevWorkflowRunInFlightException("still running"));
         await using var factory = EnabledFactory(Store(), runs);
 
-        using var response = await SendAsync(factory, "DELETE", WorkItem).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "DELETE", WorkItem);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -266,11 +265,11 @@ public sealed class DevWorkflowEndpointTests
         store.DeleteRuleSetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, method, route, body).ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route, body);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 for an unknown resource.");
         AssertEx.Null(response.Content.Headers.ContentType, $"{method} {route} must not attach a content type to a bodyless 404.");
-        AssertEx.Equal(string.Empty, await response.Content.ReadAsStringAsync().ConfigureAwait(false), $"{method} {route} must answer a bodyless 404.");
+        AssertEx.Equal(string.Empty, await response.Content.ReadAsStringAsync(), $"{method} {route} must answer a bodyless 404.");
     }
 
     [Test]
@@ -280,8 +279,8 @@ public sealed class DevWorkflowEndpointTests
         store.ListDefinitionsAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([DefinitionSummary()]);
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", $"{Definitions}?includeArchived=true").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", $"{Definitions}?includeArchived=true");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1).ListDefinitionsAsync(includeArchived: true, Arg.Any<CancellationToken>());
@@ -300,8 +299,8 @@ public sealed class DevWorkflowEndpointTests
         store.GetDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", Definition).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", Definition);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -322,7 +321,7 @@ public sealed class DevWorkflowEndpointTests
         store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(SampleGraph)).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(SampleGraph));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         await store.Received(1)
@@ -347,8 +346,8 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(graph)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(graph));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, "generalErrors", StringComparison.Ordinal);
@@ -379,8 +378,8 @@ public sealed class DevWorkflowEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(ConditionGraph)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(ConditionGraph));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(stored);
@@ -426,8 +425,8 @@ public sealed class DevWorkflowEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(ApplyGraph)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(ApplyGraph));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(stored);
@@ -472,8 +471,8 @@ public sealed class DevWorkflowEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(CapabilityGraph)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(CapabilityGraph));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(stored);
@@ -528,9 +527,8 @@ public sealed class DevWorkflowEndpointTests
         using var response = await SendAsync(factory,
                 "PUT",
                 Definition,
-                $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}}}""")
-            .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                $$"""{"version":4,"name":"renamed","graph":{{DecompositionGraph}}}""");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.NotNull(stored);
@@ -558,8 +556,8 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(UngatedApply)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(UngatedApply));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, "reached from something other than a human gate", StringComparison.Ordinal);
@@ -573,7 +571,7 @@ public sealed class DevWorkflowEndpointTests
         store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"name":"renamed"}""").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"name":"renamed"}""");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1)
@@ -597,8 +595,8 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", Definition, body).ConfigureAwait(false);
-        var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", Definition, body);
+        var responseBody = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, responseBody);
         AssertEx.Contains(responseBody, "version", StringComparison.OrdinalIgnoreCase, responseBody);
@@ -613,8 +611,8 @@ public sealed class DevWorkflowEndpointTests
              .ThrowsAsyncForAnyArgs(new DevWorkflowConcurrencyException("The definition moved on."));
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", Definition, """{"version":1,"name":"renamed"}""").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":1,"name":"renamed"}""");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -629,7 +627,7 @@ public sealed class DevWorkflowEndpointTests
         store.ArchiveDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "DELETE", Definition).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "DELETE", Definition);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
         await store.Received(1).ArchiveDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>());
@@ -642,8 +640,8 @@ public sealed class DevWorkflowEndpointTests
         store.ListRuleSetsAsync(Arg.Any<CancellationToken>()).Returns([RuleSetSummary()]);
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", RuleSets).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", RuleSets);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -663,10 +661,10 @@ public sealed class DevWorkflowEndpointTests
 
         var request = $$$"""{"name":"House rules","description":"What every agent follows.","body":"Never touch production.","scope":{"projectIds":["{{{WorkItemId}}}"],"nodeTypes":["agent"]}}""";
 
-        using var response = await SendAsync(factory, "POST", RuleSets, request).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", RuleSets, request);
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
-        using (var created = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false)))
+        using (var created = JsonDocument.Parse(await response.Content.ReadAsStringAsync()))
         {
             AssertEx.Equal("Never touch production.",
                 created.RootElement.GetProperty("body").GetString(),
@@ -693,7 +691,7 @@ public sealed class DevWorkflowEndpointTests
         store.CreateRuleSetAsync(Arg.Any<CreateDevWorkflowRuleSetCommand>(), Arg.Any<CancellationToken>()).Returns(RuleSetSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", RuleSets, """{"name":"House rules","body":"Never touch production."}""").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", RuleSets, """{"name":"House rules","body":"Never touch production."}""");
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         await store.Received(1)
@@ -712,8 +710,8 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", RuleSets, body).ConfigureAwait(false);
-        var problem = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", RuleSets, body);
+        var problem = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(problem, expectedMessage, StringComparison.Ordinal);
@@ -731,14 +729,14 @@ public sealed class DevWorkflowEndpointTests
         store.CreateRuleSetAsync(Arg.Any<CreateDevWorkflowRuleSetCommand>(), Arg.Any<CancellationToken>()).Returns(RuleSetSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var refused = await SendAsync(factory, "POST", RuleSets, $$"""{"name":"House rules","body":"{{new string('a', 4097)}}"}""").ConfigureAwait(false);
-        var problem = await refused.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var refused = await SendAsync(factory, "POST", RuleSets, $$"""{"name":"House rules","body":"{{new string('a', 4097)}}"}""");
+        var problem = await refused.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         AssertEx.Contains(problem, "4096-character limit", StringComparison.Ordinal);
         await store.DidNotReceive().CreateRuleSetAsync(Arg.Any<CreateDevWorkflowRuleSetCommand>(), Arg.Any<CancellationToken>());
 
-        using var accepted = await SendAsync(factory, "POST", RuleSets, $$"""{"name":"House rules","body":"{{new string('a', 4096)}}"}""").ConfigureAwait(false);
+        using var accepted = await SendAsync(factory, "POST", RuleSets, $$"""{"name":"House rules","body":"{{new string('a', 4096)}}"}""");
 
         AssertEx.Equal(HttpStatusCode.Created, accepted.StatusCode, "the bound itself is inclusive.");
     }
@@ -757,8 +755,8 @@ public sealed class DevWorkflowEndpointTests
         });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", RuleSet).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", RuleSet);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -774,8 +772,8 @@ public sealed class DevWorkflowEndpointTests
         store.GetRuleSetAsync(RuleSetId, Arg.Any<CancellationToken>()).Returns(RuleSetSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", RuleSet).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", RuleSet);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -791,11 +789,10 @@ public sealed class DevWorkflowEndpointTests
         store.UpdateRuleSetAsync(Arg.Any<UpdateDevWorkflowRuleSetCommand>(), Arg.Any<CancellationToken>()).Returns(RuleSetSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", RuleSet, """{"version":4,"name":"renamed","body":"Read the plan first.","enabled":false}""")
-            .ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", RuleSet, """{"version":4,"name":"renamed","body":"Read the plan first.","enabled":false}""");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        using (var updated = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false)))
+        using (var updated = JsonDocument.Parse(await response.Content.ReadAsStringAsync()))
         {
             AssertEx.Equal("Never touch production.", updated.RootElement.GetProperty("body").GetString(), "and so does the 200 a PUT answers with.");
         }
@@ -817,8 +814,8 @@ public sealed class DevWorkflowEndpointTests
              .ThrowsAsyncForAnyArgs(new DevWorkflowConcurrencyException("The rule set moved on."));
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", RuleSet, """{"version":1,"name":"renamed","body":"Read the plan first."}""").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", RuleSet, """{"version":1,"name":"renamed","body":"Read the plan first."}""");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -835,7 +832,7 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "DELETE", RuleSet).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "DELETE", RuleSet);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
         await store.Received(1).DeleteRuleSetAsync(RuleSetId, Arg.Any<CancellationToken>());
@@ -877,8 +874,8 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store, runs: null, ("DevWorkflows:MaxNodesPerDefinition", "1"));
 
-        using var response = await SendAsync(factory, method, route, CappableDefinitionBody()).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route, CappableDefinitionBody());
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"{method} {route} must refuse a graph over the configured cap.");
         AssertEx.Contains(body, "declares 2 nodes, more than the 1 one definition may carry", StringComparison.Ordinal);
@@ -899,7 +896,7 @@ public sealed class DevWorkflowEndpointTests
         store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, method, route, CappableDefinitionBody()).ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route, CappableDefinitionBody());
 
         AssertEx.True(response.IsSuccessStatusCode, $"{method} {route} must save a two-node graph under the shipped cap of 500; it answered {response.StatusCode}.");
         AssertEx.NotEmpty(store.ReceivedCalls());
@@ -921,10 +918,10 @@ public sealed class DevWorkflowEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, method, route, OversizedDefinitionBody()).ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route, OversizedDefinitionBody());
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode, $"{method} {route} must refuse a body over the cap.");
-        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, $"{method} {route}").ConfigureAwait(false);
+        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, $"{method} {route}");
         AssertEx.Empty(store.ReceivedCalls());
     }
 
@@ -946,7 +943,7 @@ public sealed class DevWorkflowEndpointTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Null(request.Content.Headers.ContentLength, "the point of the fixture: this body declares no length.");
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode, "a body of unknown length is not an oversized body.");
@@ -1092,7 +1089,7 @@ public sealed class DevWorkflowEndpointTests
         using var client = factory.CreateClient();
         using var request = Request(method, route, body);
         factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage Request(string method, string route, string? body = null)

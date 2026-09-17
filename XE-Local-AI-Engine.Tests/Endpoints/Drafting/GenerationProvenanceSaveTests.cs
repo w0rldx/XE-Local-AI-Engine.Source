@@ -69,8 +69,8 @@ public sealed class GenerationProvenanceSaveTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var payload = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(expected, response.StatusCode, payload);
 
         return JsonDocument.Parse(payload);
@@ -81,8 +81,8 @@ public sealed class GenerationProvenanceSaveTests
         using var request = new HttpRequestMessage(HttpMethod.Get, route);
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var payload = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, payload);
 
         return JsonDocument.Parse(payload);
@@ -106,8 +106,7 @@ public sealed class GenerationProvenanceSaveTests
                     generated = true,
                     generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, SkillBody))
                 },
-                HttpStatusCode.Created)
-            .ConfigureAwait(false);
+                HttpStatusCode.Created);
 
         var skill = created.RootElement;
         AssertEx.Equal("Imported", skill.GetProperty("origin").GetString(), "AI-drafted content lands in the Imported (fenced) posture.");
@@ -138,8 +137,7 @@ public sealed class GenerationProvenanceSaveTests
                     description = SkillDescription,
                     body = SkillBody
                 },
-                HttpStatusCode.Created)
-            .ConfigureAwait(false);
+                HttpStatusCode.Created);
 
         var skillId = created.RootElement.GetProperty("id").GetGuid();
         AssertEx.Equal("Local", created.RootElement.GetProperty("origin").GetString());
@@ -162,8 +160,7 @@ public sealed class GenerationProvenanceSaveTests
                     generated = true,
                     generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, ImprovedBody))
                 },
-                HttpStatusCode.OK)
-            .ConfigureAwait(false);
+                HttpStatusCode.OK);
 
         AssertEx.Equal("Imported", updated.RootElement.GetProperty("origin").GetString(), "An AI improve demotes a Local skill to Imported.");
         AssertEx.False(updated.RootElement.GetProperty("enabled").GetBoolean(), "The client-supplied enabled: true must be overridden.");
@@ -190,8 +187,7 @@ public sealed class GenerationProvenanceSaveTests
                     generationMetadata = BuildMetadata(DraftContentHash.Compute(SkillName, SkillDescription, SkillBody),
                         "the original brief")
                 },
-                HttpStatusCode.Created)
-            .ConfigureAwait(false);
+                HttpStatusCode.Created);
 
         var skillId = created.RootElement.GetProperty("id").GetGuid();
 
@@ -208,8 +204,7 @@ public sealed class GenerationProvenanceSaveTests
                     body = SkillBody + "\n\nReviewed by the operator.",
                     enabled = true
                 },
-                HttpStatusCode.OK)
-            .ConfigureAwait(false);
+                HttpStatusCode.OK);
 
         AssertEx.True(updated.RootElement.GetProperty("enabled").GetBoolean(), "An ordinary edit echoes the operator's enabled choice.");
         AssertEx.Equal("Imported", updated.RootElement.GetProperty("origin").GetString(), "Provenance stays promote-only — an edit never launders it back to Local.");
@@ -240,8 +235,7 @@ public sealed class GenerationProvenanceSaveTests
                     generated = true,
                     generationMetadata = BuildMetadata(draftHash)
                 },
-                HttpStatusCode.Created)
-            .ConfigureAwait(false);
+                HttpStatusCode.Created);
 
         AssertEx.True(created.RootElement.GetProperty("generationMetadata").GetProperty("wasEdited").GetBoolean(),
             "Content that differs from the draft must be recorded as edited.");
@@ -268,8 +262,7 @@ public sealed class GenerationProvenanceSaveTests
                     generated = true,
                     generationMetadata = BuildMetadata(draftHash)
                 },
-                HttpStatusCode.Created)
-            .ConfigureAwait(false);
+                HttpStatusCode.Created);
 
         AssertEx.False(created.RootElement.GetProperty("generationMetadata").GetProperty("wasEdited").GetBoolean(),
             "CRLF-folded content is byte-different but not an edit.");
@@ -299,7 +292,7 @@ public sealed class GenerationProvenanceSaveTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, "Every echoed provenance field is bounded at the endpoint.");
     }
@@ -327,14 +320,13 @@ public sealed class GenerationProvenanceSaveTests
                     generationMetadata = BuildMetadata(DraftContentHash.Compute(AgentName, AgentDescription, AgentInstructions),
                         BriefSentinel)
                 },
-                HttpStatusCode.Created)
-            .ConfigureAwait(false);
+                HttpStatusCode.Created);
 
         var agentId = created.RootElement.GetProperty("id").GetGuid();
         AssertEx.Equal(BriefSentinel, created.RootElement.GetProperty("generationMetadata").GetProperty("userBrief").GetString());
 
         // The single-item GET carries the provenance...
-        using var fetched = await GetAsync(factory, client, $"{AgentsRoute}/{agentId}").ConfigureAwait(false);
+        using var fetched = await GetAsync(factory, client, $"{AgentsRoute}/{agentId}");
         var metadata = fetched.RootElement.GetProperty("generationMetadata");
         AssertEx.Equal(BriefSentinel, metadata.GetProperty("userBrief").GetString());
         AssertEx.Equal("Create", metadata.GetProperty("mode").GetString());
@@ -342,7 +334,7 @@ public sealed class GenerationProvenanceSaveTests
         AssertEx.True(metadata.GetProperty("acceptedAtUtc").GetInt64() > 0);
 
         // ...and the list does not, so a library listing never ships a rationale and brief per row.
-        using var listed = await GetAsync(factory, client, AgentsRoute).ConfigureAwait(false);
+        using var listed = await GetAsync(factory, client, AgentsRoute);
         var listedAgent = listed.RootElement.GetProperty("items")
                                 .EnumerateArray()
                                 .Single(item => item.GetProperty("id").GetGuid() == agentId);
@@ -350,7 +342,7 @@ public sealed class GenerationProvenanceSaveTests
 
         // At rest the column is ciphertext: the brief quotes the operator, so it lives on the encrypted surface with the
         // instructions it was drafted from. Read as a raw scalar, which never passes the materialization interceptor.
-        var stored = await ReadRawStoredProvenanceAsync(factory).ConfigureAwait(false);
+        var stored = await ReadRawStoredProvenanceAsync(factory);
         AssertEx.NotNull(stored, "The column should hold a payload.");
         AssertEx.False(Encoding.UTF8.GetString(stored!).Contains(BriefSentinel, StringComparison.Ordinal),
             "The stored provenance must be encrypted at rest, not readable plaintext JSON.");
@@ -374,8 +366,7 @@ public sealed class GenerationProvenanceSaveTests
                     name = AgentName,
                     instructions = AgentInstructions
                 },
-                HttpStatusCode.Created)
-            .ConfigureAwait(false);
+                HttpStatusCode.Created);
 
         var agentId = created.RootElement.GetProperty("id").GetGuid();
         AssertEx.Equal(JsonValueKind.Null, created.RootElement.GetProperty("generationMetadata").ValueKind, "A plain create carries no provenance.");
@@ -393,8 +384,7 @@ public sealed class GenerationProvenanceSaveTests
                     generationMetadata = BuildMetadata(DraftContentHash.Compute(AgentName, description: null, ImprovedInstructions),
                         "improve-brief")
                 },
-                HttpStatusCode.OK)
-            .ConfigureAwait(false);
+                HttpStatusCode.OK);
 
         AssertEx.Equal("improve-brief", improved.RootElement.GetProperty("generationMetadata").GetProperty("userBrief").GetString());
         AssertEx.False(improved.RootElement.GetProperty("generationMetadata").GetProperty("wasEdited").GetBoolean());
@@ -410,8 +400,7 @@ public sealed class GenerationProvenanceSaveTests
                     name = AgentName,
                     instructions = ImprovedInstructions + " Then stop."
                 },
-                HttpStatusCode.OK)
-            .ConfigureAwait(false);
+                HttpStatusCode.OK);
 
         AssertEx.Equal("improve-brief", edited.RootElement.GetProperty("generationMetadata").GetProperty("userBrief").GetString(),
             "An omitted provenance block preserves the stored one.");
@@ -426,20 +415,20 @@ public sealed class GenerationProvenanceSaveTests
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
         var connection = dbContext.Database.GetDbConnection();
-        await dbContext.Database.OpenConnectionAsync().ConfigureAwait(false);
+        await dbContext.Database.OpenConnectionAsync();
 
         try
         {
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT generation_metadata_json FROM agent_definitions WHERE generation_metadata_json IS NOT NULL";
 
-            var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+            var value = await command.ExecuteScalarAsync();
 
             return value as byte[];
         }
         finally
         {
-            await dbContext.Database.CloseConnectionAsync().ConfigureAwait(false);
+            await dbContext.Database.CloseConnectionAsync();
         }
     }
 }

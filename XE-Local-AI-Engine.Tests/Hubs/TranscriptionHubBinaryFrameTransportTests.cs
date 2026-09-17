@@ -55,18 +55,18 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
         await using var factory = FactoryWith(registry);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(client, factory).ConfigureAwait(false);
-        using (var started = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start").ConfigureAwait(false))
+        var sessionId = await CreateSessionAsync(client, factory);
+        using (var started = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start"))
         {
-            AssertEx.Equal(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync().ConfigureAwait(false));
+            AssertEx.Equal(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
         }
 
         await using var connection = Connect(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         // The invoke itself is the gate: it completes only once the hub's own PushAudioFrame has returned, so the
         // registry call it forwards is already recorded and nothing here waits on a clock.
-        await connection.InvokeAsync("PushAudioFrame", sessionId, (int)TranscriptChannel.Mono, Payload).ConfigureAwait(false);
+        await connection.InvokeAsync("PushAudioFrame", sessionId, (int)TranscriptChannel.Mono, Payload);
 
         var (bytesChannel, bytesPcm) = Dequeue(frames, "the byte[] invoke must reach the registry.");
         AssertEx.Equal(TranscriptChannel.Mono, bytesChannel);
@@ -74,7 +74,7 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
 
         // The browser's form. A HubException here is the operator decision the slice plan calls out (MessagePack on
         // both sides), NOT something to work around by reshaping the hub signature.
-        await connection.InvokeAsync("PushAudioFrame", sessionId, (int)TranscriptChannel.Mono, PayloadBase64).ConfigureAwait(false);
+        await connection.InvokeAsync("PushAudioFrame", sessionId, (int)TranscriptChannel.Mono, PayloadBase64);
 
         var (stringChannel, stringPcm) = Dequeue(frames, "the base64-string invoke must reach the registry: this is the contract the browser client depends on.");
         AssertEx.Equal(TranscriptChannel.Mono, stringChannel);
@@ -103,7 +103,7 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(client, factory).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(client, factory);
 
         // The same call the registry's commit pipeline makes; the row is therefore indistinguishable from a live one.
         await factory.Services.GetRequiredService<ITranscriptionService>()
@@ -114,13 +114,12 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
                          endMs: 4_000,
                          "the browser parses this row",
                          confidence: 0.87,
-                         CancellationToken.None)
-                     .ConfigureAwait(false);
+                         CancellationToken.None);
 
         await using var connection = Connect(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
-        var snapshot = await connection.InvokeAsync<JsonElement>("SubscribeSession", sessionId, 0L).ConfigureAwait(false);
+        var snapshot = await connection.InvokeAsync<JsonElement>("SubscribeSession", sessionId, 0L);
 
         AssertEx.Equal(sessionId, Property(snapshot, "sessionId").GetGuid());
         AssertEx.Equal("Created", Property(snapshot, "status").GetString(), "a session that was never started is still in its created state.");
@@ -199,17 +198,17 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
             modelId = "tiny",
             maxWindowSeconds = 5
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<JsonElement>(payload, JsonOptions).GetProperty("session").GetProperty("id").GetGuid();
     }
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, TestServerWebAppFactory factory, HttpMethod method, string route)
     {
         using var request = Authorized(factory, method, route);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string route)

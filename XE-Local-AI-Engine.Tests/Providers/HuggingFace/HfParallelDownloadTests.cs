@@ -849,7 +849,7 @@ public sealed class HfParallelDownloadTests
         {
             if (_position >= payload.Length)
             {
-                await Task.Delay(EofPause, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(EofPause, cancellationToken);
                 return 0;
             }
 

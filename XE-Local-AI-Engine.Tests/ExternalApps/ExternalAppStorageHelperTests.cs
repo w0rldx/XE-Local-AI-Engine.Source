@@ -34,15 +34,15 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Reset_WipesTheVolumesThroughAHelperConfinedToOneWritableBindOfTheInstancesVolumes()
     {
-        await using var harness = await StoppedHarnessAsync().ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        await using var harness = await StoppedHarnessAsync();
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         var volumes = Path.Combine(row.StoragePath, "volumes");
-        await File.WriteAllTextAsync(Path.Combine(volumes, ServiceName, VolumeName, "user-data.txt"), "written by the application").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(volumes, ServiceName, VolumeName, "user-data.txt"), "written by the application");
 
         var helper = CaptureHelperSpecification(harness);
 
-        _ = await harness.Service.ResetAsync(row.Id, row.Version).ConfigureAwait(false);
-        _ = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        _ = await harness.Service.ResetAsync(row.Id, row.Version);
+        _ = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Stopped);
 
         var specification = AssertEx.NotNull(helper.Value, "The reset never created a storage helper container.");
 
@@ -90,13 +90,13 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Reset_RemovesTheHelperAfterwards()
     {
-        await using var harness = await StoppedHarnessAsync().ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        await using var harness = await StoppedHarnessAsync();
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
-        _ = await harness.Service.ResetAsync(row.Id, row.Version).ConfigureAwait(false);
-        _ = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        _ = await harness.Service.ResetAsync(row.Id, row.Version);
+        _ = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Stopped);
 
-        await AssertNoHelperIsLeftAsync(harness, row.Id).ConfigureAwait(false);
+        await AssertNoHelperIsLeftAsync(harness, row.Id);
     }
 
     /// <summary>
@@ -106,19 +106,19 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Reset_WhenTheHelperExitsNonZero_FailsWithAStorageErrorAndStillRemovesTheHelper()
     {
-        await using var harness = await StoppedHarnessAsync().ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        await using var harness = await StoppedHarnessAsync();
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         var marker = Path.Combine(row.StoragePath, "volumes", ServiceName, VolumeName, "user-data.txt");
-        await File.WriteAllTextAsync(marker, "the wipe never got to this").ConfigureAwait(false);
+        await File.WriteAllTextAsync(marker, "the wipe never got to this");
 
         harness.HelperOutcome = static _ => 1;
 
-        _ = await harness.Service.ResetAsync(row.Id, row.Version).ConfigureAwait(false);
-        var failed = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        _ = await harness.Service.ResetAsync(row.Id, row.Version);
+        var failed = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.StorageError, failed.FailureCategory);
         AssertEx.True(File.Exists(marker), "A failed wipe must not be reported over data that is still there.");
-        await AssertNoHelperIsLeftAsync(harness, row.Id).ConfigureAwait(false);
+        await AssertNoHelperIsLeftAsync(harness, row.Id);
     }
 
     /// <summary>
@@ -128,14 +128,14 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Reset_WhenTheHelperClaimsSuccessAndTheDataRemains_FailsWithAStorageError()
     {
-        await using var harness = await StoppedHarnessAsync().ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
-        await File.WriteAllTextAsync(Path.Combine(row.StoragePath, "volumes", ServiceName, VolumeName, "user-data.txt"), "still here").ConfigureAwait(false);
+        await using var harness = await StoppedHarnessAsync();
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
+        await File.WriteAllTextAsync(Path.Combine(row.StoragePath, "volumes", ServiceName, VolumeName, "user-data.txt"), "still here");
 
         harness.HelperOutcome = static _ => 0;
 
-        _ = await harness.Service.ResetAsync(row.Id, row.Version).ConfigureAwait(false);
-        var failed = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        _ = await harness.Service.ResetAsync(row.Id, row.Version);
+        var failed = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.StorageError, failed.FailureCategory);
     }
@@ -143,21 +143,21 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Uninstall_RemovesAnApplicationsDataThroughTheHelperAndThenTheDirectory()
     {
-        await using var harness = await RunningHarnessAsync().ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
-        await File.WriteAllTextAsync(Path.Combine(row.StoragePath, "volumes", ServiceName, VolumeName, "user-data.txt"), "written by the application").ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync();
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
+        await File.WriteAllTextAsync(Path.Combine(row.StoragePath, "volumes", ServiceName, VolumeName, "user-data.txt"), "written by the application");
 
         var helper = CaptureHelperSpecification(harness);
 
-        _ = await harness.Service.UninstallAsync(row.Id, row.Version).ConfigureAwait(false);
+        _ = await harness.Service.UninstallAsync(row.Id, row.Version);
         await AssertEx.EventuallyAsync(() => !harness.Runner.IsRunning(row.Id),
             TestBudgets.Contended,
-            "The uninstall operation never finished.").ConfigureAwait(false);
+            "The uninstall operation never finished.");
 
         AssertEx.NotNull(helper.Value, "The uninstall removed the directory without ever running the helper.");
-        AssertEx.Null(await harness.ReadAsync(row.Id).ConfigureAwait(false), "The uninstall must delete the row.");
+        AssertEx.Null(await harness.ReadAsync(row.Id), "The uninstall must delete the row.");
         AssertEx.False(Directory.Exists(row.StoragePath), $"The instance directory '{row.StoragePath}' survived the uninstall.");
-        await AssertNoHelperIsLeftAsync(harness, row.Id).ConfigureAwait(false);
+        await AssertNoHelperIsLeftAsync(harness, row.Id);
     }
 
     /// <summary>
@@ -168,19 +168,19 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Uninstall_WhenTheWipeFails_KeepsTheRowAndTheData()
     {
-        await using var harness = await RunningHarnessAsync().ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        await using var harness = await RunningHarnessAsync();
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         var marker = Path.Combine(row.StoragePath, "volumes", ServiceName, VolumeName, "user-data.txt");
-        await File.WriteAllTextAsync(marker, "the wipe never got to this").ConfigureAwait(false);
+        await File.WriteAllTextAsync(marker, "the wipe never got to this");
 
         harness.HelperOutcome = static _ => 1;
 
-        _ = await harness.Service.UninstallAsync(row.Id, row.Version).ConfigureAwait(false);
-        var failed = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        _ = await harness.Service.UninstallAsync(row.Id, row.Version);
+        var failed = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.StorageError, failed.FailureCategory);
         AssertEx.True(File.Exists(marker), "The application's data must survive an uninstall that could not remove it.");
-        AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false),
+        AssertEx.NotNull(await harness.ReadAsync(row.Id),
             "The row must survive too: it is the only thing left that a retry can act on.");
     }
 
@@ -192,20 +192,20 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Uninstall_WhenTheHelperClaimsSuccessAndTheDataRemains_KeepsTheRowAndTheData()
     {
-        await using var harness = await RunningHarnessAsync().ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        await using var harness = await RunningHarnessAsync();
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         var marker = Path.Combine(row.StoragePath, "volumes", ServiceName, VolumeName, "user-data.txt");
-        await File.WriteAllTextAsync(marker, "a helper that exited 0 without deleting it").ConfigureAwait(false);
+        await File.WriteAllTextAsync(marker, "a helper that exited 0 without deleting it");
 
         // Exit 0 and not one entry removed: the shape of the defect the live round found.
         harness.HelperOutcome = static _ => 0;
 
-        _ = await harness.Service.UninstallAsync(row.Id, row.Version).ConfigureAwait(false);
-        var failed = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        _ = await harness.Service.UninstallAsync(row.Id, row.Version);
+        var failed = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed);
 
         AssertEx.Equal(ExternalAppFailureCategory.StorageError, failed.FailureCategory);
         AssertEx.True(File.Exists(marker), "The data must survive an uninstall whose helper only claimed to remove it.");
-        AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false),
+        AssertEx.NotNull(await harness.ReadAsync(row.Id),
             "The row must survive too, or nothing is left that a retry could act on.");
     }
 
@@ -216,15 +216,14 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Uninstall_WhenTheApplicationDeclaresNoStorage_RunsNoHelperAtAll()
     {
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service(ServiceName)]))
-                                                                 .ConfigureAwait(false);
-        var row = await InstallAsync(harness).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service(ServiceName)]));
+        var row = await InstallAsync(harness);
         var helper = CaptureHelperSpecification(harness);
 
-        _ = await harness.Service.UninstallAsync(row.Id, row.Version).ConfigureAwait(false);
+        _ = await harness.Service.UninstallAsync(row.Id, row.Version);
         await AssertEx.EventuallyAsync(() => !harness.Runner.IsRunning(row.Id),
             TestBudgets.Contended,
-            "The uninstall operation never finished.").ConfigureAwait(false);
+            "The uninstall operation never finished.");
 
         AssertEx.Null(helper.Value, "An instance with no volumes directory must not cost a container and an image pull.");
         AssertEx.False(Directory.Exists(row.StoragePath));
@@ -253,7 +252,7 @@ public sealed class ExternalAppStorageHelperTests
     private static async Task AssertNoHelperIsLeftAsync(ExternalAppServiceHarness harness, Guid instanceId)
     {
         var labels = ExternalAppLabels.ForStorageHelper(harness.Service.InstallId, instanceId);
-        AssertEx.Empty(await harness.Runtime.ListContainersDetailedAsync(labels).ConfigureAwait(false),
+        AssertEx.Empty(await harness.Runtime.ListContainersDetailedAsync(labels),
             "A storage helper container was left on the runtime.");
     }
 
@@ -264,7 +263,7 @@ public sealed class ExternalAppStorageHelperTests
 
     private static async Task<ExternalAppInstanceSnapshot> InstallAsync(ExternalAppServiceHarness harness)
     {
-        var manifest = await harness.Catalog.GetApplicationAsync("test-app").ConfigureAwait(false)
+        var manifest = await harness.Catalog.GetApplicationAsync("test-app")
                        ?? throw new AssertionException("The harness catalog does not hold the fixture manifest.");
 
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
@@ -272,13 +271,12 @@ public sealed class ExternalAppStorageHelperTests
                                         manifest.ManifestVersion,
                                         manifest.ManifestSha256,
                                         new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true))
-                                    .ConfigureAwait(false);
+                                        AcceptPermissions: true));
 
-        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         harness.InstalledId = admitted.Id;
 
-        return AssertEx.NotNull(await harness.ReadAsync(admitted.Id).ConfigureAwait(false));
+        return AssertEx.NotNull(await harness.ReadAsync(admitted.Id));
     }
 
     private static async Task<ExternalAppServiceHarness> RunningHarnessAsync()
@@ -287,19 +285,18 @@ public sealed class ExternalAppStorageHelperTests
                                                          static options => options with
                                                          {
                                                              StorageHelperImage = HelperImage
-                                                         })
-                                                     .ConfigureAwait(false);
-        _ = await InstallAsync(harness).ConfigureAwait(false);
+                                                         });
+        _ = await InstallAsync(harness);
         return harness;
     }
 
     private static async Task<ExternalAppServiceHarness> StoppedHarnessAsync()
     {
-        var harness = await RunningHarnessAsync().ConfigureAwait(false);
-        var running = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var harness = await RunningHarnessAsync();
+        var running = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
-        _ = await harness.Service.StopAsync(running.Id, running.Version).ConfigureAwait(false);
-        _ = await harness.SettleAsync(running.Id, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        _ = await harness.Service.StopAsync(running.Id, running.Version);
+        _ = await harness.SettleAsync(running.Id, ExternalAppInstanceStatus.Stopped);
 
         return harness;
     }

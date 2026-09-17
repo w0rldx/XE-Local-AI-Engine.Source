@@ -27,7 +27,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
+        var conversationId = await SeedRemoteConversationAsync(factory);
 
         using var request = CreateJsonRequest(factory,
             HttpMethod.Patch,
@@ -36,9 +36,9 @@ public sealed class NodeChatReadOnlyEndpointTests
             {
                 Title = "renamed by operator"
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
+        await AssertReadOnlyConflictAsync(response);
     }
 
     [Test]
@@ -46,7 +46,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
+        var conversationId = await SeedRemoteConversationAsync(factory);
 
         using var request = CreateJsonRequest(factory,
             HttpMethod.Patch,
@@ -55,9 +55,9 @@ public sealed class NodeChatReadOnlyEndpointTests
             {
                 IsPinned = true
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
+        await AssertReadOnlyConflictAsync(response);
     }
 
     [Test]
@@ -65,7 +65,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
+        var conversationId = await SeedRemoteConversationAsync(factory);
 
         using var request = CreateJsonRequest(factory,
             HttpMethod.Patch,
@@ -74,9 +74,9 @@ public sealed class NodeChatReadOnlyEndpointTests
             {
                 Archived = true
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
+        await AssertReadOnlyConflictAsync(response);
     }
 
     [Test]
@@ -84,7 +84,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
+        var conversationId = await SeedRemoteConversationAsync(factory);
 
         // The guard rejects on conversation origin before any message lookup, so an arbitrary message id
         // exercises the read-only boundary without seeding a message. The empty JSON body satisfies the POST
@@ -96,9 +96,9 @@ public sealed class NodeChatReadOnlyEndpointTests
             new
             {
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
+        await AssertReadOnlyConflictAsync(response);
     }
 
     [Test]
@@ -106,7 +106,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
+        var conversationId = await SeedRemoteConversationAsync(factory);
 
         // POST revisions creates a sibling variant placeholder — a mutation, so it is guarded. Empty JSON body
         // satisfies the POST content-type binding (ids bind from the route); without it the pipeline returns 415
@@ -117,9 +117,9 @@ public sealed class NodeChatReadOnlyEndpointTests
             new
             {
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
+        await AssertReadOnlyConflictAsync(response);
     }
 
     [Test]
@@ -127,7 +127,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
+        var conversationId = await SeedRemoteConversationAsync(factory);
 
         using var request = CreateJsonRequest(factory,
             HttpMethod.Put,
@@ -136,9 +136,9 @@ public sealed class NodeChatReadOnlyEndpointTests
             {
                 Rating = "up"
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
+        await AssertReadOnlyConflictAsync(response);
     }
 
     [Test]
@@ -146,7 +146,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         var factory = Factory;
         using var client = factory.CreateClient();
-        var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
+        var conversationId = await SeedRemoteConversationAsync(factory);
 
         // Persisting a selection is a mutation of conversation metadata, so it is guarded on a remote-mirror
         // (view-only) conversation, mirroring the rename/pin/branch/feedback boundary.
@@ -160,9 +160,9 @@ public sealed class NodeChatReadOnlyEndpointTests
                     [Guid.NewGuid()] = Guid.NewGuid()
                 }
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
+        await AssertReadOnlyConflictAsync(response);
     }
 
     private static async Task<Guid> SeedRemoteConversationAsync(TestServerWebAppFactory factory)
@@ -173,8 +173,7 @@ public sealed class NodeChatReadOnlyEndpointTests
                              "Platform conversation",
                              "client-node",
                              CreatedAtUtc: 10,
-                             NodeChatOriginValues.Remote))
-                         .ConfigureAwait(false);
+                             NodeChatOriginValues.Remote));
         return conversationId;
     }
 
@@ -182,7 +181,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     {
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.ContentType?.ToString(), "problem+json", StringComparison.OrdinalIgnoreCase);
-        var body = await ReadJsonAsync<ConflictProblemBody>(response).ConfigureAwait(false);
+        var body = await ReadJsonAsync<ConflictProblemBody>(response);
         AssertEx.Equal("ReadOnlyConversation", body.ConflictType);
         AssertEx.NotEmpty(body.Detail);
         AssertEx.NotEmpty(body.TraceId);
@@ -208,7 +207,7 @@ public sealed class NodeChatReadOnlyEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 }

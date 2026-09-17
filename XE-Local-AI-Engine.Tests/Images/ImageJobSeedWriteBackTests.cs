@@ -33,41 +33,41 @@ public sealed class ImageJobSeedWriteBackTests : IDisposable
     [Test]
     public async Task MarkSucceededAsync_WhenSeedWasRandom_RecordsTheResolvedSeed()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         var jobId = Guid.NewGuid();
-        await CreateQueuedJobAsync(provider, jobId, RandomSeedSentinel).ConfigureAwait(false);
+        await CreateQueuedJobAsync(provider, jobId, RandomSeedSentinel);
 
-        await MarkSucceededAsync(provider, jobId, resolvedSeed: 182_736).ConfigureAwait(false);
+        await MarkSucceededAsync(provider, jobId, resolvedSeed: 182_736);
 
-        var view = await GetAsync(provider, jobId).ConfigureAwait(false);
+        var view = await GetAsync(provider, jobId);
         AssertEx.Equal(182_736, view.Seed);
     }
 
     [Test]
     public async Task MarkSucceededAsync_WhenRuntimeReportedNoSeed_LeavesTheRequestedSeedAlone()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         var jobId = Guid.NewGuid();
-        await CreateQueuedJobAsync(provider, jobId, seed: 4242).ConfigureAwait(false);
+        await CreateQueuedJobAsync(provider, jobId, seed: 4242);
 
         // A negative resolved seed means the runtime could not report one; overwriting would replace a usable seed
         // with a second sentinel.
-        await MarkSucceededAsync(provider, jobId, resolvedSeed: RandomSeedSentinel).ConfigureAwait(false);
+        await MarkSucceededAsync(provider, jobId, resolvedSeed: RandomSeedSentinel);
 
-        var view = await GetAsync(provider, jobId).ConfigureAwait(false);
+        var view = await GetAsync(provider, jobId);
         AssertEx.Equal(4242, view.Seed);
     }
 
     [Test]
     public async Task MarkSucceededAsync_PreservesAnExplicitSeedTheRuntimeEchoedBack()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         var jobId = Guid.NewGuid();
-        await CreateQueuedJobAsync(provider, jobId, seed: 99).ConfigureAwait(false);
+        await CreateQueuedJobAsync(provider, jobId, seed: 99);
 
-        await MarkSucceededAsync(provider, jobId, resolvedSeed: 99).ConfigureAwait(false);
+        await MarkSucceededAsync(provider, jobId, resolvedSeed: 99);
 
-        var view = await GetAsync(provider, jobId).ConfigureAwait(false);
+        var view = await GetAsync(provider, jobId);
         AssertEx.Equal(99, view.Seed);
     }
 
@@ -75,13 +75,13 @@ public sealed class ImageJobSeedWriteBackTests : IDisposable
     [Test]
     public async Task MarkSucceededAsync_RecordsZeroAsARealSeed()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         var jobId = Guid.NewGuid();
-        await CreateQueuedJobAsync(provider, jobId, RandomSeedSentinel).ConfigureAwait(false);
+        await CreateQueuedJobAsync(provider, jobId, RandomSeedSentinel);
 
-        await MarkSucceededAsync(provider, jobId, resolvedSeed: 0).ConfigureAwait(false);
+        await MarkSucceededAsync(provider, jobId, resolvedSeed: 0);
 
-        var view = await GetAsync(provider, jobId).ConfigureAwait(false);
+        var view = await GetAsync(provider, jobId);
         AssertEx.Equal(0, view.Seed);
     }
 
@@ -102,7 +102,7 @@ public sealed class ImageJobSeedWriteBackTests : IDisposable
             Sampler = "euler_a",
             CfgScale = 7.0,
             CreatedAtUtc = 100
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
     }
 
     private static async Task MarkSucceededAsync(ServiceProvider provider, Guid jobId, long resolvedSeed)
@@ -117,7 +117,7 @@ public sealed class ImageJobSeedWriteBackTests : IDisposable
             outputWidth: 512,
             outputHeight: 512,
             resolvedSeed,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
     }
 
     private static async Task<ImageJobView> GetAsync(ServiceProvider provider, Guid jobId)
@@ -125,7 +125,7 @@ public sealed class ImageJobSeedWriteBackTests : IDisposable
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
         await using var scope = scopeFactory.CreateAsyncScope();
         var store = new ImageJobStore(scope.ServiceProvider.GetRequiredService<NodeChatDbContext>());
-        return AssertEx.NotNull(await store.GetAsync(jobId, CancellationToken.None).ConfigureAwait(false));
+        return AssertEx.NotNull(await store.GetAsync(jobId, CancellationToken.None));
     }
 
     private async Task<ServiceProvider> BuildProviderAsync()
@@ -140,8 +140,8 @@ public sealed class ImageJobSeedWriteBackTests : IDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }

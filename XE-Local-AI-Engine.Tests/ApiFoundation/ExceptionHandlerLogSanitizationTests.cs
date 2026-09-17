@@ -68,13 +68,13 @@ public sealed class ExceptionHandlerLogSanitizationTests
             AssertEx.Equal(UnsafePath, context.Request.Path.Value);
             return Task.CompletedTask;
         });
-        await app.StartAsync().ConfigureAwait(false);
+        await app.StartAsync();
 
         await app.GetTestServer().SendAsync(context =>
         {
             context.Request.Method = UnsafeMethod;
             context.Request.Path = UnsafePath;
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(expected: 1, sink.Events.Count);
         var completion = sink.Events.Single();
@@ -92,7 +92,7 @@ public sealed class ExceptionHandlerLogSanitizationTests
         var handler = new DefaultExceptionHandler(logger, environment);
         var context = CreateContext();
 
-        var handled = await handler.TryHandleAsync(context, new InvalidOperationException("boom"), CancellationToken.None).ConfigureAwait(false);
+        var handled = await handler.TryHandleAsync(context, new InvalidOperationException("boom"), CancellationToken.None);
 
         AssertSanitizedRequestProperties(handled, logger);
         AssertEx.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
@@ -107,8 +107,7 @@ public sealed class ExceptionHandlerLogSanitizationTests
 
         var handled = await handler.TryHandleAsync(context,
                                        new WorkSessionInvalidTransitionException("A work session cannot be deleted mid-step."),
-                                       CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                       CancellationToken.None);
 
         AssertSanitizedRequestProperties(handled, logger);
         AssertEx.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
@@ -121,8 +120,7 @@ public sealed class ExceptionHandlerLogSanitizationTests
         var handler = new DomainValidationExceptionHandler(logger);
         var context = CreateContext();
 
-        var handled = await handler.TryHandleAsync(context, new ScheduledJobValidationException("invalid"), CancellationToken.None)
-                                   .ConfigureAwait(false);
+        var handled = await handler.TryHandleAsync(context, new ScheduledJobValidationException("invalid"), CancellationToken.None);
 
         AssertSanitizedRequestProperties(handled, logger);
         AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);

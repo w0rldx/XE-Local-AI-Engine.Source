@@ -35,11 +35,11 @@ public sealed class ManagedDevWorkflowArtifactBlobStoreTests : IDisposable
         var artifactId = Guid.NewGuid();
         ReadOnlyMemory<byte> content = "bounded dev workflow artifact"u8.ToArray();
 
-        var written = await store.WriteAsync(runId, artifactId, content).ConfigureAwait(false);
+        var written = await store.WriteAsync(runId, artifactId, content);
         AssertEx.False(Path.IsPathRooted(written.OpaqueReference));
         AssertEx.False(written.OpaqueReference.Contains("..", StringComparison.Ordinal));
 
-        var read = await store.ReadAsync(runId, artifactId, written.ContentHash, written.ByteCount).ConfigureAwait(false);
+        var read = await store.ReadAsync(runId, artifactId, written.ContentHash, written.ByteCount);
         AssertEx.Equal(DevWorkflowArtifactReadStatus.Found, read.Status);
         AssertEx.True(read.Content.Span.SequenceEqual(content.Span));
 
@@ -48,17 +48,17 @@ public sealed class ManagedDevWorkflowArtifactBlobStoreTests : IDisposable
         AssertEx.True(File.Exists(path), $"The blob must live at {path}.");
 
         AssertEx.Equal(DevWorkflowArtifactReadStatus.HashMismatch,
-            (await store.ReadAsync(runId, artifactId, new string('0', count: 64), written.ByteCount).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(runId, artifactId, new string('0', count: 64), written.ByteCount)).Status);
         AssertEx.Equal(DevWorkflowArtifactReadStatus.SizeMismatch,
-            (await store.ReadAsync(runId, artifactId, written.ContentHash, written.ByteCount + 1).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(runId, artifactId, written.ContentHash, written.ByteCount + 1)).Status);
         AssertEx.Equal(DevWorkflowArtifactReadStatus.Missing,
-            (await store.ReadAsync(runId, Guid.NewGuid(), written.ContentHash, written.ByteCount).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(runId, Guid.NewGuid(), written.ContentHash, written.ByteCount)).Status);
 
-        var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+        var bytes = await File.ReadAllBytesAsync(path);
         bytes[^1] ^= 0x5A;
-        await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(path, bytes);
         AssertEx.Equal(DevWorkflowArtifactReadStatus.Tampered,
-            (await store.ReadAsync(runId, artifactId, written.ContentHash, written.ByteCount).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(runId, artifactId, written.ContentHash, written.ByteCount)).Status);
     }
 
     [Test]
@@ -71,12 +71,12 @@ public sealed class ManagedDevWorkflowArtifactBlobStoreTests : IDisposable
         store.Delete(runId, artifactId);
         store.DeleteRun(runId);
 
-        var written = await store.WriteAsync(runId, artifactId, "content"u8.ToArray()).ConfigureAwait(false);
+        var written = await store.WriteAsync(runId, artifactId, "content"u8.ToArray());
         store.Delete(runId, artifactId);
         AssertEx.Equal(DevWorkflowArtifactReadStatus.Missing,
-            (await store.ReadAsync(runId, artifactId, written.ContentHash, written.ByteCount).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(runId, artifactId, written.ContentHash, written.ByteCount)).Status);
 
-        _ = await store.WriteAsync(runId, artifactId, "content"u8.ToArray()).ConfigureAwait(false);
+        _ = await store.WriteAsync(runId, artifactId, "content"u8.ToArray());
         store.DeleteRun(runId);
         AssertEx.False(Directory.Exists(Path.Combine(_root, "dev-workflows", "artifacts", runId.ToString("N"))),
             "The row purge is the caller's; taking the bytes with the run is this store's half of it.");
@@ -87,7 +87,7 @@ public sealed class ManagedDevWorkflowArtifactBlobStoreTests : IDisposable
     {
         var store = CreateStore(maxArtifactBytes: 4);
 
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[5])).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[5]));
         AssertEx.False(Directory.Exists(Path.Combine(_root, "dev-workflows")), "A rejected write must not create the artifact tree.");
     }
 

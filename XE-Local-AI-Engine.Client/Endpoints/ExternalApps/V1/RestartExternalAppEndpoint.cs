@@ -34,7 +34,7 @@ public sealed class RestartExternalAppEndpoint(IExternalAppService apps)
         ArgumentNullException.ThrowIfNull(req);
 
         // The validator's NotNull rule ran first, so the value is present here and only here.
-        var summary = await _apps.RestartAsync(req.InstanceId, req.ExpectedVersion!.Value, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: ExternalAppMapper.ToSummaryView(summary))).ConfigureAwait(false);
+        var summary = await _apps.RestartAsync(req.InstanceId, req.ExpectedVersion!.Value, ct);
+        await Send.ResultAsync(Results.Accepted(value: ExternalAppMapper.ToSummaryView(summary)));
     }
 }

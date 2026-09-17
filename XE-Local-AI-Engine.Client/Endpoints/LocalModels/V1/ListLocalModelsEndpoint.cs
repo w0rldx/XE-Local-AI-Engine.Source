@@ -18,7 +18,7 @@ public sealed class ListLocalModelsEndpoint(ILocalModelCatalogService catalogSer
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var catalog = await _catalogService.GetCatalogAsync(ct).ConfigureAwait(false);
+        var catalog = await _catalogService.GetCatalogAsync(ct);
         var cloudModels = ToCloudModelResponses(catalog);
         var externalModels = LocalModelsMapper.ToExternalProviderModelResponses(catalog.ExternalModels, catalog.SelectedModelName);
 
@@ -39,7 +39,7 @@ public sealed class ListLocalModelsEndpoint(ILocalModelCatalogService catalogSer
                 catalog.InstalledGgufModels,
                 externalModels);
 
-        await Send.OkAsync(response, ct).ConfigureAwait(false);
+        await Send.OkAsync(response, ct);
     }
 
     /// <summary>

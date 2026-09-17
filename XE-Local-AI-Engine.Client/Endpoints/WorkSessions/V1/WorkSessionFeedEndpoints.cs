@@ -23,8 +23,8 @@ public sealed class ListWorkSessionTasksEndpoint(IWorkSessionService service) : 
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var tasks = await _service.ListTasksAsync(req.SessionId, req.SinceSeq, ct).ConfigureAwait(false);
-        await Send.OkAsync(tasks.ToResponse(), ct).ConfigureAwait(false);
+        var tasks = await _service.ListTasksAsync(req.SessionId, req.SinceSeq, ct);
+        await Send.OkAsync(tasks.ToResponse(), ct);
     }
 }
 
@@ -43,8 +43,8 @@ public sealed class ListWorkSessionFindingsEndpoint(IWorkSessionService service)
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var findings = await _service.ListFindingsAsync(req.SessionId, req.SinceSeq, ct).ConfigureAwait(false);
-        await Send.OkAsync(findings.ToResponse(), ct).ConfigureAwait(false);
+        var findings = await _service.ListFindingsAsync(req.SessionId, req.SinceSeq, ct);
+        await Send.OkAsync(findings.ToResponse(), ct);
     }
 }
 
@@ -63,8 +63,8 @@ public sealed class ListWorkSessionArtifactsEndpoint(IWorkSessionService service
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var artifacts = await _service.ListArtifactsAsync(req.SessionId, req.SinceSeq, ct).ConfigureAwait(false);
-        await Send.OkAsync(artifacts.ToResponse(), ct).ConfigureAwait(false);
+        var artifacts = await _service.ListArtifactsAsync(req.SessionId, req.SinceSeq, ct);
+        await Send.OkAsync(artifacts.ToResponse(), ct);
     }
 }
 
@@ -84,8 +84,8 @@ public sealed class ListWorkSessionCheckpointsEndpoint(IWorkSessionService servi
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var checkpoints = await _service.ListCheckpointsAsync(req.SessionId, req.SinceSeq, ct).ConfigureAwait(false);
-        await Send.OkAsync(checkpoints.ToResponse(), ct).ConfigureAwait(false);
+        var checkpoints = await _service.ListCheckpointsAsync(req.SessionId, req.SinceSeq, ct);
+        await Send.OkAsync(checkpoints.ToResponse(), ct);
     }
 }
 
@@ -104,7 +104,7 @@ public sealed class ListWorkSessionEventsEndpoint(IWorkSessionService service) :
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var events = await _service.ListEventsAsync(req.SessionId, req.SinceSeq, req.Limit, ct).ConfigureAwait(false);
-        await Send.OkAsync(events.ToResponse(req.Limit), ct).ConfigureAwait(false);
+        var events = await _service.ListEventsAsync(req.SessionId, req.SinceSeq, req.Limit, ct);
+        await Send.OkAsync(events.ToResponse(req.Limit), ct);
     }
 }

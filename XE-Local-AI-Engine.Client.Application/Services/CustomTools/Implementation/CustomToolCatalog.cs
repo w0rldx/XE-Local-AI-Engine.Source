@@ -57,12 +57,12 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ICustomToolStore>();
-        return await store.ListAsync(cancellationToken).ConfigureAwait(false);
+        return await store.ListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)
     {
-        var tools = await ListToolsAsync(cancellationToken).ConfigureAwait(false);
+        var tools = await ListToolsAsync(cancellationToken);
         var descriptors = new List<LocalChatToolDescriptor>();
         foreach (var tool in tools)
         {
@@ -95,7 +95,7 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
         // Belt-and-suspenders node kill-switch. When custom tools are disabled at the node level, refuse to resolve one
         // even if a stale offer somehow reached the resolver. The offer merge already withholds custom tools when off, so
         // this is the second, execution-time gate. ONE check for the whole resolution instead of one per name.
-        if (!await _runtimeSettings.GetCustomToolsEnabledAsync(cancellationToken).ConfigureAwait(false))
+        if (!await _runtimeSettings.GetCustomToolsEnabledAsync(cancellationToken))
         {
             return ReadOnlyDictionary<string, AITool>.Empty;
         }
@@ -104,7 +104,7 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
 
         // THE one read for the whole resolution operation, whatever the offer's custom-name count. Still a live read per
         // operation — the batch bounds the reads inside one resolution and is not a cache across resolutions.
-        var tools = await ListToolsAsync(cancellationToken).ConfigureAwait(false);
+        var tools = await ListToolsAsync(cancellationToken);
 
         var resolved = new Dictionary<string, AITool>(StringComparer.Ordinal);
         var claimed = new HashSet<string>(StringComparer.Ordinal);

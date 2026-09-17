@@ -21,14 +21,13 @@ internal sealed class McpAgentRunRecoveryService(
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<McpAgentRunAccountingService>()
-                       .VerifyAndRepairAsync(cancellationToken).ConfigureAwait(false);
+                       .VerifyAndRepairAsync(cancellationToken);
 
             var store = scope.ServiceProvider.GetRequiredService<IMcpAgentRunStore>();
-            var count = await store.ReconcileInterruptedRunsAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken)
-                                   .ConfigureAwait(false);
+            var count = await store.ReconcileInterruptedRunsAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
             if (count > 0)
             {
-                await _metrics.RefreshAsync(store, CancellationToken.None).ConfigureAwait(false);
+                await _metrics.RefreshAsync(store, CancellationToken.None);
                 _metrics.RecordRecovery("running_terminalized", count);
                 _logger.LogWarning("Terminalized {Count} non-replayable durable MCP agent run claim(s) during startup recovery.", count);
             }

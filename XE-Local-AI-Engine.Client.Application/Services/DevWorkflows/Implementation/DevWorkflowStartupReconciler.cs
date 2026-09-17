@@ -82,11 +82,11 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         var recovered = 0;
         var pass = 1;
         var attempts = 0;
-        var remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
+        var remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken);
         while (pass <= RecoveryPasses && attempts < RecoveryAttempts && remaining.Count > 0)
         {
             attempts++;
-            var verdicts = await ComposeVerdictsAsync(store, sessions, remaining, cancellationToken).ConfigureAwait(false);
+            var verdicts = await ComposeVerdictsAsync(store, sessions, remaining, cancellationToken);
 
             // The last pass settles what it could not judge instead of walking away from it, because nothing downstream
             // would pick those rows up: the dispatcher admits Pending rows and follows Running AGENT ones, so a stranded
@@ -98,7 +98,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
                 : null;
             try
             {
-                recovered += (await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken).ConfigureAwait(false)).Count;
+                recovered += (await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken)).Count;
                 pass++;
             }
             catch (DevWorkflowRetryBudgetExceededException refused)
@@ -113,7 +113,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
                 _logger.LogWarning(refused, "Startup recovery pass {Pass} was refused its re-attempt budget, so it is being re-judged against the decision it did not see.", pass);
             }
 
-            remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
+            remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken);
         }
 
         if (remaining.Count > 0 && pass <= RecoveryPasses)
@@ -151,8 +151,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         await SweepOrphanedWorkSessionsAsync(store,
                 sessions,
                 scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>(),
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) =>
@@ -200,7 +199,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
 
             try
             {
-                _ = await sessions.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                _ = await sessions.GetAsync(sessionId, cancellationToken);
             }
             catch (WorkSessionNotFoundException)
             {
@@ -217,7 +216,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
 
         foreach (var group in interrupted.GroupBy(static nodeRun => nodeRun.RunId))
         {
-            var nodeRuns = await store.ListNodeRunsAsync(group.Key, cancellationToken).ConfigureAwait(false);
+            var nodeRuns = await store.ListNodeRunsAsync(group.Key, cancellationToken);
 
             // TWO counts, deliberately. `spent` is what the run has actually made — the sum the trailing sweep below
             // has always decided on. `promised` adds the reservations: a Retry recorded before the crash and never
@@ -229,7 +228,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
             // attempt, so a single unapplied Retry sitting on the last slot would send every one of them to a human at
             // boot for a slot none of them wanted.
             var spent = nodeRuns.Sum(static nodeRun => nodeRun.Attempt - 1);
-            var promised = DevWorkflowRetryPolicy.Promised(nodeRuns, await store.ListDecisionsAsync(group.Key, cancellationToken).ConfigureAwait(false));
+            var promised = DevWorkflowRetryPolicy.Promised(nodeRuns, await store.ListDecisionsAsync(group.Key, cancellationToken));
 
             // The re-attempts this run can still afford, handed out in a fixed order so the same boot always admits the
             // same rows. Several interrupted sandbox node runs otherwise each take an attempt they were never all
@@ -354,8 +353,8 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         IAgentWorkSessionStore workSessions,
         CancellationToken cancellationToken)
     {
-        var owned = (await store.ListOwnedWorkSessionIdsAsync(cancellationToken).ConfigureAwait(false)).ToHashSet();
-        var orphans = (await workSessions.ListAsync(cancellationToken).ConfigureAwait(false))
+        var owned = (await store.ListOwnedWorkSessionIdsAsync(cancellationToken)).ToHashSet();
+        var orphans = (await workSessions.ListAsync(cancellationToken))
                       .Where(session => session is { Kind: AgentWorkSessionKind.Workflow, Status: AgentWorkSessionStatus.Draft } && !owned.Contains(session.Id))
                       .Select(static session => session.Id)
                       .ToList();
@@ -368,7 +367,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
                 orphan);
             try
             {
-                await sessions.DeleteAsync(orphan, cancellationToken).ConfigureAwait(false);
+                await sessions.DeleteAsync(orphan, cancellationToken);
             }
             catch (Exception exception) when (exception is WorkSessionInvalidTransitionException or WorkSessionNotFoundException)
             {

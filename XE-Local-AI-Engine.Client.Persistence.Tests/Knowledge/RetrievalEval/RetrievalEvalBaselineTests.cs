@@ -39,10 +39,10 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
     [Test]
     public async Task HybridSearch_MeetsBaselineRetrievalThresholds()
     {
-        using var fixture = await BuildFixtureAsync("hybrid.sqlite").ConfigureAwait(false);
+        using var fixture = await BuildFixtureAsync("hybrid.sqlite");
         var search = fixture.CreateHybridSearchService();
 
-        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, RetrievalEvalFixture.Queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
+        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, RetrievalEvalFixture.Queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
         Report("hybrid", metrics);
 
         // Baseline bar on the current tree: every labeled query's relevant document is retrieved within the top-k.
@@ -54,15 +54,15 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
     [Test]
     public async Task VectorArm_RetrievesLexicallyDisjointQuery_ThatLexicalOnlyCannot()
     {
-        using var fixture = await BuildFixtureAsync("vector-arm.sqlite").ConfigureAwait(false);
+        using var fixture = await BuildFixtureAsync("vector-arm.sqlite");
         var vehicleQuery = RetrievalEvalFixture.Queries.Single(query => query.IsVectorOnly);
         var singleQuery = new[]
         {
             vehicleQuery
         };
 
-        var hybrid = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(), singleQuery, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
-        var lexicalOnly = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateLexicalOnlySearchService(), singleQuery, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
+        var hybrid = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(), singleQuery, fixture.DocumentIdsByKey, K, CancellationToken.None);
+        var lexicalOnly = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateLexicalOnlySearchService(), singleQuery, fixture.DocumentIdsByKey, K, CancellationToken.None);
         Report("vector-arm-hybrid", hybrid);
         Report("vector-arm-lexical", lexicalOnly);
 
@@ -74,11 +74,11 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
     [Test]
     public async Task LexicalOnly_DegradesGracefully_AndStillAnswersLexicalQueries()
     {
-        using var fixture = await BuildFixtureAsync("lexical-only.sqlite").ConfigureAwait(false);
+        using var fixture = await BuildFixtureAsync("lexical-only.sqlite");
         var lexicalQueries = RetrievalEvalFixture.Queries.Where(query => !query.IsVectorOnly).ToList();
         var search = fixture.CreateLexicalOnlySearchService();
 
-        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, lexicalQueries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
+        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, lexicalQueries, fixture.DocumentIdsByKey, K, CancellationToken.None);
         Report("lexical-only", metrics);
 
         // With the vector arm disabled, RRF is the lexical (FTS) ranking alone — the topical queries still resolve.
@@ -89,7 +89,7 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
     [Test]
     public async Task RerankerPath_IsExercised_AndKeepsRetrievalCorrect()
     {
-        using var fixture = await BuildFixtureAsync("reranked.sqlite").ConfigureAwait(false);
+        using var fixture = await BuildFixtureAsync("reranked.sqlite");
 
         // A deterministic token-overlap reranker standing in for the local cross-encoder: it rescores each candidate by
         // how many query tokens the candidate text contains, proving the rerank stage is wired end to end.
@@ -109,7 +109,7 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
         // one query overruns it, RerankWithinBudgetAsync skips the call, and the per-query invocation count fails.
         // Reranker_WhenRemainingRetrievalBudgetExpires_DegradesToFusionOrder owns the tight-budget path.
         var search = fixture.CreateRerankedSearchService(reranker, retrievalLatencyBudgetMilliseconds: 30_000);
-        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, RetrievalEvalFixture.Queries, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
+        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, RetrievalEvalFixture.Queries, fixture.DocumentIdsByKey, K, CancellationToken.None);
         Report("reranked", metrics);
 
         AssertEx.True(invocations >= RetrievalEvalFixture.Queries.Count, $"The reranker must be invoked for every query (was {invocations}).");
@@ -119,15 +119,15 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
     [Test]
     public async Task Reranker_WhenRemainingRetrievalBudgetExpires_DegradesToFusionOrder()
     {
-        using var fixture = await BuildFixtureAsync("reranker-budget.sqlite").ConfigureAwait(false);
+        using var fixture = await BuildFixtureAsync("reranker-budget.sqlite");
         var reranker = new BudgetObservingReranker();
         var search = fixture.CreateRerankedSearchService(reranker, retrievalLatencyBudgetMilliseconds: 500);
 
-        var result = await search.SearchAsync(new KnowledgeSearchRequest("retention period", Limit: 3), CancellationToken.None).ConfigureAwait(false);
+        var result = await search.SearchAsync(new KnowledgeSearchRequest("retention period", Limit: 3), CancellationToken.None);
 
         if (reranker.InvocationObserved)
         {
-            AssertEx.True(await reranker.WaitForCancellationAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+            AssertEx.True(await reranker.WaitForCancellationAsync(TimeSpan.FromSeconds(2)),
                 "When optional reranking starts, the remaining per-search deadline must cancel model acquisition/scoring rather than permitting the provider's multi-second timeout.");
         }
 
@@ -152,7 +152,7 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
         {
             try
             {
-                await _cancellationObserved.Task.WaitAsync(timeout).ConfigureAwait(false);
+                await _cancellationObserved.Task.WaitAsync(timeout);
                 return true;
             }
             catch (TimeoutException)
@@ -169,7 +169,7 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
             Interlocked.Exchange(ref _invocationObserved, 1);
             try
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
                 return null;
             }
             catch (OperationCanceledException)

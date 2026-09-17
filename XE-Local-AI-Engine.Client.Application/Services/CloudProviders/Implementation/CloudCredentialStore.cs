@@ -35,7 +35,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
 
     public async Task<StoredCloudProviderConfig?> LoadConfigAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (!File.Exists(_credentialsPath))
@@ -46,7 +46,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
             byte[] payload;
             try
             {
-                var protectedPayload = await File.ReadAllBytesAsync(_credentialsPath, cancellationToken).ConfigureAwait(false);
+                var protectedPayload = await File.ReadAllBytesAsync(_credentialsPath, cancellationToken);
                 payload = _protector.Unprotect(protectedPayload);
             }
             catch (CryptographicException exception)
@@ -87,10 +87,10 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         var payload = JsonSerializer.SerializeToUtf8Bytes(config, SerializerOptions);
         var protectedPayload = _protector.Protect(payload);
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            await WriteProtectedPayloadAsync(protectedPayload, cancellationToken).ConfigureAwait(false);
+            await WriteProtectedPayloadAsync(protectedPayload, cancellationToken);
             SecureFilePermissions.Apply(_credentialsPath);
         }
         finally
@@ -101,7 +101,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
 
     public async Task<StoredCloudCredentials?> LoadAsync(CancellationToken cancellationToken = default)
     {
-        var config = await LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var config = await LoadConfigAsync(cancellationToken);
         if (config?.AzureFoundry is not { } connection)
         {
             return null;
@@ -147,12 +147,12 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
             },
         };
 
-        await SaveConfigAsync(config, cancellationToken).ConfigureAwait(false);
+        await SaveConfigAsync(config, cancellationToken);
     }
 
     public async Task ClearAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (File.Exists(_credentialsPath))
@@ -434,9 +434,9 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         }
 
         var stream = new FileStream(_credentialsPath, options);
-        await using (stream.ConfigureAwait(false))
+        await using (stream)
         {
-            await stream.WriteAsync(protectedPayload, cancellationToken).ConfigureAwait(false);
+            await stream.WriteAsync(protectedPayload, cancellationToken);
         }
     }
 

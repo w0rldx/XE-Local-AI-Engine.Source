@@ -44,16 +44,15 @@ public sealed class DecideGraphWorkflowNodeRunEndpoint(IGraphWorkflowRunService 
 
         try
         {
-            var result = await _runs.DecideAsync(req.RunId, req.NodeKey, req.OperationId, decision, req.Comment, payload, subject, ct).ConfigureAwait(false);
-            await Send.OkAsync(new GraphWorkflowDecisionResultResponse(result.Decision.ToString(), result.RunStatus.ToString(), result.NodeRunStatus.ToString()), ct)
-                      .ConfigureAwait(false);
+            var result = await _runs.DecideAsync(req.RunId, req.NodeKey, req.OperationId, decision, req.Comment, payload, subject, ct);
+            await Send.OkAsync(new GraphWorkflowDecisionResultResponse(result.Decision.ToString(), result.RunStatus.ToString(), result.NodeRunStatus.ToString()), ct);
         }
         catch (GraphWorkflowValidationException exception)
         {
             // Replayed here rather than through the global single-message handler, for the same reason the write
             // routes do it: the runtime's refusals are a keyed list, and collapsing them loses which one failed.
             GraphWorkflowValidationErrors.AddTo(this, exception.Result);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }

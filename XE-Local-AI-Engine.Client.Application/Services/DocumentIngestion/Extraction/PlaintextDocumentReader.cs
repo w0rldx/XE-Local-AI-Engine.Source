@@ -34,7 +34,7 @@ internal sealed class PlaintextDocumentReader : IngestionDocumentReader
         ArgumentNullException.ThrowIfNull(source);
 
         using var buffer = new MemoryStream();
-        await source.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        await source.CopyToAsync(buffer, cancellationToken);
         var bytes = buffer.ToArray();
 
         var document = new IngestionDocument(identifier ?? "document");

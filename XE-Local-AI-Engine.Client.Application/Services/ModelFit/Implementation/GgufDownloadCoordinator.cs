@@ -65,7 +65,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     public async Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var source = await _downloadTransaction.ResolveAsync(request, ct).ConfigureAwait(false);
+        var source = await _downloadTransaction.ResolveAsync(request, ct);
         var intent = ToIntent(source);
         var identity = _identityResolver.Resolve(intent);
         var active = _operations.GetNewest(AcquisitionKind.Download, identity.CanonicalModelName);
@@ -83,10 +83,10 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         await using (var scope = _scopeFactory.CreateAsyncScope())
         {
             var preflight = scope.ServiceProvider.GetRequiredService<IGgufAcquisitionPreflight>();
-            reservation = await preflight.ResolveAndReserveAsync(intent, ct).ConfigureAwait(false);
+            reservation = await preflight.ResolveAndReserveAsync(intent, ct);
         }
 
-        await using (reservation.ConfigureAwait(false))
+        await using (reservation)
         {
             var totalBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0));
             if (reservation.Disposition is GgufAcquisitionDisposition.VerifiedInstalled or GgufAcquisitionDisposition.VerifiedLegacyInstalled)
@@ -94,7 +94,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 var completed = await CompleteVerifiedInstalledAsync(reservation.Identity.CanonicalModelName,
                     totalBytes,
                     reservation.Lease,
-                    ct).ConfigureAwait(false);
+                    ct);
                 BroadcastStatus(completed, isInitialOrTerminal: true);
                 return new GgufDownloadTicket(completed.ModelName, AlreadyInFlight: false, completed.OperationId);
             }
@@ -163,7 +163,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var registrar = scope.ServiceProvider.GetRequiredService<IToolCapableModelRegistrar>();
-            _ = await registrar.RegisterIfToolCapableAsync(modelName, token).ConfigureAwait(false);
+            _ = await registrar.RegisterIfToolCapableAsync(modelName, token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -187,7 +187,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         ProviderMapMutationReceipt? mapReceipt = null;
         try
         {
-            var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, cancellationToken).ConfigureAwait(false);
+            var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, cancellationToken);
             if (claim is ProviderMapClaimResult.Conflict)
             {
                 throw new GgufAcquisitionConflictException();
@@ -196,7 +196,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             mapReceipt = (claim as ProviderMapClaimResult.Created)?.Receipt;
             var providerResolver = scope.ServiceProvider.GetRequiredService<ILocalModelProviderResolver>();
             providerResolver.InvalidateModelProviderMap();
-            var resolvedProvider = await providerResolver.ResolveProviderNameForModelAsync(modelName, lease, cancellationToken).ConfigureAwait(false);
+            var resolvedProvider = await providerResolver.ResolveProviderNameForModelAsync(modelName, lease, cancellationToken);
             if (!string.Equals(resolvedProvider, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
             {
                 throw new GgufAcquisitionConflictException();
@@ -214,7 +214,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 scope.ServiceProvider.GetService<ILocalModelProviderResolver>(),
                 mapReceipt,
                 lease,
-                modelName).ConfigureAwait(false);
+                modelName);
             if (compensationFailure is not null)
             {
                 throw new AggregateException("Verified-installed download routing could not be finalized or safely restored.",
@@ -239,7 +239,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 
         try
         {
-            var restore = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None).ConfigureAwait(false);
+            var restore = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None);
             providerResolver?.InvalidateModelProviderMap();
             if (restore == ProviderMapRestoreResult.Superseded)
             {
@@ -326,7 +326,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         {
             // Fire-and-forget from a synchronous Progress<T> callback: there is no request token here, and the push
             // must outlive the caller, so cancellation is intentionally not propagated (MA0032/CA2016 opt-out).
-            await _eventPublisher.PublishStatusAsync(hubEvent, CancellationToken.None).ConfigureAwait(false);
+            await _eventPublisher.PublishStatusAsync(hubEvent, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -350,7 +350,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         PreparedGgufDownload? prepared = null;
         GgufDownloadCommitReceipt? committed = null;
         ProviderMapMutationReceipt? mapReceipt = null;
-        await using (lease.ConfigureAwait(false))
+        await using (lease)
         {
             try
             {
@@ -362,15 +362,15 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                         identity.RelativeSidecarPath,
                         identity.ProjectorRelativePath),
                     progress,
-                    token).ConfigureAwait(false);
+                    token);
                 token.ThrowIfCancellationRequested();
                 SetStatus(operationId, GgufAcquisitionPhase.Committing, isInitialOrTerminal: true);
-                committed = await _downloadTransaction.CommitAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+                committed = await _downloadTransaction.CommitAsync(prepared, CancellationToken.None);
                 token.ThrowIfCancellationRequested();
 
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
-                var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, CancellationToken.None).ConfigureAwait(false);
+                var claim = await mapStore.TryClaimLlamaCppAsync(lease, modelName, CancellationToken.None);
                 if (claim is ProviderMapClaimResult.Conflict)
                 {
                     throw new GgufAcquisitionConflictException();
@@ -382,11 +382,11 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 token.ThrowIfCancellationRequested();
                 var completedBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0));
                 SetStatus(operationId, GgufAcquisitionPhase.Completed, completedBytes, completedBytes, isInitialOrTerminal: true);
-                await RegisterToolCapabilityAsync(modelName, CancellationToken.None).ConfigureAwait(false);
+                await RegisterToolCapabilityAsync(modelName, CancellationToken.None);
             }
             catch (OperationCanceledException)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -403,7 +403,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             catch (GgufDownloadCommitException exception)
             {
                 committed = exception.CommitReceipt;
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -417,7 +417,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             }
             catch (HuggingFaceDownloadException exception)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -428,7 +428,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             }
             catch (InsufficientDiskSpaceException exception)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -439,7 +439,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             }
             catch (GgufAcquisitionConflictException exception)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -454,7 +454,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             }
             catch (Exception exception)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, modelName))
                 {
                     PublishCompensationFailure(operationId);
                     _logger.LogWarning(exception, "GGUF download failed for {ModelName} and compensation was incomplete.", modelName);
@@ -489,7 +489,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
-                var restore = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None).ConfigureAwait(false);
+                var restore = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None);
                 scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
                 if (restore == ProviderMapRestoreResult.Superseded)
                 {
@@ -513,12 +513,12 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             {
                 if (mayRollbackCommittedArtifacts)
                 {
-                    await _downloadTransaction.RollbackCommittedAsync(committed, CancellationToken.None).ConfigureAwait(false);
+                    await _downloadTransaction.RollbackCommittedAsync(committed, CancellationToken.None);
                 }
             }
             else if (prepared is not null)
             {
-                await _downloadTransaction.DiscardPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+                await _downloadTransaction.DiscardPreparedAsync(prepared, CancellationToken.None);
             }
         }
         catch (Exception exception)

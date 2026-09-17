@@ -18,7 +18,7 @@ internal sealed class FeedbackInsightsService(IFeedbackInsightsStore store, Time
 
     public async Task<FeedbackInsightsResult?> GetAgentFeedbackInsightsAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
-        var aggregate = await _store.GetAgentFeedbackAggregateAsync(agentDefinitionId, MaxExemplars, cancellationToken).ConfigureAwait(false);
+        var aggregate = await _store.GetAgentFeedbackAggregateAsync(agentDefinitionId, MaxExemplars, cancellationToken);
         if (aggregate is null)
         {
             return null;

@@ -69,7 +69,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             return WithLivePlacement(cached);
         }
 
-        await _computeGate.WaitAsync(ct).ConfigureAwait(false);
+        await _computeGate.WaitAsync(ct);
         try
         {
             // Re-check under the gate — a concurrent caller may have computed it while we waited.
@@ -78,7 +78,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
                 return WithLivePlacement(current);
             }
 
-            var (state, fallbackReasonCode, determinate, signalVersion) = await ComputeAsync(ct).ConfigureAwait(false);
+            var (state, fallbackReasonCode, determinate, signalVersion) = await ComputeAsync(ct);
 
             // Latch only a determinate audit (the device probe ran, or a CPU variant that needs no probe). An
             // indeterminate probe yields backend "unknown" with CpuFallback:false — memoizing that would keep
@@ -125,8 +125,8 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     /// <inheritdoc />
     public async Task<HardwareProfile> GetEffectiveProfileAsync(bool forceRefreshProfile, CancellationToken ct)
     {
-        var raw = await _hardwareProfiler.GetProfileAsync(forceRefreshProfile, ct).ConfigureAwait(false);
-        var audit = await GetAuditAsync(forceRefresh: false, ct).ConfigureAwait(false);
+        var raw = await _hardwareProfiler.GetProfileAsync(forceRefreshProfile, ct);
+        var audit = await GetAuditAsync(forceRefresh: false, ct);
         if (!audit.CpuFallback)
         {
             return raw;
@@ -147,14 +147,14 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     {
         // The raw profile is read non-force here (the audit only needs the vendor / total-VRAM presence, not a live free
         // figure); the free figures are re-probed by GetEffectiveProfileAsync when a caller needs them live.
-        var raw = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
+        var raw = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct);
 
         // Capture the managed-CUDA signal stamp immediately BEFORE selecting the variant (the selector reads the signal):
         // this is the stamp the resulting audit is valid for. If the signal flips after this read, the cached stamp lags
         // the current one and the next GetAuditAsync re-computes rather than trusting a memo built against the old state.
         var signalVersion = CurrentSignalVersion();
-        var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
-        var inventory = await _deviceProbe.GetDeviceInventoryAsync(variant, ct).ConfigureAwait(false);
+        var variant = await _variantSelector.SelectVariantAsync(ct);
+        var inventory = await _deviceProbe.GetDeviceInventoryAsync(variant, ct);
 
         var state = BuildState(raw, variant, inventory);
         string? reasonCode = null;

@@ -37,22 +37,22 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
         var artifactId = Guid.NewGuid();
         ReadOnlyMemory<byte> content = "bounded artifact"u8.ToArray();
 
-        var written = await store.WriteAsync(projectId, artifactId, content).ConfigureAwait(false);
-        var replay = await store.WriteAsync(projectId, artifactId, content).ConfigureAwait(false);
+        var written = await store.WriteAsync(projectId, artifactId, content);
+        var replay = await store.WriteAsync(projectId, artifactId, content);
         AssertEx.Equal(written, replay);
         await AssertEx.ThrowsAsync<IOException>(() => store.WriteAsync(projectId, artifactId, "different"u8.ToArray()));
         AssertEx.False(Path.IsPathRooted(written.OpaqueReference));
         AssertEx.False(written.OpaqueReference.Contains("..", StringComparison.Ordinal));
 
-        var read = await store.ReadAsync(projectId, artifactId, written.ContentHash, written.ByteCount).ConfigureAwait(false);
+        var read = await store.ReadAsync(projectId, artifactId, written.ContentHash, written.ByteCount);
         AssertEx.Equal(DevelopmentArtifactReadStatus.Found, read.Status);
         AssertEx.True(read.Content.Span.SequenceEqual(content.Span));
 
         var path = Path.Combine(_root, "development", "artifacts", projectId.ToString("N"), artifactId.ToString("N") + ".blob");
-        var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+        var bytes = await File.ReadAllBytesAsync(path);
         bytes[^1] ^= 0x5A;
-        await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(false);
-        var tampered = await store.ReadAsync(projectId, artifactId, written.ContentHash, written.ByteCount).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(path, bytes);
+        var tampered = await store.ReadAsync(projectId, artifactId, written.ContentHash, written.ByteCount);
         AssertEx.Equal(DevelopmentArtifactReadStatus.Tampered, tampered.Status);
     }
 
@@ -66,8 +66,7 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
                 Enabled = true,
                 MaxArtifactBytes = 4
             }));
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[5]))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[5]));
         AssertEx.False(Directory.Exists(Path.Combine(_root, "development")));
     }
 
@@ -77,11 +76,11 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
         var fixture = new DevelopmentTestFixture();
         try
         {
-            await using var provider = await fixture.BuildProviderAsync().ConfigureAwait(false);
+            await using var provider = await fixture.BuildProviderAsync();
             await using var scope = provider.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
             var seed = DevelopmentTestFixture.CreateSeed();
-            _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+            _ = await store.CreateProjectAsync(seed);
 
             await AssertEx.ThrowsAsync<ArgumentException>(() => store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
                               seed.ProjectId,
@@ -92,8 +91,7 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
                               SchemaVersion: 1,
                               ContentHash: "hash",
                               ByteCount: 1,
-                              ManagedReference: "../../caller/path")))
-                          .ConfigureAwait(false);
+                              ManagedReference: "../../caller/path")));
         }
         finally
         {

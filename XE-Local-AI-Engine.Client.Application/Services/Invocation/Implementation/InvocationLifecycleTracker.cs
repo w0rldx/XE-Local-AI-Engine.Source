@@ -105,7 +105,7 @@ public sealed class InvocationLifecycleTracker
 
         try
         {
-            await Task.WhenAll(activeInvocationTasks).WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            await Task.WhenAll(activeInvocationTasks).WaitAsync(timeout, cancellationToken);
             return true;
         }
         catch (TimeoutException)

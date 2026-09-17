@@ -90,12 +90,12 @@ internal sealed class PublishingGraphWorkflowStore(
     /// </summary>
     public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
     {
-        if (await _inner.DecideNodeRunAsync(command, cancellationToken).ConfigureAwait(false) is not { } result)
+        if (await _inner.DecideNodeRunAsync(command, cancellationToken) is not { } result)
         {
             return null;
         }
 
-        return await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Gate, cancellationToken).ConfigureAwait(false);
+        return await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Gate, cancellationToken);
     }
 
     public Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
@@ -135,10 +135,10 @@ internal sealed class PublishingGraphWorkflowStore(
         GraphWorkflowChangeKind kind,
         CancellationToken cancellationToken)
     {
-        var result = await mutation.ConfigureAwait(false);
+        var result = await mutation;
         try
         {
-            await _publisher.PublishAsync(result.RunId, result.Sequence, kind, cancellationToken).ConfigureAwait(false);
+            await _publisher.PublishAsync(result.RunId, result.Sequence, kind, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

@@ -13,15 +13,15 @@ public sealed class AddDevWorkflowRuleSetsMigrationTests
     [Test]
     public async Task Migrate_CreatesTheRuleSetTableWithItsColumnsAndEnabledIndex()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-sets.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-sets.sqlite", PreviousMigrationId);
 
-        AssertEx.False(await probe.TableExistsAsync(Table).ConfigureAwait(false), $"{Table} must not exist before the migration.");
+        AssertEx.False(await probe.TableExistsAsync(Table), $"{Table} must not exist before the migration.");
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
-        AssertEx.True(await probe.TableExistsAsync(Table).ConfigureAwait(false), $"{Table} must exist after the migration.");
+        AssertEx.True(await probe.TableExistsAsync(Table), $"{Table} must exist after the migration.");
 
-        var columns = await probe.ColumnsAsync(Table).ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync(Table);
         foreach (var column in new[]
                  {
                      "id",
@@ -39,7 +39,7 @@ public sealed class AddDevWorkflowRuleSetsMigrationTests
             AssertEx.True(columns.Contains(column), $"{Table} must carry '{column}'.");
         }
 
-        AssertEx.True(await probe.IndexExistsAsync(Table, "ix_dev_workflow_rule_sets_enabled", unique: false, "enabled").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync(Table, "ix_dev_workflow_rule_sets_enabled", unique: false, "enabled"),
             "The resolver reads every ENABLED rule set, so that is the one indexed column — and it is deliberately not unique.");
     }
 
@@ -47,13 +47,13 @@ public sealed class AddDevWorkflowRuleSetsMigrationTests
     [Test]
     public async Task MigratedSchema_MatchesWhatEnsureCreatedBuilds()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-set-parity.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-set-parity.sqlite");
 
         using var fixture = new DevWorkflowTestFixture();
-        await using var created = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var created = await fixture.CreateSchemaAsync();
 
-        var migrated = await probe.ColumnsAsync(Table).ConfigureAwait(false);
-        var ensured = await EnsureCreatedColumnsAsync(fixture).ConfigureAwait(false);
+        var migrated = await probe.ColumnsAsync(Table);
+        var ensured = await EnsureCreatedColumnsAsync(fixture);
         AssertEx.Empty(migrated.Except(ensured, StringComparer.Ordinal), $"{Table}: the migration created column(s) EnsureCreated does not.");
         AssertEx.Empty(ensured.Except(migrated, StringComparer.Ordinal), $"{Table}: EnsureCreated created column(s) the migration does not.");
     }
@@ -61,27 +61,27 @@ public sealed class AddDevWorkflowRuleSetsMigrationTests
     [Test]
     public async Task Rollback_DropsTheRuleSetTableAndLeavesTheRestOfTheWorkflowSchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-sets-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-sets-rollback.sqlite", ThisMigrationId);
 
-        await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreviousMigrationId);
 
-        AssertEx.False(await probe.TableExistsAsync(Table).ConfigureAwait(false), $"{Table} must be gone after the rollback.");
+        AssertEx.False(await probe.TableExistsAsync(Table), $"{Table} must be gone after the rollback.");
 
         // The migration only ever created one table, so `Down` has nothing else to touch — least of all the audit.
-        AssertEx.True(await probe.TableExistsAsync("dev_workflow_node_runs").ConfigureAwait(false), "The rollback must not disturb the node-run table.");
-        AssertEx.True(await probe.TableExistsAsync("dev_workflow_definitions").ConfigureAwait(false), "The rollback must not disturb the definition table.");
+        AssertEx.True(await probe.TableExistsAsync("dev_workflow_node_runs"), "The rollback must not disturb the node-run table.");
+        AssertEx.True(await probe.TableExistsAsync("dev_workflow_definitions"), "The rollback must not disturb the definition table.");
     }
 
     private static async Task<IReadOnlySet<string>> EnsureCreatedColumnsAsync(DevWorkflowTestFixture fixture)
     {
         var columns = new HashSet<string>(StringComparer.Ordinal);
         await using var connection = new SqliteConnection($"Data Source={fixture.DatabasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM pragma_table_info($table);";
         command.Parameters.AddWithValue("$table", Table);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             _ = columns.Add(reader.GetString(ordinal: 0));
         }

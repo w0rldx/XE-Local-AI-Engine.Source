@@ -6,7 +6,7 @@ internal static class GenerateEndpoint
 {
     public static async Task<IResult> HandleAsync(HttpContext context, FakeOllamaState state)
     {
-        using var body = await FakeOllamaEndpointMapper.ReadJsonAsync(context).ConfigureAwait(false);
+        using var body = await FakeOllamaEndpointMapper.ReadJsonAsync(context);
         if (body is null)
         {
             return Results.BadRequest(new
@@ -24,7 +24,7 @@ internal static class GenerateEndpoint
         var keepAlive = FakeOllamaEndpointMapper.GetKeepAlive(root);
         FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, prompt, keepAlive);
 
-        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
+        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model))
         {
             return Results.Empty;
         }
@@ -79,7 +79,7 @@ internal static class GenerateEndpoint
             eval_duration = 1
         });
 
-        await FakeOllamaEndpointMapper.WriteNdjsonAsync(context, chunks).ConfigureAwait(false);
+        await FakeOllamaEndpointMapper.WriteNdjsonAsync(context, chunks);
         return Results.Empty;
     }
 

@@ -43,7 +43,7 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken);
 
         try
         {
@@ -51,10 +51,10 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
 
             var entryPath = Path.Combine(_queueDirectoryPath, BuildFileName(payload.InvocationId));
             await using var stream = File.Create(entryPath);
-            await JsonSerializer.SerializeAsync(stream, payload, SerializerOptions, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await JsonSerializer.SerializeAsync(stream, payload, SerializerOptions, cancellationToken);
+            await stream.FlushAsync(cancellationToken);
 
-            await EnforceSizeLimitAsync(cancellationToken).ConfigureAwait(false);
+            await EnforceSizeLimitAsync(cancellationToken);
         }
         finally
         {
@@ -64,7 +64,7 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
 
     public async Task<IReadOnlyList<InvocationFailedPayload>> GetPendingAsync(CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken);
 
         try
         {
@@ -74,7 +74,7 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var payload = await ReadPayloadAsync(filePath, cancellationToken).ConfigureAwait(false);
+                var payload = await ReadPayloadAsync(filePath, cancellationToken);
                 if (payload is not null)
                 {
                     pending.Add(payload);
@@ -91,7 +91,7 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
 
     public async Task RemoveAsync(Guid invocationId, CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken);
 
         try
         {
@@ -99,7 +99,7 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var payload = await ReadPayloadAsync(filePath, cancellationToken).ConfigureAwait(false);
+                var payload = await ReadPayloadAsync(filePath, cancellationToken);
                 if (payload?.InvocationId != invocationId)
                 {
                     continue;
@@ -176,7 +176,7 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
         try
         {
             await using var stream = File.OpenRead(filePath);
-            return await JsonSerializer.DeserializeAsync<InvocationFailedPayload>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            return await JsonSerializer.DeserializeAsync<InvocationFailedPayload>(stream, SerializerOptions, cancellationToken);
         }
         catch (JsonException exception)
         {

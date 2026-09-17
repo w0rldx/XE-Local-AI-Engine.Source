@@ -44,7 +44,7 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     /// <inheritdoc />
     public async Task<IReadOnlyList<ExternalProviderModelRegistration>> ListRegistrationsAsync(CancellationToken ct)
     {
-        return (await GetSnapshotAsync(ct).ConfigureAwait(false)).Registrations;
+        return (await GetSnapshotAsync(ct)).Registrations;
     }
 
     /// <inheritdoc />
@@ -57,14 +57,14 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
             return null;
         }
 
-        var snapshot = await GetSnapshotAsync(ct).ConfigureAwait(false);
+        var snapshot = await GetSnapshotAsync(ct);
         return snapshot.ByModelId.GetValueOrDefault(canonical);
     }
 
     /// <inheritdoc />
     public async Task<ExternalProviderBinding?> TryResolveBindingAsync(string modelId, CancellationToken ct)
     {
-        return (await TryResolveTransportBindingAsync(modelId, ct).ConfigureAwait(false))?.Binding;
+        return (await TryResolveTransportBindingAsync(modelId, ct))?.Binding;
     }
 
     /// <inheritdoc />
@@ -78,7 +78,7 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
         // ONE snapshot read serves the endpoint, the trust declaration, the generation AND the key. Reading the key
         // through a second call — the shape this replaced — is what let a concurrent edit bind a new key to an old
         // base URL: two reads, two generations, one request.
-        var snapshot = await GetSnapshotAsync(ct).ConfigureAwait(false);
+        var snapshot = await GetSnapshotAsync(ct);
         if (snapshot.ByModelId.GetValueOrDefault(canonical) is not { } registration)
         {
             return null;
@@ -103,7 +103,7 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     /// <inheritdoc />
     public async Task PrimeAsync(CancellationToken cancellationToken = default)
     {
-        _ = await GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        _ = await GetSnapshotAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -154,7 +154,7 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
             observedEpoch = _epoch;
         }
 
-        var loaded = ExternalProviderSnapshot.Build(observedEpoch, await _store.LoadAsync(cancellationToken).ConfigureAwait(false));
+        var loaded = ExternalProviderSnapshot.Build(observedEpoch, await _store.LoadAsync(cancellationToken));
 
         lock (_publishGate)
         {

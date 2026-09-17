@@ -28,24 +28,24 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
     public async Task MigrateAsync_WhenApplied_CreatesRunAndSingletonLedgerTables()
     {
         var databasePath = GetDatabasePath("mcp-ledger-up.sqlite");
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreLedgerMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreLedgerMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.True(await TableExistsAsync(connection, "mcp_agent_runs").ConfigureAwait(false));
-        AssertEx.True(await TableExistsAsync(connection, "mcp_agent_run_ledger").ConfigureAwait(false));
-        var ledgerColumns = await GetColumnsAsync(connection, "mcp_agent_run_ledger").ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.True(await TableExistsAsync(connection, "mcp_agent_runs"));
+        AssertEx.True(await TableExistsAsync(connection, "mcp_agent_run_ledger"));
+        var ledgerColumns = await GetColumnsAsync(connection, "mcp_agent_run_ledger");
         AssertEx.True(ledgerColumns.IsSupersetOf(new[]
         {
             "queued_run_count",
             "running_run_count",
             "nonterminal_run_count"
         }));
-        var columns = await GetColumnsAsync(connection, "mcp_agent_runs").ConfigureAwait(false);
+        var columns = await GetColumnsAsync(connection, "mcp_agent_runs");
         AssertEx.True(columns.IsSupersetOf(new[]
         {
             "request_id",
@@ -68,12 +68,12 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
             "payload_expires_at_utc",
             "compacted_at_utc"
         }), "The run table must contain the durable lifecycle, binding, encrypted payload, and accounting columns.");
-        AssertEx.Equal(expected: 0L, await ForeignKeyCountAsync(connection).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0L, await ForeignKeyCountAsync(connection));
 
         await using var singleton = connection.CreateCommand();
         singleton.CommandText = "SELECT accounting_version, identity_count, active_payload_bytes FROM mcp_agent_run_ledger WHERE id = 1;";
-        await using var reader = await singleton.ExecuteReaderAsync().ConfigureAwait(false);
-        AssertEx.True(await reader.ReadAsync().ConfigureAwait(false), "The migration must seed the singleton ledger row.");
+        await using var reader = await singleton.ExecuteReaderAsync();
+        AssertEx.True(await reader.ReadAsync(), "The migration must seed the singleton ledger row.");
         AssertEx.Equal(expected: 1L, reader.GetInt64(0));
         AssertEx.Equal(expected: 0L, reader.GetInt64(1));
         AssertEx.Equal(expected: 0L, reader.GetInt64(2));
@@ -83,16 +83,16 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
     public async Task MigrateAsync_WhenRolledBack_DropsBothLedgerTables()
     {
         var databasePath = GetDatabasePath("mcp-ledger-down.sqlite");
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreLedgerMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreLedgerMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.False(await TableExistsAsync(connection, "mcp_agent_runs").ConfigureAwait(false));
-        AssertEx.False(await TableExistsAsync(connection, "mcp_agent_run_ledger").ConfigureAwait(false));
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.False(await TableExistsAsync(connection, "mcp_agent_runs"));
+        AssertEx.False(await TableExistsAsync(connection, "mcp_agent_run_ledger"));
     }
 
     private NodeChatDbContext CreateContext(string databasePath) =>
@@ -101,7 +101,7 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -110,7 +110,7 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlySet<string>> GetColumnsAsync(SqliteConnection connection, string tableName)
@@ -119,8 +119,8 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
         command.CommandText = "SELECT name FROM pragma_table_info($table);";
         command.Parameters.AddWithValue("$table", tableName);
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             _ = columns.Add(reader.GetString(0));
         }
@@ -132,7 +132,7 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM pragma_foreign_key_list('mcp_agent_runs');";
-        return (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+        return (long)(await command.ExecuteScalarAsync())!;
     }
 
     private string GetDatabasePath(string fileName)

@@ -36,8 +36,7 @@ public sealed class GraphWorkflowToolValidationTests
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
                                         definitions.CreateAsync($"Refused {Guid.NewGuid():N}",
                                             description: null,
-                                            GraphWorkflowGraphs.ToolValidationWriteExecuteTool))
-                                    .ConfigureAwait(false);
+                                            GraphWorkflowGraphs.ToolValidationWriteExecuteTool));
 
         var error = AssertEx.NotNull(refusal.Result.Errors.SingleOrDefault(), $"one offending node, one error: {refusal.Message}");
         AssertEx.Equal("runner", error.Key, "the error is keyed by NODE key, so the editor draws it on the node that named the tool.");
@@ -57,8 +56,7 @@ public sealed class GraphWorkflowToolValidationTests
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
                                         definitions.CreateAsync($"Refused {Guid.NewGuid():N}",
                                             description: null,
-                                            GraphWorkflowGraphs.ToolValidationTwoRefusedTools))
-                                    .ConfigureAwait(false);
+                                            GraphWorkflowGraphs.ToolValidationTwoRefusedTools));
 
         AssertEx.Equal("asker,runner",
             string.Join(',', refusal.Result.Errors.Select(static error => error.Key).Order(StringComparer.Ordinal)),
@@ -80,15 +78,15 @@ public sealed class GraphWorkflowToolValidationTests
         await using var scope = factory.Services.CreateAsyncScope();
         var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-        var before = (await store.ListDefinitionsAsync().ConfigureAwait(false)).Count;
+        var before = (await store.ListDefinitionsAsync()).Count;
 
-        var result = await definitions.ValidateAsync(GraphWorkflowGraphs.ToolValidationWriteExecuteTool).ConfigureAwait(false);
+        var result = await definitions.ValidateAsync(GraphWorkflowGraphs.ToolValidationWriteExecuteTool);
 
         AssertEx.False(result.IsValid, "the probe never throws, so the refusal has to arrive as a report.");
         var error = AssertEx.NotNull(result.Errors.SingleOrDefault(), "the same single error the save throws.");
         AssertEx.Equal("runner", error.Key);
         AssertEx.Contains(error.Message, "run_python");
-        AssertEx.Equal(before, (await store.ListDefinitionsAsync().ConfigureAwait(false)).Count, "a probe writes no definition row.");
+        AssertEx.Equal(before, (await store.ListDefinitionsAsync()).Count, "a probe writes no definition row.");
     }
 
     /// <summary>
@@ -116,8 +114,7 @@ public sealed class GraphWorkflowToolValidationTests
         });
         await using var scope = factory.Services.CreateAsyncScope();
         var definition = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>()
-                                    .CreateAsync($"Tightened {Guid.NewGuid():N}", description: null, GraphWorkflowGraphs.ToolNode)
-                                    .ConfigureAwait(false);
+                                    .CreateAsync($"Tightened {Guid.NewGuid():N}", description: null, GraphWorkflowGraphs.ToolNode);
 
         // The tightening itself: the same catalog, now offering neither tool.
         _ = tools.ListInvocableToolsAsync(Arg.Any<CancellationToken>()).Returns([]);
@@ -125,13 +122,12 @@ public sealed class GraphWorkflowToolValidationTests
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
                                         scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
-                                             .StartAsync(definition.Id, requestId, inputJson: null, definitionVersion: null))
-                                    .ConfigureAwait(false);
+                                             .StartAsync(definition.Id, requestId, inputJson: null, definitionVersion: null));
 
         AssertEx.Equal("lookup,peek",
             string.Join(',', refusal.Result.Errors.Select(static error => error.Key).Order(StringComparer.Ordinal)),
             $"the start reports every Tool node it can no longer run, keyed as the save's would be: {refusal.Message}");
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-        AssertEx.Null(await store.FindRunByRequestAsync(requestId).ConfigureAwait(false), "the refusal lands before the run row, so nothing is left half-started.");
+        AssertEx.Null(await store.FindRunByRequestAsync(requestId), "the refusal lands before the run row, so nothing is left half-started.");
     }
 }

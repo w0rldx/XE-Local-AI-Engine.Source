@@ -48,7 +48,7 @@ public sealed class HeartbeatBackgroundService : BackgroundService
             try
             {
                 var delay = TestDelayOverride > TimeSpan.Zero ? TestDelayOverride : interval;
-                await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
+                await Task.Delay(delay, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -60,7 +60,7 @@ public sealed class HeartbeatBackgroundService : BackgroundService
                 continue;
             }
 
-            var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false);
+            var clientNodeId = await _tokenStore.GetClientNodeIdAsync();
             if (clientNodeId is null)
             {
                 continue;
@@ -68,8 +68,8 @@ public sealed class HeartbeatBackgroundService : BackgroundService
 
             try
             {
-                await _hubConnection.SendHeartbeatAsync(clientNodeId.Value, stoppingToken).ConfigureAwait(false);
-                await RefreshCapabilitiesIfDueAsync(stoppingToken).ConfigureAwait(false);
+                await _hubConnection.SendHeartbeatAsync(clientNodeId.Value, stoppingToken);
+                await RefreshCapabilitiesIfDueAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -97,7 +97,7 @@ public sealed class HeartbeatBackgroundService : BackgroundService
         _lastCapabilityRefreshAt = now;
         try
         {
-            await _capabilityReporter.Value.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
+            await _capabilityReporter.Value.ReportToApiAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

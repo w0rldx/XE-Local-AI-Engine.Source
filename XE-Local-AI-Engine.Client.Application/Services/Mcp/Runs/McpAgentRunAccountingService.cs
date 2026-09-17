@@ -19,23 +19,22 @@ internal sealed class McpAgentRunAccountingService(
     {
         try
         {
-            var verification = await _store.VerifyLedgerAsync(cancellationToken).ConfigureAwait(false);
+            var verification = await _store.VerifyLedgerAsync(cancellationToken);
             if (verification.IsConsistent)
             {
-                await _metrics.RefreshAsync(_store, cancellationToken).ConfigureAwait(false);
+                await _metrics.RefreshAsync(_store, cancellationToken);
                 _metrics.RecordRecovery("accounting_verified");
                 return;
             }
 
-            _ = await _store.RebuildLedgerAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken)
-                            .ConfigureAwait(false);
-            var repaired = await _store.VerifyLedgerAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _store.RebuildLedgerAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
+            var repaired = await _store.VerifyLedgerAsync(cancellationToken);
             if (!repaired.IsConsistent)
             {
                 throw new InvalidOperationException("The durable MCP run accounting ledger could not be reconstructed.");
             }
 
-            await _metrics.RefreshAsync(_store, CancellationToken.None).ConfigureAwait(false);
+            await _metrics.RefreshAsync(_store, CancellationToken.None);
             _metrics.RecordRecovery("accounting_rebuilt");
             _logger.LogWarning("Rebuilt inconsistent durable MCP agent run accounting before dispatch started.");
         }

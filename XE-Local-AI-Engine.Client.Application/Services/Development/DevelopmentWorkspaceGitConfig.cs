@@ -110,7 +110,7 @@ internal static class DevelopmentWorkspaceGitConfig
         DeleteIfPresent(configPath);
         DeleteIfPresent(Path.Combine(gitDirectory, "config.worktree"));
 
-        await File.WriteAllTextAsync(configPath, Render(preserved), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(configPath, Render(preserved), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
     }
 
     /// <summary>

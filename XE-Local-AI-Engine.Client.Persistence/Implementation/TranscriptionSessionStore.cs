@@ -33,7 +33,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         };
 
         _ = _dbContext.TranscriptionSessions.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<TranscriptionSessionDetailView?> GetWithSegmentsAsync(Guid sessionId, CancellationToken cancellationToken)
@@ -41,8 +41,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         var entity = await _dbContext.TranscriptionSessions
                                      .AsNoTracking()
                                      .Include(session => session.Segments)
-                                     .FirstOrDefaultAsync(session => session.Id == sessionId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(session => session.Id == sessionId, cancellationToken);
 
         return entity is null ? null : ToDetailView(entity);
     }
@@ -63,8 +62,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
                                    .Skip(skip)
                                    .Take(take)
                                    .Select(session => new SessionCountRow(session, session.Segments.Count))
-                                   .ToListAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToListAsync(cancellationToken);
 
         return rows.Select(static row => ToSummaryView(row.Session, row.SegmentCount)).ToArray();
     }
@@ -76,7 +74,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
 
     public async Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var entity = await LoadTrackedAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(sessionId, cancellationToken);
         if (entity is null)
         {
             return false;
@@ -86,23 +84,22 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         // but the node connection leaves PRAGMA foreign_keys off, so the database will not enforce it and the rows
         // would orphan. Loading them to let EF cascade would decrypt every segment of a long transcript only to throw
         // the plaintext away. The two statements share one transaction so a session never survives its own transcript.
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         _ = await _dbContext.TranscriptSegments
                             .Where(segment => segment.SessionId == sessionId)
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
+                            .ExecuteDeleteAsync(cancellationToken);
 
         _ = _dbContext.TranscriptionSessions.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
     public async Task<bool> SetStatusAsync(Guid sessionId, TranscriptionSessionStatus status, long updatedAtUtc, CancellationToken cancellationToken)
     {
-        var entity = await LoadTrackedAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(sessionId, cancellationToken);
         if (entity is null)
         {
             return false;
@@ -110,7 +107,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
 
         entity.Status = status;
         entity.UpdatedAtUtc = updatedAtUtc;
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -120,7 +117,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         long updatedAtUtc,
         CancellationToken cancellationToken)
     {
-        var entity = await LoadTrackedAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(sessionId, cancellationToken);
         if (entity is null || entity.Status != expected)
         {
             return false;
@@ -128,7 +125,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
 
         entity.Status = desired;
         entity.UpdatedAtUtc = updatedAtUtc;
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -140,8 +137,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
                                   .AsNoTracking()
                                   .Where(session => session.Id == sessionId)
                                   .Select(session => new SessionCountRow(session, session.Segments.Count))
-                                  .FirstOrDefaultAsync(cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .FirstOrDefaultAsync(cancellationToken);
 
         return row is null ? null : ToSummaryView(row.Session, row.SegmentCount);
     }
@@ -153,13 +149,12 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
                                .AsNoTracking()
                                .Where(segment => segment.SessionId == sessionId)
                                .Select(static segment => (long?)segment.Seq)
-                               .MaxAsync(cancellationToken)
-                               .ConfigureAwait(false) ?? 0L;
+                               .MaxAsync(cancellationToken) ?? 0L;
     }
 
     public async Task<bool> CompleteAsync(Guid sessionId, string? detectedLanguage, long durationMs, long updatedAtUtc, CancellationToken cancellationToken)
     {
-        var entity = await LoadTrackedAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(sessionId, cancellationToken);
         if (entity is null)
         {
             return false;
@@ -169,7 +164,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         entity.DetectedLanguage = detectedLanguage;
         entity.DurationMs = durationMs;
         entity.UpdatedAtUtc = updatedAtUtc;
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -178,7 +173,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         ArgumentException.ThrowIfNullOrWhiteSpace(errorCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(errorMessage);
 
-        var entity = await LoadTrackedAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadTrackedAsync(sessionId, cancellationToken);
         if (entity is null)
         {
             return false;
@@ -188,7 +183,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         entity.ErrorCode = Encoding.UTF8.GetBytes(errorCode);
         entity.ErrorMessage = Encoding.UTF8.GetBytes(errorMessage);
         entity.UpdatedAtUtc = updatedAtUtc;
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -198,7 +193,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
 
         // The session is loaded before anything is written. PRAGMA foreign_keys is off on the node connection, so an
         // unknown session id would otherwise insert orphan rows that no read path can ever reach and nothing deletes.
-        var session = await LoadTrackedAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await LoadTrackedAsync(sessionId, cancellationToken);
         if (session is null)
         {
             return false;
@@ -227,7 +222,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         }
 
         // One batch, one save: the rows and the session's new updated stamp either all land or none of them do.
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -248,8 +243,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
                                    .Where(segment => segment.SessionId == sessionId && segment.Seq > afterSeq)
                                    .OrderBy(segment => segment.Seq)
                                    .Take(take)
-                                   .ToListAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToListAsync(cancellationToken);
 
         return rows.Select(static segment => ToSegmentView(segment)).ToArray();
     }

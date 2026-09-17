@@ -23,13 +23,13 @@ public sealed class GetIntegrationExecutionEndpoint(IntegrationExecutionQuerySer
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var execution = await _executions.GetAsync(Route<Guid>("executionId"), ct).ConfigureAwait(false);
+        var execution = await _executions.GetAsync(Route<Guid>("executionId"), ct);
         if (execution is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(IntegrationMapper.ToDetail(execution), ct).ConfigureAwait(false);
+        await Send.OkAsync(IntegrationMapper.ToDetail(execution), ct);
     }
 }

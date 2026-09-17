@@ -52,7 +52,7 @@ public sealed class GpuModelLoadAdmission : IGpuModelLoadAdmission, IDisposable
         timeoutCts.CancelAfter(_maxWait);
         try
         {
-            await _gate.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+            await _gate.WaitAsync(timeoutCts.Token);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {

@@ -49,59 +49,56 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     {
         // A zero-day window makes the sweep cutoff equal to now, deleting every conversation the instant retention is
         // enabled; ValidateOnStart must reject it at startup rather than silently purging everything.
-        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "0", sweepInterval: null))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "0", sweepInterval: null));
     }
 
     [Test]
     public async Task RetentionOptions_NegativeRetentionDays_FailStartupValidation()
     {
         // A negative window pushes the cutoff into the future, which would also delete everything.
-        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "-5", sweepInterval: null))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "-5", sweepInterval: null));
     }
 
     [Test]
     public async Task RetentionOptions_ZeroSweepInterval_FailStartupValidation()
     {
         // A zero sweep interval would busy-spin the PeriodicTimer; the interval bounds must reject it at startup.
-        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "30", sweepInterval: "00:00:00"))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "30", sweepInterval: "00:00:00"));
     }
 
     [Test]
     public async Task RetentionOptions_ValidConfig_PassesStartupValidation()
     {
-        await StartHostWithRetentionAsync(enabled: true, retentionDays: "30", sweepInterval: "00:10:00").ConfigureAwait(false);
+        await StartHostWithRetentionAsync(enabled: true, retentionDays: "30", sweepInterval: "00:10:00");
     }
 
     [Test]
     public async Task RetentionOptions_DisabledWithDefaults_PassesStartupValidation()
     {
         // The default-off configuration (no overrides) must never fail startup validation.
-        await StartHostWithRetentionAsync(enabled: false, retentionDays: null, sweepInterval: null).ConfigureAwait(false);
+        await StartHostWithRetentionAsync(enabled: false, retentionDays: null, sweepInterval: null);
     }
 
     [Test]
     public async Task OrphanResweep_WhenDisabled_RemovesOrphansButKeepsValidConversation()
     {
-        await using var provider = await BuildProviderAsync("disabled-orphan.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("disabled-orphan.sqlite");
         var service = CreateService(provider);
 
         // A valid conversation with a real row + upload directory: it must survive because inactivity-based deletion
         // stays gated on Enabled.
-        var keptConversationId = await SeedConversationWithFootprintAsync(provider, service).ConfigureAwait(false);
+        var keptConversationId = await SeedConversationWithFootprintAsync(provider, service);
 
         // A stranded upload directory whose conversation row is gone: it must be reconciled even with retention off.
         var orphanConversationId = Guid.NewGuid();
         Directory.CreateDirectory(UploadDirectory(orphanConversationId));
-        await File.WriteAllTextAsync(Path.Combine(UploadDirectory(orphanConversationId), "leftover.bin"), "x").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(UploadDirectory(orphanConversationId), "leftover.bin"), "x");
 
         using var sweeper = CreateSweeper(provider, enabled: false);
-        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
 
         AssertEx.False(Directory.Exists(UploadDirectory(orphanConversationId)), "A disabled sweeper must still reconcile orphaned upload directories.");
-        AssertEx.NotNull(await service.GetConversationAsync(keptConversationId).ConfigureAwait(false));
+        AssertEx.NotNull(await service.GetConversationAsync(keptConversationId));
         AssertEx.True(Directory.Exists(UploadDirectory(keptConversationId)), "The valid conversation's upload directory must survive when retention is disabled.");
     }
 
@@ -131,58 +128,58 @@ public sealed class RetentionSweeperServiceTests : IDisposable
                .ValidateOnStart();
 
         using var host = builder.Build();
-        await host.StartAsync().ConfigureAwait(false);
-        await host.StopAsync().ConfigureAwait(false);
+        await host.StartAsync();
+        await host.StopAsync();
     }
 
     [Test]
     public async Task Sweep_WhenDisabled_DeletesNothing()
     {
-        await using var provider = await BuildProviderAsync("disabled.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("disabled.sqlite");
         var service = CreateService(provider);
-        var conversationId = await SeedConversationWithFootprintAsync(provider, service).ConfigureAwait(false);
+        var conversationId = await SeedConversationWithFootprintAsync(provider, service);
 
         using var sweeper = CreateSweeper(provider, enabled: false);
-        await sweeper.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await sweeper.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await sweeper.StartAsync(CancellationToken.None);
+        await sweeper.StopAsync(CancellationToken.None);
 
         // Nothing is deleted: the conversation, its feedback row, and its upload directory all survive.
-        AssertEx.NotNull(await service.GetConversationAsync(conversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "message_feedback", conversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "conversation_uploaded_files", conversationId).ConfigureAwait(false));
+        AssertEx.NotNull(await service.GetConversationAsync(conversationId));
+        AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "message_feedback", conversationId));
+        AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "conversation_uploaded_files", conversationId));
         AssertEx.True(Directory.Exists(UploadDirectory(conversationId)), "The upload directory must survive when retention is disabled.");
     }
 
     [Test]
     public async Task Sweep_WhenEnabled_DeletesFullFootprintIncludingFeedbackUploadsAndBlobs()
     {
-        await using var provider = await BuildProviderAsync("enabled.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("enabled.sqlite");
         var service = CreateService(provider);
-        var conversationId = await SeedConversationWithFootprintAsync(provider, service).ConfigureAwait(false);
+        var conversationId = await SeedConversationWithFootprintAsync(provider, service);
 
         using var sweeper = CreateSweeper(provider, enabled: true);
-        await sweeper.RunSweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await sweeper.RunSweepOnceAsync(CancellationToken.None);
 
-        AssertEx.True(await service.GetConversationAsync(conversationId).ConfigureAwait(false) is null, "The expired conversation must be deleted.");
-        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "message_feedback", conversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "conversation_uploaded_files", conversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "messages", conversationId).ConfigureAwait(false));
+        AssertEx.True(await service.GetConversationAsync(conversationId) is null, "The expired conversation must be deleted.");
+        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "message_feedback", conversationId));
+        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "conversation_uploaded_files", conversationId));
+        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "messages", conversationId));
         AssertEx.False(Directory.Exists(UploadDirectory(conversationId)), "The on-disk upload directory must be deleted.");
     }
 
     [Test]
     public async Task Sweep_OrphanResweep_RemovesUploadDirectoryWithNoConversationRow()
     {
-        await using var provider = await BuildProviderAsync("orphan.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("orphan.sqlite");
 
         // Simulate a crash between a purge's DB commit and its blob teardown: an upload directory exists for a
         // conversation that has no row.
         var orphanConversationId = Guid.NewGuid();
         Directory.CreateDirectory(UploadDirectory(orphanConversationId));
-        await File.WriteAllTextAsync(Path.Combine(UploadDirectory(orphanConversationId), "leftover.bin"), "x").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(UploadDirectory(orphanConversationId), "leftover.bin"), "x");
 
         using var sweeper = CreateSweeper(provider, enabled: true);
-        await sweeper.RunSweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await sweeper.RunSweepOnceAsync(CancellationToken.None);
 
         AssertEx.False(Directory.Exists(UploadDirectory(orphanConversationId)), "An upload directory with no conversation row must be resweept away.");
     }
@@ -190,15 +187,15 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     [Test]
     public async Task InteractivePurge_StillDeletesTheCompleteFootprint()
     {
-        await using var provider = await BuildProviderAsync("interactive-purge.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("interactive-purge.sqlite");
         var service = CreateService(provider);
-        var conversationId = await SeedConversationWithFootprintAsync(provider, service).ConfigureAwait(false);
+        var conversationId = await SeedConversationWithFootprintAsync(provider, service);
 
-        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId, DeletedAtUtc: 100, PurgeImmediately: true)).ConfigureAwait(false);
+        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId, DeletedAtUtc: 100, PurgeImmediately: true));
 
-        AssertEx.True(await service.GetConversationAsync(conversationId).ConfigureAwait(false) is null, "The purged conversation must be deleted.");
-        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "message_feedback", conversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "conversation_uploaded_files", conversationId).ConfigureAwait(false));
+        AssertEx.True(await service.GetConversationAsync(conversationId) is null, "The purged conversation must be deleted.");
+        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "message_feedback", conversationId));
+        AssertEx.Equal(expected: 0, await CountRowsAsync(provider, "conversation_uploaded_files", conversationId));
         AssertEx.False(Directory.Exists(UploadDirectory(conversationId)), "Interactive purge must also delete the on-disk upload directory.");
     }
 
@@ -210,15 +207,15 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         // conversation leaves the session's content readable on disk forever.
         await using var factory = WorkSessionServiceTests.NewFactory();
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId);
 
         using var sweeper = CreateSweeper(factory.Services, enabled: true);
-        await sweeper.RunSweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await sweeper.RunSweepOnceAsync(CancellationToken.None);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var chat = scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
-        AssertEx.True(await chat.GetConversationAsync(session.ConversationId).ConfigureAwait(false) is null, "The expired session conversation must be deleted.");
+        AssertEx.True(await chat.GetConversationAsync(session.ConversationId) is null, "The expired session conversation must be deleted.");
         AssertEx.False(Directory.Exists(artifactDirectory), "Retention must delete the artifact bytes of a session whose conversation it aged out.");
     }
 
@@ -228,14 +225,14 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         // Same footprint, the other entry point: an immediate purge from the chat surface.
         await using var factory = WorkSessionServiceTests.NewFactory();
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var chat = scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
-        _ = await chat.DeleteConversationAsync(new NodeChatDeleteConversationRequest(session.ConversationId, DeletedAtUtc: 100, PurgeImmediately: true)).ConfigureAwait(false);
+        _ = await chat.DeleteConversationAsync(new NodeChatDeleteConversationRequest(session.ConversationId, DeletedAtUtc: 100, PurgeImmediately: true));
 
-        AssertEx.True(await chat.GetConversationAsync(session.ConversationId).ConfigureAwait(false) is null, "The purged conversation must be deleted.");
+        AssertEx.True(await chat.GetConversationAsync(session.ConversationId) is null, "The purged conversation must be deleted.");
         AssertEx.False(Directory.Exists(artifactDirectory), "An immediate purge must also delete the session's artifact bytes.");
     }
 
@@ -244,7 +241,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     private static async Task<string> WriteArtifactBlobAsync(IServiceProvider services, Guid sessionId)
     {
         var blobStore = services.GetRequiredService<IWorkSessionArtifactBlobStore>();
-        _ = await blobStore.WriteAsync(sessionId, Guid.NewGuid(), new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("artifact bytes")), CancellationToken.None).ConfigureAwait(false);
+        _ = await blobStore.WriteAsync(sessionId, Guid.NewGuid(), new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("artifact bytes")), CancellationToken.None);
 
         var directory = Path.Combine(services.GetRequiredService<INodeDataDirectory>().Root, "work-sessions", "artifacts", sessionId.ToString("N"));
         AssertEx.True(Directory.Exists(directory), "The seeded artifact directory must exist before the purge.");
@@ -261,19 +258,19 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var fixedClock = new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(fixedNowMs));
         var cutoffMs = fixedNowMs - (long)TimeSpan.FromDays(30).TotalMilliseconds;
 
-        await using var provider = await BuildProviderAsync("ms-boundary.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("ms-boundary.sqlite");
         var service = CreateService(provider);
 
         // last_seen exactly at the cutoff is eligible (predicate is last_seen <= cutoff); one millisecond newer is not.
-        var justInsideId = await SeedConversationAtAsync(service, cutoffMs).ConfigureAwait(false);
-        var justOutsideId = await SeedConversationAtAsync(service, cutoffMs + 1).ConfigureAwait(false);
+        var justInsideId = await SeedConversationAtAsync(service, cutoffMs);
+        var justOutsideId = await SeedConversationAtAsync(service, cutoffMs + 1);
 
         using var sweeper = CreateSweeper(provider, enabled: true, timeProvider: fixedClock);
-        await sweeper.RunSweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await sweeper.RunSweepOnceAsync(CancellationToken.None);
 
-        AssertEx.True(await service.GetConversationAsync(justInsideId).ConfigureAwait(false) is null,
+        AssertEx.True(await service.GetConversationAsync(justInsideId) is null,
             "A conversation whose last_seen is exactly at the millisecond cutoff must be deleted.");
-        AssertEx.NotNull(await service.GetConversationAsync(justOutsideId).ConfigureAwait(false));
+        AssertEx.NotNull(await service.GetConversationAsync(justOutsideId));
     }
 
     [Test]
@@ -296,34 +293,34 @@ public sealed class RetentionSweeperServiceTests : IDisposable
                 {
                     if (service is not null && touchedId != Guid.Empty)
                     {
-                        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(touchedId, IsPinned: false, UpdatedAtUtc: fixedNowMs)).ConfigureAwait(false);
+                        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(touchedId, IsPinned: false, UpdatedAtUtc: fixedNowMs));
                     }
-                }))).ConfigureAwait(false);
+                })));
 
         service = CreateService(provider);
 
         // Two conversations, both expired at selection time, each with a full footprint incl. an on-disk upload dir.
-        touchedId = await SeedExpiredConversationWithFootprintAsync(provider, service, cutoffMs - 5_000).ConfigureAwait(false);
-        var deletedId = await SeedExpiredConversationWithFootprintAsync(provider, service, cutoffMs - 5_000).ConfigureAwait(false);
+        touchedId = await SeedExpiredConversationWithFootprintAsync(provider, service, cutoffMs - 5_000);
+        var deletedId = await SeedExpiredConversationWithFootprintAsync(provider, service, cutoffMs - 5_000);
 
         using var sweeper = CreateSweeper(provider, enabled: true, timeProvider: fixedClock);
-        await sweeper.RunSweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await sweeper.RunSweepOnceAsync(CancellationToken.None);
 
         // Touched after selection: the in-transaction re-check saw the fresh last_seen and spared it — the row and its
         // upload directory both survive, proving retention cannot delete a just-touched conversation.
-        AssertEx.NotNull(await service.GetConversationAsync(touchedId).ConfigureAwait(false));
+        AssertEx.NotNull(await service.GetConversationAsync(touchedId));
         AssertEx.True(Directory.Exists(UploadDirectory(touchedId)), "A conversation touched after selection must keep its upload directory.");
-        AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "conversation_uploaded_files", touchedId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "conversation_uploaded_files", touchedId));
 
         // Still-expired peer: deleted, and only its blobs are torn down — blob teardown targets actually-deleted ids.
-        AssertEx.True(await service.GetConversationAsync(deletedId).ConfigureAwait(false) is null, "The still-expired conversation must be deleted.");
+        AssertEx.True(await service.GetConversationAsync(deletedId) is null, "The still-expired conversation must be deleted.");
         AssertEx.False(Directory.Exists(UploadDirectory(deletedId)), "The deleted conversation's upload directory must be removed.");
     }
 
     // Creates a conversation with no messages, so its last_seen_utc is exactly the supplied millisecond value.
     private static async Task<Guid> SeedConversationAtAsync(INodeChatPersistenceService service, long lastSeenMs)
     {
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: lastSeenMs));
         return conversation.ConversationId;
     }
 
@@ -331,10 +328,10 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     // supplied millisecond value (message/feedback touches all use the same value, and the final pin makes it explicit).
     private static async Task<Guid> SeedExpiredConversationWithFootprintAsync(ServiceProvider provider, INodeChatPersistenceService service, long lastSeenMs)
     {
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: lastSeenMs));
         var messageId = Guid.NewGuid();
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "question", CreatedAtUtc: lastSeenMs)).ConfigureAwait(false);
-        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, "up", Comment: null, UpdatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "question", CreatedAtUtc: lastSeenMs));
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, "up", Comment: null, UpdatedAtUtc: lastSeenMs));
 
         var uploadedFileStore = provider.GetRequiredService<IConversationUploadedFileStore>();
         await uploadedFileStore.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,
@@ -347,9 +344,9 @@ public sealed class RetentionSweeperServiceTests : IDisposable
                 DocumentExtractionStatus.Extracted,
                 ExtractedMarkdown: "data",
                 ExtractedChars: 4),
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
-        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(conversation.ConversationId, IsPinned: false, UpdatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(conversation.ConversationId, IsPinned: false, UpdatedAtUtc: lastSeenMs));
         return conversation.ConversationId;
     }
 
@@ -357,10 +354,10 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     {
         // Small timestamps put last_seen far in the past, so the conversation is always expired against a real-now
         // retention cutoff.
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1));
         var messageId = Guid.NewGuid();
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "question", CreatedAtUtc: 2)).ConfigureAwait(false);
-        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, "up", Comment: null, UpdatedAtUtc: 3)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "question", CreatedAtUtc: 2));
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, "up", Comment: null, UpdatedAtUtc: 3));
 
         var uploadedFileStore = provider.GetRequiredService<IConversationUploadedFileStore>();
         await uploadedFileStore.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,
@@ -373,7 +370,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
                 DocumentExtractionStatus.Extracted,
                 ExtractedMarkdown: "data",
                 ExtractedChars: 4),
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         return conversation.ConversationId;
     }
@@ -405,8 +402,8 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }
@@ -443,14 +440,14 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE conversation_id = $conversation_id;";
         var parameter = command.CreateParameter();
         parameter.ParameterName = "$conversation_id";
         parameter.Value = conversationId;
         command.Parameters.Add(parameter);
-        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
@@ -469,8 +466,8 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     {
         public async Task<IReadOnlyList<Guid>> ListExpiredConversationCandidatesAsync(long cutoffUtc, CancellationToken cancellationToken = default)
         {
-            var candidates = await inner.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken).ConfigureAwait(false);
-            await afterSelection().ConfigureAwait(false);
+            var candidates = await inner.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken);
+            await afterSelection();
             return candidates;
         }
     }

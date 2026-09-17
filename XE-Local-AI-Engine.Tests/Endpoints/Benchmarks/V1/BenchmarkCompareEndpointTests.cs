@@ -27,7 +27,7 @@ public sealed class BenchmarkCompareEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, Api + $"/projects/{ProjectId}/compare?cellKeys=a&cellKeys=b");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -42,7 +42,7 @@ public sealed class BenchmarkCompareEndpointTests
             Cell("cell:two", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)])
         ]);
 
-        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two");
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var document = JsonDocument.Parse(content);
@@ -68,7 +68,7 @@ public sealed class BenchmarkCompareEndpointTests
             Cell("cell:two", null, [Item(0, null, "item-revised"), Item(1, 60), Item(2, 80), Item(3, 50)])
         ]);
 
-        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two");
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var document = JsonDocument.Parse(content);
@@ -89,7 +89,7 @@ public sealed class BenchmarkCompareEndpointTests
             Cell("cell:two", null, [Item(0, null), Item(1, null), Item(2, null)], "item-set-revised")
         ]);
 
-        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two");
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var document = JsonDocument.Parse(content);
@@ -107,7 +107,7 @@ public sealed class BenchmarkCompareEndpointTests
             Cell("cell:three", 60, [Item(0, 60), Item(1, 60), Item(2, 60)])
         ]);
 
-        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two&cellKeys=cell:three").ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two&cellKeys=cell:three");
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var document = JsonDocument.Parse(content);
@@ -126,7 +126,7 @@ public sealed class BenchmarkCompareEndpointTests
             Cell("cell:two", 70, [Item(0, 60), Item(1, 70), Item(2, 80)])
         ]);
 
-        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two");
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var document = JsonDocument.Parse(content);
@@ -145,7 +145,7 @@ public sealed class BenchmarkCompareEndpointTests
             Cell("cell:two", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)])
         ], displayOnlyIndexes: 3);
 
-        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two");
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var document = JsonDocument.Parse(content);
@@ -163,7 +163,7 @@ public sealed class BenchmarkCompareEndpointTests
     {
         await using var context = Seeded([Cell("cell:one", 70, [Item(0, 70)])]);
 
-        var (status, content) = await GetAsync(context, query).ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, query);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         AssertEx.Contains(content, "Provide between 2 and 6 cellKeys", StringComparison.Ordinal);
@@ -174,7 +174,7 @@ public sealed class BenchmarkCompareEndpointTests
     {
         await using var context = Seeded([Cell("cell:one", 70, [Item(0, 70), Item(1, 70), Item(2, 70)])]);
 
-        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:one").ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:one");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         AssertEx.Contains(content, "must be distinct", StringComparison.Ordinal);
@@ -185,7 +185,7 @@ public sealed class BenchmarkCompareEndpointTests
     {
         await using var context = Seeded([Cell("cell:one", 70, [Item(0, 70), Item(1, 70), Item(2, 70)])]);
 
-        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:gone").ConfigureAwait(false);
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:gone");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         AssertEx.Contains(content, "cell:gone", StringComparison.Ordinal);
@@ -196,7 +196,7 @@ public sealed class BenchmarkCompareEndpointTests
     {
         await using var context = new Context();
 
-        var (status, _) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
+        var (status, _) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two");
 
         AssertEx.Equal(HttpStatusCode.NotFound, status);
     }
@@ -230,8 +230,8 @@ public sealed class BenchmarkCompareEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Get, Api + $"/projects/{ProjectId}/compare?{query}");
         context.Factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        return (response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
     private static BenchmarkCellRecord Cell(string key, int? quality, IReadOnlyList<BenchmarkCellItemRecord> items, string? exclusion = null) =>

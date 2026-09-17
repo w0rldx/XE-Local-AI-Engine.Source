@@ -24,16 +24,16 @@ public sealed class CoderAgentSeederTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = new CoderAgentSeeder(scopeFactory, NullLogger<CoderAgentSeeder>.Instance);
 
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
+        await seeder.StartAsync(CancellationToken.None);
 
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
 
-        var slugs = await store.ListSeededSlugsAsync().ConfigureAwait(false);
+        var slugs = await store.ListSeededSlugsAsync();
         AssertEx.Contains(slugs, AgentDefaults.CoderAgentSeedSlug);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         var coderRows = definitions.Where(definition => definition.SeedSlug == AgentDefaults.CoderAgentSeedSlug).ToList();
         AssertEx.Equal(expected: 1, coderRows.Count);
 

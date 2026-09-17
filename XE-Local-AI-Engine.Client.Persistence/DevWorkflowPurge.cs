@@ -41,12 +41,12 @@ public static class DevWorkflowPurge
     {
         ArgumentNullException.ThrowIfNull(dbContext);
 
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_artifact_uses WHERE run_id = {0};", [runId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_artifacts WHERE run_id = {0};", [runId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_decisions WHERE run_id = {0};", [runId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_run_events WHERE run_id = {0};", [runId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_node_runs WHERE run_id = {0};", [runId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_runs WHERE id = {0};", [runId], cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_artifact_uses WHERE run_id = {0};", [runId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_artifacts WHERE run_id = {0};", [runId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_decisions WHERE run_id = {0};", [runId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_run_events WHERE run_id = {0};", [runId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_node_runs WHERE run_id = {0};", [runId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_runs WHERE id = {0};", [runId], cancellationToken);
     }
 
     /// <summary>
@@ -61,30 +61,25 @@ public static class DevWorkflowPurge
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM dev_workflow_artifact_uses WHERE run_id IN (SELECT id FROM dev_workflow_runs WHERE work_item_id = {0});",
                            [workItemId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM dev_workflow_artifacts WHERE run_id IN (SELECT id FROM dev_workflow_runs WHERE work_item_id = {0});",
                            [workItemId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM dev_workflow_decisions WHERE run_id IN (SELECT id FROM dev_workflow_runs WHERE work_item_id = {0});",
                            [workItemId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM dev_workflow_run_events WHERE run_id IN (SELECT id FROM dev_workflow_runs WHERE work_item_id = {0});",
                            [workItemId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM dev_workflow_node_runs WHERE run_id IN (SELECT id FROM dev_workflow_runs WHERE work_item_id = {0});",
                            [workItemId],
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
 
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_runs WHERE work_item_id = {0};", [workItemId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_work_items WHERE id = {0};", [workItemId], cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_runs WHERE work_item_id = {0};", [workItemId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM dev_workflow_work_items WHERE id = {0};", [workItemId], cancellationToken);
     }
 }

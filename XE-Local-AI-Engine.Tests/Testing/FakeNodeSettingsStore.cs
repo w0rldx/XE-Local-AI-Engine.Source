@@ -57,7 +57,7 @@ internal sealed class FakeNodeSettingsStore(
             Current = siblingWriteBeforeTheUpdate(Current);
         }
 
-        await SaveAsync(mutate(Current), cancellationToken).ConfigureAwait(false);
+        await SaveAsync(mutate(Current), cancellationToken);
         return Current;
     }
 }

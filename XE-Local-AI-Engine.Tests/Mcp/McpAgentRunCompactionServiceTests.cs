@@ -43,7 +43,7 @@ public sealed class McpAgentRunCompactionServiceTests
             TimeProvider.System,
             NullLogger<McpAgentRunCompactionService>.Instance);
 
-        await BackgroundServiceTestHelper.RunExecuteAsync(service, stop.Token).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await BackgroundServiceTestHelper.RunExecuteAsync(service, stop.Token).WaitAsync(TimeSpan.FromSeconds(5));
 
         await store.Received(1).CompactExpiredPayloadsAsync(Arg.Any<long>(), Arg.Any<CancellationToken>());
         await store.Received(1).GetLedgerSnapshotAsync(Arg.Any<CancellationToken>());
@@ -79,14 +79,14 @@ public sealed class McpAgentRunCompactionServiceTests
         try
         {
             var execution = BackgroundServiceTestHelper.RunExecuteAsync(service, stop.Token);
-            await firstAttempt.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await firstAttempt.Task.WaitAsync(TimeSpan.FromSeconds(2));
             await Task.Yield();
             AssertEx.Equal(expected: 1, Volatile.Read(ref attemptCount));
 
             time.FireTimer();
-            await secondAttempt.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
-            await stop.CancelAsync().ConfigureAwait(false);
-            await execution.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await secondAttempt.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            await stop.CancelAsync();
+            await execution.WaitAsync(TimeSpan.FromSeconds(2));
 
             AssertEx.Equal(expected: 2, Volatile.Read(ref attemptCount));
         }

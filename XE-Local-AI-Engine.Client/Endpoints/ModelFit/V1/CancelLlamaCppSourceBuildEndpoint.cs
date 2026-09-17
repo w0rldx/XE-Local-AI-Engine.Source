@@ -19,6 +19,6 @@ public sealed class CancelLlamaCppSourceBuildEndpoint(LlamaCppRuntimeOrchestrati
     public override async Task HandleAsync(CancellationToken ct)
     {
         runtime.CancelSourceBuild();
-        await Send.OkAsync(runtime.GetSourceBuildStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(runtime.GetSourceBuildStatus().ToResponse(), ct);
     }
 }

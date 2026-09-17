@@ -33,7 +33,7 @@ public sealed class CancelImageModelDownloadEndpoint(IImageModelDownloadCoordina
         if (string.IsNullOrWhiteSpace(req.ModelName))
         {
             AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -43,6 +43,6 @@ public sealed class CancelImageModelDownloadEndpoint(IImageModelDownloadCoordina
         {
             ModelName = req.ModelName.Trim(),
             Cancelled = cancelled
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

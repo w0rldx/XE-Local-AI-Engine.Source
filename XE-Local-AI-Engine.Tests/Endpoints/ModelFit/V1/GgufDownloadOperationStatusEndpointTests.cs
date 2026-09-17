@@ -38,17 +38,17 @@ public sealed class GgufDownloadOperationStatusEndpointTests
         using var byOperationRequest =
             new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/downloads/operations/{operationId}");
         factory.AddNodeBearerToken(byOperationRequest);
-        using var byOperationResponse = await client.SendAsync(byOperationRequest).ConfigureAwait(false);
+        using var byOperationResponse = await client.SendAsync(byOperationRequest);
         AssertEx.Equal(HttpStatusCode.OK, byOperationResponse.StatusCode);
-        var byOperationJson = await byOperationResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var byOperationJson = await byOperationResponse.Content.ReadAsStringAsync();
         using var byOperationDoc = JsonDocument.Parse(byOperationJson);
 
         using var byModelNameRequest =
             new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/downloads/operations-route-test-model");
         factory.AddNodeBearerToken(byModelNameRequest);
-        using var byModelNameResponse = await client.SendAsync(byModelNameRequest).ConfigureAwait(false);
+        using var byModelNameResponse = await client.SendAsync(byModelNameRequest);
         AssertEx.Equal(HttpStatusCode.OK, byModelNameResponse.StatusCode);
-        var byModelNameJson = await byModelNameResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var byModelNameJson = await byModelNameResponse.Content.ReadAsStringAsync();
         using var byModelNameDoc = JsonDocument.Parse(byModelNameJson);
 
         AssertEx.Equal(operationId, byOperationDoc.RootElement.GetProperty("operationId").GetGuid());
@@ -74,7 +74,7 @@ public sealed class GgufDownloadOperationStatusEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/downloads/operations/{importOperationId}");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // The download-operations route must never leak an import's status: GgufDownloadCoordinator.GetStatus(Guid)
         // filters to OperationKind.Download, so a real (but Import-kind) operation id 404s here even though the
@@ -93,7 +93,7 @@ public sealed class GgufDownloadOperationStatusEndpointTests
         // route (which requires a second, guid-constrained segment this request does not supply).
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/downloads/operations");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

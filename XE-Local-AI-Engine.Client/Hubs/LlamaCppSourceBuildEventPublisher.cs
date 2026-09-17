@@ -12,13 +12,13 @@ internal sealed class LlamaCppSourceBuildEventPublisher(
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
         await sourceHubContext.Clients.All.SendAsync(LlamaCppSourceBuildHubEvents.StatusChanged,
-            LlamaCppSourceBuildStatusHubMessage.FromContract(statusEvent), cancellationToken).ConfigureAwait(false);
+            LlamaCppSourceBuildStatusHubMessage.FromContract(statusEvent), cancellationToken);
 
         if (statusEvent.CurrentBuild.IsLegacyPinnedCuda())
         {
             await cudaHubContext.Clients.All.SendAsync(CudaBuildHubEvents.StatusChanged,
                 new CudaBuildStatusHubEvent(statusEvent.Phase, statusEvent.AppendedLogLines, statusEvent.Terminal, statusEvent.SanitizedError),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
     }
 }

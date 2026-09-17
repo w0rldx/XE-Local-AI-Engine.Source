@@ -10,7 +10,7 @@ public sealed partial class BenchmarkStore
         // ONE ranking, then one flat read of the runs it ranked — the same two reads the export makes, grouped by the
         // key the ranking already decided rather than by re-deriving anything. Warm-ups never form a rankable cell, so
         // they are absent here for the same reason they are absent from the denominator.
-        var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var ranking = await LoadRankingAsync(projectId, cancellationToken);
         var rows = await _dbContext.BenchmarkRuns.AsNoTracking()
                                    .Where(entity => entity.ProjectId == projectId && !entity.IsWarmup)
                                    .OrderBy(entity => entity.CreatedAtUtc)
@@ -27,8 +27,7 @@ public sealed partial class BenchmarkStore
                                        entity.TaskItemIndex,
                                        entity.PrimaryStopReason
                                    })
-                                   .ToArrayAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToArrayAsync(cancellationToken);
 
         var cells = new List<BenchmarkCellRecord>();
         foreach (var group in rows.GroupBy(static row => row.CellKey, StringComparer.Ordinal))

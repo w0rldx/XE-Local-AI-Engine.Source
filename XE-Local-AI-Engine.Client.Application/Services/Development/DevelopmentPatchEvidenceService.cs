@@ -43,19 +43,19 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await StageWorkingTreeAsync(session, cancellationToken).ConfigureAwait(false);
+        await StageWorkingTreeAsync(session, cancellationToken);
         var patch = await RunGitExactAsync(session,
             ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--", "."],
             maxOutputBytes: _options.MaxPatchBytes,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var status = await RunGitExactAsync(session,
             ["diff", "--cached", "--name-status", "-z", "HEAD", "--", "."],
             maxOutputBytes: _options.MaxPatchBytes,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var resultTree = await RunGitExactAsync(session,
             ["write-tree"],
             maxOutputBytes: 4096,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         var patchBytes = patch.StandardOutput;
         if (patchBytes.Length == 0 || patchBytes.Length > _options.MaxPatchBytes)
@@ -114,11 +114,11 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     {
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
-        await StageWorkingTreeAsync(session, cancellationToken).ConfigureAwait(false);
+        await StageWorkingTreeAsync(session, cancellationToken);
         var status = await RunGitExactAsync(session,
             ["diff", "--cached", "--name-status", "-z", "HEAD", "--", "."],
             maxOutputBytes: _options.MaxPatchBytes,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         return status.StandardOutput.Length == 0
             ? new HashSet<string>(StringComparer.Ordinal)
 
@@ -148,15 +148,15 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     /// </summary>
     private async Task StageWorkingTreeAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken)
     {
-        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(session.HostWorktreePath, cancellationToken).ConfigureAwait(false);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(session.HostWorktreePath, cancellationToken);
         _ = await RunGitExactAsync(session,
             ["reset", "--mixed", "--quiet", "HEAD", "--"],
             maxOutputBytes: 4096,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         _ = await RunGitExactAsync(session,
             ["add", "-A", "--", "."],
             maxOutputBytes: 4096,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private async Task<ExactGitResult> RunGitExactAsync(DevelopmentWorkspaceSession session,
@@ -215,9 +215,9 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         {
             var outputTask = ReadCappedAndDrainAsync(process.StandardOutput.BaseStream, maxOutputBytes, timeout.Token);
             var errorTask = ReadCappedAndDrainAsync(process.StandardError.BaseStream, 64 * 1024, timeout.Token);
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-            var output = await outputTask.ConfigureAwait(false);
-            var error = await errorTask.ConfigureAwait(false);
+            await process.WaitForExitAsync(timeout.Token);
+            var output = await outputTask;
+            var error = await errorTask;
             if (output.Truncated || error.Truncated)
             {
                 throw new InvalidDataException("The exact Development Git evidence output exceeded its configured bound.");
@@ -316,7 +316,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         var truncated = false;
         while (true)
         {
-            var read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            var read = await stream.ReadAsync(buffer, cancellationToken);
             if (read == 0)
             {
                 break;
@@ -325,7 +325,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             var remaining = maxBytes - (int)captured.Length;
             if (remaining > 0)
             {
-                await captured.WriteAsync(buffer.AsMemory(0, Math.Min(read, remaining)), cancellationToken).ConfigureAwait(false);
+                await captured.WriteAsync(buffer.AsMemory(0, Math.Min(read, remaining)), cancellationToken);
             }
 
             truncated |= read > remaining;

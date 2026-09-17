@@ -34,13 +34,12 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
             throw new TrainingValidationException("An evaluation run requires the model it scores.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         _ = await _dbContext.TrainingDatasets.AsNoTracking()
                             .FirstOrDefaultAsync(item => item.Id == command.DatasetId, cancellationToken)
-                            .ConfigureAwait(false)
             ?? throw new TrainingNotFoundException("The training dataset was not found.");
         if (command.TrainingRunId is { } runId
-            && !await _dbContext.TrainingRuns.AnyAsync(item => item.Id == runId, cancellationToken).ConfigureAwait(false))
+            && !await _dbContext.TrainingRuns.AnyAsync(item => item.Id == runId, cancellationToken))
         {
             throw new TrainingNotFoundException("The training run was not found.");
         }
@@ -49,7 +48,6 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         {
             var artifact = command.SourceArtifactId is { } sourceId
                 ? await _dbContext.TrainingArtifacts.AsNoTracking().FirstOrDefaultAsync(item => item.Id == sourceId, cancellationToken)
-                                  .ConfigureAwait(false)
                 : null;
             if (artifact is null || !string.Equals(artifact.Sha256, command.ModelContentFingerprint, StringComparison.OrdinalIgnoreCase))
             {
@@ -86,22 +84,21 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
             EnqueuedAtUtc = now
         });
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(evaluation, TrainingWorkStatus.Queued);
     }
 
     public async Task<TrainingEvaluationRecord?> GetAsync(Guid evaluationId, CancellationToken cancellationToken = default)
     {
         var evaluation = await _dbContext.TrainingEvaluationRuns.AsNoTracking()
-                                         .FirstOrDefaultAsync(item => item.Id == evaluationId, cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .FirstOrDefaultAsync(item => item.Id == evaluationId, cancellationToken);
         if (evaluation is null)
         {
             return null;
         }
 
-        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
+        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken);
         return ToRecord(evaluation, work?.Status);
     }
 
@@ -116,13 +113,11 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         var evaluations = await filtered.OrderByDescending(item => item.CreatedAtUtc)
                                         // Secondary key so two evaluations created in the same millisecond keep a stable order.
                                         .ThenBy(item => item.Id)
-                                        .ToListAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ToListAsync(cancellationToken);
         var ids = evaluations.Select(item => item.Id).ToList();
         var work = await _dbContext.TrainingWorkItems.AsNoTracking()
                                    .Where(item => item.Kind == TrainingWorkKind.EvaluationRun && ids.Contains(item.TargetId))
-                                   .ToDictionaryAsync(item => item.TargetId, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToDictionaryAsync(item => item.TargetId, cancellationToken);
         return evaluations.Select(item => ToRecord(item, work.TryGetValue(item.Id, out var found) ? found.Status : null)).ToArray();
     }
 
@@ -131,7 +126,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entries);
-        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken);
         if (evaluation.ExecutionProvenanceJson is null)
         {
             throw new TrainingConflictException("EvaluationExecutionProvenanceUnbound");
@@ -155,7 +150,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
 
         if (!added)
         {
-            var unchangedWork = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
+            var unchangedWork = await FindWorkAsync(evaluationId, tracking: false, cancellationToken);
             return ToRecord(evaluation, unchangedWork?.Status);
         }
 
@@ -167,8 +162,8 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         evaluation.PassedCount = merged.Count(entry => entry.Passed);
         evaluation.PerKindJson = TrainingEvaluationResults.WriteTally(tally);
         evaluation.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken);
         return ToRecord(evaluation, work?.Status);
     }
 
@@ -181,7 +176,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
             throw new TrainingValidationException("Evaluation execution provenance cannot be empty.");
         }
 
-        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken);
         if (IsTerminal(evaluation.Status))
         {
             throw new TrainingConflictException("EvaluationTerminal");
@@ -195,14 +190,14 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
                 throw new TrainingConflictException("EvaluationAttemptProvenanceMismatch");
             }
 
-            var unchangedWork = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
+            var unchangedWork = await FindWorkAsync(evaluationId, tracking: false, cancellationToken);
             return ToRecord(evaluation, unchangedWork?.Status);
         }
 
         evaluation.ExecutionProvenanceJson = provenanceJson.ToArray();
         evaluation.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken);
         return ToRecord(evaluation, work?.Status);
     }
 
@@ -216,8 +211,8 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
             throw new TrainingValidationException("Only the non-terminal progression is written here; terminal statuses go through CompleteAsync.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken);
         EnsureVersion(evaluation.Version, expectedVersion);
         if (IsTerminal(evaluation.Status))
         {
@@ -227,9 +222,9 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         evaluation.Status = status;
         evaluation.Version++;
         evaluation.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        var work = await FindWorkAsync(evaluationId, tracking: false, cancellationToken);
         return ToRecord(evaluation, work?.Status);
     }
 
@@ -243,9 +238,9 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
             throw new TrainingValidationException("An evaluation run can only be completed into a terminal status.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false);
-        var work = await FindWorkAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false)
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken);
+        var work = await FindWorkAsync(evaluationId, tracking: true, cancellationToken)
                    ?? throw new TrainingNotFoundException("The evaluation work item was not found.");
         if (IsTerminal(work.Status))
         {
@@ -267,15 +262,15 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         evaluation.ErrorMessage = ErrorMessageTruncation.Truncate(errorMessage);
         evaluation.Version++;
         evaluation.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(evaluation, work.Status);
     }
 
     public async Task<TrainingEvaluationRecord> ResumeAsync(Guid evaluationId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken);
         EnsureVersion(evaluation.Version, expectedVersion);
         if (!IsTerminal(evaluation.Status))
         {
@@ -291,8 +286,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         // place, so the terminal row is deleted and replaced rather than reset.
         _ = await _dbContext.TrainingWorkItems
                             .Where(item => item.TargetId == evaluationId && item.Kind == TrainingWorkKind.EvaluationRun)
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
+                            .ExecuteDeleteAsync(cancellationToken);
         var now = Now();
         _ = _dbContext.TrainingWorkItems.Add(new TrainingWorkItem
         {
@@ -307,15 +301,15 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         evaluation.ErrorMessage = null;
         evaluation.Version++;
         evaluation.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(evaluation, TrainingWorkStatus.Queued);
     }
 
     public async Task DeleteAsync(Guid evaluationId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var evaluation = await RequireAsync(evaluationId, tracking: true, cancellationToken);
         EnsureVersion(evaluation.Version, expectedVersion);
         if (evaluation.ComparisonId is not null)
         {
@@ -326,8 +320,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
                             .AnyAsync(item => item.TargetId == evaluationId
                                               && item.Kind == TrainingWorkKind.EvaluationRun
                                               && (item.Status == TrainingWorkStatus.Queued || item.Status == TrainingWorkStatus.Running),
-                                cancellationToken)
-                            .ConfigureAwait(false))
+                                cancellationToken))
         {
             throw new TrainingConflictException("EvaluationActive");
         }
@@ -335,13 +328,11 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         // Explicit ordered deletes: nothing cascades on the node connection. Work item first, then the evaluation.
         _ = await _dbContext.TrainingWorkItems
                             .Where(item => item.TargetId == evaluationId && item.Kind == TrainingWorkKind.EvaluationRun)
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
+                            .ExecuteDeleteAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
         _ = await _dbContext.TrainingEvaluationRuns.Where(item => item.Id == evaluationId)
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                            .ExecuteDeleteAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<TrainingComparisonRecord> CreateComparisonAsync(TrainingComparisonInput input, CancellationToken cancellationToken = default)
@@ -362,9 +353,9 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
             throw new TrainingValidationException("A comparison report needs two distinct evaluation runs.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var baseEvaluation = await RequireAsync(input.BaseEvaluationRunId, tracking: true, cancellationToken).ConfigureAwait(false);
-        var tunedEvaluation = await RequireAsync(input.TunedEvaluationRunId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var baseEvaluation = await RequireAsync(input.BaseEvaluationRunId, tracking: true, cancellationToken);
+        var tunedEvaluation = await RequireAsync(input.TunedEvaluationRunId, tracking: true, cancellationToken);
         if (baseEvaluation.ComparisonId is not null || tunedEvaluation.ComparisonId is not null)
         {
             throw new TrainingConflictException("EvaluationBound");
@@ -388,16 +379,15 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         _ = _dbContext.TrainingComparisonReports.Add(report);
         Bind(baseEvaluation, report.Id, now);
         Bind(tunedEvaluation, report.Id, now);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(report);
     }
 
     public async Task<TrainingComparisonRecord?> GetComparisonAsync(Guid comparisonId, CancellationToken cancellationToken = default)
     {
         var report = await _dbContext.TrainingComparisonReports.AsNoTracking()
-                                     .FirstOrDefaultAsync(item => item.Id == comparisonId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(item => item.Id == comparisonId, cancellationToken);
         return report is null ? null : ToRecord(report);
     }
 
@@ -406,19 +396,17 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         var reports = await _dbContext.TrainingComparisonReports.AsNoTracking()
                                       .OrderByDescending(item => item.CreatedAtUtc)
                                       .ThenBy(item => item.Id)
-                                      .ToListAsync(cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .ToListAsync(cancellationToken);
         return reports.Select(ToRecord).ToArray();
     }
 
     public async Task DeleteComparisonAsync(Guid comparisonId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var report = await _dbContext.TrainingComparisonReports.FirstOrDefaultAsync(item => item.Id == comparisonId, cancellationToken)
-                                     .ConfigureAwait(false)
                      ?? throw new TrainingNotFoundException("The comparison report was not found.");
         EnsureVersion(report.Version, expectedVersion);
-        if (await _dbContext.TrainingArtifacts.AnyAsync(item => item.QualityComparisonId == comparisonId, cancellationToken).ConfigureAwait(false))
+        if (await _dbContext.TrainingArtifacts.AnyAsync(item => item.QualityComparisonId == comparisonId, cancellationToken))
         {
             throw new TrainingConflictException("ComparisonQualityReferenced");
         }
@@ -426,8 +414,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         // Unbind first: an evaluation still pointing at a deleted report would be undeletable forever.
         var now = Now();
         var bound = await _dbContext.TrainingEvaluationRuns.Where(item => item.ComparisonId == comparisonId)
-                                    .ToListAsync(cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ToListAsync(cancellationToken);
         foreach (var evaluation in bound)
         {
             evaluation.ComparisonId = null;
@@ -436,8 +423,8 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         }
 
         _ = _dbContext.TrainingComparisonReports.Remove(report);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private static void Bind(TrainingEvaluationRun evaluation, Guid comparisonId, long now)
@@ -464,22 +451,21 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
     private async Task<TrainingEvaluationRun> RequireAsync(Guid evaluationId, bool tracking, CancellationToken cancellationToken)
     {
         var query = tracking ? _dbContext.TrainingEvaluationRuns : _dbContext.TrainingEvaluationRuns.AsNoTracking();
-        return await query.FirstOrDefaultAsync(item => item.Id == evaluationId, cancellationToken).ConfigureAwait(false)
+        return await query.FirstOrDefaultAsync(item => item.Id == evaluationId, cancellationToken)
                ?? throw new TrainingNotFoundException("The evaluation run was not found.");
     }
 
     private async Task<TrainingWorkItem?> FindWorkAsync(Guid evaluationId, bool tracking, CancellationToken cancellationToken)
     {
         var query = tracking ? _dbContext.TrainingWorkItems : _dbContext.TrainingWorkItems.AsNoTracking();
-        return await query.FirstOrDefaultAsync(item => item.TargetId == evaluationId && item.Kind == TrainingWorkKind.EvaluationRun, cancellationToken)
-                          .ConfigureAwait(false);
+        return await query.FirstOrDefaultAsync(item => item.TargetId == evaluationId && item.Kind == TrainingWorkKind.EvaluationRun, cancellationToken);
     }
 
     private async Task SaveAsync(CancellationToken cancellationToken)
     {
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {

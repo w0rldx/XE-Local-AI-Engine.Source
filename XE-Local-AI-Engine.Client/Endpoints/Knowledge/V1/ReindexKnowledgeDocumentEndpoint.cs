@@ -28,14 +28,14 @@ public sealed class ReindexKnowledgeDocumentEndpoint(
 
     public override async Task HandleAsync(KnowledgeDocumentRouteRequest req, CancellationToken ct)
     {
-        var reset = await _catalogService.ResetToPendingAsync(req.DocumentId, ct).ConfigureAwait(false);
+        var reset = await _catalogService.ResetToPendingAsync(req.DocumentId, ct);
         if (!reset)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        var admission = await _ingestionDispatcher.EnqueueAsync(req.DocumentId, ct).ConfigureAwait(false);
+        var admission = await _ingestionDispatcher.EnqueueAsync(req.DocumentId, ct);
         if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
         {
             // The document is reset to Pending but the bounded ingestion queue is full, so it was not admitted now; the
@@ -44,10 +44,10 @@ public sealed class ReindexKnowledgeDocumentEndpoint(
             HttpContext.Response.Headers.RetryAfter = "5";
             await Send.StringAsync("The server is busy indexing documents. Please retry shortly.",
                 StatusCodes.Status503ServiceUnavailable,
-                cancellation: ct).ConfigureAwait(false);
+                cancellation: ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

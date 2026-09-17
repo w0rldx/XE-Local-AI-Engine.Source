@@ -38,6 +38,6 @@ public sealed class StartTranscriptionModelDownloadEndpoint(IWhisperModelDownloa
             Accepted = true,
             AlreadyInFlight = ticket.AlreadyInFlight,
             Status = _downloadCoordinator.GetStatus(ticket.ModelId)?.ToResponse()
-        })).ConfigureAwait(false);
+        }));
     }
 }

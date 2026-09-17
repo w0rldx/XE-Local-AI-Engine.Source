@@ -79,7 +79,7 @@ public sealed class NodeAgentMcpTools
     [Description("List the saved agents (personas) on this node that can be given a task with run_agent or start_agent_run. Returns each agent's id, name and description.")]
     public async Task<IReadOnlyList<AgentSummary>> ListAgentsAsync(CancellationToken cancellationToken)
     {
-        var definitions = await _agentDefinitionStore.ListAsync(cancellationToken).ConfigureAwait(false);
+        var definitions = await _agentDefinitionStore.ListAsync(cancellationToken);
         return [.. definitions.Select(static definition => new AgentSummary(definition.Id.ToString(), definition.Name, definition.Description))];
     }
 
@@ -87,8 +87,8 @@ public sealed class NodeAgentMcpTools
     [Description("List the locally installed models on this node that run_agent or start_agent_run can bind directly when no saved agent is wanted.")]
     public async Task<IReadOnlyList<LocalModelSummary>> ListModelsAsync(CancellationToken cancellationToken)
     {
-        var models = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
-        var settings = await _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken).ConfigureAwait(false);
+        var models = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
+        var settings = await _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken);
         return
         [
             .. models.Where(static model => model.IsAvailable)
@@ -105,7 +105,7 @@ public sealed class NodeAgentMcpTools
         "List the operator-authorized read-only workspaces that may be used by the seeded Coder. Returns only bounded opaque ids, aliases, and the read-only mode; host paths are never exposed. A workspace id remains valid across MCP connections until the operator revokes it.")]
     public async Task<McpWorkspaceListResponse> ListWorkspacesAsync(CancellationToken cancellationToken)
     {
-        var references = await _selectedFolderResolver.ListReferencesAsync(cancellationToken).ConfigureAwait(false);
+        var references = await _selectedFolderResolver.ListReferencesAsync(cancellationToken);
         var bounded = references.Take(_runOptions.MaxListLimit)
                                 .Select(static reference => new McpWorkspaceSummary(reference.Id, reference.Alias, "read-only"))
                                 .ToArray();
@@ -165,7 +165,7 @@ public sealed class NodeAgentMcpTools
                     ExecutionRequestId = requestId
                 },
                 workspaceId),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         return new McpAgentRunStartResponse(MapStartStatus(result.Kind),
             result.Run is null ? null : McpAgentToolResponseMapper.ToSummary(result.Run),
@@ -186,7 +186,7 @@ public sealed class NodeAgentMcpTools
             return new McpAgentRunGetResponse("invalid_request", null, InvalidRequestCode, "Cannot get: provide a valid request UUID.");
         }
 
-        var run = await _runCoordinator.GetAsync(requestId, cancellationToken).ConfigureAwait(false);
+        var run = await _runCoordinator.GetAsync(requestId, cancellationToken);
         if (run is null)
         {
             return new McpAgentRunGetResponse("not_found", null, RunNotFoundCode, "Run not found.");
@@ -225,7 +225,7 @@ public sealed class NodeAgentMcpTools
             return new McpAgentRunCancelResponse("not_found", null, InvalidRequestCode, "Cannot cancel: provide a valid request UUID.");
         }
 
-        var result = await _runCoordinator.CancelAsync(requestId, cancellationToken).ConfigureAwait(false);
+        var result = await _runCoordinator.CancelAsync(requestId, cancellationToken);
         return new McpAgentRunCancelResponse(MapCancelStatus(result.Kind),
             result.Run is null ? null : McpAgentToolResponseMapper.ToSummary(result.Run),
             MapCancelFailureCode(result.Kind),
@@ -262,7 +262,7 @@ public sealed class NodeAgentMcpTools
         }
 
         var boundedLimit = ClampListLimit(limit);
-        var runs = await _runCoordinator.ListAsync(boundedLimit, parsedStatus, cancellationToken).ConfigureAwait(false);
+        var runs = await _runCoordinator.ListAsync(boundedLimit, parsedStatus, cancellationToken);
         return new McpAgentRunListResponse("ok",
             runs.Select(McpAgentToolResponseMapper.ToSummary).ToArray(),
             runs.Count,
@@ -354,7 +354,7 @@ public sealed class NodeAgentMcpTools
             task,
             expectedBindingFingerprint: null,
             cancellationToken,
-            workspaceId).ConfigureAwait(false);
+            workspaceId);
         var result = outcome.ToSynchronousResult();
 
         progress.Report(new ProgressNotificationValue

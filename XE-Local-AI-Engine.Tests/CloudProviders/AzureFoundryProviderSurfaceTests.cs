@@ -129,7 +129,7 @@ public sealed class AzureFoundryProviderSurfaceTests
 
         var error = await ThrowsAsync<AzureFoundryProviderException>(async () =>
         {
-            await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]).ConfigureAwait(false))
+            await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]))
             {
                 // The exception is thrown before any update is yielded (see ThrowingChatClient); nothing to do here.
             }
@@ -201,7 +201,7 @@ public sealed class AzureFoundryProviderSurfaceTests
 
         var error = await ThrowsAsync<AzureFoundryProviderException>(async () =>
         {
-            await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]).ConfigureAwait(false))
+            await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]))
             {
                 // The exception is thrown before any update is yielded (see ThrowingChatClient); nothing to do here.
             }
@@ -245,7 +245,7 @@ public sealed class AzureFoundryProviderSurfaceTests
     {
         try
         {
-            await action().ConfigureAwait(false);
+            await action();
         }
         catch (TException expected)
         {
@@ -269,7 +269,7 @@ public sealed class AzureFoundryProviderSurfaceTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             throw toThrow;
 #pragma warning disable CS0162 // Unreachable: satisfies the iterator contract.
             yield break;

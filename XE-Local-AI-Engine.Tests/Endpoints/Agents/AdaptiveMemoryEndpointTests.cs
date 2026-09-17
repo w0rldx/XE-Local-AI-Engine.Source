@@ -47,9 +47,9 @@ public sealed class AdaptiveMemoryEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
         // Seed a candidate exactly as the extraction service would: Suggested + Source=Extracted + a typed scope.
-        var actionId = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Procedural).ConfigureAwait(false);
+        var actionId = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Procedural);
 
         // Attempt to promote with no recorded eval → the SAME eval gate that governs Manual/Analysis blocks it (409).
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId))
@@ -59,18 +59,18 @@ public sealed class AdaptiveMemoryEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.Equal("EvalRequired", document.RootElement.GetProperty("status").GetString());
 
         // The blocked promote leaves the Extracted candidate Suggested (still inert) — governance was not bypassed.
         using var verifyScope = factory.Services.CreateScope();
         var service = verifyScope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId));
         AssertEx.Equal(PlaybookActionState.Suggested, stored.State);
         AssertEx.Equal(PlaybookActionSource.Extracted, stored.Source);
     }
@@ -83,9 +83,9 @@ public sealed class AdaptiveMemoryEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
-        var actionId = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Procedural).ConfigureAwait(false);
-        await RecordPassingEvalAsync(factory, agentId, actionId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
+        var actionId = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Procedural);
+        await RecordPassingEvalAsync(factory, agentId, actionId);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId))
         {
@@ -94,13 +94,13 @@ public sealed class AdaptiveMemoryEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
         using var verifyScope = factory.Services.CreateScope();
         var service = verifyScope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId));
         AssertEx.Equal(PlaybookActionState.Enabled, stored.State);
         AssertEx.Equal(PlaybookActionSource.Extracted, stored.Source);
     }
@@ -111,17 +111,17 @@ public sealed class AdaptiveMemoryEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
-        var proceduralId = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Procedural).ConfigureAwait(false);
-        _ = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Failure).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
+        var proceduralId = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Procedural);
+        _ = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Failure);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{PlaybookRoute(agentId)}?scope=Procedural");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
@@ -138,17 +138,17 @@ public sealed class AdaptiveMemoryEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
-        _ = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Procedural).ConfigureAwait(false);
-        _ = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Failure).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
+        _ = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Procedural);
+        _ = await SeedExtractedSuggestionAsync(factory, agentId, MemoryScope.Failure);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, PlaybookRoute(agentId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.Equal(expected: 2, document.RootElement.GetProperty("items").GetArrayLength());
     }
@@ -160,7 +160,7 @@ public sealed class AdaptiveMemoryEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ExecutionLogsRoute(Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -171,17 +171,17 @@ public sealed class AdaptiveMemoryEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
-        await SeedExecutionLogAsync(factory, agentId, success: true, errorClass: null).ConfigureAwait(false);
-        await SeedExecutionLogAsync(factory, agentId, success: false, "InvalidOperationException").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
+        await SeedExecutionLogAsync(factory, agentId, success: true, errorClass: null);
+        await SeedExecutionLogAsync(factory, agentId, success: false, "InvalidOperationException");
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ExecutionLogsRoute(agentId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
         AssertEx.Equal(expected: 2, items.GetArrayLength());
@@ -208,7 +208,7 @@ public sealed class AdaptiveMemoryEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ExecutionLogsRoute(Guid.NewGuid()));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -229,20 +229,20 @@ public sealed class AdaptiveMemoryEndpointTests
             })
         };
         factory.AddNodeBearerToken(createRequest);
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
 
         AssertEx.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
-        var createPayload = await createResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var createPayload = await createResponse.Content.ReadAsStringAsync();
         using var createDocument = JsonDocument.Parse(createPayload);
         AssertEx.True(createDocument.RootElement.GetProperty("defaultTemporaryChat").GetBoolean(), "Create response should echo defaultTemporaryChat=true.");
 
         using var getRequest = new HttpRequestMessage(HttpMethod.Get, createResponse.Headers.Location);
         factory.AddNodeBearerToken(getRequest);
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
-        var getPayload = await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var getPayload = await getResponse.Content.ReadAsStringAsync();
         using var getDocument = JsonDocument.Parse(getPayload);
         AssertEx.True(getDocument.RootElement.GetProperty("defaultTemporaryChat").GetBoolean(), "Persisted defaultTemporaryChat should round-trip on GET.");
     }
@@ -253,7 +253,7 @@ public sealed class AdaptiveMemoryEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
 
         using var updateRequest = new HttpRequestMessage(HttpMethod.Put, $"/api/local/v1/agents/{agentId}")
         {
@@ -265,18 +265,18 @@ public sealed class AdaptiveMemoryEndpointTests
             })
         };
         factory.AddNodeBearerToken(updateRequest);
-        using var updateResponse = await client.SendAsync(updateRequest).ConfigureAwait(false);
+        using var updateResponse = await client.SendAsync(updateRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
-        var payload = await updateResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await updateResponse.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.True(document.RootElement.GetProperty("defaultTemporaryChat").GetBoolean(), "Update response should reflect defaultTemporaryChat=true.");
 
         // Confirm via the store that the flag persisted.
         using var verifyScope = factory.Services.CreateScope();
         var store = verifyScope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var stored = AssertEx.NotNull(await store.GetByIdAsync(agentId).ConfigureAwait(false));
+        var stored = AssertEx.NotNull(await store.GetByIdAsync(agentId));
         AssertEx.True(stored.DefaultTemporaryChat, "Persisted definition should carry DefaultTemporaryChat=true after update.");
     }
 
@@ -292,7 +292,7 @@ public sealed class AdaptiveMemoryEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -310,7 +310,7 @@ public sealed class AdaptiveMemoryEndpointTests
             Priority: 100,
             [Guid.NewGuid()],
             Confidence: 0.8d,
-            MemoryScope: scope)).ConfigureAwait(false);
+            MemoryScope: scope));
         return created.Id;
     }
 
@@ -327,7 +327,7 @@ public sealed class AdaptiveMemoryEndpointTests
             success,
             PromptTokens: 10,
             CompletionTokens: 20,
-            errorClass)).ConfigureAwait(false);
+            errorClass));
     }
 
     private static async Task RecordPassingEvalAsync(TestServerWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
@@ -335,17 +335,17 @@ public sealed class AdaptiveMemoryEndpointTests
         using var scope = factory.Services.CreateScope();
         var serviceProvider = scope.ServiceProvider;
         var service = serviceProvider.GetRequiredService<IPlaybookActionService>();
-        var current = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+        var current = AssertEx.NotNull(await service.GetByIdAsync(actionId));
 
         // The eval gate recomputes the fingerprint over the current behaviour-affecting context, so a fabricated passing
         // eval must carry a matching fingerprint (computed from the SAME services/model the gate reads) to be promotable.
-        var agent = AssertEx.NotNull(await serviceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId).ConfigureAwait(false));
-        var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
-        var enabledGolden = await serviceProvider.GetRequiredService<IGoldenConversationStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
+        var agent = AssertEx.NotNull(await serviceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId));
+        var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId);
+        var enabledGolden = await serviceProvider.GetRequiredService<IGoldenConversationStore>().ListEnabledByAgentAsync(agentDefinitionId);
         var modelName = serviceProvider.GetRequiredService<IOptions<PlaybookEvalOptions>>().Value.ModelName;
         // Resolve the model identity through the SAME seam the gate uses so the fabricated fingerprint carries the
         // matching weight-identity token (an uninstalled eval model resolves to the unverified sentinel here).
-        var modelIdentity = await serviceProvider.GetRequiredService<IEvalModelIdentityResolver>().ResolveAsync(modelName).ConfigureAwait(false);
+        var modelIdentity = await serviceProvider.GetRequiredService<IEvalModelIdentityResolver>().ResolveAsync(modelName);
         var fingerprint = PlaybookEvalFingerprint.Compute(current.Id, current.Version, agent.Instructions, enabledActions, enabledGolden, modelName, modelIdentity.Token);
 
         var eval = new PlaybookEvalResult(Passed: true,
@@ -361,6 +361,6 @@ public sealed class AdaptiveMemoryEndpointTests
             [],
             fingerprint);
         var json = JsonSerializer.Serialize(eval, PlaybookEvalResult.SerializerOptions);
-        _ = AssertEx.NotNull(await service.RecordEvalResultAsync(agentDefinitionId, actionId, json).ConfigureAwait(false));
+        _ = AssertEx.NotNull(await service.RecordEvalResultAsync(agentDefinitionId, actionId, json));
     }
 }

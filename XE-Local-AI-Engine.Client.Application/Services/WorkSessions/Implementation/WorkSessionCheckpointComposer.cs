@@ -31,10 +31,10 @@ internal sealed class WorkSessionCheckpointComposer(
 
     public async Task<WorkSessionMutationResult> ComposeAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        var tasks = await _store.ListTasksAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
-        var findings = await _store.ListFindingsAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
-        var previous = await _store.GetLatestCheckpointAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _store.GetAsync(sessionId, cancellationToken);
+        var tasks = await _store.ListTasksAsync(sessionId, sinceSequence: 0, cancellationToken);
+        var findings = await _store.ListFindingsAsync(sessionId, sinceSequence: 0, cancellationToken);
+        var previous = await _store.GetLatestCheckpointAsync(sessionId, cancellationToken);
 
         var openTasks = WorkSessionStateBlockComposer.OpenTasks(tasks);
         var currentTask = WorkSessionStateBlockComposer.ResolveCurrentTask(new WorkSessionState(session, tasks, findings, [], previous));
@@ -44,7 +44,7 @@ internal sealed class WorkSessionCheckpointComposer(
             currentTask?.Title,
             session.StepCount);
 
-        var summary = await SummarizeAsync(session.ConversationId, previous?.Summary, cancellationToken).ConfigureAwait(false);
+        var summary = await SummarizeAsync(session.ConversationId, previous?.Summary, cancellationToken);
 
         // The operation id is the checkpoint's own id, i.e. unique per call rather than derived from the step. A step
         // takes more than one checkpoint — the park-timeout one and the pause one land at the same step count — and a
@@ -58,8 +58,7 @@ internal sealed class WorkSessionCheckpointComposer(
                                    session.StepCount,
                                    summary,
                                    JsonSerializer.Serialize(state)),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
     }
 
     /// <summary>
@@ -92,8 +91,7 @@ internal sealed class WorkSessionCheckpointComposer(
         var result = await _compaction.CompactAsync(conversationId,
                                           requestedModel: null,
                                           ConversationStepContextBound.SessionKeepVerbatim,
-                                          cancellationToken)
-                                      .ConfigureAwait(false);
+                                          cancellationToken);
 
         // Any non-blank synopsis wins, not only a freshly folded one. The step boundary
         // (ConversationStepContextBound) folds this conversation with a keep window of 2 whenever it grows past the

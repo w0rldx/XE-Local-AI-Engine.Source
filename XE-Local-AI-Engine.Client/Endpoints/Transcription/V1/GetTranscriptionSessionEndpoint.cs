@@ -28,13 +28,13 @@ public sealed class GetTranscriptionSessionEndpoint(ITranscriptionService sessio
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var session = await _sessions.GetSessionAsync(req.SessionId, ct).ConfigureAwait(false);
+        var session = await _sessions.GetSessionAsync(req.SessionId, ct);
         if (session is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(session.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(session.ToResponse(), ct);
     }
 }

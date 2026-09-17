@@ -40,11 +40,11 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var uploadRoot = Path.Combine(_rootPath, "data");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await using var provider = await BuildProviderAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
         var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000));
         var fileId = Guid.NewGuid();
         var content = Encoding.UTF8.GetBytes("PLAINTEXT-FILE-BODY-4815162342-should-be-encrypted");
 
@@ -57,7 +57,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
             content,
             DocumentExtractionStatus.Extracted,
             ExtractedMarkdown,
-            ExtractedMarkdown.Length), CancellationToken.None).ConfigureAwait(false);
+            ExtractedMarkdown.Length), CancellationToken.None);
 
         AssertEx.Equal(fileId, info.FileId);
         AssertEx.Equal(OriginalFileName, info.OriginalFileName);
@@ -68,21 +68,21 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         // Bytes on disk must be ciphertext: neither the raw body nor the unique plaintext marker may appear.
         var bytesPath = Path.Combine(uploadRoot, "uploaded-files", "conversations", conversation.ConversationId.ToString("D"), fileId.ToString("D") + ".pdf");
         AssertEx.True(File.Exists(bytesPath), "Encrypted bytes file should be written to disk.");
-        var diskBytes = await File.ReadAllBytesAsync(bytesPath).ConfigureAwait(false);
+        var diskBytes = await File.ReadAllBytesAsync(bytesPath);
         AssertEx.False(ContainsSubsequence(diskBytes, content), "On-disk bytes should not contain the plaintext file body.");
 
         // Cached extracted Markdown on disk must be ciphertext, but ReadExtractedMarkdownAsync round-trips it.
         var markdownPath = Path.Combine(uploadRoot, "uploaded-files", "conversations", conversation.ConversationId.ToString("D"), fileId.ToString("D") + ".md");
-        var diskMarkdown = await File.ReadAllBytesAsync(markdownPath).ConfigureAwait(false);
+        var diskMarkdown = await File.ReadAllBytesAsync(markdownPath);
         AssertEx.False(ContainsSubsequence(diskMarkdown, Encoding.UTF8.GetBytes(ExtractedMarkdown)), "On-disk Markdown should be encrypted at rest.");
-        AssertEx.Equal(ExtractedMarkdown, await store.ReadExtractedMarkdownAsync(conversation.ConversationId, fileId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Equal(ExtractedMarkdown, await store.ReadExtractedMarkdownAsync(conversation.ConversationId, fileId, CancellationToken.None));
 
         // The display name column must be ciphertext in the database file.
-        AssertEx.False(await DatabaseContainsAsync(databasePath, Encoding.UTF8.GetBytes(OriginalFileName)).ConfigureAwait(false),
+        AssertEx.False(await DatabaseContainsAsync(databasePath, Encoding.UTF8.GetBytes(OriginalFileName)),
             "The SQLite file should not contain the plaintext uploaded file name.");
 
         // List decrypts the name and metadata back.
-        var listed = await store.ListAsync(conversation.ConversationId, CancellationToken.None).ConfigureAwait(false);
+        var listed = await store.ListAsync(conversation.ConversationId, CancellationToken.None);
         AssertEx.Equal(expected: 1, listed.Count);
         AssertEx.Equal(OriginalFileName, listed[0].OriginalFileName);
         AssertEx.Equal(content.Length, listed[0].SizeBytes);
@@ -95,11 +95,11 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var uploadRoot = Path.Combine(_rootPath, "image-data");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await using var provider = await BuildProviderAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
         var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000));
         var fileId = Guid.NewGuid();
         var pixels = new byte[]
         {
@@ -127,25 +127,25 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
             pixels,
             DocumentExtractionStatus.Image,
             ExtractedMarkdown: null,
-            ExtractedChars: null), CancellationToken.None).ConfigureAwait(false);
+            ExtractedChars: null), CancellationToken.None);
 
         AssertEx.Equal(DocumentExtractionStatus.Image, info.ExtractionStatus);
 
         // The bytes blob on disk is ciphertext but ReadBytesAsync round-trips the exact plaintext.
         var bytesPath = Path.Combine(uploadRoot, "uploaded-files", "conversations", conversation.ConversationId.ToString("D"), fileId.ToString("D") + ".png");
         AssertEx.True(File.Exists(bytesPath), "Encrypted image bytes file should be written to disk.");
-        var diskBytes = await File.ReadAllBytesAsync(bytesPath).ConfigureAwait(false);
+        var diskBytes = await File.ReadAllBytesAsync(bytesPath);
         AssertEx.False(ContainsSubsequence(diskBytes, pixels), "On-disk image bytes should be encrypted at rest.");
 
-        var read = await store.ReadBytesAsync(conversation.ConversationId, fileId, CancellationToken.None).ConfigureAwait(false);
+        var read = await store.ReadBytesAsync(conversation.ConversationId, fileId, CancellationToken.None);
         AssertEx.True(read.HasValue, "ReadBytesAsync should return the stored image bytes.");
         AssertEx.True(read!.Value.Span.SequenceEqual(pixels), "Decrypted image bytes should match the uploaded payload.");
 
         // No cached Markdown was written for an image.
-        AssertEx.Null(await store.ReadExtractedMarkdownAsync(conversation.ConversationId, fileId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Null(await store.ReadExtractedMarkdownAsync(conversation.ConversationId, fileId, CancellationToken.None));
 
         // An unknown file id yields null rather than throwing.
-        var missing = await store.ReadBytesAsync(conversation.ConversationId, Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+        var missing = await store.ReadBytesAsync(conversation.ConversationId, Guid.NewGuid(), CancellationToken.None);
         AssertEx.False(missing.HasValue, "ReadBytesAsync should return null for an unknown file id.");
     }
 
@@ -156,21 +156,21 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var uploadRoot = Path.Combine(_rootPath, "cascade-data");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await using var provider = await BuildProviderAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
         var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000)).ConfigureAwait(false);
-        await AddSampleFileAsync(store, conversation.ConversationId, "alpha.txt").ConfigureAwait(false);
-        await AddSampleFileAsync(store, conversation.ConversationId, "beta.txt").ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000));
+        await AddSampleFileAsync(store, conversation.ConversationId, "alpha.txt");
+        await AddSampleFileAsync(store, conversation.ConversationId, "beta.txt");
 
         var conversationDirectory = Path.Combine(uploadRoot, "uploaded-files", "conversations", conversation.ConversationId.ToString("D"));
         AssertEx.True(Directory.Exists(conversationDirectory), "Upload directory should exist before delete.");
-        AssertEx.Equal(expected: 2, (await store.ListAsync(conversation.ConversationId, CancellationToken.None).ConfigureAwait(false)).Count);
+        AssertEx.Equal(expected: 2, (await store.ListAsync(conversation.ConversationId, CancellationToken.None)).Count);
 
-        _ = await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 2000, PurgeImmediately: true)).ConfigureAwait(false);
+        _ = await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 2000, PurgeImmediately: true));
 
-        AssertEx.Empty(await store.ListAsync(conversation.ConversationId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Empty(await store.ListAsync(conversation.ConversationId, CancellationToken.None));
         AssertEx.False(Directory.Exists(conversationDirectory), "Upload directory should be removed after purge.");
     }
 
@@ -181,16 +181,16 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var uploadRoot = Path.Combine(_rootPath, "staging-data");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await using var provider = await BuildProviderAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(databasePath, keyHolder);
         var store = CreateStore(provider, uploadRoot, keyHolder);
         var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000)).ConfigureAwait(false);
-        await AddSampleFileAsync(store, conversation.ConversationId, "notes.txt").ConfigureAwait(false);
-        await AddSampleFileAsync(store, conversation.ConversationId, "summary.txt").ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Title", "user", CreatedAtUtc: 1000));
+        await AddSampleFileAsync(store, conversation.ConversationId, "notes.txt");
+        await AddSampleFileAsync(store, conversation.ConversationId, "summary.txt");
 
         string hostPath;
-        await using (var snapshot = await store.CreateStagingSnapshotAsync(conversation.ConversationId, CancellationToken.None).ConfigureAwait(false))
+        await using (var snapshot = await store.CreateStagingSnapshotAsync(conversation.ConversationId, CancellationToken.None))
         {
             AssertEx.Equal(expected: 2, snapshot.FileCount);
             hostPath = snapshot.HostPath;
@@ -200,7 +200,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
             AssertEx.Equal(expected: 2, stagedFiles.Length);
             foreach (var stagedFile in stagedFiles)
             {
-                var text = await File.ReadAllTextAsync(stagedFile).ConfigureAwait(false);
+                var text = await File.ReadAllTextAsync(stagedFile);
                 AssertEx.True(text.Contains(ExtractedMarkdown, StringComparison.Ordinal), "Staged Markdown should be the decrypted extracted text.");
             }
         }
@@ -214,12 +214,12 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var databasePath = GetDatabasePath("migrate.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
 
-        var columns = await GetUploadedFileColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetUploadedFileColumnsAsync(connection);
         AssertEx.True(columns.SetEquals(new[]
             {
                 "file_id",
@@ -234,9 +234,9 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
                 "created_at_utc"
             }),
             "conversation_uploaded_files should expose the mapped columns.");
-        AssertEx.True(await HasConversationForeignKeyAsync(connection).ConfigureAwait(false),
+        AssertEx.True(await HasConversationForeignKeyAsync(connection),
             "conversation_uploaded_files.conversation_id should be a cascading foreign key to conversations.");
-        AssertEx.True(await HasConversationIndexAsync(connection).ConfigureAwait(false),
+        AssertEx.True(await HasConversationIndexAsync(connection),
             "conversation_uploaded_files.conversation_id should be indexed.");
     }
 
@@ -252,7 +252,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
             content,
             DocumentExtractionStatus.Extracted,
             ExtractedMarkdown,
-            ExtractedMarkdown.Length), CancellationToken.None).ConfigureAwait(false);
+            ExtractedMarkdown.Length), CancellationToken.None);
     }
 
     private static ConversationUploadedFileStore CreateStore(ServiceProvider provider, string uploadRoot, INodeSqliteKeyHolder keyHolder)
@@ -275,8 +275,8 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }
@@ -286,7 +286,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM conversation_uploaded_files LIMIT 0;";
 
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -296,8 +296,8 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT \"table\", \"on_delete\" FROM pragma_foreign_key_list('conversation_uploaded_files');";
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             if (string.Equals(reader.GetString(0), "conversations", StringComparison.Ordinal)
                 && reader.GetString(1).Contains("CASCADE", StringComparison.OrdinalIgnoreCase))
@@ -313,12 +313,12 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'conversation_uploaded_files' AND sql LIKE '%conversation_id%';";
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<bool> DatabaseContainsAsync(string databasePath, byte[] needle)
     {
-        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath).ConfigureAwait(false);
+        var fileBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
         return ContainsSubsequence(fileBytes, needle);
     }
 

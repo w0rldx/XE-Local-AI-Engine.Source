@@ -50,19 +50,19 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
 
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "apply@example.invalid").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Apply Port Test").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "apply@example.invalid");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Apply Port Test");
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
 
         var sentinel = Path.Combine(_root, "SENTINEL");
         var payload = Path.Combine(_root, "payload.sh");
-        await File.WriteAllTextAsync(payload, $"#!/bin/sh\ntouch \"{sentinel}\"\nexit 1\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(payload, $"#!/bin/sh\ntouch \"{sentinel}\"\nexit 1\n");
         File.SetUnixFileMode(payload, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         await File.AppendAllTextAsync(Path.Combine(repository, ".git", "config"),
-            $"\n[core]\n\tfsmonitor = {payload}\n").ConfigureAwait(false);
+            $"\n[core]\n\tfsmonitor = {payload}\n");
 
         var blobStore = Substitute.For<IDevelopmentArtifactBlobStore>();
         blobStore.ReadAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
@@ -84,7 +84,7 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
         _ = await port.InspectAsync(new DevelopmentApprovedApplySubject(projectId,
                               Guid.NewGuid(),
                               ExpectedTaskVersion: 1,
-                              await ReadHeadAsync(repository).ConfigureAwait(false),
+                              await ReadHeadAsync(repository),
                               "PATCHHASH",
                               "MANIFESTHASH",
                               "RESULTHASH",
@@ -97,8 +97,7 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
                               "main",
                               PatchByteCount: 3,
                               ManifestByteCount: 3),
-                          repository)
-                      .ConfigureAwait(false);
+                          repository);
 
         AssertEx.False(File.Exists(sentinel), "the repository-local core.fsmonitor command executed on the host.");
     }
@@ -121,8 +120,8 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
             StartInfo = startInfo
         };
         process.Start();
-        var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
         return output.Trim();
     }
 

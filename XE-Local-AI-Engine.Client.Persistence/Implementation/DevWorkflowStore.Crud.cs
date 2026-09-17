@@ -28,7 +28,7 @@ internal sealed partial class DevWorkflowStore
         _dbContext.DevWorkflowWorkItems.Add(workItem);
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
         {
@@ -63,7 +63,7 @@ internal sealed partial class DevWorkflowStore
         while (true)
         {
             attempt++;
-            var workItem = await _dbContext.DevWorkflowWorkItems.SingleOrDefaultAsync(entity => entity.Id == command.WorkItemId, cancellationToken).ConfigureAwait(false)
+            var workItem = await _dbContext.DevWorkflowWorkItems.SingleOrDefaultAsync(entity => entity.Id == command.WorkItemId, cancellationToken)
                            ?? throw new DevWorkflowNotFoundException($"Development workflow work item '{command.WorkItemId}' was not found.");
             if (command.ExpectedVersion != DevWorkflowVersions.Any && workItem.Version != command.ExpectedVersion)
             {
@@ -91,7 +91,7 @@ internal sealed partial class DevWorkflowStore
             workItem.UpdatedAtUtc = Now();
             try
             {
-                await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                await _dbContext.SaveChangesAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException exception)
             {
@@ -106,7 +106,7 @@ internal sealed partial class DevWorkflowStore
                 continue;
             }
 
-            return await ComposeWorkItemAsync(workItem, cancellationToken).ConfigureAwait(false);
+            return await ComposeWorkItemAsync(workItem, cancellationToken);
         }
     }
 
@@ -132,12 +132,10 @@ internal sealed partial class DevWorkflowStore
                                                           .Select(definition => definition.Name)
                                                           .FirstOrDefault()))
                                             .FirstOrDefault()))
-                              .ToListAsync(cancellationToken)
-                              .ConfigureAwait(false);
+                              .ToListAsync(cancellationToken);
 
         // Query two: one pass over the node-runs of the listed runs, tallied in memory. Never one query per row.
-        var counters = await LoadNodeCountersAsync([.. page.Where(row => row.LatestRun is not null).Select(row => row.LatestRun!.RunId)], cancellationToken)
-            .ConfigureAwait(false);
+        var counters = await LoadNodeCountersAsync([.. page.Where(row => row.LatestRun is not null).Select(row => row.LatestRun!.RunId)], cancellationToken);
 
         return
         [
@@ -149,23 +147,22 @@ internal sealed partial class DevWorkflowStore
 
     public async Task<DevWorkflowWorkItemSnapshot> GetWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default)
     {
-        var workItem = await _dbContext.DevWorkflowWorkItems.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == workItemId, cancellationToken).ConfigureAwait(false)
+        var workItem = await _dbContext.DevWorkflowWorkItems.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == workItemId, cancellationToken)
                        ?? throw new DevWorkflowNotFoundException($"Development workflow work item '{workItemId}' was not found.");
-        return await ComposeWorkItemAsync(workItem, cancellationToken).ConfigureAwait(false);
+        return await ComposeWorkItemAsync(workItem, cancellationToken);
     }
 
     public async Task<DevWorkflowWorkItemDeletion> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default)
     {
         // Explicit ordered deletes through DevWorkflowPurge: the node connection runs without PRAGMA foreign_keys, so
         // the declared cascades are documentation only and an EF-graph delete would leave every child table populated.
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             var runIds = await _dbContext.DevWorkflowRuns.AsNoTracking()
                                          .Where(entity => entity.WorkItemId == workItemId)
                                          .Select(entity => entity.Id)
-                                         .ToListAsync(cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .ToListAsync(cancellationToken);
 
             // Inside the transaction, so a run that starts between a caller's check and this one still loses: deleting
             // the rows under a live run would leave its executor holding a slot for work nothing will ever settle.
@@ -181,13 +178,12 @@ internal sealed partial class DevWorkflowStore
                                     entity.Id,
                                     entity.Status
                                 })
-                                .FirstOrDefaultAsync(cancellationToken)
-                                .ConfigureAwait(false) is { } live)
+                                .FirstOrDefaultAsync(cancellationToken) is { } live)
             {
                 throw new DevWorkflowRunInFlightException($"Run '{live.Id}' is {live.Status}, so work item '{workItemId}' cannot be deleted yet. Cancel the run first.");
             }
 
-            var removed = await CountRowsAsync(runIds, workItemId, cancellationToken).ConfigureAwait(false);
+            var removed = await CountRowsAsync(runIds, workItemId, cancellationToken);
 
             // Read here, not by the caller beforehand: one query over every run of the item rather than a page the
             // caller has to remember to walk, and gathered only on the path where the guard above has already passed.
@@ -195,22 +191,21 @@ internal sealed partial class DevWorkflowStore
                                              .Where(entity => runIds.Contains(entity.RunId) && entity.WorkSessionId != null)
                                              .Select(entity => entity.WorkSessionId!.Value)
                                              .Distinct()
-                                             .ToListAsync(cancellationToken)
-                                             .ConfigureAwait(false);
+                                             .ToListAsync(cancellationToken);
 
-            await DevWorkflowPurge.DeleteWorkItemAsync(_dbContext, workItemId, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await DevWorkflowPurge.DeleteWorkItemAsync(_dbContext, workItemId, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             _dbContext.ChangeTracker.Clear();
             return new DevWorkflowWorkItemDeletion(removed, runIds, sessionIds);
         }
         catch (DbUpdateException exception)
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw new DevWorkflowConcurrencyException("The work item could not be deleted because a database constraint rejected the write.", exception);
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -244,7 +239,7 @@ internal sealed partial class DevWorkflowStore
         _dbContext.DevWorkflowDefinitions.Add(definition);
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
         {
@@ -269,7 +264,7 @@ internal sealed partial class DevWorkflowStore
             EnsureNotBlank(command.GraphJson, nameof(command.GraphJson));
         }
 
-        var definition = await LoadDefinitionAsync(command.DefinitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await LoadDefinitionAsync(command.DefinitionId, cancellationToken);
         if (definition.Version != command.ExpectedVersion)
         {
             throw new DevWorkflowConcurrencyException($"The definition version is stale (expected {command.ExpectedVersion}, current {definition.Version}).");
@@ -296,7 +291,7 @@ internal sealed partial class DevWorkflowStore
 
         definition.Version++;
         definition.UpdatedAtUtc = Now();
-        await SaveDefinitionAsync(cancellationToken).ConfigureAwait(false);
+        await SaveDefinitionAsync(cancellationToken);
         return DefinitionSnapshot(definition);
     }
 
@@ -321,28 +316,26 @@ internal sealed partial class DevWorkflowStore
                               entity.Version,
                               entity.CreatedAtUtc,
                               entity.UpdatedAtUtc))
-                          .ToListAsync(cancellationToken)
-                          .ConfigureAwait(false);
+                          .ToListAsync(cancellationToken);
     }
 
     public async Task<DevWorkflowDefinitionSnapshot> GetDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default)
     {
         var definition = await _dbContext.DevWorkflowDefinitions.AsNoTracking()
                                          .SingleOrDefaultAsync(entity => entity.Id == definitionId, cancellationToken)
-                                         .ConfigureAwait(false)
                          ?? throw new DevWorkflowNotFoundException($"Development workflow definition '{definitionId}' was not found.");
         return DefinitionSnapshot(definition);
     }
 
     public async Task<DevWorkflowDefinitionSnapshot> ArchiveDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default)
     {
-        var definition = await LoadDefinitionAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await LoadDefinitionAsync(definitionId, cancellationToken);
         if (!definition.Archived)
         {
             definition.Archived = true;
             definition.Version++;
             definition.UpdatedAtUtc = Now();
-            await SaveDefinitionAsync(cancellationToken).ConfigureAwait(false);
+            await SaveDefinitionAsync(cancellationToken);
         }
 
         return DefinitionSnapshot(definition);
@@ -360,10 +353,10 @@ internal sealed partial class DevWorkflowStore
             EnsureSeedsValid(seeded, nameof(command));
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            var workItem = await _dbContext.DevWorkflowWorkItems.SingleOrDefaultAsync(entity => entity.Id == command.WorkItemId, cancellationToken).ConfigureAwait(false)
+            var workItem = await _dbContext.DevWorkflowWorkItems.SingleOrDefaultAsync(entity => entity.Id == command.WorkItemId, cancellationToken)
                            ?? throw new DevWorkflowNotFoundException($"Development workflow work item '{command.WorkItemId}' was not found.");
 
             var now = Now();
@@ -402,13 +395,13 @@ internal sealed partial class DevWorkflowStore
             workItem.Version++;
             workItem.UpdatedAtUtc = now;
 
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return RunSnapshot(run);
         }
         catch (DbUpdateException exception)
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
 
             // ux_dev_workflow_runs_live_per_work_item is what rejects a second live run. Its own type rather than a
             // generic invalid transition, because the answer differs: wait for the live run, or cancel it.
@@ -418,14 +411,14 @@ internal sealed partial class DevWorkflowStore
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
 
     public async Task<DevWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        var run = await _dbContext.DevWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false)
+        var run = await _dbContext.DevWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken)
                   ?? throw new DevWorkflowNotFoundException($"Development workflow run '{runId}' was not found.");
         return RunSnapshot(run);
     }
@@ -454,8 +447,7 @@ internal sealed partial class DevWorkflowStore
         var runs = await query.OrderByDescending(entity => entity.CreatedAtUtc)
                               .ThenByDescending(entity => entity.Id)
                               .Take(limit)
-                              .ToListAsync(cancellationToken)
-                              .ConfigureAwait(false);
+                              .ToListAsync(cancellationToken);
         return [.. runs.Select(RunSnapshot)];
     }
 
@@ -496,10 +488,9 @@ internal sealed partial class DevWorkflowStore
                                   entity.EndedAtUtc,
                                   entity.CreatedAtUtc,
                                   entity.UpdatedAtUtc))
-                              .ToListAsync(cancellationToken)
-                              .ConfigureAwait(false);
+                              .ToListAsync(cancellationToken);
 
-        var counters = await LoadNodeCountersAsync([.. runs.Select(run => run.Id)], cancellationToken).ConfigureAwait(false);
+        var counters = await LoadNodeCountersAsync([.. runs.Select(run => run.Id)], cancellationToken);
         return
         [
             .. runs.Select(run => new DevWorkflowRunSummary(run.Id,
@@ -529,7 +520,6 @@ internal sealed partial class DevWorkflowStore
                      entity.WorkSessionId,
                      entity.MaxAttempts))
                  .ToListAsync(cancellationToken)
-                 .ConfigureAwait(false)
     ];
 
     public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
@@ -546,19 +536,18 @@ internal sealed partial class DevWorkflowStore
         // store answers snapshots.
         _dbContext.ChangeTracker.Clear();
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            var stranded = await StrandedNodeRuns().ToListAsync(cancellationToken).ConfigureAwait(false);
+            var stranded = await StrandedNodeRuns().ToListAsync(cancellationToken);
             if (stranded.Count == 0)
             {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken);
                 return [];
             }
 
             var runIds = stranded.Select(entity => entity.RunId).Distinct().ToList();
-            var runs = await _dbContext.DevWorkflowRuns.Where(entity => runIds.Contains(entity.Id)).ToDictionaryAsync(entity => entity.Id, cancellationToken)
-                                       .ConfigureAwait(false);
+            var runs = await _dbContext.DevWorkflowRuns.Where(entity => runIds.Contains(entity.Id)).ToDictionaryAsync(entity => entity.Id, cancellationToken);
 
             var judged = verdicts.ToDictionary(verdict => verdict.NodeRunId);
             var now = Now();
@@ -625,27 +614,27 @@ internal sealed partial class DevWorkflowStore
                 // the caller re-judges.
                 if (command is { MaxTotalAttempts: { } budget, IncrementAttempt: true })
                 {
-                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken).ConfigureAwait(false);
+                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken);
                 }
 
-                var outcome = await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false);
+                var outcome = await ApplyNodeRunTransitionAsync(run, command, cancellationToken);
                 _ = AddEvent(run, outcome.EventType, outcome.NodeRunId, outcome.Outcome, command.OperationId, outcome.DetailJson);
                 run.Version++;
                 run.UpdatedAtUtc = now;
             }
 
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return reconciled;
         }
         catch (DbUpdateException exception)
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw new DevWorkflowConcurrencyException("A concurrent writer won the race before the interrupted node runs were reconciled.", exception);
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -685,7 +674,7 @@ internal sealed partial class DevWorkflowStore
     {
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -698,7 +687,7 @@ internal sealed partial class DevWorkflowStore
     }
 
     private async Task<DevWorkflowDefinition> LoadDefinitionAsync(Guid definitionId, CancellationToken cancellationToken) =>
-        await _dbContext.DevWorkflowDefinitions.SingleOrDefaultAsync(entity => entity.Id == definitionId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.DevWorkflowDefinitions.SingleOrDefaultAsync(entity => entity.Id == definitionId, cancellationToken)
         ?? throw new DevWorkflowNotFoundException($"Development workflow definition '{definitionId}' was not found.");
 
     private async Task<DevWorkflowWorkItemSnapshot> ComposeWorkItemAsync(DevWorkflowWorkItem workItem, CancellationToken cancellationToken)
@@ -712,14 +701,13 @@ internal sealed partial class DevWorkflowStore
                                          _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == run.DefinitionId)
                                                    .Select(definition => definition.Name)
                                                    .FirstOrDefault()))
-                                     .FirstOrDefaultAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(cancellationToken);
         if (latest is null)
         {
             return WorkItemSnapshot(workItem, latestRun: null, DevWorkflowNodeCounters.Empty);
         }
 
-        var counters = await LoadNodeCountersAsync([latest.RunId], cancellationToken).ConfigureAwait(false);
+        var counters = await LoadNodeCountersAsync([latest.RunId], cancellationToken);
         return WorkItemSnapshot(workItem, latest, Counters(counters, latest.RunId));
     }
 
@@ -739,8 +727,7 @@ internal sealed partial class DevWorkflowStore
                                    .Where(entity => runIds.Contains(entity.RunId))
                                    .OrderBy(entity => entity.Sequence)
                                    .Select(entity => new NodeCounterRow(entity.RunId, entity.Id, entity.Status))
-                                   .ToListAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToListAsync(cancellationToken);
 
         return rows.GroupBy(row => row.RunId)
                    .ToDictionary(group => group.Key,
@@ -754,18 +741,18 @@ internal sealed partial class DevWorkflowStore
 
     private async Task<int> CountRowsAsync(IReadOnlyList<Guid> runIds, Guid workItemId, CancellationToken cancellationToken)
     {
-        var removed = await _dbContext.DevWorkflowWorkItems.AsNoTracking().CountAsync(entity => entity.Id == workItemId, cancellationToken).ConfigureAwait(false);
+        var removed = await _dbContext.DevWorkflowWorkItems.AsNoTracking().CountAsync(entity => entity.Id == workItemId, cancellationToken);
         if (runIds.Count == 0)
         {
             return removed;
         }
 
         removed += runIds.Count;
-        removed += await _dbContext.DevWorkflowNodeRuns.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken).ConfigureAwait(false);
-        removed += await _dbContext.DevWorkflowRunEvents.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken).ConfigureAwait(false);
-        removed += await _dbContext.DevWorkflowDecisions.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken).ConfigureAwait(false);
-        removed += await _dbContext.DevWorkflowArtifacts.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken).ConfigureAwait(false);
-        removed += await _dbContext.DevWorkflowArtifactUses.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken).ConfigureAwait(false);
+        removed += await _dbContext.DevWorkflowNodeRuns.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken);
+        removed += await _dbContext.DevWorkflowRunEvents.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken);
+        removed += await _dbContext.DevWorkflowDecisions.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken);
+        removed += await _dbContext.DevWorkflowArtifacts.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken);
+        removed += await _dbContext.DevWorkflowArtifactUses.AsNoTracking().CountAsync(entity => runIds.Contains(entity.RunId), cancellationToken);
         return removed;
     }
 

@@ -107,7 +107,7 @@ internal sealed partial class ExternalAppService
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
-        var row = await store.GetAsync(instanceId, cancellationToken).ConfigureAwait(false);
+        var row = await store.GetAsync(instanceId, cancellationToken);
 
         return BridgeGrantFor(row?.BridgeToken);
     }
@@ -173,8 +173,8 @@ internal sealed partial class ExternalAppService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
 
-        var rows = await services.Store.ListAsync(cancellationToken).ConfigureAwait(false);
-        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken).ConfigureAwait(false);
+        var rows = await services.Store.ListAsync(cancellationToken);
+        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken);
 
         return [.. rows.Select(row => ToSummary(row, versions))];
     }
@@ -186,8 +186,8 @@ internal sealed partial class ExternalAppService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
 
-        var rows = await services.Store.ListAsync(cancellationToken).ConfigureAwait(false);
-        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken).ConfigureAwait(false);
+        var rows = await services.Store.ListAsync(cancellationToken);
+        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken);
 
         return [.. rows.Select(row => ToDetail(row, ToSummary(row, versions)))];
     }
@@ -199,8 +199,8 @@ internal sealed partial class ExternalAppService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
 
-        var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
-        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken).ConfigureAwait(false);
+        var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken);
+        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken);
 
         return ToDetail(row, ToSummary(row, versions));
     }
@@ -217,9 +217,9 @@ internal sealed partial class ExternalAppService
 
         // The existence check is not redundant: an unknown instance must answer "no such instance" rather than an
         // empty page, which a caller would render as "nothing has happened yet".
-        _ = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
+        _ = await RequireInstanceAsync(services.Store, instanceId, cancellationToken);
 
-        return await services.Store.ListEventsAsync(instanceId, afterSequence, limit, cancellationToken).ConfigureAwait(false);
+        return await services.Store.ListEventsAsync(instanceId, afterSequence, limit, cancellationToken);
     }
 
     public async Task<ContainerLogSnapshot> ReadLogsAsync(Guid instanceId,
@@ -240,14 +240,13 @@ internal sealed partial class ExternalAppService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
 
-        var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
+        var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken);
         var manifest = DeserializeManifest(row.ManifestSnapshotJson);
         var serviceName = SelectLogService(manifest, service);
 
-        await using var runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        await using var runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken);
         var containers = await runtime
-                               .ListContainersAsync(ExternalAppLabels.For(_installId, instanceId, serviceName), cancellationToken)
-                               .ConfigureAwait(false);
+                               .ListContainersAsync(ExternalAppLabels.For(_installId, instanceId, serviceName), cancellationToken);
         if (containers.Count == 0)
         {
             return new ContainerLogSnapshot
@@ -264,8 +263,7 @@ internal sealed partial class ExternalAppService
                                             TailLines = tail,
                                             MaxBytes = ContainerLogRequest.MaximumBytes
                                         },
-                                        cancellationToken)
-                                    .ConfigureAwait(false);
+                                        cancellationToken);
 
         // Logs cross UNMASKED by design: the text is the application's own container output rather than an
         // engine-owned value, and an application printing its own secrets is something its operator needs to see.
@@ -299,7 +297,7 @@ internal sealed partial class ExternalAppService
         Guid instanceId,
         CancellationToken cancellationToken)
     {
-        return await store.GetAsync(instanceId, cancellationToken).ConfigureAwait(false)
+        return await store.GetAsync(instanceId, cancellationToken)
                ?? throw new ExternalAppNotFoundException($"No external application instance '{instanceId:N}' is installed.");
     }
 
@@ -308,7 +306,7 @@ internal sealed partial class ExternalAppService
     {
         // Read once per call rather than once per row: the provider serves one snapshot, and a per-row read would
         // make a list of ten instances ten chances to observe a refresh landing mid-projection.
-        var snapshot = await catalog.GetCatalogAsync(cancellationToken).ConfigureAwait(false);
+        var snapshot = await catalog.GetCatalogAsync(cancellationToken);
         var versions = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var application in snapshot.Document.Applications)
         {

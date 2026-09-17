@@ -21,7 +21,7 @@ public sealed class LocalModelProxyApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
         AssertEx.True(generated.Key.StartsWith("xeprx_", StringComparison.Ordinal), "The key must carry the scheme marker so a leaked value is attributable.");
         AssertEx.True(generated.Key.Length > 40, "A 256-bit base64url secret must be substantially longer than its prefix.");
@@ -35,8 +35,8 @@ public sealed class LocalModelProxyApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        var first = await service.GenerateAsync().ConfigureAwait(false);
-        var second = await service.GenerateAsync().ConfigureAwait(false);
+        var first = await service.GenerateAsync();
+        var second = await service.GenerateAsync();
 
         AssertEx.True(first.Key != second.Key, "Each generation must mint fresh key material.");
     }
@@ -46,8 +46,8 @@ public sealed class LocalModelProxyApiKeyServiceTests
     {
         var service = CreateService(out var store);
 
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
-        var stored = AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false));
+        var generated = await service.GenerateAsync();
+        var stored = AssertEx.NotNull(await store.GetAsync());
 
         AssertEx.Equal(32, stored.KeyHash.Length);
         AssertEx.True(stored.KeyHash.Span.SequenceEqual(SHA256.HashData(Encoding.UTF8.GetBytes(generated.Key))),
@@ -61,19 +61,19 @@ public sealed class LocalModelProxyApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.Null(await service.GetAsync().ConfigureAwait(false));
+        AssertEx.Null(await service.GetAsync());
     }
 
     [Test]
     public async Task GetAsync_ReturnsMetadataOnly_AndCannotRecoverTheKey()
     {
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
-        var fetched = AssertEx.NotNull(await service.GetAsync().ConfigureAwait(false));
+        var fetched = AssertEx.NotNull(await service.GetAsync());
 
         AssertEx.Equal(generated.View.Prefix, fetched.Prefix);
-        AssertEx.False(await service.ValidateAsync(fetched.Prefix).ConfigureAwait(false),
+        AssertEx.False(await service.ValidateAsync(fetched.Prefix),
             "Everything still retrievable after generation must be useless as a credential.");
     }
 
@@ -82,7 +82,7 @@ public sealed class LocalModelProxyApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.False(await service.ValidateAsync("xeprx_anything").ConfigureAwait(false),
+        AssertEx.False(await service.ValidateAsync("xeprx_anything"),
             "A node with no generated key must authenticate nobody — an absent credential is not an open door.");
     }
 
@@ -90,50 +90,50 @@ public sealed class LocalModelProxyApiKeyServiceTests
     public async Task ValidateAsync_WithTheCorrectKey_Succeeds()
     {
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
-        AssertEx.True(await service.ValidateAsync(generated.Key).ConfigureAwait(false));
+        AssertEx.True(await service.ValidateAsync(generated.Key));
     }
 
     [Test]
     public async Task ValidateAsync_WithAWrongKey_Fails()
     {
         var service = CreateService(out _);
-        _ = await service.GenerateAsync().ConfigureAwait(false);
+        _ = await service.GenerateAsync();
 
-        AssertEx.False(await service.ValidateAsync("xeprx_not-the-right-key").ConfigureAwait(false));
+        AssertEx.False(await service.ValidateAsync("xeprx_not-the-right-key"));
     }
 
     [Test]
     public async Task ValidateAsync_WithNullOrEmpty_Fails()
     {
         var service = CreateService(out _);
-        _ = await service.GenerateAsync().ConfigureAwait(false);
+        _ = await service.GenerateAsync();
 
-        AssertEx.False(await service.ValidateAsync(presented: null).ConfigureAwait(false));
-        AssertEx.False(await service.ValidateAsync(string.Empty).ConfigureAwait(false));
+        AssertEx.False(await service.ValidateAsync(presented: null));
+        AssertEx.False(await service.ValidateAsync(string.Empty));
     }
 
     [Test]
     public async Task ValidateAsync_WithAProperPrefixOfTheKey_Fails()
     {
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
-        AssertEx.False(await service.ValidateAsync(generated.Key[..^1]).ConfigureAwait(false));
-        AssertEx.False(await service.ValidateAsync(generated.View.Prefix).ConfigureAwait(false));
+        AssertEx.False(await service.ValidateAsync(generated.Key[..^1]));
+        AssertEx.False(await service.ValidateAsync(generated.View.Prefix));
     }
 
     [Test]
     public async Task GenerateAsync_ReplacesThePreviousKey_SoTheOldOneStopsAuthenticating()
     {
         var service = CreateService(out _);
-        var original = await service.GenerateAsync().ConfigureAwait(false);
+        var original = await service.GenerateAsync();
 
-        var replacement = await service.GenerateAsync().ConfigureAwait(false);
+        var replacement = await service.GenerateAsync();
 
-        AssertEx.True(await service.ValidateAsync(replacement.Key).ConfigureAwait(false), "The new key must authenticate.");
-        AssertEx.False(await service.ValidateAsync(original.Key).ConfigureAwait(false),
+        AssertEx.True(await service.ValidateAsync(replacement.Key), "The new key must authenticate.");
+        AssertEx.False(await service.ValidateAsync(original.Key),
             "Regenerating must immediately invalidate the replaced key — there is no window in which both work.");
     }
 
@@ -141,12 +141,12 @@ public sealed class LocalModelProxyApiKeyServiceTests
     public async Task RevokeAsync_RemovesTheKeyAndClosesTheEndpoint()
     {
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
-        AssertEx.True(await service.RevokeAsync().ConfigureAwait(false));
+        AssertEx.True(await service.RevokeAsync());
 
-        AssertEx.Null(await service.GetAsync().ConfigureAwait(false));
-        AssertEx.False(await service.ValidateAsync(generated.Key).ConfigureAwait(false), "A revoked key must no longer authenticate.");
+        AssertEx.Null(await service.GetAsync());
+        AssertEx.False(await service.ValidateAsync(generated.Key), "A revoked key must no longer authenticate.");
     }
 
     [Test]
@@ -154,19 +154,19 @@ public sealed class LocalModelProxyApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.False(await service.RevokeAsync().ConfigureAwait(false));
+        AssertEx.False(await service.RevokeAsync());
     }
 
     [Test]
     public async Task ValidateAsync_OnSuccess_StampsLastUsed()
     {
         var service = CreateService(out var store);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
         AssertEx.Null(generated.View.LastUsedAt);
 
-        _ = await service.ValidateAsync(generated.Key).ConfigureAwait(false);
+        _ = await service.ValidateAsync(generated.Key);
 
-        AssertEx.True(AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false)).LastUsedAtUtc.HasValue,
+        AssertEx.True(AssertEx.NotNull(await store.GetAsync()).LastUsedAtUtc.HasValue,
             "A successful authentication must stamp last-used.");
     }
 
@@ -174,11 +174,11 @@ public sealed class LocalModelProxyApiKeyServiceTests
     public async Task ValidateAsync_OnFailure_DoesNotStampLastUsed()
     {
         var service = CreateService(out var store);
-        _ = await service.GenerateAsync().ConfigureAwait(false);
+        _ = await service.GenerateAsync();
 
-        _ = await service.ValidateAsync("xeprx_wrong").ConfigureAwait(false);
+        _ = await service.ValidateAsync("xeprx_wrong");
 
-        AssertEx.False(AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false)).LastUsedAtUtc.HasValue,
+        AssertEx.False(AssertEx.NotNull(await store.GetAsync()).LastUsedAtUtc.HasValue,
             "A rejected credential must not stamp last-used.");
     }
 

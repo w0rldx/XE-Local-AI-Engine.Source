@@ -58,7 +58,7 @@ internal sealed class LocalModelProxyApiKeyAuthenticationHandler : Authenticatio
         }
 
         var presented = header[BearerPrefix.Length..].Trim();
-        if (!await _apiKeyService.ValidateAsync(presented, Context.RequestAborted).ConfigureAwait(false))
+        if (!await _apiKeyService.ValidateAsync(presented, Context.RequestAborted))
         {
             // Deliberately uniform: never distinguish "no key generated" from "wrong key" to a caller.
             return AuthenticateResult.Fail("Invalid model-proxy API key.");

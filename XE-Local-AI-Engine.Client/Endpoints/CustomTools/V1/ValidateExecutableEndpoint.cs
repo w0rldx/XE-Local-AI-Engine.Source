@@ -26,6 +26,6 @@ public sealed class ValidateExecutableEndpoint(ICustomToolService customToolServ
     public override async Task HandleAsync(ProbeExecutableRequest req, CancellationToken ct)
     {
         var result = _customToolService.ProbeExecutable(req.Path);
-        await Send.OkAsync(result, ct).ConfigureAwait(false);
+        await Send.OkAsync(result, ct);
     }
 }

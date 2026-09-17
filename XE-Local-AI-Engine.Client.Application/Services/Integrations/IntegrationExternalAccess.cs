@@ -90,8 +90,8 @@ public sealed class IntegrationExternalAccess
         // missing or foreign row skipped the key query and the allowlist scan, so an execution id that exists and is
         // merely out of allowlist did measurably more work than one that does not exist — a timing signal for id
         // existence behind two byte-identical 404s.
-        var execution = await _executions.GetByIdAsync(executionId, cancellationToken).ConfigureAwait(false);
-        var allowed = await AllowsAsync(caller, execution?.TriggerId ?? Guid.Empty, cancellationToken).ConfigureAwait(false);
+        var execution = await _executions.GetByIdAsync(executionId, cancellationToken);
+        var allowed = await AllowsAsync(caller, execution?.TriggerId ?? Guid.Empty, cancellationToken);
 
         return execution is not null && execution.PrincipalId == caller.PrincipalId && allowed
             ? new IntegrationAccessResult(IntegrationAccessOutcome.Allowed, execution, Session: null)
@@ -107,11 +107,11 @@ public sealed class IntegrationExternalAccess
         // The store's two-column predicate IS the ownership limb — a missing row and a foreign one come back as the
         // same non-result, so there is no loaded row here for a later edit to start reading. The allowlist is the
         // second limb and stays here, because it is an authorisation rule rather than a persistence one.
-        var session = await _sessions.GetForPrincipalAsync(sessionId, caller.PrincipalId, cancellationToken).ConfigureAwait(false);
+        var session = await _sessions.GetForPrincipalAsync(sessionId, caller.PrincipalId, cancellationToken);
 
         // Same constant shape as the execution path above: the key read and the allowlist scan run whether or not the
         // session resolved, so the two masked outcomes cost the same.
-        var allowed = await AllowsAsync(caller, session?.TriggerId ?? Guid.Empty, cancellationToken).ConfigureAwait(false);
+        var allowed = await AllowsAsync(caller, session?.TriggerId ?? Guid.Empty, cancellationToken);
 
         return session is not null && allowed
             ? new IntegrationAccessResult(IntegrationAccessOutcome.Allowed, Execution: null, session)
@@ -123,7 +123,7 @@ public sealed class IntegrationExternalAccess
 
     private async Task<bool> AllowsAsync(IntegrationCallerIdentity caller, Guid triggerId, CancellationToken cancellationToken)
     {
-        var key = await _keys.GetByPrefixAsync(caller.KeyPrefix, cancellationToken).ConfigureAwait(false);
+        var key = await _keys.GetByPrefixAsync(caller.KeyPrefix, cancellationToken);
         if (key is null || key.RevokedAtUtc is not null || key.PrincipalId != caller.PrincipalId)
         {
             return false;

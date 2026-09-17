@@ -22,7 +22,7 @@ public sealed class TriggerScheduledJobEndpoint(IScheduledJobManagementService s
 
     public override async Task HandleAsync(ScheduledJobActionRequest req, CancellationToken ct)
     {
-        await _scheduledJobManagementService.TriggerNowAsync(req.ScheduledJobId, parameterOverrides: null, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _scheduledJobManagementService.TriggerNowAsync(req.ScheduledJobId, parameterOverrides: null, ct);
+        await Send.NoContentAsync(ct);
     }
 }

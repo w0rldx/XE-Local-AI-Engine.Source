@@ -9,7 +9,7 @@ public sealed partial class BenchmarkStore
 {
     private async Task<BenchmarkRunRecord> ToRecordWithJudgeAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
-        return ToRecordWithJudge(run, await LoadJudgeViewsAsync([run.Id], cancellationToken).ConfigureAwait(false));
+        return ToRecordWithJudge(run, await LoadJudgeViewsAsync([run.Id], cancellationToken));
     }
 
     /// <summary>
@@ -48,13 +48,11 @@ public sealed partial class BenchmarkStore
         var currentInputHash = await _dbContext.BenchmarkTaskItems.AsNoTracking()
                                                .Where(item => item.Id == itemId)
                                                .Select(static item => item.InputHash)
-                                               .FirstOrDefaultAsync(cancellationToken)
-                                               .ConfigureAwait(false);
+                                               .FirstOrDefaultAsync(cancellationToken);
         var currentSetHash = await _dbContext.BenchmarkProjects.AsNoTracking()
                                              .Where(project => project.Id == entity.ProjectId)
                                              .Select(static project => project.TaskItemSetHash)
-                                             .FirstOrDefaultAsync(cancellationToken)
-                                             .ConfigureAwait(false);
+                                             .FirstOrDefaultAsync(cancellationToken);
         return new BenchmarkRunIdentity(entity.TaskInputHash, currentInputHash, entity.TaskItemSetHash, currentSetHash);
     }
 
@@ -85,8 +83,7 @@ public sealed partial class BenchmarkStore
                                          entity.TaskInputHash,
                                          entity.TaskItemSetHash
                                      })
-                                     .ToArrayAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .ToArrayAsync(cancellationToken);
 
         // Plaintext on both sides — hashes and flags, never a payload — so this read still decrypts nothing.
         var items = await _dbContext.BenchmarkTaskItems.AsNoTracking()
@@ -98,8 +95,7 @@ public sealed partial class BenchmarkStore
                                         entity.InputHash,
                                         entity.CountsTowardScore
                                     })
-                                    .ToArrayAsync(cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ToArrayAsync(cancellationToken);
         var currentInputHashes = items.ToDictionary(static item => item.Id, static item => item.InputHash);
         var scorableItemIds = items.Where(static item => BenchmarkTaskItemKinds.IsLeaf(item.Kind) && item.CountsTowardScore)
                                    .Select(static item => item.Id)
@@ -107,12 +103,11 @@ public sealed partial class BenchmarkStore
         var currentSetHash = await _dbContext.BenchmarkProjects.AsNoTracking()
                                              .Where(entity => entity.Id == projectId)
                                              .Select(static entity => entity.TaskItemSetHash)
-                                             .FirstOrDefaultAsync(cancellationToken)
-                                             .ConfigureAwait(false);
+                                             .FirstOrDefaultAsync(cancellationToken);
 
-        var views = await LoadJudgeViewsAsync([.. scored.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
-        var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
-        var pairwise = await LoadPairwiseRankingAsync(current, cancellationToken).ConfigureAwait(false);
+        var views = await LoadJudgeViewsAsync([.. scored.Select(static run => run.Id)], cancellationToken);
+        var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
+        var pairwise = await LoadPairwiseRankingAsync(current, cancellationToken);
 
         var runs = new Dictionary<Guid, BenchmarkRunRanking>(scored.Length);
         var rankable = new Dictionary<Guid, bool>(scored.Length);
@@ -427,7 +422,7 @@ public sealed partial class BenchmarkStore
             return null;
         }
 
-        var fit = await ActiveFitAsync(current.Id, current.CohortGeneration, cancellationToken).ConfigureAwait(false);
+        var fit = await ActiveFitAsync(current.Id, current.CohortGeneration, cancellationToken);
         if (fit is null)
         {
             return new PairwiseRanking(new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), BenchmarkRunJudgeStates.ReasonPairwisePending);
@@ -523,7 +518,7 @@ public sealed partial class BenchmarkStore
                 revision.Revision,
                 revision.CohortGeneration,
                 revision.ReferenceExecutionKey,
-                project.CurrentJudgePolicyRevisionId)).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+                project.CurrentJudgePolicyRevisionId)).ToArrayAsync(cancellationToken);
         return rows.ToDictionary(static row => row.RunId, BuildJudgeView);
     }
 

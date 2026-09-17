@@ -110,27 +110,24 @@ public sealed class RuntimeEnvironmentFactsProvider(
         var bundle = await CapturePartAsync(BundlePart,
                 async () =>
                 {
-                    binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+                    binary = await _binaryManager.EnsureBinaryAsync(variant, ct);
                     return await RuntimeBundleIdentityCalculator.ComputeAsync(binary.ServerExecutablePath,
                                                                     (path, token) => RuntimeBundleIdentityCalculator.GetFileValidationIdentityAsync(path, _fileHashCache, token),
-                                                                    ct)
-                                                                .ConfigureAwait(false);
+                                                                    ct);
                 },
                 missing,
-                ct)
-            .ConfigureAwait(false);
+                ct);
 
         var llamaRuntime = await CapturePartAsync(LlamaRuntimePart,
-                async () => ToLlamaRuntimeFacts(await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false), binary),
+                async () => ToLlamaRuntimeFacts(await _installedRuntimeStore.ReadAsync(ct), binary),
                 missing,
-                ct)
-            .ConfigureAwait(false);
+                ct);
 
         var hardware = await CapturePartAsync(HardwarePart,
                 async () =>
                 {
-                    var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
-                    var audit = await _deviceAudit.GetAuditAsync(forceRefresh: false, ct).ConfigureAwait(false);
+                    var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct);
+                    var audit = await _deviceAudit.GetAuditAsync(forceRefresh: false, ct);
                     return new BenchmarkHardwareFactsV1(RuntimeInformation.OSDescription,
                         RuntimeInformation.OSArchitecture.ToString(),
                         TryReadCpuModel(),
@@ -140,8 +137,7 @@ public sealed class RuntimeEnvironmentFactsProvider(
                         audit.InferenceBackend);
                 },
                 missing,
-                ct)
-            .ConfigureAwait(false);
+                ct);
 
         return new RuntimeEnvironmentFactsV1(SchemaVersion,
             bundle,
@@ -207,7 +203,7 @@ public sealed class RuntimeEnvironmentFactsProvider(
     {
         try
         {
-            var captured = await capture().ConfigureAwait(false);
+            var captured = await capture();
             if (captured is null)
             {
                 missing.Add(part);

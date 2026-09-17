@@ -24,15 +24,15 @@ public sealed class TrainingRunEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var list = await client.GetAsync(ApiPrefix).ConfigureAwait(false);
-        using var byId = await client.GetAsync($"{ApiPrefix}/{Guid.NewGuid()}").ConfigureAwait(false);
-        using var defaults = await client.GetAsync($"{ApiPrefix}/defaults?baseArtifactId={Guid.NewGuid()}").ConfigureAwait(false);
+        using var list = await client.GetAsync(ApiPrefix);
+        using var byId = await client.GetAsync($"{ApiPrefix}/{Guid.NewGuid()}");
+        using var defaults = await client.GetAsync($"{ApiPrefix}/defaults?baseArtifactId={Guid.NewGuid()}");
         using var create = new HttpRequestMessage(HttpMethod.Post, ApiPrefix);
         create.Headers.Add("Origin", "http://localhost");
-        using var createResponse = await client.SendAsync(create).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(create);
         using var cancel = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/{Guid.NewGuid()}/cancel");
         cancel.Headers.Add("Origin", "http://localhost");
-        using var cancelResponse = await client.SendAsync(cancel).ConfigureAwait(false);
+        using var cancelResponse = await client.SendAsync(cancel);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, list.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, byId.StatusCode);
@@ -49,10 +49,10 @@ public sealed class TrainingRunEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ApiPrefix);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.True(document.RootElement.TryGetProperty("items", out var items) && items.GetArrayLength() == 0,
             "An empty database is an empty page, never a 404.");
         AssertEx.Equal(expected: 0, document.RootElement.GetProperty("totalCount").GetInt32());
@@ -66,7 +66,7 @@ public sealed class TrainingRunEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/{Guid.NewGuid()}");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -80,7 +80,7 @@ public sealed class TrainingRunEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/{Guid.NewGuid()}/cancel");
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -103,12 +103,12 @@ public sealed class TrainingRunEndpointTests
         };
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // The licensing gate is checked before anything else, so this is a 400 rather than the 400 an unknown dataset
         // would produce later — and nothing is queued either way, which the service suite pins against a real store.
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync();
         AssertEx.True(body.Contains("licens", StringComparison.OrdinalIgnoreCase), $"The refusal must name the licensing gate. Body: {body}");
     }
 
@@ -120,7 +120,7 @@ public sealed class TrainingRunEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/defaults?baseArtifactId={Guid.NewGuid()}");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -133,7 +133,7 @@ public sealed class TrainingRunEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}?page=1&pageSize=5000");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

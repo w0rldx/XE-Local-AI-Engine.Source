@@ -62,7 +62,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
             return WorkspaceNotAuthorized();
         }
 
-        var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+        var identity = await _identityProvider.GetAsync(cancellationToken);
         var leaseKey = new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId);
         var lease = _leaseManager.TryAcquire(leaseKey);
         if (lease is null)
@@ -83,7 +83,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         };
         try
         {
-            _ = await _manifestService.InitializeAsync(attachKey, cancellationToken).ConfigureAwait(false);
+            _ = await _manifestService.InitializeAsync(attachKey, cancellationToken);
             var handle = await _provider.CreateOrAttachAsync(new SandboxCreateRequest
                 {
                     AttachKey = attachKey,
@@ -98,12 +98,12 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
                         SandboxWorkloads.WorkSession.Workload),
                     ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.WorkSession, _provider.Capabilities, _ceilingDefaults, _nodeOptions)
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             ResolvedSelectedFolder workspace;
             try
             {
-                workspace = await _resolver.ResolveAsync(workspaceId.ToString("D"), cancellationToken).ConfigureAwait(false);
+                workspace = await _resolver.ResolveAsync(workspaceId.ToString("D"), cancellationToken);
                 if (workspace.Id != workspaceId)
                 {
                     throw new SelectedFolderValidationException("The selected workspace is not active.");
@@ -111,20 +111,20 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
             }
             catch (SelectedFolderValidationException)
             {
-                return await RejectAfterRecoveryAsync(attachKey, leaseKey, WorkspaceNotAuthorized()).ConfigureAwait(false);
+                return await RejectAfterRecoveryAsync(attachKey, leaseKey, WorkspaceNotAuthorized());
             }
 
-            var snapshots = await _workspaceService.PrepareSelectedFoldersAsync(handle, [workspace], cancellationToken).ConfigureAwait(false);
+            var snapshots = await _workspaceService.PrepareSelectedFoldersAsync(handle, [workspace], cancellationToken);
             if (!HasExactCopiedWorkspace(snapshots, workspace))
             {
-                return await RejectAfterRecoveryAsync(attachKey, leaseKey, WorkspacePreparationFailed()).ConfigureAwait(false);
+                return await RejectAfterRecoveryAsync(attachKey, leaseKey, WorkspacePreparationFailed());
             }
 
             return SuccessWithTransferredLease(lease);
         }
         catch (OperationCanceledException)
         {
-            _ = await TryRecoverAsync(attachKey, leaseKey, workspaceId).ConfigureAwait(false);
+            _ = await TryRecoverAsync(attachKey, leaseKey, workspaceId);
             lease.Dispose();
             throw;
         }
@@ -133,14 +133,14 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
             _logger.LogError("MCP workspace preparation failed for workspace {WorkspaceId}; failure type {FailureType}.",
                 workspaceId,
                 exception.GetType().Name);
-            return await RejectAfterRecoveryAsync(attachKey, leaseKey, WorkspacePreparationFailed()).ConfigureAwait(false);
+            return await RejectAfterRecoveryAsync(attachKey, leaseKey, WorkspacePreparationFailed());
         }
 
         async Task<McpWorkspaceExecutionSessionOpenResult> RejectAfterRecoveryAsync(SandboxAttachKey failedAttachKey,
             AgentHomeExecutionLeaseKey failedLeaseKey,
             McpWorkspaceExecutionSessionOpenResult rejection)
         {
-            var recovered = await TryRecoverAsync(failedAttachKey, failedLeaseKey, workspaceId).ConfigureAwait(false);
+            var recovered = await TryRecoverAsync(failedAttachKey, failedLeaseKey, workspaceId);
             lease.Dispose();
             return recovered ? rejection : WorkspacePreparationFailed();
         }
@@ -152,7 +152,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
     {
         try
         {
-            await _isolation.RecoverExistingAsync(attachKey, leaseKey, CancellationToken.None).ConfigureAwait(false);
+            await _isolation.RecoverExistingAsync(attachKey, leaseKey, CancellationToken.None);
             return true;
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)

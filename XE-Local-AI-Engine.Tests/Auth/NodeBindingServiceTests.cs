@@ -129,10 +129,10 @@ public sealed class NodeBindingServiceTests
         var session = await service.StartBindingAsync();
 
         var pollTask = service.PollUntilTerminalAsync(session);
-        await pollStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        await service.CancelAsync().ConfigureAwait(false);
+        await pollStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await service.CancelAsync();
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => pollTask).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => pollTask);
     }
 
     private static NodeBindingService CreateService(MockTokenStore tokenStore,

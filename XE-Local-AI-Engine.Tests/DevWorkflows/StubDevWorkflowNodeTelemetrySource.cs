@@ -70,7 +70,7 @@ internal sealed class StubDevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelem
             if (IgnoresCancellationUntil is { } gate)
             {
                 // Deliberately not passed the token: this is the collector the decorator cannot ask to stop.
-                await gate.Task.ConfigureAwait(false);
+                await gate.Task;
             }
 
             if (Delay > TimeSpan.Zero)
@@ -78,7 +78,7 @@ internal sealed class StubDevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelem
                 // real-timer: the collector's latency is the subject's input — the decorator under test measures it
                 // against a wall-clock budget, so a gate that completes on command cannot stand in for it. The
                 // IgnoresCancellationUntil gate above is the deterministic seam for the non-timing cases.
-                await Task.Delay(Delay, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(Delay, cancellationToken);
             }
 
             return Fault is null ? Answer : throw Fault;

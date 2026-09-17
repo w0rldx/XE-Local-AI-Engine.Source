@@ -18,13 +18,13 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
     public async Task<SlashCommandRecord> AddAsync(SlashCommandInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        await _dbContext.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await _dbContext.Database.OpenConnectionAsync(cancellationToken);
         var connection = (SqliteConnection)_dbContext.Database.GetDbConnection();
         await using var transaction = BeginImmediateTransaction(connection);
-        _ = await _dbContext.Database.UseTransactionAsync(transaction, cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.Database.UseTransactionAsync(transaction, cancellationToken);
         try
         {
-            if (await _dbContext.SlashCommands.CountAsync(cancellationToken).ConfigureAwait(false) >= MaximumCustomCommands)
+            if (await _dbContext.SlashCommands.CountAsync(cancellationToken) >= MaximumCustomCommands)
             {
                 throw new SlashCommandCapacityException();
             }
@@ -41,21 +41,21 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
                 UpdatedAtUtc = now
             };
             _ = _dbContext.SlashCommands.Add(entity);
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return ToRecord(entity);
         }
         finally
         {
-            _ = await _dbContext.Database.UseTransactionAsync(null, CancellationToken.None).ConfigureAwait(false);
-            await _dbContext.Database.CloseConnectionAsync().ConfigureAwait(false);
+            _ = await _dbContext.Database.UseTransactionAsync(null, CancellationToken.None);
+            await _dbContext.Database.CloseConnectionAsync();
         }
     }
 
     public async Task<SlashCommandRecord?> UpdateAsync(Guid id, SlashCommandInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        var entity = await _dbContext.SlashCommands.FirstOrDefaultAsync(command => command.Id == id, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.SlashCommands.FirstOrDefaultAsync(command => command.Id == id, cancellationToken);
         if (entity is null)
         {
             return null;
@@ -66,32 +66,32 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
         entity.ActionType = (int)input.ActionType;
         entity.ActionConfiguration = SerializeAction(input.Prompt);
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return ToRecord(entity);
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.SlashCommands.FirstOrDefaultAsync(command => command.Id == id, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.SlashCommands.FirstOrDefaultAsync(command => command.Id == id, cancellationToken);
         if (entity is null)
         {
             return false;
         }
 
         _ = _dbContext.SlashCommands.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
     public async Task<SlashCommandRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.SlashCommands.AsNoTracking().FirstOrDefaultAsync(command => command.Id == id, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.SlashCommands.AsNoTracking().FirstOrDefaultAsync(command => command.Id == id, cancellationToken);
         return entity is null ? null : ToRecord(entity);
     }
 
     public async Task<IReadOnlyList<SlashCommandRecord>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _dbContext.SlashCommands.AsNoTracking().OrderBy(command => command.Name).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var entities = await _dbContext.SlashCommands.AsNoTracking().OrderBy(command => command.Name).ToListAsync(cancellationToken);
         return entities.Select(ToRecord).ToArray();
     }
 

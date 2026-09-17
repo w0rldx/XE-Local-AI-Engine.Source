@@ -53,7 +53,7 @@ public sealed class SkillImportEndpointTests
         {
             Content = content
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -76,7 +76,7 @@ public sealed class SkillImportEndpointTests
                 acknowledged = true
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -88,7 +88,7 @@ public sealed class SkillImportEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{Guid.NewGuid()}/resources");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -100,7 +100,7 @@ public sealed class SkillImportEndpointTests
         using var client = factory.CreateClient();
 
         var name = SkillName();
-        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
+        var preview = await PreviewArchiveAsync(factory, client, name);
         var skill = preview.GetProperty("skills")[0];
 
         AssertEx.Equal(name, skill.GetProperty("name").GetString());
@@ -108,7 +108,7 @@ public sealed class SkillImportEndpointTests
         AssertEx.Equal(expected: 1, skill.GetProperty("resources").GetArrayLength());
 
         // The whole point of phase 1: the library never saw this skill.
-        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false)).Count);
+        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name)).Count);
     }
 
     [Test]
@@ -117,7 +117,7 @@ public sealed class SkillImportEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var preview = await PreviewArchiveAsync(factory, client, SkillName()).ConfigureAwait(false);
+        var preview = await PreviewArchiveAsync(factory, client, SkillName());
         var resource = preview.GetProperty("skills")[0].GetProperty("resources")[0];
 
         AssertEx.Equal("references/FAQ.md", resource.GetProperty("name").GetString());
@@ -131,17 +131,16 @@ public sealed class SkillImportEndpointTests
         using var client = factory.CreateClient();
 
         var name = SkillName();
-        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
+        var preview = await PreviewArchiveAsync(factory, client, name);
 
         using var response = await CommitAsync(factory,
                 client,
                 preview.GetProperty("token").GetGuid(),
                 name,
-                acknowledged: false)
-            .ConfigureAwait(false);
+                acknowledged: false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false)).Count);
+        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name)).Count);
     }
 
     [Test]
@@ -151,24 +150,23 @@ public sealed class SkillImportEndpointTests
         using var client = factory.CreateClient();
 
         var name = SkillName();
-        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
+        var preview = await PreviewArchiveAsync(factory, client, name);
 
         using var commitResponse = await CommitAsync(factory,
                 client,
                 preview.GetProperty("token").GetGuid(),
                 name,
-                acknowledged: true)
-            .ConfigureAwait(false);
+                acknowledged: true);
 
         AssertEx.Equal(HttpStatusCode.OK, commitResponse.StatusCode);
 
-        var commitPayload = await commitResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var commitPayload = await commitResponse.Content.ReadAsStringAsync();
         using var commitDocument = JsonDocument.Parse(commitPayload);
         var outcome = commitDocument.RootElement.GetProperty("outcomes")[0];
         AssertEx.Equal(name, outcome.GetProperty("name").GetString());
         AssertEx.Equal("Imported", outcome.GetProperty("status").GetString());
 
-        var rows = await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false);
+        var rows = await ListSkillsNamedAsync(factory, client, name);
         AssertEx.Equal(expected: 1, rows.Count);
 
         var summary = rows[0];
@@ -179,11 +177,11 @@ public sealed class SkillImportEndpointTests
 
         using var getRequest = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{summary.GetProperty("id").GetGuid()}");
         factory.AddNodeBearerToken(getRequest);
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var getPayload = await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var getPayload = await getResponse.Content.ReadAsStringAsync();
         using var getDocument = JsonDocument.Parse(getPayload);
         var detail = getDocument.RootElement;
         AssertEx.Equal(expected: 1, detail.GetProperty("resourceCount").GetInt32());
@@ -198,10 +196,10 @@ public sealed class SkillImportEndpointTests
         using var client = factory.CreateClient();
 
         var name = SkillName();
-        using var response = await CommitAsync(factory, client, Guid.NewGuid(), name, acknowledged: true).ConfigureAwait(false);
+        using var response = await CommitAsync(factory, client, Guid.NewGuid(), name, acknowledged: true);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false)).Count);
+        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name)).Count);
     }
 
     [Test]
@@ -211,19 +209,19 @@ public sealed class SkillImportEndpointTests
         using var client = factory.CreateClient();
 
         var name = SkillName();
-        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
+        var preview = await PreviewArchiveAsync(factory, client, name);
         var token = preview.GetProperty("token").GetGuid();
 
-        using (var first = await CommitAsync(factory, client, token, name, acknowledged: true).ConfigureAwait(false))
+        using (var first = await CommitAsync(factory, client, token, name, acknowledged: true))
         {
             AssertEx.Equal(HttpStatusCode.OK, first.StatusCode);
         }
 
-        using var replay = await CommitAsync(factory, client, token, name, acknowledged: true).ConfigureAwait(false);
+        using var replay = await CommitAsync(factory, client, token, name, acknowledged: true);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
         AssertEx.Equal(expected: 1,
-            (await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false)).Count);
+            (await ListSkillsNamedAsync(factory, client, name)).Count);
     }
 
     [Test]
@@ -233,7 +231,7 @@ public sealed class SkillImportEndpointTests
         using var client = factory.CreateClient();
 
         var name = SkillName();
-        var skillId = await ImportSkillAsync(factory, client, name).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, name);
 
         // The store writes the frontmatter column from the input unconditionally, so an update that did not carry the
         // fields back would erase them. Provenance is promote-only, so the same edit must NOT launder the row to Local.
@@ -249,11 +247,11 @@ public sealed class SkillImportEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.Equal("MIT", document.RootElement.GetProperty("license").GetString());
         AssertEx.Equal("Imported", document.RootElement.GetProperty("origin").GetString());
@@ -265,15 +263,15 @@ public sealed class SkillImportEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, SkillName());
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{skillId}/resources");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
@@ -290,7 +288,7 @@ public sealed class SkillImportEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{Guid.NewGuid()}/resources");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -301,17 +299,17 @@ public sealed class SkillImportEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, SkillName());
 
         // The client escapes the whole name into one segment; Kestrel leaves %2F encoded, so the endpoint decodes it.
         using var request = new HttpRequestMessage(HttpMethod.Get,
             $"{ListRoute}/{skillId}/resources/{Uri.EscapeDataString("references/FAQ.md")}");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.Equal("references/FAQ.md", document.RootElement.GetProperty("name").GetString());
         AssertEx.Equal("Frequently asked.", document.RootElement.GetProperty("content").GetString());
@@ -323,13 +321,13 @@ public sealed class SkillImportEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, SkillName());
 
         // Decodes to "../../etc/passwd": the charset guard runs AFTER the decode, so the traversal is what is rejected.
         using var request = new HttpRequestMessage(HttpMethod.Get,
             $"{ListRoute}/{skillId}/resources/{Uri.EscapeDataString("../../etc/passwd")}");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -340,11 +338,11 @@ public sealed class SkillImportEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, SkillName());
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{skillId}/resources/absent.md");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -367,7 +365,7 @@ public sealed class SkillImportEndpointTests
             Content = content
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -396,11 +394,11 @@ public sealed class SkillImportEndpointTests
             Content = content
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var skill = document.RootElement.GetProperty("skills")[0];
         AssertEx.Equal(name, skill.GetProperty("name").GetString());
@@ -439,11 +437,11 @@ public sealed class SkillImportEndpointTests
             Content = content
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<JsonElement>(payload);
     }
 
@@ -466,19 +464,18 @@ public sealed class SkillImportEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     /// <summary>Runs both phases and returns the id of the skill that landed.</summary>
     private static async Task<Guid> ImportSkillAsync(TestServerWebAppFactory factory, HttpClient client, string name)
     {
-        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
-        using var response = await CommitAsync(factory, client, preview.GetProperty("token").GetGuid(), name, acknowledged: true)
-            .ConfigureAwait(false);
+        var preview = await PreviewArchiveAsync(factory, client, name);
+        using var response = await CommitAsync(factory, client, preview.GetProperty("token").GetGuid(), name, acknowledged: true);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var rows = await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false);
+        var rows = await ListSkillsNamedAsync(factory, client, name);
         return rows[0].GetProperty("id").GetGuid();
     }
 
@@ -488,7 +485,7 @@ public sealed class SkillImportEndpointTests
     /// </summary>
     private static async Task<IReadOnlyList<JsonElement>> ListSkillsNamedAsync(TestServerWebAppFactory factory, HttpClient client, string name)
     {
-        var items = await ListSkillsAsync(factory, client).ConfigureAwait(false);
+        var items = await ListSkillsAsync(factory, client);
         return items.EnumerateArray()
                     .Where(item => string.Equals(item.GetProperty("name").GetString(), name, StringComparison.Ordinal))
                     .ToList();
@@ -498,11 +495,11 @@ public sealed class SkillImportEndpointTests
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<JsonElement>(payload).GetProperty("items");
     }
 }

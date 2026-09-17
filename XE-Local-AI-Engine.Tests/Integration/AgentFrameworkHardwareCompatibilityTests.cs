@@ -50,8 +50,8 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
                            ?? throw new InvalidOperationException("XE_FRAMEWORK_COMPAT_EVIDENCE_PATH is required.");
         var variant = Environment.GetEnvironmentVariable("XE_LLAMACPP_VARIANT") ?? "cpu";
         var modelFile = new FileInfo(modelPath);
-        var modelSha256 = await HashFileAsync(modelPath).ConfigureAwait(false);
-        var serverSha256 = await HashFileAsync(serverPath).ConfigureAwait(false);
+        var modelSha256 = await HashFileAsync(modelPath);
+        var serverSha256 = await HashFileAsync(serverPath);
         var store = new FixedGgufModelStore(modelPath, modelFile.Length, modelSha256);
 
         await using var factory = new TestServerWebAppFactory
@@ -64,7 +64,7 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
         };
 
         var resolver = factory.Services.GetRequiredService<ILocalModelProviderResolver>();
-        var provider = await resolver.ResolveProviderForModelAsync(ModelName).ConfigureAwait(false);
+        var provider = await resolver.ResolveProviderForModelAsync(ModelName);
         var agentFactory = factory.Services.GetRequiredService<IInvocationAgentFactory>();
         var runner = factory.Services.GetRequiredService<IInvocationRunner>();
         var dispatcher = factory.Services.GetRequiredService<IWorkerEventDispatcher>();
@@ -87,9 +87,9 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
 
         try
         {
-            await using var invocationLease = await dispatcher.ReportInvocationAssignedAsync(package).ConfigureAwait(false);
+            await using var invocationLease = await dispatcher.ReportInvocationAssignedAsync(package);
             using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
-            await runner.RunAsync(context).ConfigureAwait(false);
+            await runner.RunAsync(context);
 
             var state = AssertEx.NotNull(dispatcher.CurrentInvocation);
             AssertEx.Equal(InvocationStatus.Completed, state.Status, state.Error);
@@ -107,12 +107,11 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
                         new EvidencePath(resolver.GetType().FullName,
                             provider.GetType().FullName,
                             agentFactory.GetType().FullName,
-                            runner.GetType().FullName)))
-                .ConfigureAwait(false);
+                            runner.GetType().FullName)));
         }
         finally
         {
-            await provider.UnloadModelAsync(ModelName, CancellationToken.None).ConfigureAwait(false);
+            await provider.UnloadModelAsync(ModelName, CancellationToken.None);
         }
     }
 
@@ -164,14 +163,13 @@ public sealed class AgentFrameworkHardwareCompatibilityTests
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)
                                   ?? throw new InvalidOperationException("Evidence path has no parent directory."));
         await File.WriteAllTextAsync(fullPath,
-                      JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine)
-                  .ConfigureAwait(false);
+                      JsonSerializer.Serialize(payload, EvidenceJsonOptions) + Environment.NewLine);
     }
 
     private static async Task<string> HashFileAsync(string path)
     {
         await using var stream = File.OpenRead(path);
-        var hash = await SHA256.HashDataAsync(stream).ConfigureAwait(false);
+        var hash = await SHA256.HashDataAsync(stream);
         return Convert.ToHexStringLower(hash);
     }
 

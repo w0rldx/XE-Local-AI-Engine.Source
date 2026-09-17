@@ -22,8 +22,8 @@ public sealed class GetTutorialStateEndpoint(INodeTutorialStateService tutorialS
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var entries = await _tutorialStateService.GetEntriesAsync(User, ct).ConfigureAwait(false);
-        await Send.OkAsync(entries.ToResponse(), ct).ConfigureAwait(false);
+        var entries = await _tutorialStateService.GetEntriesAsync(User, ct);
+        await Send.OkAsync(entries.ToResponse(), ct);
     }
 }
 
@@ -61,13 +61,13 @@ public sealed class SaveTutorialStateEndpoint(INodeTutorialStateService tutorial
 
         ThrowIfAnyErrors();
 
-        var saved = await _tutorialStateService.SaveEntryAsync(User, req.Key, status, ct).ConfigureAwait(false);
+        var saved = await _tutorialStateService.SaveEntryAsync(User, req.Key, status, ct);
         if (!saved)
         {
-            await Send.UnauthorizedAsync(ct).ConfigureAwait(false);
+            await Send.UnauthorizedAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

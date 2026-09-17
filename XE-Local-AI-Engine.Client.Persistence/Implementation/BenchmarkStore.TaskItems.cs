@@ -7,17 +7,17 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed partial class BenchmarkStore
 {
     public async Task<IReadOnlyList<BenchmarkTaskItemRecord>> ListTaskItemsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
-        [.. (await TaskItemsAsync(projectId, tracking: false, cancellationToken).ConfigureAwait(false)).Select(ToRecord)];
+        [.. (await TaskItemsAsync(projectId, tracking: false, cancellationToken)).Select(ToRecord)];
 
     public async Task<IReadOnlyList<BenchmarkTaskItemRecord>> GetOrCreateItemsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        var existing = await ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var existing = await ListTaskItemsAsync(projectId, cancellationToken);
         if (existing.Count > 0)
         {
             return existing;
         }
 
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         var now = Now();
         var item = NewTaskItem(projectId,
             new BenchmarkTaskItemInput(project.CoreTaskJson),
@@ -30,7 +30,7 @@ public sealed partial class BenchmarkStore
         _dbContext.BenchmarkTaskItems.Add(item);
         try
         {
-            await SaveAsync(cancellationToken).ConfigureAwait(false);
+            await SaveAsync(cancellationToken);
         }
         catch (BenchmarkConflictException exception) when (string.Equals(exception.Code, "DuplicateWork", StringComparison.Ordinal))
         {
@@ -38,7 +38,7 @@ public sealed partial class BenchmarkStore
             // (project_id, index) index turns that into a constraint violation rather than a second item 0, so the
             // loser simply reads what the winner wrote.
             _dbContext.ChangeTracker.Clear();
-            return await ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+            return await ListTaskItemsAsync(projectId, cancellationToken);
         }
 
         return [ToRecord(item)];
@@ -51,12 +51,12 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken = default)
     {
         ValidateTaskItem(input);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedProjectVersion);
-        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken);
 
-        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken);
         if (input.ParentItemId is { } parentId && items.All(entity => entity.Id != parentId))
         {
             throw new BenchmarkValidationException("The parent task item does not belong to this project.");
@@ -74,8 +74,8 @@ public sealed partial class BenchmarkStore
             item
         };
         written.AddRange(AddChildren(projectId, item.Id, children, nextIndex + 1, now));
-        await ApplyItemSetChangeAsync(project, written, now, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await ApplyItemSetChangeAsync(project, written, now, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(item);
     }
 
@@ -87,10 +87,10 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken = default)
     {
         ValidateTaskItem(input);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken).ConfigureAwait(false);
-        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
+        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken);
+        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken);
         var item = items.SingleOrDefault(entity => entity.Id == itemId) ?? throw new BenchmarkNotFoundException("Benchmark task item was not found.");
         EnsureVersion(item.Version, expectedItemVersion);
         if (!string.Equals(item.Kind, input.Kind, StringComparison.Ordinal))
@@ -127,8 +127,8 @@ public sealed partial class BenchmarkStore
             survivors.AddRange(AddChildren(projectId, itemId, children, items.Max(entity => entity.Index) + 1, now));
         }
 
-        await ApplyItemSetChangeAsync(project, survivors, now, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await ApplyItemSetChangeAsync(project, survivors, now, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(item);
     }
 
@@ -159,10 +159,10 @@ public sealed partial class BenchmarkStore
 
     public async Task DeleteTaskItemAsync(Guid projectId, Guid itemId, long expectedItemVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken).ConfigureAwait(false);
-        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
+        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken);
+        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken);
         var item = items.SingleOrDefault(entity => entity.Id == itemId) ?? throw new BenchmarkNotFoundException("Benchmark task item was not found.");
         EnsureVersion(item.Version, expectedItemVersion);
 
@@ -178,8 +178,8 @@ public sealed partial class BenchmarkStore
         // children before the parent they point at.
         _dbContext.BenchmarkTaskItems.RemoveRange(doomed.Where(entity => entity.ParentItemId == itemId));
         _dbContext.BenchmarkTaskItems.Remove(item);
-        await ApplyItemSetChangeAsync(project, survivors, Now(), cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await ApplyItemSetChangeAsync(project, survivors, Now(), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderTaskItemsAsync(Guid projectId,
@@ -187,9 +187,9 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(orderedItemIds);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
+        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken);
 
         // Naming exactly the current set is this call's concurrency check: an item added or deleted while the operator
         // was dragging makes the two sets disagree, and the reorder is refused instead of renumbering a stale list.
@@ -209,7 +209,7 @@ public sealed partial class BenchmarkStore
             items.Single(entity => entity.Id == orderedItemIds[position]).Index = offset + position;
         }
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         for (var position = 0; position < orderedItemIds.Count; position++)
         {
             var item = items.Single(entity => entity.Id == orderedItemIds[position]);
@@ -221,8 +221,8 @@ public sealed partial class BenchmarkStore
         // No revision bump, no set-hash change and no cohort reset, all deliberately: the index is a display position
         // that no hash carries, and a drag-and-drop must not unrank a completed suite.
         project.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return [.. items.OrderBy(static entity => entity.Index).Select(ToRecord)];
     }
 
@@ -238,7 +238,7 @@ public sealed partial class BenchmarkStore
             return;
         }
 
-        var items = await TaskItemsAsync(project.Id, tracking: true, cancellationToken).ConfigureAwait(false);
+        var items = await TaskItemsAsync(project.Id, tracking: true, cancellationToken);
         var first = items.Where(static entity => BenchmarkTaskItemKinds.IsLeaf(entity.Kind)).MinBy(static entity => entity.Index);
         if (first is null)
         {
@@ -272,10 +272,10 @@ public sealed partial class BenchmarkStore
             project.Version++;
         }
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         if (moved)
         {
-            await ResetCurrentCohortAsync(project.Id, cancellationToken).ConfigureAwait(false);
+            await ResetCurrentCohortAsync(project.Id, cancellationToken);
         }
     }
 
@@ -289,7 +289,7 @@ public sealed partial class BenchmarkStore
         var active = await (from work in _dbContext.BenchmarkWorkItems.AsNoTracking()
             join run in _dbContext.BenchmarkRuns.AsNoTracking() on work.RunId equals run.Id
             where run.ProjectId == projectId && (work.Status == BenchmarkWorkStatus.Queued || work.Status == BenchmarkWorkStatus.Running)
-            select work.QueueSequence).AnyAsync(cancellationToken).ConfigureAwait(false);
+            select work.QueueSequence).AnyAsync(cancellationToken);
         if (active)
         {
             throw new BenchmarkConflictException("ActiveRun");
@@ -302,8 +302,7 @@ public sealed partial class BenchmarkStore
         return await query.Where(entity => entity.ProjectId == projectId)
                           .OrderBy(entity => entity.Index)
                           .ThenBy(entity => entity.Id)
-                          .ToListAsync(cancellationToken)
-                          .ConfigureAwait(false);
+                          .ToListAsync(cancellationToken);
     }
 
     /// <summary>

@@ -19,35 +19,35 @@ public sealed class EncryptConversationTitleMigrationTests
     [Test]
     public async Task Migrate_OverAPlaintextTitle_ClearsItAndKeepsTheConversation()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("encrypt-title.sqlite", PreEncryptionMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("encrypt-title.sqlite", PreEncryptionMigrationId);
 
         var conversationId = Guid.NewGuid().ToString();
         await probe.ExecuteAsync("""
                                  INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
                                  VALUES ($conversation_id, 'Quarterly revenue plan', 'node', 1234, 1234, 0);
                                  """,
-            command => command.Parameters.AddWithValue("$conversation_id", conversationId)).ConfigureAwait(false);
+            command => command.Parameters.AddWithValue("$conversation_id", conversationId));
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
-        AssertEx.Equal(expected: 1L, (await probe.LongsAsync("SELECT COUNT(*) FROM conversations;").ConfigureAwait(false)).Single(),
+        AssertEx.Equal(expected: 1L, (await probe.LongsAsync("SELECT COUNT(*) FROM conversations;")).Single(),
             "The conversation must survive; only its title is cleared.");
 
         var title = await probe.ScalarAsync("SELECT title FROM conversations WHERE conversation_id = $id;",
-            command => command.Parameters.AddWithValue("$id", conversationId)).ConfigureAwait(false);
+            command => command.Parameters.AddWithValue("$id", conversationId));
         AssertEx.Null(title, "The pre-migration plaintext title must not survive the migration.");
 
         AssertEx.Equal(expected: 0L,
-            (await probe.LongsAsync("SELECT COUNT(*) FROM conversations WHERE title IS NOT NULL;").ConfigureAwait(false)).Single(),
+            (await probe.LongsAsync("SELECT COUNT(*) FROM conversations WHERE title IS NOT NULL;")).Single(),
             "No conversation may keep a title through this migration.");
     }
 
     [Test]
     public async Task Migrate_ToThisMigration_WidensTheTitleColumnToABlob()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("encrypt-title-column.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("encrypt-title-column.sqlite", ThisMigrationId);
 
-        var declaredType = await probe.ScalarAsync("SELECT type FROM pragma_table_info('conversations') WHERE name = 'title';").ConfigureAwait(false);
+        var declaredType = await probe.ScalarAsync("SELECT type FROM pragma_table_info('conversations') WHERE name = 'title';");
 
         AssertEx.Equal("BLOB", AssertEx.NotNull(declaredType as string, "conversations.title must exist."),
             "The title column must be a BLOB — the product writes AEAD ciphertext into it, not text.");

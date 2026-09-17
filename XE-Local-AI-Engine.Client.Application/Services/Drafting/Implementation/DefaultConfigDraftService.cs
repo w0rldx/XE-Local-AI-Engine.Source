@@ -119,7 +119,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
                 $"The request exceeds the {_options.MaxPromptChars}-character prompt budget.");
         }
 
-        var eligibleProviderName = await ResolveEligibleProviderAsync(request.ModelName, cancellationToken).ConfigureAwait(false);
+        var eligibleProviderName = await ResolveEligibleProviderAsync(request.ModelName, cancellationToken);
         if (eligibleProviderName is null)
         {
             return DraftResult.Failed(DraftFailureKind.ModelNotEligible,
@@ -135,7 +135,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
                     "The node is running another task; try again once it finishes.");
             }
 
-            return await GenerateAsync(request, systemPrompt, normalize, eligibleProviderName, cancellationToken).ConfigureAwait(false);
+            return await GenerateAsync(request, systemPrompt, normalize, eligibleProviderName, cancellationToken);
         }
         finally
         {
@@ -154,7 +154,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         // the same knob that bounds a chat send/regenerate — read LIVE here so a Save applies without a node restart.
         // An explicit Drafting:GenerationTimeout still wins as a drafting-specific ceiling.
         var generationTimeout = _options.GenerationTimeout
-                                ?? TimeSpan.FromSeconds((await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false))
+                                ?? TimeSpan.FromSeconds((await _nodeSettingsStore.LoadAsync(cancellationToken))
                                     .MaxMessageRequestTimeoutSeconds);
 
         using var generationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -166,7 +166,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
             // Provider resolution runs INSIDE the timeout mapping: it takes the linked token, so a stalled
             // provider-map read elapsing the budget must surface as the same typed failure as a stalled generation —
             // not as an unhandled OperationCanceledException the endpoint turns into a 500.
-            var provider = await _providerResolver.ResolveProviderForModelAsync(request.ModelName, generationCancellation.Token).ConfigureAwait(false);
+            var provider = await _providerResolver.ResolveProviderForModelAsync(request.ModelName, generationCancellation.Token);
 
             // The resolver routes an unmapped model to the configured DEFAULT provider, so it is not a guard on its
             // own: if the runtime it picked is not the one eligibility cleared, refuse rather than generate on an
@@ -196,8 +196,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
                 MaxOutputTokens = _options.MaxOutputTokens
             };
 
-            response = await chatClient.GetResponseAsync<TEnvelope>(messages, chatOptions, cancellationToken: generationCancellation.Token)
-                                       .ConfigureAwait(false);
+            response = await chatClient.GetResponseAsync<TEnvelope>(messages, chatOptions, cancellationToken: generationCancellation.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -224,7 +223,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     /// </summary>
     private async Task<string?> ResolveEligibleProviderAsync(string modelName, CancellationToken cancellationToken)
     {
-        var classification = await _modelClassificationStore.GetByNameAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var classification = await _modelClassificationStore.GetByNameAsync(modelName, cancellationToken);
 
         // An absent row means the model was never classified, which is a REJECT here (unlike the chat picker, which
         // treats unknown as eligible): drafting is opt-in and must not be the thing that discovers a model's kind.
@@ -233,7 +232,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
             return null;
         }
 
-        var installedGguf = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installedGguf = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
         if (installedGguf.Any(descriptor => string.Equals(descriptor.ModelName, modelName, StringComparison.OrdinalIgnoreCase)))
         {
             return LlamaServerProviderConstants.ProviderName;
@@ -241,7 +240,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
 
         // The two installed-model universes are disjoint and there is no unified inventory facade, so the Ollama side is
         // composed separately — and only when its endpoint is loopback.
-        return await _ollamaModelService.IsLoopbackModelInstalledAsync(modelName, cancellationToken).ConfigureAwait(false)
+        return await _ollamaModelService.IsLoopbackModelInstalledAsync(modelName, cancellationToken)
             ? OllamaLocalModelProvider.OllamaProviderName
             : null;
     }

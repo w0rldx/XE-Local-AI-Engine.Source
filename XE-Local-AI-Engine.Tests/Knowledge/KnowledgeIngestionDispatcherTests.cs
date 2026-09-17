@@ -22,14 +22,14 @@ public sealed class KnowledgeIngestionDispatcherTests
         // Fill the queue exactly to capacity: every one of these must be admitted (nothing drains it — no worker runs).
         for (var i = 0; i < KnowledgeIngestionDispatcher.Capacity; i++)
         {
-            var admitted = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            var admitted = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
             AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, admitted);
         }
 
         AssertEx.Equal(KnowledgeIngestionDispatcher.Capacity, (int)dispatcher.PendingCount);
 
         // The queue is full: the next admission is rejected, not dropped and not blocked.
-        var rejected = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+        var rejected = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.QueueFull, rejected);
         AssertEx.Equal(KnowledgeIngestionDispatcher.Capacity, (int)dispatcher.PendingCount);
     }
@@ -43,9 +43,9 @@ public sealed class KnowledgeIngestionDispatcherTests
         // A retry (or drain-sweep) of a document already queued must be a no-op accept, not a second queue entry, so the
         // document is never processed twice concurrently.
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted,
-            await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false));
+            await dispatcher.EnqueueAsync(documentId, CancellationToken.None));
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted,
-            await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false));
+            await dispatcher.EnqueueAsync(documentId, CancellationToken.None));
 
         AssertEx.Equal(1, (int)dispatcher.PendingCount);
     }
@@ -56,14 +56,14 @@ public sealed class KnowledgeIngestionDispatcherTests
         var dispatcher = new KnowledgeIngestionDispatcher();
         var documentId = Guid.NewGuid();
 
-        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None);
         AssertEx.True(dispatcher.Reader.TryRead(out var firstRun));
         AssertEx.Equal(documentId, firstRun);
 
         // A repository replacement keeps the same document id. It must not run concurrently with the old revision, but
         // its admission must survive until completion so the replacement blob is eventually indexed.
-        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
-        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None);
+        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None);
         AssertEx.False(dispatcher.Reader.TryRead(out _), "The follow-up must remain deferred while the first run is active.");
 
         dispatcher.MarkCompleted(documentId);
@@ -79,13 +79,13 @@ public sealed class KnowledgeIngestionDispatcherTests
         var dispatcher = new KnowledgeIngestionDispatcher();
         var documentId = Guid.NewGuid();
 
-        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None);
         // Worker drains it, then reports completion — the id leaves the admitted set so a later reindex can re-queue it.
         AssertEx.True(dispatcher.Reader.TryRead(out _));
         dispatcher.MarkCompleted(documentId);
 
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted,
-            await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false));
+            await dispatcher.EnqueueAsync(documentId, CancellationToken.None));
         AssertEx.Equal(1, (int)dispatcher.PendingCount);
     }
 
@@ -95,16 +95,16 @@ public sealed class KnowledgeIngestionDispatcherTests
         var dispatcher = new KnowledgeIngestionDispatcher();
         for (var i = 0; i < KnowledgeIngestionDispatcher.Capacity; i++)
         {
-            _ = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            _ = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
         }
 
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.QueueFull,
-            await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false));
+            await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None));
 
         // Drain one slot; the queue now has room and admits again — admission recovers, it is not a permanent latch.
         AssertEx.True(dispatcher.Reader.TryRead(out _));
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted,
-            await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false));
+            await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
     [Test]
@@ -149,7 +149,7 @@ public sealed class KnowledgeIngestionDispatcherTests
         var rejectedResults = 0;
         for (var i = 0; i < KnowledgeIngestionDispatcher.Capacity + 3; i++)
         {
-            var result = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            var result = await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
             if (result == KnowledgeIngestionEnqueueResult.Accepted)
             {
                 acceptedResults++;

@@ -20,29 +20,29 @@ public sealed class AddBenchmarkRunRepeatModeMigrationTests
     [Test]
     public async Task Migrate_ToLatest_BackfillsTheModeAndLeavesTheSamplingUnrecorded()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-repeat-mode.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-repeat-mode.sqlite");
 
-        var columns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("benchmark_runs");
         foreach (var column in AddedColumns)
         {
             AssertEx.True(columns.Contains(column), $"benchmark_runs must record {column}.");
         }
 
-        AssertEx.Equal("'Throughput'", await probe.ColumnDefaultAsync("benchmark_runs", "repeat_mode").ConfigureAwait(false),
+        AssertEx.Equal("'Throughput'", await probe.ColumnDefaultAsync("benchmark_runs", "repeat_mode"),
             "Every run frozen before this was a throughput repeat, so the backfill is a fact rather than a guess.");
-        AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_runs", "sampling_seed").ConfigureAwait(false),
+        AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_runs", "sampling_seed"),
             "The seed those runs used is knowable, but it was never recorded — and those are different facts.");
-        AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_runs", "sampling_temperature").ConfigureAwait(false));
+        AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_runs", "sampling_temperature"));
     }
 
     [Test]
     public async Task Migrate_Down_RemovesTheColumnsAndKeepsTheRepeatColumnsItSitsBeside()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-repeat-mode-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-repeat-mode-down.sqlite");
 
-        await probe.MigrateToAsync(PreviousMigration).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreviousMigration);
 
-        var columns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("benchmark_runs");
         foreach (var column in AddedColumns)
         {
             AssertEx.False(columns.Contains(column), $"Down must drop benchmark_runs.{column}.");

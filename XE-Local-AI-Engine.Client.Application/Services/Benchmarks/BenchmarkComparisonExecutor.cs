@@ -83,11 +83,11 @@ public sealed class BenchmarkComparisonExecutor(
         string? policyHash = null;
         try
         {
-            comparison = await store.GetComparisonAsync(comparisonId, token).ConfigureAwait(false)
+            comparison = await store.GetComparisonAsync(comparisonId, token)
                          ?? throw new BenchmarkExecutionException("The comparison is no longer available.");
             // A comparison frozen under a different launch-identity scheme is failed before it launches.
             BenchmarkLaunchIdentityScheme.RequireCurrent(comparison.LaunchIntent);
-            var revision = await store.GetJudgePolicyRevisionAsync(comparison.PolicyRevisionId, token).ConfigureAwait(false)
+            var revision = await store.GetJudgePolicyRevisionAsync(comparison.PolicyRevisionId, token)
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");
             policyHash = revision.PolicyHash;
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
@@ -111,8 +111,8 @@ public sealed class BenchmarkComparisonExecutor(
             var runtime = comparison.JudgeRuntimeJson is { } runtimeJson
                 ? BenchmarkJudgeSerialization.DeserializeRuntime(runtimeJson.Span)
                 : throw new BenchmarkExecutionException("The frozen judge runtime is unavailable.");
-            var runA = await RequireAnsweredRunAsync(comparison.RunAId, work, token).ConfigureAwait(false);
-            var runB = await RequireAnsweredRunAsync(comparison.RunBId, work, token).ConfigureAwait(false);
+            var runA = await RequireAnsweredRunAsync(comparison.RunAId, work, token);
+            var runB = await RequireAnsweredRunAsync(comparison.RunBId, work, token);
             var snapshot = snapshots.Deserialize(runA.RuntimeSnapshotJson.Span);
 
             // HALF the judge window each, because both answers plus the task, the reference answer and the verdict
@@ -124,13 +124,13 @@ public sealed class BenchmarkComparisonExecutor(
             var truncatedA = WasTruncated(answerA);
             var truncatedB = WasTruncated(answerB);
 
-            await using var modelLease = await installedModels.AcquireAsync(runtime.Model.ModelName, token).ConfigureAwait(false);
+            await using var modelLease = await installedModels.AcquireAsync(runtime.Model.ModelName, token);
             if (!BenchmarkSnapshotModelComparer.Matches(runtime.Model, modelLease.Snapshot))
             {
                 throw new BenchmarkExecutionException(FingerprintChangedMessage);
             }
 
-            environment = await environmentFacts.CaptureAsync(runtime.Runtime.Variant, token).ConfigureAwait(false);
+            environment = await environmentFacts.CaptureAsync(runtime.Runtime.Variant, token);
 
             // No launch admission, and a retry around the rejection: a comparison is dequeued by the same single
             // consumer that just ran the previous one, so it routinely arrives while that llama-server is still
@@ -151,8 +151,7 @@ public sealed class BenchmarkComparisonExecutor(
                                                                    CapacityRejectedMessage),
                                                                waitBudget,
                                                                logger,
-                                                               token)
-                                                           .ConfigureAwait(false);
+                                                               token);
             using var reservation = decision.Reservation;
             var package = BuildComparisonPackage(snapshot, policy, runtime, comparison.Order == 0 ? answerA : answerB,
                 comparison.Order == 0 ? answerB : answerA,
@@ -164,7 +163,7 @@ public sealed class BenchmarkComparisonExecutor(
             // begun for it: a comparison is not a phase of either run, and claiming one would make a run's live view
             // report a judging that is not about it. The buffered deltas are evicted on the way out.
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
-            var currentVariant = await variantSelector.SelectVariantAsync(token).ConfigureAwait(false);
+            var currentVariant = await variantSelector.SelectVariantAsync(token);
             if (currentVariant != runtime.Runtime.Variant)
             {
                 throw new BenchmarkExecutionException("The selected judge llama.cpp runtime changed after the comparison was enqueued.");
@@ -183,11 +182,11 @@ public sealed class BenchmarkComparisonExecutor(
                                                          {
                                                              // Durable BEFORE a token is generated: the receipt, the environment facts and
                                                              // the execution key the fit will insist every fitted comparison shares.
-                                                             await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment).ConfigureAwait(false);
+                                                             await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment);
                                                              using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                                                             await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                                                             await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
                                                              using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
-                                                             await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                                                             await runner.RunAsync(context, profilingToken);
                                                              return true;
                                                          },
                                                          spawnToken),
@@ -195,8 +194,7 @@ public sealed class BenchmarkComparisonExecutor(
                                                  work.RunId,
                                                  "comparison",
                                                  logger,
-                                                 token)
-                                             .ConfigureAwait(false);
+                                                 token);
             token.ThrowIfCancellationRequested();
             var terminal = capture.TerminalState;
             if (terminal?.Status != InvocationStatus.Completed)
@@ -210,10 +208,9 @@ public sealed class BenchmarkComparisonExecutor(
                            BenchmarkPairwiseResultParser.ToCanonicalVerdict(parsed.Verdict, comparison.Order),
                            new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(BenchmarkCanonicalJson.Serialize(parsed))),
                            truncatedA,
-                           truncatedB), CancellationToken.None)
-                       .ConfigureAwait(false);
+                           truncatedB), CancellationToken.None);
             events.EvictPlaintext(work.RunId);
-            _ = await fitter.TryPublishAsync(comparison.ProjectId, CancellationToken.None).ConfigureAwait(false);
+            _ = await fitter.TryPublishAsync(comparison.ProjectId, CancellationToken.None);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -222,7 +219,7 @@ public sealed class BenchmarkComparisonExecutor(
         }
         catch (OperationCanceledException)
         {
-            await TerminalizeAsync(work, comparison, policyHash, environment, cancelled: true, message: null).ConfigureAwait(false);
+            await TerminalizeAsync(work, comparison, policyHash, environment, cancelled: true, message: null);
         }
         catch (Exception exception)
         {
@@ -234,13 +231,13 @@ public sealed class BenchmarkComparisonExecutor(
                 cancelled: false,
                 exception is BenchmarkExecutionException or BenchmarkSnapshotException or LlamaRuntimeException
                     ? exception.Message
-                    : InvocationFailedMessage).ConfigureAwait(false);
+                    : InvocationFailedMessage);
         }
     }
 
     private async Task<BenchmarkRunRecord> RequireAnsweredRunAsync(Guid runId, BenchmarkClaimedWork work, CancellationToken token)
     {
-        var run = work.Run.Id == runId ? work.Run : await store.GetRunAsync(runId, token).ConfigureAwait(false);
+        var run = work.Run.Id == runId ? work.Run : await store.GetRunAsync(runId, token);
         if (run is null || run.PrimaryStatus != BenchmarkPrimaryStatus.Succeeded || run.OutputPartsJson is null)
         {
             throw new BenchmarkExecutionException("A run of this comparison has no benchmark result to judge.");
@@ -314,8 +311,7 @@ public sealed class BenchmarkComparisonExecutor(
                                work.Version,
                                command,
                                BenchmarkJudgeExecutionKey.TryCompute(policyHash!, receipt, environment),
-                               CancellationToken.None)
-                           .ConfigureAwait(false);
+                               CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -333,19 +329,18 @@ public sealed class BenchmarkComparisonExecutor(
     {
         if (comparison is not null)
         {
-            await CheckpointAsync(work, comparison, policyHash, receipt: null, environment).ConfigureAwait(false);
+            await CheckpointAsync(work, comparison, policyHash, receipt: null, environment);
         }
 
         try
         {
             if (cancelled)
             {
-                await store.MarkComparisonCancelledAsync(work.QueueSequence, work.Version, CancellationToken.None).ConfigureAwait(false);
+                await store.MarkComparisonCancelledAsync(work.QueueSequence, work.Version, CancellationToken.None);
             }
             else
             {
-                await store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, message ?? InvocationFailedMessage, CancellationToken.None)
-                           .ConfigureAwait(false);
+                await store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, message ?? InvocationFailedMessage, CancellationToken.None);
             }
         }
         catch (BenchmarkStoreException exception)

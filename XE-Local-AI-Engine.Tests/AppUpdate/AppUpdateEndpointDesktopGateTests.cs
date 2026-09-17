@@ -38,7 +38,7 @@ public sealed class AppUpdateEndpointDesktopGateTests
             factory.AddNodeBearerToken(request);
             request.Headers.Add("Origin", "http://localhost");
 
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
+            using var response = await client.SendAsync(request);
 
             // Unmapped POST path → routing rejects it. A registered endpoint with a valid operator token would have
             // returned 200/400; 404/405 proves the endpoint was never mapped off the desktop flag.
@@ -59,7 +59,7 @@ public sealed class AppUpdateEndpointDesktopGateTests
             factory.AddNodeBearerToken(request);
             request.Headers.Add("Origin", "http://localhost");
 
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
+            using var response = await client.SendAsync(request);
 
             // The GET route is unmapped, so it falls through to the SPA fallback (HTML) rather than producing a JSON
             // endpoint response. The decisive check: the body is NOT a JSON app-update payload.

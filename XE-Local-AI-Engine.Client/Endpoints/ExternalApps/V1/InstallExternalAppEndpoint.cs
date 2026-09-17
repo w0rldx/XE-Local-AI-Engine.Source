@@ -42,9 +42,8 @@ public sealed class InstallExternalAppEndpoint(IExternalAppService apps)
                                          req.ManifestSha256,
                                          req.Variables,
                                          req.AcceptPermissions),
-                                     ct)
-                                 .ConfigureAwait(false);
+                                     ct);
 
-        await Send.ResultAsync(Results.Accepted(value: ExternalAppMapper.ToSummaryView(summary))).ConfigureAwait(false);
+        await Send.ResultAsync(Results.Accepted(value: ExternalAppMapper.ToSummaryView(summary)));
     }
 }

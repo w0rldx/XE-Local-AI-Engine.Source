@@ -69,7 +69,7 @@ public sealed class StructuredAgentRunner(
 
         TrainingModelEligibility.EnsureNotExternal(request.ModelName, "dataset generation teachers");
 
-        var (supportsThinking, _, isCloud) = await _capabilityResolver.ResolveAsync(request.ModelName, cancellationToken).ConfigureAwait(false);
+        var (supportsThinking, _, isCloud) = await _capabilityResolver.ResolveAsync(request.ModelName, cancellationToken);
         if (isCloud)
         {
             // Invariant #5: teacher, critic and judge are node-local.
@@ -118,8 +118,7 @@ public sealed class StructuredAgentRunner(
             var response = await agent.RunAsync(seed, session: null, new ChatClientAgentRunOptions
                                       {
                                           ChatOptions = chatOptions
-                                      }, turnCancellation.Token)
-                                      .ConfigureAwait(false);
+                                      }, turnCancellation.Token);
             activity?.SetStatus(ActivityStatusCode.Ok);
             var text = response.Text ?? string.Empty;
             return string.IsNullOrWhiteSpace(text)

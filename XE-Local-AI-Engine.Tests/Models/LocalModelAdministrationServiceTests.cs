@@ -23,8 +23,7 @@ public sealed class LocalModelAdministrationServiceTests
         harness.GgufStore.ExistsAsync("missing", Arg.Any<CancellationToken>()).Returns(false);
 
         var result = await harness.Service
-                                  .SelectDefaultAsync("missing", LocalModelSelectionPolicy.InstalledLocalOnly)
-                                  .ConfigureAwait(false);
+                                  .SelectDefaultAsync("missing", LocalModelSelectionPolicy.InstalledLocalOnly);
 
         AssertEx.False(result.Succeeded);
         AssertEx.Equal(LocalModelAdministrationFailureCodes.ModelNotInstalled, result.FailureCode);
@@ -43,12 +42,11 @@ public sealed class LocalModelAdministrationServiceTests
         harness.CloudResolver.IsCloudModelAsync("old-cloud", Arg.Any<CancellationToken>()).Returns(true);
 
         var result = await harness.Service
-                                  .SelectDefaultAsync("configured-only", LocalModelSelectionPolicy.ConfiguredModel)
-                                  .ConfigureAwait(false);
+                                  .SelectDefaultAsync("configured-only", LocalModelSelectionPolicy.ConfiguredModel);
 
         AssertEx.True(result.Succeeded);
         AssertEx.Equal("configured-only", result.SelectedModelName);
-        await harness.GgufStore.DidNotReceive().ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await harness.GgufStore.DidNotReceive().ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         AssertEx.Equal(expected: 1, settings.WriteCount);
         AssertEx.Equal("configured-only", settings.Current.DefaultModelName);
         AssertEx.Equal<bool?>(expected: true, settings.Current.CustomToolsEnabled, "an unrelated field must survive the selection write.");
@@ -74,8 +72,7 @@ public sealed class LocalModelAdministrationServiceTests
         var harness = new Harness(settings);
 
         var result = await harness.Service
-                                  .SelectDefaultAsync("configured-only", LocalModelSelectionPolicy.ConfiguredModel)
-                                  .ConfigureAwait(false);
+                                  .SelectDefaultAsync("configured-only", LocalModelSelectionPolicy.ConfiguredModel);
 
         AssertEx.True(result.Succeeded);
         AssertEx.Equal("configured-only", settings.Current.DefaultModelName);
@@ -96,11 +93,11 @@ public sealed class LocalModelAdministrationServiceTests
         var committed = new CommittedModelDeletion(operationId, "local", ["local"], receipt);
         harness.DeletionCoordinator.CommitDeleteAsync("local", Arg.Any<CancellationToken>()).Returns(committed);
 
-        var result = await harness.Service.DeleteAsync("local").ConfigureAwait(false);
+        var result = await harness.Service.DeleteAsync("local");
 
         AssertEx.True(result.Succeeded);
         AssertEx.True(result.Deleted);
-        await harness.DeletionCoordinator.Received(1).PurgeAfterSuccessAsync(committed, CancellationToken.None).ConfigureAwait(false);
+        await harness.DeletionCoordinator.Received(1).PurgeAfterSuccessAsync(committed, CancellationToken.None);
     }
 
     [Test]
@@ -116,11 +113,11 @@ public sealed class LocalModelAdministrationServiceTests
         harness.DeletionCoordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None)
                .Returns(Task.FromException(new IOException("purge failed")));
 
-        var result = await harness.Service.DeleteAsync("local").ConfigureAwait(false);
+        var result = await harness.Service.DeleteAsync("local");
 
         AssertEx.True(result.Succeeded);
         AssertEx.True(result.Deleted);
-        await harness.DeletionCoordinator.Received(1).PurgeAfterSuccessAsync(committed, CancellationToken.None).ConfigureAwait(false);
+        await harness.DeletionCoordinator.Received(1).PurgeAfterSuccessAsync(committed, CancellationToken.None);
     }
 
     [Test]
@@ -128,12 +125,12 @@ public sealed class LocalModelAdministrationServiceTests
     {
         var harness = new Harness();
 
-        var result = await harness.Service.DeleteAsync("  ").ConfigureAwait(false);
+        var result = await harness.Service.DeleteAsync("  ");
 
         AssertEx.False(result.Succeeded);
         AssertEx.Equal(LocalModelAdministrationFailureCodes.InvalidModelName, result.FailureCode);
         await harness.ProviderResolver.DidNotReceive()
-                     .ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+                     .ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     private sealed class Harness

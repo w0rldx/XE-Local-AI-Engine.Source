@@ -31,7 +31,7 @@ public sealed class BenchmarkExportQueryTests
         resolver.ResolveRun(Arg.Any<BenchmarkRunRecord>()).Returns(BenchmarkExportRunFacts.Empty);
         var query = new BenchmarkExportQuery(store, resolver);
 
-        var result = AssertEx.NotNull(await query.GetJsonAsync(ProjectId, CancellationToken.None).ConfigureAwait(false));
+        var result = AssertEx.NotNull(await query.GetJsonAsync(ProjectId, CancellationToken.None));
 
         AssertEx.Equal(expected: 5, result.Runs.Count);
         AssertEx.Equal("expected", result.Fidelity.ExpectedKldDigest);
@@ -41,10 +41,10 @@ public sealed class BenchmarkExportQueryTests
         _ = resolver.Received(1).ResolveRun(Arg.Is<BenchmarkRunRecord>(run => run.Id == repeatZero.Id));
         _ = resolver.Received(1).ResolveRun(Arg.Is<BenchmarkRunRecord>(run => run.Id == ungrouped.Id));
         _ = resolver.DidNotReceive().ResolveRun(Arg.Is<BenchmarkRunRecord>(run => run.Id == repeatOne.Id || run.Id == warmup.Id || run.Id == unmeasured.Id));
-        _ = await store.Received(1).GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        _ = await store.Received(1).GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        _ = await store.Received(5).GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        _ = await store.Received(1).GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        _ = await store.Received(1).GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>());
+        _ = await store.Received(1).GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>());
+        _ = await store.Received(5).GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        _ = await store.Received(1).GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -54,7 +54,7 @@ public sealed class BenchmarkExportQueryTests
         var store = Store(Project(), summaries);
         var query = new BenchmarkExportQuery(store, Substitute.For<IBenchmarkExportFactsResolver>());
 
-        var result = AssertEx.NotNull(await query.GetJsonAsync(ProjectId, CancellationToken.None).ConfigureAwait(false));
+        var result = AssertEx.NotNull(await query.GetJsonAsync(ProjectId, CancellationToken.None));
 
         AssertEx.True(result.Summaries.Select(static run => run.Id).SequenceEqual(summaries.Select(static run => run.Id)));
         AssertEx.True(result.Runs.Select(static item => item.Summary.Id).SequenceEqual(summaries.Select(static run => run.Id)));
@@ -69,13 +69,13 @@ public sealed class BenchmarkExportQueryTests
         resolver.ResolveProject(Arg.Any<BenchmarkProjectRecord>()).Returns(new BenchmarkFidelityDisplayFacts("expected"));
         var query = new BenchmarkExportQuery(store, resolver);
 
-        var result = AssertEx.NotNull(await query.GetCsvAsync(ProjectId, CancellationToken.None).ConfigureAwait(false));
+        var result = AssertEx.NotNull(await query.GetCsvAsync(ProjectId, CancellationToken.None));
 
         AssertEx.True(result.Runs.Select(static run => run.Id).SequenceEqual(summaries.Select(static run => run.Id)));
         AssertEx.Equal("expected", result.Fidelity.ExpectedKldDigest);
-        _ = await store.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        _ = await store.DidNotReceive().GetJudgeAttemptAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        _ = await store.DidNotReceive().GetCurrentJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        _ = await store.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        _ = await store.DidNotReceive().GetJudgeAttemptAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        _ = await store.DidNotReceive().GetCurrentJudgePolicyRevisionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         _ = resolver.DidNotReceiveWithAnyArgs().ResolveRun(default!);
     }
 
@@ -87,10 +87,10 @@ public sealed class BenchmarkExportQueryTests
         store.GetProjectAsync(ProjectId, cancellation).Returns(Task.FromCanceled<BenchmarkProjectRecord?>(cancellation));
         var query = new BenchmarkExportQuery(store, Substitute.For<IBenchmarkExportFactsResolver>());
 
-        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => query.GetJsonAsync(ProjectId, cancellation)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => query.GetJsonAsync(ProjectId, cancellation));
 
-        _ = await store.Received(1).GetProjectAsync(ProjectId, cancellation).ConfigureAwait(false);
-        _ = await store.DidNotReceive().ListAllRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        _ = await store.Received(1).GetProjectAsync(ProjectId, cancellation);
+        _ = await store.DidNotReceive().ListAllRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

@@ -30,6 +30,6 @@ public sealed class CancelWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrat
         ArgumentNullException.ThrowIfNull(request);
 
         _ = _whisperRuntime.Cancel();
-        await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct);
     }
 }

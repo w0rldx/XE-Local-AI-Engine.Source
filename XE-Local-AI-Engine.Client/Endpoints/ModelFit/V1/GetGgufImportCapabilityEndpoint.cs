@@ -19,7 +19,7 @@ public sealed class GetGgufImportCapabilityEndpoint : EndpointWithoutRequest<Ggu
         await Send.OkAsync(new GgufImportCapabilityResponse
         {
             Available = available
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 
     internal static bool IsAvailable(string[] args, bool isManagedInstall) =>

@@ -29,7 +29,7 @@ public sealed class ListExternalAppInstanceEventsEndpoint(IExternalAppService ap
 
         // One row past the page: `hasMore` is then OBSERVED rather than inferred from a full page, which would report
         // "more" for the last page whenever the history happens to be a multiple of the limit.
-        var page = await _apps.ListEventsAsync(req.InstanceId, req.AfterSequence, req.Limit + 1, ct).ConfigureAwait(false);
+        var page = await _apps.ListEventsAsync(req.InstanceId, req.AfterSequence, req.Limit + 1, ct);
 
         var count = Math.Min(page.Count, req.Limit);
         var items = new List<ExternalAppInstanceEventView>(count);
@@ -42,6 +42,6 @@ public sealed class ListExternalAppInstanceEventsEndpoint(IExternalAppService ap
         // unchanged on an empty page, so "load more" against an idle instance cannot skip a row minted meanwhile.
         var highest = count == 0 ? req.AfterSequence : items[count - 1].Sequence;
 
-        await Send.OkAsync(new ListExternalAppInstanceEventsResponse(items, highest, page.Count > req.Limit), ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListExternalAppInstanceEventsResponse(items, highest, page.Count > req.Limit), ct);
     }
 }

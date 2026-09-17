@@ -104,8 +104,7 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 
         // OperationCanceledException propagates untouched (dispatcher records Cancelled). The progress callback may be
         // null (Summary-level dispatch) — the refresh service null-checks it.
-        var result = await refreshService.RefreshAsync(request, context.ReportProgressAsync, cancellationToken)
-                                         .ConfigureAwait(false);
+        var result = await refreshService.RefreshAsync(request, context.ReportProgressAsync, cancellationToken);
 
         if (result.Status != ModelFitRunStatus.Succeeded)
         {

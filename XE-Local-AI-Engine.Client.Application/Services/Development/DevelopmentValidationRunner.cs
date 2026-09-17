@@ -55,22 +55,21 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(repository);
-        var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var task = await _store.GetTaskAsync(taskId, cancellationToken);
         var transition = await _store.StartValidationAsync(new DevelopmentStartValidationCommand(taskId,
                                              Guid.NewGuid(),
                                              task.Version),
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
-        var coderAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
+                                         cancellationToken);
+        var coderAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken))
             .Last(attempt => attempt.Role == DevelopmentAttemptRole.Coder
                              && attempt.Status == DevelopmentAttemptStatus.Succeeded);
 
         try
         {
-            var snapshot = await _store.GetExecutionSnapshotAsync(coderAttempt.Id, cancellationToken).ConfigureAwait(false);
+            var snapshot = await _store.GetExecutionSnapshotAsync(coderAttempt.Id, cancellationToken);
             var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
-            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
-            var evidence = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken).ConfigureAwait(false);
+            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken);
+            var evidence = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken);
 
             // BEFORE the command loop, and before the tools that would run it exist. A dependency-manifest change
             // cannot be resolved by an attempt whose sandbox has no egress, so running restore/build/test to watch
@@ -91,7 +90,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 
                 foreach (var commandId in profile.ValidationCommandIds)
                 {
-                    _ = await tools.RunCommandAsync(commandId, timeout.Token).ConfigureAwait(false);
+                    _ = await tools.RunCommandAsync(commandId, timeout.Token);
                 }
 
                 var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
@@ -122,7 +121,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 [evidence.PatchArtifact.Id, evidence.ManifestArtifact.Id],
                 ProfileVersion,
                 profileDigest,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             var target = TargetFor(passed);
             _ = await _store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(prepared.Attachment,
@@ -130,8 +129,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                                     transition.Version,
                                     target,
                                     passed ? null : BuildFailureReason(verdict)),
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                                cancellationToken);
             return new DevelopmentValidationResult(prepared.ArtifactId, passed, target, evidence.Current.SubjectHash);
         }
         catch (Exception exception)
@@ -154,8 +152,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                 var alreadyRecovered = await _store.FindOperationAsync(task.ProjectId,
                                                        recovery,
                                                        DevelopmentOperationPhases.Completed,
-                                                       CancellationToken.None)
-                                                   .ConfigureAwait(false) is not null;
+                                                       CancellationToken.None) is not null;
                 _ = await _store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
                                         alreadyRecovered ? Guid.NewGuid() : recovery,
                                         alreadyRecovered ? DevelopmentTaskStatus.Blocked : DevelopmentTaskStatus.InProgress,
@@ -163,8 +160,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
                                         alreadyRecovered
                                             ? BuildRecoveryExhaustedReason(exception)
                                             : "Deterministic validation did not produce usable evidence."),
-                                    CancellationToken.None)
-                                .ConfigureAwait(false);
+                                    CancellationToken.None);
             }
             catch (Exception recoveryException) when (recoveryException is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)
             {

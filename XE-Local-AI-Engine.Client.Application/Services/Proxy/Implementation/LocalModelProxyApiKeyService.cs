@@ -42,7 +42,7 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
         var key = KeyScheme + secret;
         var prefix = KeyScheme + secret[..PrefixSecretCharacters];
 
-        var record = await _store.SetAsync(prefix, HashKey(key), cancellationToken).ConfigureAwait(false);
+        var record = await _store.SetAsync(prefix, HashKey(key), cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
         return new GeneratedLocalModelProxyApiKey(key, ToView(record));
@@ -50,7 +50,7 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
 
     public async Task<LocalModelProxyApiKeyView?> GetAsync(CancellationToken cancellationToken = default)
     {
-        var record = await _store.GetAsync(cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetAsync(cancellationToken);
         return record is null ? null : ToView(record);
     }
 
@@ -66,7 +66,7 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
             return false;
         }
 
-        var record = await _store.GetAsync(cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetAsync(cancellationToken);
         if (record is null)
         {
             // No key generated => the proxy authenticates nobody. Fail closed: an ungenerated credential must never
@@ -89,7 +89,7 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
             return false;
         }
 
-        await _store.TouchLastUsedAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken).ConfigureAwait(false);
+        await _store.TouchLastUsedAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
         return true;
     }
 

@@ -27,7 +27,7 @@ public sealed class KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scope
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         var result = new Dictionary<KnowledgeChunkEmbeddingCacheKey, CachedEmbedding>();
         const int batchSize = 500;
@@ -39,7 +39,7 @@ public sealed class KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scope
                 requested,
                 result,
                 notBeforeUtc.ToUnixTimeMilliseconds(),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
 
         return result.ToDictionary(static pair => pair.Key, static pair => pair.Value.Vector);
@@ -78,15 +78,15 @@ public sealed class KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scope
         AddParameter(command, "$indexed", KnowledgeDocumentStatus.Indexed.ToString());
         AddParameter(command, "$cutoff", cutoff);
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             var key = new KnowledgeChunkEmbeddingCacheKey(reader.GetString(0),
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetString(3),
                 reader.GetInt32(4));
-            var vector = await reader.GetFieldValueAsync<byte[]>(5, cancellationToken).ConfigureAwait(false);
+            var vector = await reader.GetFieldValueAsync<byte[]>(5, cancellationToken);
             var updatedAtUtc = reader.GetInt64(6);
             if (!requested.Contains(key)
                 || vector.Length != checked(key.Dimension * sizeof(float))

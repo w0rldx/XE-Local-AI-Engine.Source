@@ -65,7 +65,7 @@ public sealed class GoldenConversationEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute(Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -80,7 +80,7 @@ public sealed class GoldenConversationEndpointTests
         {
             Content = JsonContent.Create(BuildCreateBody())
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -92,7 +92,7 @@ public sealed class GoldenConversationEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(Guid.NewGuid(), Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -103,18 +103,18 @@ public sealed class GoldenConversationEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ListRoute(agentId))
         {
             Content = JsonContent.Create(BuildCreateBody())
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -137,7 +137,7 @@ public sealed class GoldenConversationEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         var body = new
         {
@@ -167,7 +167,7 @@ public sealed class GoldenConversationEndpointTests
             Content = JsonContent.Create(body)
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -178,16 +178,16 @@ public sealed class GoldenConversationEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        await CreateGoldenAsync(factory, client, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        await CreateGoldenAsync(factory, client, agentId);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute(agentId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
@@ -201,12 +201,12 @@ public sealed class GoldenConversationEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var goldenId = await CreateGoldenAsync(factory, client, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var goldenId = await CreateGoldenAsync(factory, client, agentId);
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(agentId, goldenId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
@@ -217,14 +217,14 @@ public sealed class GoldenConversationEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var otherAgentId = await SeedAgentAsync(factory, "Other").ConfigureAwait(false);
-        var goldenId = await CreateGoldenAsync(factory, client, ownerAgentId).ConfigureAwait(false);
+        var ownerAgentId = await SeedAgentAsync(factory, "Owner");
+        var otherAgentId = await SeedAgentAsync(factory, "Other");
+        var goldenId = await CreateGoldenAsync(factory, client, ownerAgentId);
 
         // Delete the owner's golden case via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(otherAgentId, goldenId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -236,10 +236,10 @@ public sealed class GoldenConversationEndpointTests
             Content = JsonContent.Create(BuildCreateBody())
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         return document.RootElement.GetProperty("id").GetGuid();
     }
@@ -256,7 +256,7 @@ public sealed class GoldenConversationEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 }

@@ -42,8 +42,7 @@ public sealed class DefaultConfigDraftServiceTests
                              """
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent that writes release notes."))
-                                  .ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent that writes release notes."));
 
         var draft = AssertEx.NotNull(result.Draft, "A parseable envelope must produce a draft.");
         AssertEx.Equal("Release Notes Writer", draft.Name);
@@ -69,7 +68,7 @@ public sealed class DefaultConfigDraftServiceTests
             EnvelopeJson = RawModelText
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.Unparseable, result.Failure);
         AssertEx.Null(result.Draft);
@@ -88,7 +87,7 @@ public sealed class DefaultConfigDraftServiceTests
                            """
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.Unparseable, result.Failure);
     }
@@ -105,7 +104,7 @@ public sealed class DefaultConfigDraftServiceTests
             }
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.Unparseable, result.Failure);
         AssertEx.True(harness.Gate.TryAcquire(out var lease), "The admission gate must be released after a timeout.");
@@ -125,7 +124,7 @@ public sealed class DefaultConfigDraftServiceTests
             NodeMessageRequestTimeoutSeconds = 0
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.Unparseable, result.Failure);
         AssertEx.True(harness.Gate.TryAcquire(out var lease), "The admission gate must be released after a timeout.");
@@ -146,7 +145,7 @@ public sealed class DefaultConfigDraftServiceTests
             }
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.Unparseable, result.Failure);
         AssertEx.True(harness.Gate.TryAcquire(out var lease), "The admission gate must be released after a resolver stall.");
@@ -165,7 +164,7 @@ public sealed class DefaultConfigDraftServiceTests
                            """
         };
 
-        var result = await harness.Service.DraftSkillAsync(Request("Draft a code review skill.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftSkillAsync(Request("Draft a code review skill."));
 
         var draft = AssertEx.NotNull(result.Draft, "The skill draft must survive an invalid model-asserted name.");
         AssertEx.Equal("my-awesome-skill", draft.Name);
@@ -187,7 +186,7 @@ public sealed class DefaultConfigDraftServiceTests
                              """
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         var draft = AssertEx.NotNull(result.Draft, "A hostile envelope is capped, not rejected.");
         AssertEx.Equal(expected: 2000, AssertEx.NotNull(draft.Rationale).Length, "Rationale must be capped.");
@@ -207,7 +206,7 @@ public sealed class DefaultConfigDraftServiceTests
                            """
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal(expected: 0d, AssertEx.NotNull(result.Draft).Confidence);
     }
@@ -223,11 +222,10 @@ public sealed class DefaultConfigDraftServiceTests
             }
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request(new string('b', 101), DraftMode.Improve, existingContent: "current instructions"))
-                                  .ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request(new string('b', 101), DraftMode.Improve, existingContent: "current instructions"));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.InvalidRequest, result.Failure);
-        await harness.Resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await harness.Resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         AssertEx.True(harness.Gate.TryAcquire(out var lease), "The budget check must run BEFORE the gate is acquired.");
         lease?.Dispose();
     }
@@ -237,7 +235,7 @@ public sealed class DefaultConfigDraftServiceTests
     {
         var harness = new Harness();
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("   ")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("   "));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.InvalidRequest, result.Failure);
     }
@@ -277,19 +275,17 @@ public sealed class DefaultConfigDraftServiceTests
                 throw new ArgumentOutOfRangeException(nameof(scenario));
         }
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.ModelNotEligible, result.Failure);
-        await harness.Resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await harness.Resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         harness.Provider.DidNotReceive().CreateChatClient(Arg.Any<LocalModelSelection>());
 
         // Read-only: the eligibility path must never write to the classification cache.
         await harness.Classifications.DidNotReceive()
-                     .UpsertDetectedAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<ModelKind>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .UpsertDetectedAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<ModelKind>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
         await harness.Classifications.DidNotReceive()
-                     .SetOverrideAsync(Arg.Any<string>(), Arg.Any<ModelKind?>(), Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .SetOverrideAsync(Arg.Any<string>(), Arg.Any<ModelKind?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -297,7 +293,7 @@ public sealed class DefaultConfigDraftServiceTests
     {
         var harness = new Harness();
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.True(result.Succeeded, "An installed, chat-classified GGUF model is eligible.");
         harness.Provider.Received(1).CreateChatClient(Arg.Is<LocalModelSelection>(selection =>
@@ -315,7 +311,7 @@ public sealed class DefaultConfigDraftServiceTests
                .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
         harness.UseOllama(installedOnLoopback: true);
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.True(result.Succeeded, "A model installed in a LOOPBACK Ollama is eligible.");
     }
@@ -330,7 +326,7 @@ public sealed class DefaultConfigDraftServiceTests
             ProviderName = "ollama"
         };
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.ModelNotEligible, result.Failure);
         harness.Provider.DidNotReceive().CreateChatClient(Arg.Any<LocalModelSelection>());
@@ -342,7 +338,7 @@ public sealed class DefaultConfigDraftServiceTests
         var harness = new Harness();
         harness.WorkerEventDispatcher.CurrentInvocation.Returns(new InvocationState());
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.NodeBusy, result.Failure);
         harness.Provider.DidNotReceive().CreateChatClient(Arg.Any<LocalModelSelection>());
@@ -354,7 +350,7 @@ public sealed class DefaultConfigDraftServiceTests
         var harness = new Harness();
         harness.InvocationRunner.ActiveInvocationCount.Returns(1);
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
+        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.NodeBusy, result.Failure);
         harness.Provider.DidNotReceive().CreateChatClient(Arg.Any<LocalModelSelection>());
@@ -370,17 +366,17 @@ public sealed class DefaultConfigDraftServiceTests
             BeforeResponse = async () =>
             {
                 _ = firstDraftStarted.Release();
-                _ = await releaseFirstDraft.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                _ = await releaseFirstDraft.WaitAsync(TimeSpan.FromSeconds(10));
             }
         };
 
         var firstDraft = harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
-        AssertEx.True(await firstDraftStarted.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false),
+        AssertEx.True(await firstDraftStarted.WaitAsync(TimeSpan.FromSeconds(10)),
             "The first draft must reach the model before the second is attempted.");
 
-        var secondResult = await harness.Service.DraftAgentDefinitionAsync(Request("Draft another agent.")).ConfigureAwait(false);
+        var secondResult = await harness.Service.DraftAgentDefinitionAsync(Request("Draft another agent."));
         _ = releaseFirstDraft.Release();
-        var firstResult = await firstDraft.ConfigureAwait(false);
+        var firstResult = await firstDraft;
 
         AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.NodeBusy, secondResult.Failure);
         AssertEx.True(firstResult.Succeeded, "The draft holding the slot must still complete.");
@@ -525,7 +521,7 @@ public sealed class DefaultConfigDraftServiceTests
                 Resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(async callInfo =>
                         {
-                            await Task.Delay(Timeout.Infinite, callInfo.Arg<CancellationToken>()).ConfigureAwait(false);
+                            await Task.Delay(Timeout.Infinite, callInfo.Arg<CancellationToken>());
                             return Provider;
                         });
             }
@@ -581,12 +577,12 @@ public sealed class DefaultConfigDraftServiceTests
 
             if (beforeResponse is not null)
             {
-                await beforeResponse().ConfigureAwait(false);
+                await beforeResponse();
             }
 
             if (hangUntilCancelled)
             {
-                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(Timeout.Infinite, cancellationToken);
             }
 
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, json));
@@ -598,7 +594,7 @@ public sealed class DefaultConfigDraftServiceTests
             CancellationToken cancellationToken = default)
         {
             // Drafting is non-streaming; an empty stream suffices.
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 

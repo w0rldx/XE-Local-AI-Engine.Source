@@ -17,8 +17,8 @@ public sealed class RouteCoexistenceTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var liveResponse = await client.GetAsync("/health/live").ConfigureAwait(false);
-        using var readyResponse = await client.GetAsync("/health/ready").ConfigureAwait(false);
+        using var liveResponse = await client.GetAsync("/health/live");
+        using var readyResponse = await client.GetAsync("/health/ready");
 
         AssertEx.Equal(HttpStatusCode.OK, liveResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
@@ -35,7 +35,7 @@ public sealed class RouteCoexistenceTests
         using var client = factory.CreateClient();
         using var request = CreateProbeRequest(factory, "route-coexistence");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.ContentType?.MediaType,
@@ -43,8 +43,8 @@ public sealed class RouteCoexistenceTests
             StringComparison.OrdinalIgnoreCase,
             "Local API route should return JSON, not a fallback HTML document.");
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
         AssertEx.Equal("route-coexistence", document.RootElement.GetProperty("name").GetString());
     }
 
@@ -54,8 +54,8 @@ public sealed class RouteCoexistenceTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.GetAsync("/");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.ContentType?.MediaType, "html", StringComparison.OrdinalIgnoreCase);
@@ -73,8 +73,8 @@ public sealed class RouteCoexistenceTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/dashboard").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.GetAsync("/dashboard");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.ContentType?.MediaType, "html", StringComparison.OrdinalIgnoreCase);
@@ -90,7 +90,7 @@ public sealed class RouteCoexistenceTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/assets/missing-route-coexistence-file.js").ConfigureAwait(false);
+        using var response = await client.GetAsync("/assets/missing-route-coexistence-file.js");
 
         // 401, not 404: the SPA fallback's {*path:nonfile} constraint excludes a dotted path, so routing matches no
         // endpoint at all — and the FallbackPolicy answers exactly that case, so an unmatched path fails closed.
@@ -108,7 +108,7 @@ public sealed class RouteCoexistenceTests
         using var client = factory.CreateClient();
 
         using var localChatNegotiateRequest = CreateLocalChatNegotiateRequest(factory);
-        using var localChatNegotiateResponse = await client.SendAsync(localChatNegotiateRequest).ConfigureAwait(false);
+        using var localChatNegotiateResponse = await client.SendAsync(localChatNegotiateRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, localChatNegotiateResponse.StatusCode);
         AssertEx.False(string.Equals(localChatNegotiateResponse.Content.Headers.ContentType?.MediaType,

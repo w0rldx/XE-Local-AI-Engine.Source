@@ -29,7 +29,7 @@ internal static class BenchmarkEndpointSupport
             return null;
         }
 
-        var attempt = await records.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
+        var attempt = await records.GetJudgeAttemptAsync(attemptId, ct);
         return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
     }
 

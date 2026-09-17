@@ -21,11 +21,11 @@ public sealed class PreviewGgufImportEndpoint(IGgufImportTransactionCoordinator 
         if (string.IsNullOrWhiteSpace(req.SourcePath))
         {
             AddError("An absolute GGUF source path is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var preview = await _coordinator.PreviewAsync(req.SourcePath, ct).ConfigureAwait(false);
+        var preview = await _coordinator.PreviewAsync(req.SourcePath, ct);
         await Send.OkAsync(new PreviewGgufImportResponse
         {
             ModelBaseName = preview.ModelBaseName,
@@ -41,6 +41,6 @@ public sealed class PreviewGgufImportEndpoint(IGgufImportTransactionCoordinator 
             HasSufficientStorage = preview.HasSufficientStorage,
             PreviewToken = preview.PreviewToken,
             ExpiresAtUtc = preview.ExpiresAtUtc
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

@@ -223,7 +223,7 @@ public static class RetrievalEvalHarness
         {
             var relevantDocumentIds = ResolveRelevantDocumentIds(query, documentIdsByKey);
             var startedAt = Stopwatch.GetTimestamp();
-            var result = await search.SearchAsync(new KnowledgeSearchRequest(query.Text, Limit: k), cancellationToken).ConfigureAwait(false);
+            var result = await search.SearchAsync(new KnowledgeSearchRequest(query.Text, Limit: k), cancellationToken);
             var elapsed = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
             perQuery.Add(EvaluateQuery(query, relevantDocumentIds, result.Results, k) with
             {

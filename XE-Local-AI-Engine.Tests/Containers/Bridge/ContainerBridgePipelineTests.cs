@@ -35,24 +35,24 @@ public sealed class ContainerBridgePipelineTests
     [Test]
     public async Task Bridge_WithoutAToken_Answers401AndNeverReachesTheForwarder()
     {
-        await using var bridge = await BridgeHost.StartAsync().ConfigureAwait(false);
+        await using var bridge = await BridgeHost.StartAsync();
 
-        using var response = await bridge.GetAsync(ContainerBridgePipeline.ModelsPath, token: null).ConfigureAwait(false);
+        using var response = await bridge.GetAsync(ContainerBridgePipeline.ModelsPath, token: null);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertEx.Equal("Bearer", AssertEx.NotNull(response.Headers.WwwAuthenticate.FirstOrDefault()).Scheme);
-        await bridge.Models.DidNotReceiveWithAnyArgs().ListInstalledModelsAsync(default).ConfigureAwait(false);
+        await bridge.Models.DidNotReceiveWithAnyArgs().ListInstalledModelsAsync(default);
     }
 
     [Test]
     public async Task Bridge_WithAnUnknownToken_Answers401()
     {
-        await using var bridge = await BridgeHost.StartAsync().ConfigureAwait(false);
+        await using var bridge = await BridgeHost.StartAsync();
 
-        using var response = await bridge.GetAsync(ContainerBridgePipeline.ModelsPath, ContainerBridgeToken.Mint(Guid.NewGuid())).ConfigureAwait(false);
+        using var response = await bridge.GetAsync(ContainerBridgePipeline.ModelsPath, ContainerBridgeToken.Mint(Guid.NewGuid()));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        await bridge.Models.DidNotReceiveWithAnyArgs().ListInstalledModelsAsync(default).ConfigureAwait(false);
+        await bridge.Models.DidNotReceiveWithAnyArgs().ListInstalledModelsAsync(default);
     }
 
     /// <summary>
@@ -62,23 +62,23 @@ public sealed class ContainerBridgePipelineTests
     [Test]
     public async Task Bridge_WithTheInstancesToken_ForwardsToTheLocalModelSurface()
     {
-        await using var bridge = await BridgeHost.StartAsync().ConfigureAwait(false);
+        await using var bridge = await BridgeHost.StartAsync();
 
-        using var response = await bridge.GetAsync(ContainerBridgePipeline.ModelsPath, bridge.ValidToken).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await bridge.GetAsync(ContainerBridgePipeline.ModelsPath, bridge.ValidToken);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, ModelName);
-        await bridge.Models.Received(1).ListInstalledModelsAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await bridge.Models.Received(1).ListInstalledModelsAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task Bridge_OnAnUnknownPath_Answers404InTheOpenAiErrorEnvelope()
     {
-        await using var bridge = await BridgeHost.StartAsync().ConfigureAwait(false);
+        await using var bridge = await BridgeHost.StartAsync();
 
-        using var response = await bridge.GetAsync("/llm/v1/nothing-here", bridge.ValidToken).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await bridge.GetAsync("/llm/v1/nothing-here", bridge.ValidToken);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.Equal(ContainerBridgePipeline.NotFoundBody, body);
@@ -95,9 +95,9 @@ public sealed class ContainerBridgePipelineTests
     [Arguments("/health/ready")]
     public async Task Bridge_ServesNothingTheLoopbackListenerServes(string path)
     {
-        await using var bridge = await BridgeHost.StartAsync().ConfigureAwait(false);
+        await using var bridge = await BridgeHost.StartAsync();
 
-        using var response = await bridge.GetAsync(path, bridge.ValidToken).ConfigureAwait(false);
+        using var response = await bridge.GetAsync(path, bridge.ValidToken);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"'{path}' belongs to the loopback listener and must not exist on the bridge.");
     }
@@ -105,9 +105,9 @@ public sealed class ContainerBridgePipelineTests
     [Test]
     public async Task Bridge_OnAKnownPathWithTheWrongMethod_Answers405AndNamesTheMethodItTakes()
     {
-        await using var bridge = await BridgeHost.StartAsync().ConfigureAwait(false);
+        await using var bridge = await BridgeHost.StartAsync();
 
-        using var response = await bridge.GetAsync(ContainerBridgePipeline.ChatCompletionsPath, bridge.ValidToken).ConfigureAwait(false);
+        using var response = await bridge.GetAsync(ContainerBridgePipeline.ChatCompletionsPath, bridge.ValidToken);
 
         AssertEx.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.Allow, "POST");
@@ -198,7 +198,7 @@ public sealed class ContainerBridgePipelineTests
 
             var app = builder.Build();
             ContainerBridgePipeline.Map(app, endpoint);
-            await app.StartAsync().ConfigureAwait(false);
+            await app.StartAsync();
 
             var client = new HttpClient
             {
@@ -215,14 +215,14 @@ public sealed class ContainerBridgePipelineTests
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
 
-            return await _client.SendAsync(request).ConfigureAwait(false);
+            return await _client.SendAsync(request);
         }
 
         public async ValueTask DisposeAsync()
         {
             _client.Dispose();
             _watcher.Dispose();
-            await _app.DisposeAsync().ConfigureAwait(false);
+            await _app.DisposeAsync();
         }
 
         // Bind :0, read what the kernel handed out, release it, and bind that number for real. The window between

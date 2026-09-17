@@ -60,6 +60,6 @@ internal sealed class ListFilesToolHandler : IClientLocalToolHandler
             return $"list_files arguments are invalid: {string.Join(" ", validationErrors)}";
         }
 
-        return await _reader.ListFilesAsync(request, cancellationToken).ConfigureAwait(false);
+        return await _reader.ListFilesAsync(request, cancellationToken);
     }
 }

@@ -22,7 +22,7 @@ public sealed class McpToolCallTimeoutAIFunctionTests
         var inner = AIFunctionFactory.Create(async (CancellationToken ct) =>
         {
             _ = Interlocked.Increment(ref invocations);
-            await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             return "unreachable";
         }, "slow_tool");
 
@@ -40,7 +40,7 @@ public sealed class McpToolCallTimeoutAIFunctionTests
         listener.SetMeasurementEventCallback<long>((_, measurement, _, _) => Interlocked.Add(ref observedTimeouts, measurement));
         listener.Start();
 
-        var result = await sut.InvokeAsync(new AIFunctionArguments(), CancellationToken.None).ConfigureAwait(false);
+        var result = await sut.InvokeAsync(new AIFunctionArguments(), CancellationToken.None);
 
         listener.Dispose();
 
@@ -55,7 +55,7 @@ public sealed class McpToolCallTimeoutAIFunctionTests
     {
         var inner = AIFunctionFactory.Create(async (CancellationToken ct) =>
         {
-            await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             return "unreachable";
         }, "slow_tool");
 
@@ -76,7 +76,7 @@ public sealed class McpToolCallTimeoutAIFunctionTests
         var result = await sut.InvokeAsync(new AIFunctionArguments
         {
             ["value"] = "hi"
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
 
         AssertEx.True(result?.ToString()?.Contains("echo:hi", StringComparison.Ordinal) == true, "Expected the inner tool result to pass through unchanged.");
     }

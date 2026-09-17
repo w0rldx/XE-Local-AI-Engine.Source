@@ -48,7 +48,7 @@ public sealed class DevWorkflowRetryPolicyTests
                      ? throw new DevWorkflowConcurrencyException("A concurrent writer won the race before the route committed.")
                      : new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
 
-        var written = await RouteAsync(store).ConfigureAwait(false);
+        var written = await RouteAsync(store);
 
         AssertEx.Equal(expected: 2, attempts, "one lost race is asked again rather than left to the next sweep.");
         AssertEx.Equal(expected: 3, written, "the routing event and both resets, counted once — the re-ask is the same write, not a second one.");
@@ -76,10 +76,10 @@ public sealed class DevWorkflowRetryPolicyTests
         _ = store.RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>())
                  .Returns<DevWorkflowMutationResult>(_ => throw new DevWorkflowConcurrencyException("A concurrent writer won the race before the route committed."));
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => RouteAsync(store)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => RouteAsync(store));
 
-        await store.Received(2).RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await store.DidNotReceive().TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(2).RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>());
+        await store.DidNotReceive().TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -105,7 +105,7 @@ public sealed class DevWorkflowRetryPolicyTests
             InputJson = """{"requirements":"Add the negate tests.","operatorRetryReason":"Start from src/inference.","operatorRetryAttempt":3}"""
         };
 
-        var written = await SettleSameNodeAsync(store, implement).ConfigureAwait(false);
+        var written = await SettleSameNodeAsync(store, implement);
 
         AssertEx.Equal(expected: 1, written);
         var command = Transitioned(store).Single();
@@ -140,8 +140,7 @@ public sealed class DevWorkflowRetryPolicyTests
         _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
                  .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
 
-        var written = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running))
-            .ConfigureAwait(false);
+        var written = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
 
         AssertEx.Equal(expected: 1, written, "the block is the one write this settle makes; the refused re-attempt wrote nothing.");
         var commands = Transitioned(store);
@@ -168,10 +167,10 @@ public sealed class DevWorkflowRetryPolicyTests
         _ = store.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>())
                  .Returns(new DevWorkflowMutationResult(RunId, Sequence: 7, Version: 3, DevWorkflowRunStatus.Running, GraphRevision: 0));
 
-        var written = await RouteAsync(store).ConfigureAwait(false);
+        var written = await RouteAsync(store);
 
         AssertEx.Equal(expected: 1, written);
-        await store.Received(1).RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).RouteRetryAsync(Arg.Any<RouteDevWorkflowRetryCommand>(), Arg.Any<CancellationToken>());
 
         var routed = (RouteDevWorkflowRetryCommand)store.ReceivedCalls()
                                                         .First(call => string.Equals(call.GetMethodInfo().Name,
@@ -216,8 +215,8 @@ public sealed class DevWorkflowRetryPolicyTests
         _ = store.TransitionNodeRunAsync(Arg.Is<TransitionDevWorkflowNodeRunCommand>(static command => !command.IncrementAttempt), Arg.Any<CancellationToken>())
                  .Returns(new DevWorkflowMutationResult(RunId, Sequence: 8, Version: 4, DevWorkflowRunStatus.Running, GraphRevision: 0));
 
-        _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)).ConfigureAwait(false);
-        _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)).ConfigureAwait(false);
+        _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
+        _ = await SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running));
 
         var commands = Transitioned(store);
         AssertEx.Equal(expected: 2,
@@ -245,8 +244,7 @@ public sealed class DevWorkflowRetryPolicyTests
 
         var thrown = await AssertEx
                            .ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                               SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)))
-                           .ConfigureAwait(false);
+                               SettleSameNodeAsync(store, NodeRun(ImplementId, "implement", DevWorkflowNodeType.DevTask, DevWorkflowNodeRunStatus.Running)));
 
         AssertEx.False(thrown is DevWorkflowRetryBudgetExceededException, "An illegal move is not an accounting refusal.");
         AssertEx.Empty(Transitioned(store).Where(static command => command.TargetStatus == DevWorkflowNodeRunStatus.Blocked),

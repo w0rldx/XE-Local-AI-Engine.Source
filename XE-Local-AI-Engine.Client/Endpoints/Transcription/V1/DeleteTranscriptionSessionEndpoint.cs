@@ -28,13 +28,13 @@ public sealed class DeleteTranscriptionSessionEndpoint(ITranscriptionService ses
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var deleted = await _sessions.DeleteSessionAsync(req.SessionId, ct).ConfigureAwait(false);
+        var deleted = await _sessions.DeleteSessionAsync(req.SessionId, ct);
         if (!deleted)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

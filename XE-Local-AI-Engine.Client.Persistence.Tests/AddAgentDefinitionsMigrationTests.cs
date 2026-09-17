@@ -30,24 +30,24 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
         var databasePath = GetDatabasePath("agent-definitions-up.sqlite");
         var conversationId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAgentDefinitionsMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAgentDefinitionsMigrationId);
 
-        await InsertHistoricalConversationAsync(databasePath, conversationId).ConfigureAwait(false);
+        await InsertHistoricalConversationAsync(databasePath, conversationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "agent_definitions").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "agent_definitions"),
             "Migration should create the agent_definitions table.");
 
         // MigrateAsync applies every migration, so the column set reflects later additive migrations too: playbook
         // enabled is added by AddPlaybookActions, source and seed slug by AddAgentDefinitionSeedProvenance, and the
         // allowed skill ids json column by AddAgentSkills. This asserts the post-full-migrate shape.
-        var definitionColumns = await GetAgentDefinitionColumnsAsync(connection).ConfigureAwait(false);
+        var definitionColumns = await GetAgentDefinitionColumnsAsync(connection);
         AssertEx.True(definitionColumns.SetEquals(new[]
         {
             "id",
@@ -79,10 +79,10 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
             "disable_tool_relevance_filter"
         }), "agent_definitions should expose the mapped columns.");
 
-        var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);
+        var conversationColumns = await GetConversationColumnsAsync(connection);
         AssertEx.True(conversationColumns.Contains("agent_definition_id"), "conversations.agent_definition_id should be added.");
 
-        AssertEx.True(await ReadAgentDefinitionIdIsNullAsync(connection, conversationId).ConfigureAwait(false),
+        AssertEx.True(await ReadAgentDefinitionIdIsNullAsync(connection, conversationId),
             "Existing conversations should default to a null agent_definition_id.");
     }
 
@@ -91,19 +91,19 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("agent-definitions-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreAgentDefinitionsMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreAgentDefinitionsMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False(await TableExistsAsync(connection, "agent_definitions").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "agent_definitions"),
             "Rollback should drop the agent_definitions table.");
 
-        var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);
+        var conversationColumns = await GetConversationColumnsAsync(connection);
         AssertEx.False(conversationColumns.Contains("agent_definition_id"), "Rollback should drop conversations.agent_definition_id.");
     }
 
@@ -114,7 +114,7 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
 
     private static async Task InsertHistoricalConversationAsync(string databasePath, Guid conversationId)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
@@ -127,13 +127,13 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
         command.Parameters.AddWithValue("$last_seen_utc", value: 1234L);
         command.Parameters.AddWithValue("$purged", value: false);
 
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -142,26 +142,26 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlySet<string>> GetAgentDefinitionColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM agent_definitions LIMIT 0;";
-        return await ReadColumnNamesAsync(command).ConfigureAwait(false);
+        return await ReadColumnNamesAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> GetConversationColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM conversations LIMIT 0;";
-        return await ReadColumnNamesAsync(command).ConfigureAwait(false);
+        return await ReadColumnNamesAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> ReadColumnNamesAsync(SqliteCommand command)
     {
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -172,7 +172,7 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT agent_definition_id FROM conversations WHERE conversation_id = $id;";
         command.Parameters.AddWithValue("$id", conversationId.ToString());
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is null or DBNull;
     }
 

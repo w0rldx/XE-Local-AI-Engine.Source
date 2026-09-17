@@ -19,8 +19,7 @@ public sealed class IntegrationTriggerEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await IntegrationEndpointPayloads.SendAnonymousAsync(client, HttpMethod.Get, IntegrationEndpointPayloads.TriggersRoute)
-                                                              .ConfigureAwait(false);
+        using var response = await IntegrationEndpointPayloads.SendAnonymousAsync(client, HttpMethod.Get, IntegrationEndpointPayloads.TriggersRoute);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -30,8 +29,7 @@ public sealed class IntegrationTriggerEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await IntegrationEndpointPayloads.SendAsNonOperatorAsync(Factory, client, HttpMethod.Get, IntegrationEndpointPayloads.TriggersRoute)
-                                                              .ConfigureAwait(false);
+        using var response = await IntegrationEndpointPayloads.SendAsNonOperatorAsync(Factory, client, HttpMethod.Get, IntegrationEndpointPayloads.TriggersRoute);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -44,7 +42,7 @@ public sealed class IntegrationTriggerEndpointTests
         using var response = await IntegrationEndpointPayloads.SendAnonymousAsync(client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody("anon-probe", Guid.NewGuid())).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody("anon-probe", Guid.NewGuid()));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -58,7 +56,7 @@ public sealed class IntegrationTriggerEndpointTests
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody("viewer-probe", Guid.NewGuid())).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody("viewer-probe", Guid.NewGuid()));
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -67,16 +65,16 @@ public sealed class IntegrationTriggerEndpointTests
     public async Task Create_WhenValid_Returns201WithAResolvableLocation()
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "trigger-create-agent").ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "trigger-create-agent");
 
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody("create-probe", agentId)).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody("create-probe", agentId));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
-        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json));
         AssertEx.NotEqual(Guid.Empty, view.Id);
         AssertEx.Equal("create-probe", view.Name);
         AssertEx.True(view.AcceptedInputKinds.SequenceEqual(new[]
@@ -87,7 +85,7 @@ public sealed class IntegrationTriggerEndpointTests
             "The [Flags] enum crosses the wire as member names, not as an integer sum a generated SDK cannot read.");
 
         var location = AssertEx.NotNull(response.Headers.Location);
-        using var followUp = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, location.ToString()).ConfigureAwait(false);
+        using var followUp = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, location.ToString());
         AssertEx.Equal(HttpStatusCode.OK, followUp.StatusCode, "The Location the create returns must resolve through the get endpoint.");
     }
 
@@ -100,16 +98,16 @@ public sealed class IntegrationTriggerEndpointTests
         // WITHDRAWAL is pinned by IntegrationTriggerServiceTests, which can put a real WriteExecute offer in front of
         // it; this host resolves an agent with no allowed tool names to an empty offer, so it cannot.
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "caller-managed-write-agent").ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "caller-managed-write-agent");
 
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody("caller-managed-write", agentId, sessionPolicy: "CallerManaged")).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody("caller-managed-write", agentId, sessionPolicy: "CallerManaged"));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
-        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json));
         AssertEx.Equal("CallerManaged", view.SessionPolicy);
     }
 
@@ -121,13 +119,13 @@ public sealed class IntegrationTriggerEndpointTests
     public async Task Create_WithAnInvalidName_Returns400(string name)
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, $"name-probe-{Guid.NewGuid():N}").ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, $"name-probe-{Guid.NewGuid():N}");
 
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody(name, agentId)).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody(name, agentId));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -136,13 +134,13 @@ public sealed class IntegrationTriggerEndpointTests
     public async Task Create_WithNoAcceptedInputKinds_Returns400()
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "kinds-probe").ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "kinds-probe");
 
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody("kinds-probe", agentId, acceptedInputKinds: [])).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody("kinds-probe", agentId, acceptedInputKinds: []));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -152,13 +150,13 @@ public sealed class IntegrationTriggerEndpointTests
     {
         // Silently dropping the unknown member would save a trigger accepting LESS than the operator asked for.
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "unknown-kind-probe").ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "unknown-kind-probe");
 
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody("unknown-kind-probe", agentId, acceptedInputKinds: ["text", "binary"])).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody("unknown-kind-probe", agentId, acceptedInputKinds: ["text", "binary"]));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -172,7 +170,7 @@ public sealed class IntegrationTriggerEndpointTests
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody("missing-agent-probe", Guid.NewGuid())).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody("missing-agent-probe", Guid.NewGuid()));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -181,14 +179,14 @@ public sealed class IntegrationTriggerEndpointTests
     public async Task Create_WithADuplicateName_Returns409()
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "duplicate-probe-agent").ConfigureAwait(false);
-        _ = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "duplicate-probe", agentId).ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "duplicate-probe-agent");
+        _ = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "duplicate-probe", agentId);
 
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Post,
             IntegrationEndpointPayloads.TriggersRoute,
-            IntegrationEndpointPayloads.TriggerBody("duplicate-probe", agentId)).ConfigureAwait(false);
+            IntegrationEndpointPayloads.TriggerBody("duplicate-probe", agentId));
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -201,7 +199,7 @@ public sealed class IntegrationTriggerEndpointTests
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            $"{IntegrationEndpointPayloads.TriggersRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{IntegrationEndpointPayloads.TriggersRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -210,14 +208,13 @@ public sealed class IntegrationTriggerEndpointTests
     public async Task List_ReturnsTheCreatedTrigger()
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "list-probe-agent").ConfigureAwait(false);
-        var created = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "list-probe", agentId).ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "list-probe-agent");
+        var created = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "list-probe", agentId);
 
-        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, IntegrationEndpointPayloads.TriggersRoute)
-                                                              .ConfigureAwait(false);
+        using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Get, IntegrationEndpointPayloads.TriggersRoute);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerListBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerListBody>(IntegrationEndpointPayloads.Json));
         AssertEx.Contains(body.Items, item => item.Id == created.Id);
     }
 
@@ -225,18 +222,18 @@ public sealed class IntegrationTriggerEndpointTests
     public async Task Update_AppliesTheEditAndRejectsAStaleVersionWith409()
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "update-probe-agent").ConfigureAwait(false);
-        var created = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "update-probe", agentId).ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "update-probe-agent");
+        var created = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "update-probe", agentId);
         var route = $"{IntegrationEndpointPayloads.TriggersRoute}/{created.Id}";
 
         using var updated = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Put,
             route,
-            IntegrationEndpointPayloads.UpdateBody(agentId, created.Version, displayName: "Renamed", acceptedInputKinds: ["text"])).ConfigureAwait(false);
+            IntegrationEndpointPayloads.UpdateBody(agentId, created.Version, displayName: "Renamed", acceptedInputKinds: ["text"]));
 
         AssertEx.Equal(HttpStatusCode.OK, updated.StatusCode);
-        var view = AssertEx.NotNull(await updated.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json).ConfigureAwait(false));
+        var view = AssertEx.NotNull(await updated.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json));
         AssertEx.Equal("Renamed", view.DisplayName);
         AssertEx.Equal("update-probe", view.Name, "The external name is not editable through the update.");
         AssertEx.Equal(created.Version + 1, view.Version);
@@ -245,7 +242,7 @@ public sealed class IntegrationTriggerEndpointTests
             client,
             HttpMethod.Put,
             route,
-            IntegrationEndpointPayloads.UpdateBody(agentId, created.Version, displayName: "Renamed again")).ConfigureAwait(false);
+            IntegrationEndpointPayloads.UpdateBody(agentId, created.Version, displayName: "Renamed again"));
 
         AssertEx.Equal(HttpStatusCode.Conflict, stale.StatusCode);
     }
@@ -254,13 +251,13 @@ public sealed class IntegrationTriggerEndpointTests
     public async Task Update_WithAnUnknownId_Returns404()
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "update-404-agent").ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "update-404-agent");
 
         using var response = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Put,
             $"{IntegrationEndpointPayloads.TriggersRoute}/{Guid.NewGuid()}",
-            IntegrationEndpointPayloads.UpdateBody(agentId, expectedVersion: 1)).ConfigureAwait(false);
+            IntegrationEndpointPayloads.UpdateBody(agentId, expectedVersion: 1));
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -269,14 +266,14 @@ public sealed class IntegrationTriggerEndpointTests
     public async Task Delete_Returns204ThenNotFound()
     {
         using var client = Factory.CreateClient();
-        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "delete-probe-agent").ConfigureAwait(false);
-        var created = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "delete-probe", agentId).ConfigureAwait(false);
+        var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "delete-probe-agent");
+        var created = await IntegrationEndpointPayloads.CreateTriggerAsync(Factory, client, "delete-probe", agentId);
         var route = $"{IntegrationEndpointPayloads.TriggersRoute}/{created.Id}";
 
-        using var deleted = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Delete, route).ConfigureAwait(false);
+        using var deleted = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Delete, route);
         AssertEx.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
 
-        using var again = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Delete, route).ConfigureAwait(false);
+        using var again = await IntegrationEndpointPayloads.SendAsOperatorAsync(Factory, client, HttpMethod.Delete, route);
         AssertEx.Equal(HttpStatusCode.NotFound, again.StatusCode);
     }
 
@@ -288,7 +285,7 @@ public sealed class IntegrationTriggerEndpointTests
         using var response = await IntegrationEndpointPayloads.SendAsNonOperatorAsync(Factory,
             client,
             HttpMethod.Delete,
-            $"{IntegrationEndpointPayloads.TriggersRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{IntegrationEndpointPayloads.TriggersRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }

@@ -30,29 +30,29 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionServic
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)
     {
-        var result = await _playbookActionService.PromoteSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct).ConfigureAwait(false);
+        var result = await _playbookActionService.PromoteSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct);
 
         switch (result.Status)
         {
             case PlaybookPromotionStatus.Promoted when result.Record is not null:
-                await Send.OkAsync(result.Record.ToResponse(), ct).ConfigureAwait(false);
+                await Send.OkAsync(result.Record.ToResponse(), ct);
                 return;
             case PlaybookPromotionStatus.NotFound:
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                await Send.NotFoundAsync(ct);
                 return;
             case PlaybookPromotionStatus.CapReached:
                 // relevance retrieval and cohort monitoring hard cap: the agent is already at MaxEnabledActions. Surface a typed 409 with the
                 // PascalCase status name (the established wire format every other branch uses) so the panel's parser
                 // recognizes it and can explain the block and prompt an archive/disable.
                 var capConflict = new PlaybookPromotionConflictResponse(result.Status.ToString(), ReasonFor(result.Status));
-                await Send.ResultAsync(Results.Conflict(capConflict)).ConfigureAwait(false);
+                await Send.ResultAsync(Results.Conflict(capConflict));
                 return;
             default:
                 // EvalRequired / EvalRegressed / EvalStale (and a Promoted with no record) → evaluation blocked the
                 // promotion. Surface a typed 409 so the panel can explain why Approve is unavailable (same Conflict-body
                 // convention as the chat/auth endpoints).
                 var conflict = new PlaybookPromotionConflictResponse(result.Status.ToString(), ReasonFor(result.Status));
-                await Send.ResultAsync(Results.Conflict(conflict)).ConfigureAwait(false);
+                await Send.ResultAsync(Results.Conflict(conflict));
                 return;
         }
     }

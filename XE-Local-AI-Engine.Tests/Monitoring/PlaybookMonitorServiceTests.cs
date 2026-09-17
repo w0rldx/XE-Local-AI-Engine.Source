@@ -20,7 +20,7 @@ public sealed class PlaybookMonitorServiceTests
         // Before: 6/10 down (0.6). After: 1/10 down (0.1). Drop > epsilon (0.05) and after sample (10) >= floor (3).
         var service = CreateService(out _, agentId, new CohortComparison(BeforeTotal: 10, BeforeDown: 6, AfterTotal: 10, AfterDown: 1), enabledAtUtc: 100);
 
-        var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
+        var views = await service.GetMonitorAsync(agentId);
 
         AssertEx.Equal(expected: 1, views.Count);
         var view = views[0];
@@ -38,7 +38,7 @@ public sealed class PlaybookMonitorServiceTests
         // Before: 1/10 down (0.1). After: 8/10 down (0.8). Rise > epsilon and after sample >= floor → Regressed + flagged.
         var service = CreateService(out _, agentId, new CohortComparison(BeforeTotal: 10, BeforeDown: 1, AfterTotal: 10, AfterDown: 8), enabledAtUtc: 100);
 
-        var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
+        var views = await service.GetMonitorAsync(agentId);
 
         AssertEx.Equal(expected: 1, views.Count);
         AssertEx.Equal(PlaybookMonitorStatus.Regressed, views[0].Status);
@@ -52,7 +52,7 @@ public sealed class PlaybookMonitorServiceTests
         // Before: 5/10 (0.5). After: 5/10 (0.5). Within epsilon → Flat; after sample >= floor → flagged (dead action).
         var service = CreateService(out _, agentId, new CohortComparison(BeforeTotal: 10, BeforeDown: 5, AfterTotal: 10, AfterDown: 5), enabledAtUtc: 100);
 
-        var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
+        var views = await service.GetMonitorAsync(agentId);
 
         AssertEx.Equal(PlaybookMonitorStatus.Flat, views[0].Status);
         AssertEx.True(views[0].Flagged, "A meaningfully-sampled flat action is flagged for review.");
@@ -65,7 +65,7 @@ public sealed class PlaybookMonitorServiceTests
         // After total 2 < the min sample size 3: regardless of the rate delta, the verdict is InsufficientData, unflagged.
         var service = CreateService(out _, agentId, new CohortComparison(BeforeTotal: 10, BeforeDown: 1, AfterTotal: 2, AfterDown: 2), enabledAtUtc: 100);
 
-        var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
+        var views = await service.GetMonitorAsync(agentId);
 
         AssertEx.Equal(PlaybookMonitorStatus.InsufficientData, views[0].Status);
         AssertEx.False(views[0].Flagged, "InsufficientData is never flagged.");
@@ -86,14 +86,14 @@ public sealed class PlaybookMonitorServiceTests
                     .Returns(new CohortComparison(BeforeTotal: 4, BeforeDown: 3, AfterTotal: 4, AfterDown: 0));
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
-        var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
+        var views = await service.GetMonitorAsync(agentId);
 
         AssertEx.Equal(expected: 1, views.Count);
         AssertEx.Equal("run_in_agent_home", views[0].FacetToolName);
         AssertEx.Equal(PlaybookMonitorStatus.Improved, views[0].Status);
         // The facet (non-null tool scope) was requested from the store, not the overall (null) path.
-        await monitorStore.Received(1).GetCohortComparisonAsync(agentId, enabledAtUtc, "run_in_agent_home", Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await monitorStore.DidNotReceive().GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await monitorStore.Received(1).GetCohortComparisonAsync(agentId, enabledAtUtc, "run_in_agent_home", Arg.Any<CancellationToken>());
+        await monitorStore.DidNotReceive().GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -112,10 +112,10 @@ public sealed class PlaybookMonitorServiceTests
                     .Returns(new CohortComparison(BeforeTotal: 10, BeforeDown: 5, AfterTotal: 10, AfterDown: 5));
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
-        var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
+        var views = await service.GetMonitorAsync(agentId);
 
         AssertEx.True(views[0].FacetToolName is null, "A blank scope must surface a null facet.");
-        await monitorStore.Received(1).GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await monitorStore.Received(1).GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -129,10 +129,10 @@ public sealed class PlaybookMonitorServiceTests
                    .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([noClock]));
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
-        var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
+        var views = await service.GetMonitorAsync(agentId);
 
         AssertEx.Equal(expected: 0, views.Count);
-        await monitorStore.DidNotReceive().GetCohortComparisonAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await monitorStore.DidNotReceive().GetCohortComparisonAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -145,7 +145,7 @@ public sealed class PlaybookMonitorServiceTests
                    .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
-        var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
+        var views = await service.GetMonitorAsync(agentId);
 
         AssertEx.True(views is not null, "The result is non-null.");
         AssertEx.Equal(expected: 0, views!.Count);

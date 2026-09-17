@@ -43,7 +43,7 @@ public sealed class CoderAgentSendIntersectionTests
         var coder = SeededCoderDefinition();
         store.GetByIdAsync(coder.Id, Arg.Any<CancellationToken>()).Returns(coder);
 
-        var resolved = await resolver.ResolveAsync(coder.Id, CapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(coder.Id, CapableModel);
 
         AssertEx.NotNull(resolved);
         // The three coder tools plus ask_user, which is unioned into EVERY tool-enabled projection regardless of
@@ -69,7 +69,7 @@ public sealed class CoderAgentSendIntersectionTests
         var coder = SeededCoderDefinition();
         store.GetByIdAsync(coder.Id, Arg.Any<CancellationToken>()).Returns(coder);
 
-        var resolved = await resolver.ResolveAsync(coder.Id, IncapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(coder.Id, IncapableModel);
 
         AssertEx.NotNull(resolved);
         // The coder tools are capability-gated, so the intersection collapses to ∅. ask_user is capability-gated too, so

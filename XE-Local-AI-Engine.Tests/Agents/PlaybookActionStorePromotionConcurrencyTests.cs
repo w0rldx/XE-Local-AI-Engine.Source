@@ -22,11 +22,11 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     public async Task PromoteSuggestedIfCurrentAsync_WhenConcurrentEditBumpsVersion_RejectsAndLeavesSuggested()
     {
         var factory = Factory;
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
+        var actionId = await SeedSuggestionAsync(factory, agentId);
 
         // The caller validated the snapshot at this Version.
-        var snapshot = await GetAsync(factory, actionId).ConfigureAwait(false);
+        var snapshot = await GetAsync(factory, actionId);
         var validatedVersion = snapshot.Version;
 
         // A concurrent edit lands between the caller's validation and its promote write: UpdateSuggestedAsync bumps
@@ -34,21 +34,20 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
         using (var editScope = factory.Services.CreateScope())
         {
             var service = editScope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-            _ = await service.UpdateSuggestedAsync(new SuggestedActionEditInput(agentId, actionId, "An edited behavior after validation.", TriggerCondition: null, Scope: null, Priority: 100))
-                             .ConfigureAwait(false);
+            _ = await service.UpdateSuggestedAsync(new SuggestedActionEditInput(agentId, actionId, "An edited behavior after validation.", TriggerCondition: null, Scope: null, Priority: 100));
         }
 
         PlaybookPromotionCommit commit;
         using (var promoteScope = factory.Services.CreateScope())
         {
             var store = promoteScope.ServiceProvider.GetRequiredService<IPlaybookActionStore>();
-            commit = await store.PromoteSuggestedIfCurrentAsync(actionId, validatedVersion, maxEnabledActions: 10, evalResult: "{}").ConfigureAwait(false);
+            commit = await store.PromoteSuggestedIfCurrentAsync(actionId, validatedVersion, maxEnabledActions: 10, evalResult: "{}");
         }
 
         AssertEx.Equal(PlaybookPromotionCommitStatus.VersionConflict, commit.Status);
         AssertEx.Null(commit.Record, "A version-conflicted CAS writes nothing.");
 
-        var after = await GetAsync(factory, actionId).ConfigureAwait(false);
+        var after = await GetAsync(factory, actionId);
         AssertEx.Equal(PlaybookActionState.Suggested, after.State);
     }
 
@@ -56,15 +55,15 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     public async Task PromoteSuggestedIfCurrentAsync_WhenCurrentAndUnderCap_Enables()
     {
         var factory = Factory;
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
-        var snapshot = await GetAsync(factory, actionId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
+        var actionId = await SeedSuggestionAsync(factory, agentId);
+        var snapshot = await GetAsync(factory, actionId);
 
         PlaybookPromotionCommit commit;
         using (var scope = factory.Services.CreateScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IPlaybookActionStore>();
-            commit = await store.PromoteSuggestedIfCurrentAsync(actionId, snapshot.Version, maxEnabledActions: 10, evalResult: "{\"eval\":true}").ConfigureAwait(false);
+            commit = await store.PromoteSuggestedIfCurrentAsync(actionId, snapshot.Version, maxEnabledActions: 10, evalResult: "{\"eval\":true}");
         }
 
         AssertEx.Equal(PlaybookPromotionCommitStatus.Committed, commit.Status);
@@ -79,17 +78,17 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     public async Task PromoteSuggestedIfCurrentAsync_TwoPromotesAtCapOne_ExactlyOneEnabled()
     {
         var factory = Factory;
-        var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
-        var firstId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
-        var secondId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
-        var first = await GetAsync(factory, firstId).ConfigureAwait(false);
-        var second = await GetAsync(factory, secondId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory);
+        var firstId = await SeedSuggestionAsync(factory, agentId);
+        var secondId = await SeedSuggestionAsync(factory, agentId);
+        var first = await GetAsync(factory, firstId);
+        var second = await GetAsync(factory, secondId);
 
         PlaybookPromotionCommit firstCommit;
         using (var scope = factory.Services.CreateScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IPlaybookActionStore>();
-            firstCommit = await store.PromoteSuggestedIfCurrentAsync(firstId, first.Version, maxEnabledActions: 1, evalResult: "{}").ConfigureAwait(false);
+            firstCommit = await store.PromoteSuggestedIfCurrentAsync(firstId, first.Version, maxEnabledActions: 1, evalResult: "{}");
         }
 
         // The second promote's cap re-check runs against the count the first promote committed, so it sees the agent
@@ -98,7 +97,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
         using (var scope = factory.Services.CreateScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IPlaybookActionStore>();
-            secondCommit = await store.PromoteSuggestedIfCurrentAsync(secondId, second.Version, maxEnabledActions: 1, evalResult: "{}").ConfigureAwait(false);
+            secondCommit = await store.PromoteSuggestedIfCurrentAsync(secondId, second.Version, maxEnabledActions: 1, evalResult: "{}");
         }
 
         AssertEx.Equal(PlaybookPromotionCommitStatus.Committed, firstCommit.Status);
@@ -106,7 +105,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
 
         using var verifyScope = factory.Services.CreateScope();
         var verifyStore = verifyScope.ServiceProvider.GetRequiredService<IPlaybookActionStore>();
-        var enabled = await verifyStore.ListEnabledByAgentAsync(agentId).ConfigureAwait(false);
+        var enabled = await verifyStore.ListEnabledByAgentAsync(agentId);
         AssertEx.Equal(expected: 1, enabled.Count);
     }
 
@@ -122,7 +121,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -136,7 +135,7 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
             "search",
             Priority: 100,
             [Guid.NewGuid()],
-            Confidence: 0.8d)).ConfigureAwait(false);
+            Confidence: 0.8d));
         return created.Id;
     }
 
@@ -144,6 +143,6 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IPlaybookActionStore>();
-        return AssertEx.NotNull(await store.GetByIdAsync(actionId).ConfigureAwait(false));
+        return AssertEx.NotNull(await store.GetByIdAsync(actionId));
     }
 }

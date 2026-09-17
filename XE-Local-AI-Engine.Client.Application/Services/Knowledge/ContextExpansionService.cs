@@ -30,9 +30,9 @@ public sealed class ContextExpansionService : IContextExpansionService
         var safeWindow = Math.Max(0, window);
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
-        return await ReadRangeAsync(connection, documentId, chunkIndex - safeWindow, chunkIndex + safeWindow, cancellationToken).ConfigureAwait(false);
+        return await ReadRangeAsync(connection, documentId, chunkIndex - safeWindow, chunkIndex + safeWindow, cancellationToken);
     }
 
     public async Task<IReadOnlyList<KnowledgeNeighborChunk>> ExpandAsync(Guid documentId,
@@ -48,14 +48,13 @@ public sealed class ContextExpansionService : IContextExpansionService
 
         var safeWindow = Math.Max(0, window);
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
         return await ReadRangeAsync(connection,
                 documentId,
                 chunkIndex - safeWindow,
                 chunkIndex + safeWindow,
                 normalizedCollectionId,
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     // Defensive cap on how many disjoint ranges are packed into one parameterized OR-disjunction, so the bound-parameter
@@ -89,7 +88,7 @@ public sealed class ContextExpansionService : IContextExpansionService
         var safeWindow = Math.Max(0, window);
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         // Per document, merge only OVERLAPPING or ADJACENT anchor windows into DISJOINT ranges, then read ALL of that
         // document's ranges in ONE parameterized query (an OR of BETWEEN predicates) — never a single min-to-max span, so
@@ -101,7 +100,7 @@ public sealed class ContextExpansionService : IContextExpansionService
         foreach (var group in anchors.GroupBy(static anchor => anchor.DocumentId))
         {
             var merged = MergeWindows(group.Select(anchor => new TextWindow(anchor.ChunkIndex - safeWindow, anchor.ChunkIndex + safeWindow)));
-            rowsByDocument[group.Key] = await ReadDisjointRangesAsync(connection, group.Key, merged, cancellationToken).ConfigureAwait(false);
+            rowsByDocument[group.Key] = await ReadDisjointRangesAsync(connection, group.Key, merged, cancellationToken);
         }
 
         var results = new List<IReadOnlyList<KnowledgeNeighborChunk>>(anchors.Count);
@@ -183,10 +182,10 @@ public sealed class ContextExpansionService : IContextExpansionService
                                    """;
             LastBatchQueryCount++;
 
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
             {
-                var headingPath = await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false)
+                var headingPath = await reader.IsDBNullAsync(ordinal: 3, cancellationToken)
                     ? null
                     : reader.GetString(3);
                 rows.Add(new KnowledgeNeighborChunk(Guid.Parse(reader.GetString(0)),
@@ -206,7 +205,7 @@ public sealed class ContextExpansionService : IContextExpansionService
         int upperBound,
         CancellationToken cancellationToken)
     {
-        return await ReadRangeAsync(connection, documentId, lowerBound, upperBound, collectionId: null, cancellationToken).ConfigureAwait(false);
+        return await ReadRangeAsync(connection, documentId, lowerBound, upperBound, collectionId: null, cancellationToken);
     }
 
     private static async Task<IReadOnlyList<KnowledgeNeighborChunk>> ReadRangeAsync(DbConnection connection,
@@ -231,11 +230,11 @@ public sealed class ContextExpansionService : IContextExpansionService
         AddParameter(command, "$lower", lowerBound);
         AddParameter(command, "$upper", upperBound);
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var neighbors = new List<KnowledgeNeighborChunk>();
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await reader.ReadAsync(cancellationToken))
         {
-            var headingPath = await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false)
+            var headingPath = await reader.IsDBNullAsync(ordinal: 3, cancellationToken)
                 ? null
                 : reader.GetString(3);
             neighbors.Add(new KnowledgeNeighborChunk(Guid.Parse(reader.GetString(0)),

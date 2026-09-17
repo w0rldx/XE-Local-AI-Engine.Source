@@ -61,14 +61,14 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
     {
         // Startup recovery first: re-dispatch any document a previous run left non-terminal (its queue entry was lost with
         // the in-memory channel) before draining new uploads. A failure here must never take the worker down.
-        await RecoverInterruptedDocumentsAsync(stoppingToken).ConfigureAwait(false);
+        await RecoverInterruptedDocumentsAsync(stoppingToken);
 
         try
         {
-            await foreach (var documentId in _dispatcher.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+            await foreach (var documentId in _dispatcher.Reader.ReadAllAsync(stoppingToken))
             {
                 // Gate on the concurrency budget before starting the next document so at most MaxConcurrentIngestions run.
-                await _concurrency.WaitAsync(stoppingToken).ConfigureAwait(false);
+                await _concurrency.WaitAsync(stoppingToken);
                 TrackInFlight(ProcessDocumentAsync(documentId));
             }
         }
@@ -86,8 +86,8 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
 
         // base.StopAsync cancels the stopping token and awaits ExecuteAsync's return, so the queue read stops and no new
         // documents are launched. Only then do we drain the documents already in flight.
-        await base.StopAsync(cancellationToken).ConfigureAwait(false);
-        await DrainInFlightAsync(cancellationToken).ConfigureAwait(false);
+        await base.StopAsync(cancellationToken);
+        await DrainInFlightAsync(cancellationToken);
     }
 
     private async Task RecoverInterruptedDocumentsAsync(CancellationToken cancellationToken)
@@ -96,7 +96,7 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
-            var interrupted = await catalog.ResetNonTerminalToPendingAsync(cancellationToken).ConfigureAwait(false);
+            var interrupted = await catalog.ResetNonTerminalToPendingAsync(cancellationToken);
             if (interrupted.Count == 0)
             {
                 return;
@@ -105,7 +105,7 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
             var reQueued = 0;
             foreach (var documentId in interrupted)
             {
-                var admission = await _dispatcher.EnqueueAsync(documentId, cancellationToken).ConfigureAwait(false);
+                var admission = await _dispatcher.EnqueueAsync(documentId, cancellationToken);
                 if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
                 {
                     // The bounded queue filled while re-dispatching a large backlog. The remaining documents are already
@@ -144,7 +144,7 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
             // exceeded, so a hung document does not block shutdown forever.
             await using var scope = _scopeFactory.CreateAsyncScope();
             var ingestionService = scope.ServiceProvider.GetRequiredService<IKnowledgeIngestionService>();
-            await ingestionService.RunAsync(documentId, _drainDeadline.Token).ConfigureAwait(false);
+            await ingestionService.RunAsync(documentId, _drainDeadline.Token);
         }
         catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
         {
@@ -164,7 +164,7 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
             // slot, then sweep any stranded Pending documents now that a queue slot may have freed.
             _dispatcher.MarkCompleted(documentId);
             ReleaseConcurrency();
-            await SweepStrandedPendingAsync().ConfigureAwait(false);
+            await SweepStrandedPendingAsync();
         }
     }
 
@@ -185,10 +185,10 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
-            var pending = await catalog.ListPendingDocumentIdsAsync(_drainDeadline.Token).ConfigureAwait(false);
+            var pending = await catalog.ListPendingDocumentIdsAsync(_drainDeadline.Token);
             foreach (var documentId in pending)
             {
-                var admission = await _dispatcher.EnqueueAsync(documentId, _drainDeadline.Token).ConfigureAwait(false);
+                var admission = await _dispatcher.EnqueueAsync(documentId, _drainDeadline.Token);
                 if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
                 {
                     break;
@@ -225,11 +225,11 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
 
         try
         {
-            await Task.WhenAll(pending).WaitAsync(window.Token).ConfigureAwait(false);
+            await Task.WhenAll(pending).WaitAsync(window.Token);
         }
         catch (OperationCanceledException)
         {
-            await _drainDeadline.CancelAsync().ConfigureAwait(false);
+            await _drainDeadline.CancelAsync();
             _logger.LogWarning("Knowledge ingestion worker abandoned in-flight ingestion(s) not drained within {DrainSeconds:F0}s; they resume on next start.", _drainTimeout.TotalSeconds);
         }
     }

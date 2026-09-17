@@ -112,7 +112,7 @@ public sealed class ChatStreamEventSink : IChatStreamEventSink
 
     public async IAsyncEnumerable<ChatStreamEvent> ReadAllAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        while (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await _channel.Reader.WaitToReadAsync(cancellationToken))
         {
             while (_channel.Reader.TryRead(out var streamEvent))
             {

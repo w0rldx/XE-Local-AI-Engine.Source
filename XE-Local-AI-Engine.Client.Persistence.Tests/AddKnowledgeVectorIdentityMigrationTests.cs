@@ -32,23 +32,23 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
         var documentId = Guid.NewGuid();
         var chunkId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreviousMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreviousMigrationId);
 
-        await SeedLegacyProjectionAsync(databasePath, documentId, chunkId).ConfigureAwait(false);
+        await SeedLegacyProjectionAsync(databasePath, documentId, chunkId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         await using (var document = connection.CreateCommand())
         {
             document.CommandText =
                 "SELECT status, vector_identity, vector_dim, content_hash, storage_path FROM knowledge_documents WHERE document_id = $id;";
             document.Parameters.AddWithValue("$id", documentId);
-            await using var reader = await document.ExecuteReaderAsync().ConfigureAwait(false);
-            _ = await reader.ReadAsync().ConfigureAwait(false);
+            await using var reader = await document.ExecuteReaderAsync();
+            _ = await reader.ReadAsync();
             AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), reader.GetString(0));
             AssertEx.Equal(KnowledgeEmbeddingVectorPolicy.LegacyIdentity, reader.GetString(1));
             AssertEx.Equal(0, reader.GetInt32(2));
@@ -61,8 +61,8 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
             vector.CommandText =
                 "SELECT vector_identity, dim, length(embedding) FROM knowledge_chunk_vectors WHERE chunk_id = $id;";
             vector.Parameters.AddWithValue("$id", chunkId);
-            await using var reader = await vector.ExecuteReaderAsync().ConfigureAwait(false);
-            _ = await reader.ReadAsync().ConfigureAwait(false);
+            await using var reader = await vector.ExecuteReaderAsync();
+            _ = await reader.ReadAsync();
             AssertEx.Equal(KnowledgeEmbeddingVectorPolicy.LegacyIdentity, reader.GetString(0));
             AssertEx.Equal(768, reader.GetInt32(1));
             AssertEx.Equal(768 * sizeof(float), reader.GetInt32(2));
@@ -71,7 +71,7 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
         await using var chunk = connection.CreateCommand();
         chunk.CommandText = "SELECT content FROM knowledge_document_chunks WHERE chunk_id = $id;";
         chunk.Parameters.AddWithValue("$id", chunkId);
-        AssertEx.Equal("preserved source chunk", (string?)await chunk.ExecuteScalarAsync().ConfigureAwait(false));
+        AssertEx.Equal("preserved source chunk", (string?)await chunk.ExecuteScalarAsync());
     }
 
     [Test]
@@ -81,21 +81,21 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
         var documentId = Guid.NewGuid();
         var chunkId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreviousMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreviousMigrationId);
 
-        await SeedLegacyProjectionAsync(databasePath, documentId, chunkId).ConfigureAwait(false);
+        await SeedLegacyProjectionAsync(databasePath, documentId, chunkId);
 
         // Not a template copy: the rows seeded above have to survive the round trip, so the tail runs for real over
         // them and the down migration then runs over the result.
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreviousMigrationId).ConfigureAwait(false);
+            await context.Database.MigrateAsync();
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreviousMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var documentColumns = await ReadDocumentColumnsAsync(connection).ConfigureAwait(false);
-        var vectorColumns = await ReadVectorColumnsAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var documentColumns = await ReadDocumentColumnsAsync(connection);
+        var vectorColumns = await ReadVectorColumnsAsync(connection);
         AssertEx.False(documentColumns.Contains("vector_identity"));
         AssertEx.False(documentColumns.Contains("vector_dim"));
         AssertEx.False(vectorColumns.Contains("vector_identity"));
@@ -110,7 +110,7 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
             """;
         source.Parameters.AddWithValue("$document_id", documentId);
         source.Parameters.AddWithValue("$chunk_id", chunkId);
-        AssertEx.Equal(1L, (long)(await source.ExecuteScalarAsync().ConfigureAwait(false))!);
+        AssertEx.Equal(1L, (long)(await source.ExecuteScalarAsync())!);
     }
 
     [Test]
@@ -129,8 +129,8 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
 
     private static async Task SeedLegacyProjectionAsync(string databasePath, Guid documentId, Guid chunkId)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        await using var transaction = await connection.BeginTransactionAsync();
 
         await using (var document = connection.CreateCommand())
         {
@@ -145,7 +145,7 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
                      'Indexed', NULL, 1, 'nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M', 1, 1);
                 """;
             document.Parameters.AddWithValue("$document_id", documentId);
-            _ = await document.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await document.ExecuteNonQueryAsync();
         }
 
         await using (var chunk = connection.CreateCommand())
@@ -159,7 +159,7 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
                 """;
             chunk.Parameters.AddWithValue("$chunk_id", chunkId);
             chunk.Parameters.AddWithValue("$document_id", documentId);
-            _ = await chunk.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await chunk.ExecuteNonQueryAsync();
         }
 
         await using (var vector = connection.CreateCommand())
@@ -173,10 +173,10 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
             vector.Parameters.AddWithValue("$chunk_id", chunkId);
             vector.Parameters.AddWithValue("$document_id", documentId);
             vector.Parameters.AddWithValue("$bytes", 768 * sizeof(float));
-            _ = await vector.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await vector.ExecuteNonQueryAsync();
         }
 
-        await transaction.CommitAsync().ConfigureAwait(false);
+        await transaction.CommitAsync();
     }
 
     private static async Task<HashSet<string>> ReadDocumentColumnsAsync(SqliteConnection connection)
@@ -184,8 +184,8 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA table_info(knowledge_documents);";
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             columns.Add(reader.GetString(reader.GetOrdinal("name")));
         }
@@ -198,8 +198,8 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA table_info(knowledge_chunk_vectors);";
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             columns.Add(reader.GetString(reader.GetOrdinal("name")));
         }
@@ -210,7 +210,7 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 

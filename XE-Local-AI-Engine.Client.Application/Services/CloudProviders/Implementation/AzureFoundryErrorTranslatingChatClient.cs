@@ -55,7 +55,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
     {
         try
         {
-            return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            return await base.GetResponseAsync(messages, options, cancellationToken);
         }
         catch (RequestFailedException exception)
         {
@@ -86,7 +86,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
                 ChatResponseUpdate update;
                 try
                 {
-                    if (!await enumerator.MoveNextAsync().ConfigureAwait(false))
+                    if (!await enumerator.MoveNextAsync())
                     {
                         yield break;
                     }
@@ -111,7 +111,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         }
         finally
         {
-            await enumerator.DisposeAsync().ConfigureAwait(false);
+            await enumerator.DisposeAsync();
         }
     }
 

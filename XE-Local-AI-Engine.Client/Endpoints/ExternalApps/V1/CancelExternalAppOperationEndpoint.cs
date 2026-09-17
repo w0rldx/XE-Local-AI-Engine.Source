@@ -38,7 +38,7 @@ public sealed class CancelExternalAppOperationEndpoint(IExternalAppService apps)
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await _apps.CancelAsync(req.InstanceId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted()).ConfigureAwait(false);
+        await _apps.CancelAsync(req.InstanceId, ct);
+        await Send.ResultAsync(Results.Accepted());
     }
 }

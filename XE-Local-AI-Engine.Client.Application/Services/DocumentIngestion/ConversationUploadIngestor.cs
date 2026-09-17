@@ -58,7 +58,7 @@ public sealed class ConversationUploadIngestor(
 
         using (extractionLease)
         {
-            var bytes = await ReadAllBytesAsync(content, cancellationToken).ConfigureAwait(false);
+            var bytes = await ReadAllBytesAsync(content, cancellationToken);
 
             // Images skip text extraction entirely: the raw bytes are the payload (persisted encrypted by the store),
             // marked with the Image status and no cached Markdown. Non-image files keep the exact extract-then-persist path.
@@ -74,7 +74,7 @@ public sealed class ConversationUploadIngestor(
             else
             {
                 using var extractionStream = new MemoryStream(bytes, writable: false);
-                var extraction = await _extractor.ExtractAsync(extractionStream, originalFileName, extension, cancellationToken).ConfigureAwait(false);
+                var extraction = await _extractor.ExtractAsync(extractionStream, originalFileName, extension, cancellationToken);
                 status = extraction.Status;
                 markdown = extraction.Markdown;
                 extractedChars = extraction.ExtractedChars;
@@ -104,14 +104,14 @@ public sealed class ConversationUploadIngestor(
                 markdown,
                 extractedChars);
 
-            return await _fileStore.AddAsync(input, cancellationToken).ConfigureAwait(false);
+            return await _fileStore.AddAsync(input, cancellationToken);
         }
     }
 
     private static async Task<byte[]> ReadAllBytesAsync(Stream content, CancellationToken cancellationToken)
     {
         using var buffer = new MemoryStream();
-        await content.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        await content.CopyToAsync(buffer, cancellationToken);
         return buffer.ToArray();
     }
 }

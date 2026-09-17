@@ -48,10 +48,9 @@ public sealed class GetAgentUsageSummaryEndpointTests
         // The rangeless read is the SPA's default, and the retention window is the only thing telling a reader that
         // "all time" means the retained horizon rather than the node's whole history.
         var modelName = UniqueModelName();
-        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, DayStart(RangelessDay) + 10, prompt: 13, completion: 17, reasoning: 19, total: 49)
-            .ConfigureAwait(false);
+        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, DayStart(RangelessDay) + 10, prompt: 13, completion: 17, reasoning: 19, total: 49);
 
-        var payload = await GetSummaryAsync(fromEpochMs: null, toEpochMs: null).ConfigureAwait(false);
+        var payload = await GetSummaryAsync(fromEpochMs: null, toEpochMs: null);
 
         var bucket = AssertEx.NotNull(payload.Items.SingleOrDefault(item => item.ModelName == modelName),
             "A rangeless summary must include the seeded row.");
@@ -73,11 +72,11 @@ public sealed class GetAgentUsageSummaryEndpointTests
         var modelName = UniqueModelName();
         var from = DayStart(HalfOpenDay);
         var to = DayStart(HalfOpenDay + 1);
-        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, from, prompt: 1, completion: 1, reasoning: 0, total: 2).ConfigureAwait(false);
-        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, from + 100, prompt: 10, completion: 10, reasoning: 0, total: 20).ConfigureAwait(false);
-        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, to, prompt: 999, completion: 999, reasoning: 0, total: 1_998).ConfigureAwait(false);
+        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, from, prompt: 1, completion: 1, reasoning: 0, total: 2);
+        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, from + 100, prompt: 10, completion: 10, reasoning: 0, total: 20);
+        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, to, prompt: 999, completion: 999, reasoning: 0, total: 1_998);
 
-        var payload = await GetSummaryAsync(from, to).ConfigureAwait(false);
+        var payload = await GetSummaryAsync(from, to);
 
         AssertEx.Equal(expected: 1, payload.Items.Count, "The window holds one day and one (model, provider) pair.");
         var bucket = payload.Items[0];
@@ -98,12 +97,12 @@ public sealed class GetAgentUsageSummaryEndpointTests
         var modelB = $"{prefix}-b";
         var from = DayStart(GroupingDay);
         var to = DayStart(GroupingDay + 2);
-        await SeedEnvelopeAsync(modelA, AgentUsageProviders.Local, DayStart(GroupingDay + 1) + 5, prompt: 7, completion: 0, reasoning: 0, total: 7).ConfigureAwait(false);
-        await SeedEnvelopeAsync(modelA, AgentUsageProviders.Local, from + 10, prompt: 1, completion: 0, reasoning: 0, total: 1).ConfigureAwait(false);
-        await SeedEnvelopeAsync(modelB, AgentUsageProviders.Local, from + 20, prompt: 2, completion: 0, reasoning: 0, total: 2).ConfigureAwait(false);
-        await SeedEnvelopeAsync(modelA, AgentUsageProviders.Ollama, from + 30, prompt: 3, completion: 0, reasoning: 0, total: 3).ConfigureAwait(false);
+        await SeedEnvelopeAsync(modelA, AgentUsageProviders.Local, DayStart(GroupingDay + 1) + 5, prompt: 7, completion: 0, reasoning: 0, total: 7);
+        await SeedEnvelopeAsync(modelA, AgentUsageProviders.Local, from + 10, prompt: 1, completion: 0, reasoning: 0, total: 1);
+        await SeedEnvelopeAsync(modelB, AgentUsageProviders.Local, from + 20, prompt: 2, completion: 0, reasoning: 0, total: 2);
+        await SeedEnvelopeAsync(modelA, AgentUsageProviders.Ollama, from + 30, prompt: 3, completion: 0, reasoning: 0, total: 3);
 
-        var payload = await GetSummaryAsync(from, to).ConfigureAwait(false);
+        var payload = await GetSummaryAsync(from, to);
 
         AssertEx.Equal(expected: 4, payload.Items.Count, "Two days x (model, provider) pairs must not fold together.");
         AssertEx.Equal(DayStart(GroupingDay + 1), payload.Items[0].DayStartUtcMs);
@@ -130,10 +129,10 @@ public sealed class GetAgentUsageSummaryEndpointTests
         var modelName = UniqueModelName();
         var from = DayStart(TokenSumDay);
         var to = DayStart(TokenSumDay + 1);
-        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, from + 10, prompt: 100, completion: 200, reasoning: 50, total: 350).ConfigureAwait(false);
-        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, from + 20, prompt: 5, completion: 6, reasoning: null, total: null).ConfigureAwait(false);
+        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, from + 10, prompt: 100, completion: 200, reasoning: 50, total: 350);
+        await SeedEnvelopeAsync(modelName, AgentUsageProviders.Local, from + 20, prompt: 5, completion: 6, reasoning: null, total: null);
 
-        var payload = await GetSummaryAsync(from, to).ConfigureAwait(false);
+        var payload = await GetSummaryAsync(from, to);
 
         AssertEx.Equal(expected: 1, payload.Items.Count);
         var bucket = payload.Items[0];
@@ -152,11 +151,11 @@ public sealed class GetAgentUsageSummaryEndpointTests
         var localModel = UniqueModelName();
         var from = DayStart(RollupDay);
         var to = DayStart(RollupDay + 1);
-        await SeedEnvelopeAsync(localModel, AgentUsageProviders.Local, from + 10, prompt: 1_000, completion: 0, reasoning: 0, total: 1_000).ConfigureAwait(false);
-        await SeedEnvelopeAsync(localModel, AgentUsageProviders.Ollama, from + 20, prompt: 10, completion: 0, reasoning: 0, total: 10).ConfigureAwait(false);
-        await SeedEnvelopeAsync("gpt-4o-mini", AgentUsageProviders.Codex, from + 30, prompt: 1_000_000, completion: 0, reasoning: 0, total: 1_000_000).ConfigureAwait(false);
+        await SeedEnvelopeAsync(localModel, AgentUsageProviders.Local, from + 10, prompt: 1_000, completion: 0, reasoning: 0, total: 1_000);
+        await SeedEnvelopeAsync(localModel, AgentUsageProviders.Ollama, from + 20, prompt: 10, completion: 0, reasoning: 0, total: 10);
+        await SeedEnvelopeAsync("gpt-4o-mini", AgentUsageProviders.Codex, from + 30, prompt: 1_000_000, completion: 0, reasoning: 0, total: 1_000_000);
 
-        var payload = await GetSummaryAsync(from, to).ConfigureAwait(false);
+        var payload = await GetSummaryAsync(from, to);
 
         AssertEx.Equal(expected: 3, payload.ByProvider.Count);
         // Ordered by descending total tokens: codex (1,000,000) then local (1,000) then ollama (10).
@@ -189,15 +188,15 @@ public sealed class GetAgentUsageSummaryEndpointTests
         using var client = Factory.CreateClient();
 
         using var anonymous = Request(authorize: null);
-        using var anonymousResponse = await client.SendAsync(anonymous).ConfigureAwait(false);
+        using var anonymousResponse = await client.SendAsync(anonymous);
         AssertEx.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
 
         using var forbidden = Request(Factory.AddNonOperatorBearerToken);
-        using var forbiddenResponse = await client.SendAsync(forbidden).ConfigureAwait(false);
+        using var forbiddenResponse = await client.SendAsync(forbidden);
         AssertEx.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
 
         using var allowed = Request(Factory.AddNodeBearerToken);
-        using var allowedResponse = await client.SendAsync(allowed).ConfigureAwait(false);
+        using var allowedResponse = await client.SendAsync(allowed);
         AssertEx.Equal(HttpStatusCode.OK, allowedResponse.StatusCode);
     }
 
@@ -229,8 +228,8 @@ public sealed class GetAgentUsageSummaryEndpointTests
         using var client = Factory.CreateClient();
         using var request = Request(Factory.AddNodeBearerToken, bounds.Length == 0 ? string.Empty : $"?{bounds}");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, responseText);
         return AssertEx.NotNull(JsonSerializer.Deserialize<AgentUsageSummaryResponse>(responseText, JsonOptions));
     }
@@ -259,6 +258,6 @@ public sealed class GetAgentUsageSummaryEndpointTests
                                                               {Guid.NewGuid()}, {Guid.NewGuid()}, {Guid.NewGuid()}, {Guid.NewGuid()},
                                                               {modelName}, {provider}, '', 'completed', 1500, 1, {createdAtUtc},
                                                               {prompt}, {completion}, {reasoning}, {total});
-                                                      """).ConfigureAwait(false);
+                                                      """);
     }
 }

@@ -35,7 +35,7 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
         };
 
         _ = _dbContext.GoldenConversations.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -46,8 +46,7 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
                                        .AsNoTracking()
                                        .Where(golden => golden.AgentDefinitionId == agentDefinitionId)
                                        .OrderBy(golden => golden.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -58,8 +57,7 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
                                        .AsNoTracking()
                                        .Where(golden => golden.AgentDefinitionId == agentDefinitionId && golden.Enabled)
                                        .OrderBy(golden => golden.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -68,8 +66,7 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
     {
         var entity = await _dbContext.GoldenConversations
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(golden => golden.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(golden => golden.Id == id, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -77,8 +74,7 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
     public async Task<GoldenConversationRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.GoldenConversations
-                                     .FirstOrDefaultAsync(golden => golden.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(golden => golden.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -88,7 +84,7 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
         entity.Enabled = enabled;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -99,15 +95,13 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
                                .AsNoTracking()
                                .Where(golden => golden.AgentDefinitionId == agentDefinitionId && golden.SourceMessageId != null)
                                .Select(golden => golden.SourceMessageId!.Value)
-                               .ToArrayAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .ToArrayAsync(cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.GoldenConversations
-                                     .FirstOrDefaultAsync(golden => golden.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(golden => golden.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -115,7 +109,7 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
         }
 
         _ = _dbContext.GoldenConversations.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }

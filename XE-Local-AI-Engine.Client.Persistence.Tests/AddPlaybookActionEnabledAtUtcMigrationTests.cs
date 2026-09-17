@@ -29,16 +29,16 @@ public sealed class AddPlaybookActionEnabledAtUtcMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("enabled-at-utc-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreEnabledAtUtcMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreEnabledAtUtcMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetPlaybookActionColumnInfoAsync(connection).ConfigureAwait(false);
+        var columns = await GetPlaybookActionColumnInfoAsync(connection);
 
         AssertEx.True(columns.ContainsKey("enabled_at_utc"), "Migration should add the enabled_at_utc column.");
         AssertEx.False(columns["enabled_at_utc"], "enabled_at_utc should be nullable.");
@@ -49,16 +49,16 @@ public sealed class AddPlaybookActionEnabledAtUtcMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("enabled-at-utc-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreEnabledAtUtcMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreEnabledAtUtcMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetPlaybookActionColumnInfoAsync(connection).ConfigureAwait(false);
+        var columns = await GetPlaybookActionColumnInfoAsync(connection);
 
         AssertEx.False(columns.ContainsKey("enabled_at_utc"), "Rollback should drop the enabled_at_utc column.");
         // The earlier playbook_actions schema (before enabled_at_utc was added) must survive the rollback intact.
@@ -74,7 +74,7 @@ public sealed class AddPlaybookActionEnabledAtUtcMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -85,8 +85,8 @@ public sealed class AddPlaybookActionEnabledAtUtcMigrationTests : IDisposable
         command.CommandText = "PRAGMA table_info(playbook_actions);";
 
         var columns = new Dictionary<string, bool>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             var name = reader.GetString(reader.GetOrdinal("name"));
             var notNull = reader.GetInt64(reader.GetOrdinal("notnull")) != 0L;

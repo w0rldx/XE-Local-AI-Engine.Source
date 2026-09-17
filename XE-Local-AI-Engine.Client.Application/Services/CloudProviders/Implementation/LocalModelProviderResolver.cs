@@ -92,7 +92,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
     /// <inheritdoc />
     public async Task<string> ResolveProviderNameForModelAsync(string modelName, CancellationToken cancellationToken = default)
     {
-        return await ResolveProviderNameCoreAsync(modelName, existingLease: null, cancellationToken).ConfigureAwait(false);
+        return await ResolveProviderNameCoreAsync(modelName, existingLease: null, cancellationToken);
     }
 
     public async Task<string> ResolveProviderNameForModelAsync(string modelName,
@@ -100,7 +100,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(existingLease);
-        return await ResolveProviderNameCoreAsync(modelName, existingLease, cancellationToken).ConfigureAwait(false);
+        return await ResolveProviderNameCoreAsync(modelName, existingLease, cancellationToken);
     }
 
     private async Task<string> ResolveProviderNameCoreAsync(string modelName,
@@ -126,7 +126,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
         if (existingLease is null)
         {
             var leaseCoordinator = scope.ServiceProvider.GetRequiredService<IModelProviderMapLeaseCoordinator>();
-            acquiredLease = await leaseCoordinator.AcquireMapReadAsync(modelName, cancellationToken).ConfigureAwait(false);
+            acquiredLease = await leaseCoordinator.AcquireMapReadAsync(modelName, cancellationToken);
             lease = acquiredLease;
         }
         else
@@ -136,7 +136,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
 
         try
         {
-            var mapping = await mapStore.ReadWithRevisionAsync(lease, modelName, cancellationToken).ConfigureAwait(false);
+            var mapping = await mapStore.ReadWithRevisionAsync(lease, modelName, cancellationToken);
             var mapped = mapping?.ProviderName;
 
             // An unmapped model routes to the configured default provider; a mapped row wins.
@@ -159,7 +159,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
         {
             if (acquiredLease is not null)
             {
-                await acquiredLease.DisposeAsync().ConfigureAwait(false);
+                await acquiredLease.DisposeAsync();
             }
         }
     }
@@ -186,7 +186,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
     /// <inheritdoc />
     public async Task<ILocalModelProvider> ResolveProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
     {
-        var providerName = await ResolveProviderNameForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var providerName = await ResolveProviderNameForModelAsync(modelName, cancellationToken);
         return ResolveProvider(providerName);
     }
 

@@ -27,15 +27,15 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(ILlamaCppRuntimeAdministration
         if (req.Variant is not null && ModelFitMapper.TryParseVariant(req.Variant) is null)
         {
             AddError(r => r.Variant, "Variant is not supported.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var variant = req.Variant is null ? null : ModelFitMapper.TryParseVariant(req.Variant);
-        var result = await _administrationService.InstallAsync(req.Tag, variant, ct).ConfigureAwait(false);
+        var result = await _administrationService.InstallAsync(req.Tag, variant, ct);
         if (result.Succeeded)
         {
-            await Send.OkAsync(result.Binary!.ToResponse(result.RecommendedTag!), ct).ConfigureAwait(false);
+            await Send.OkAsync(result.Binary!.ToResponse(result.RecommendedTag!), ct);
             return;
         }
 
@@ -45,11 +45,11 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(ILlamaCppRuntimeAdministration
             {
                 RunningProcessCount = result.RunningProcessCount,
                 Message = result.DisplayMessage!
-            })).ConfigureAwait(false);
+            }));
             return;
         }
 
         AddError(result.DisplayMessage ?? "The llama.cpp runtime could not be installed.");
-        await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        await Send.ErrorsAsync(cancellation: ct);
     }
 }

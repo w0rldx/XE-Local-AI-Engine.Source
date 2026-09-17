@@ -27,40 +27,39 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
         ArgumentNullException.ThrowIfNull(input);
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         // Repository updates preserve document_id, so existence alone cannot prove that the embedded chunks came from the
         // current blob. Commit only against the exact content-hash revision captured before extraction.
         var currentContentHash = await ReadCurrentContentHashAsync(connection,
                 transaction,
                 input.DocumentId,
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         if (currentContentHash is null)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.RollbackAsync(cancellationToken);
             return false;
         }
 
         if (!string.Equals(currentContentHash, input.SourceContentHash, StringComparison.Ordinal))
         {
-            await PreserveCurrentRevisionPendingAsync(connection, transaction, input.DocumentId, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await PreserveCurrentRevisionPendingAsync(connection, transaction, input.DocumentId, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return false;
         }
 
-        await PurgeDocumentRowsAsync(connection, transaction, input.DocumentId, cancellationToken).ConfigureAwait(false);
-        var sectionIdsByOrdinal = await InsertSectionsAsync(connection, transaction, input, cancellationToken).ConfigureAwait(false);
-        await InsertChunksAndVectorsAsync(connection, transaction, input, sectionIdsByOrdinal, cancellationToken).ConfigureAwait(false);
-        if (!await MarkIndexedAsync(connection, transaction, input, cancellationToken).ConfigureAwait(false))
+        await PurgeDocumentRowsAsync(connection, transaction, input.DocumentId, cancellationToken);
+        var sectionIdsByOrdinal = await InsertSectionsAsync(connection, transaction, input, cancellationToken);
+        await InsertChunksAndVectorsAsync(connection, transaction, input, sectionIdsByOrdinal, cancellationToken);
+        if (!await MarkIndexedAsync(connection, transaction, input, cancellationToken))
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.RollbackAsync(cancellationToken);
             return false;
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
@@ -73,7 +72,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             vectorsCommand.Transaction = transaction;
             vectorsCommand.CommandText = "DELETE FROM knowledge_chunk_vectors WHERE document_id = $document_id;";
             AddParameter(vectorsCommand, "$document_id", documentId);
-            _ = await vectorsCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await vectorsCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await using (var chunksCommand = connection.CreateCommand())
@@ -81,7 +80,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             chunksCommand.Transaction = transaction;
             chunksCommand.CommandText = "DELETE FROM knowledge_document_chunks WHERE document_id = $document_id;";
             AddParameter(chunksCommand, "$document_id", documentId);
-            _ = await chunksCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await chunksCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await using (var sectionsCommand = connection.CreateCommand())
@@ -89,7 +88,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             sectionsCommand.Transaction = transaction;
             sectionsCommand.CommandText = "DELETE FROM knowledge_document_sections WHERE document_id = $document_id;";
             AddParameter(sectionsCommand, "$document_id", documentId);
-            _ = await sectionsCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await sectionsCommand.ExecuteNonQueryAsync(cancellationToken);
         }
     }
 
@@ -116,7 +115,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             AddParameter(command, "$heading", section.Heading);
             AddParameter(command, "$level", section.Level);
             AddParameter(command, "$page_number", section.PageNumber);
-            _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         return sectionIdsByOrdinal;
@@ -166,7 +165,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
                 AddParameter(chunkCommand, "$symbol", chunk.Symbol);
                 AddParameter(chunkCommand, "$content_hash", chunk.ContentHash);
                 AddParameter(chunkCommand, "$embedding_input_hash", chunk.EmbeddingInputHash);
-                _ = await chunkCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await chunkCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             // Store the vector L2-normalized. Cosine similarity is scale-invariant, so unit-length storage changes no
@@ -189,7 +188,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
                 AddParameter(vectorCommand, "$embedding", embeddingBytes);
                 AddParameter(vectorCommand, "$embedding_model", input.EmbeddingModel);
                 AddParameter(vectorCommand, "$vector_identity", input.VectorIdentity);
-                _ = await vectorCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await vectorCommand.ExecuteNonQueryAsync(cancellationToken);
             }
         }
     }
@@ -226,7 +225,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
         AddParameter(command, "$updated_at_utc", now);
         AddParameter(command, "$document_id", input.DocumentId);
         AddParameter(command, "$content_hash", input.SourceContentHash);
-        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) == 1;
+        return await command.ExecuteNonQueryAsync(cancellationToken) == 1;
     }
 
     private static async Task<string?> ReadCurrentContentHashAsync(DbConnection connection,
@@ -238,7 +237,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
         command.Transaction = transaction;
         command.CommandText = "SELECT content_hash FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is null or DBNull ? null : (string)result;
     }
 
@@ -260,6 +259,6 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
         AddParameter(command, "$status", KnowledgeDocumentStatus.Pending.ToString());
         AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
         AddParameter(command, "$document_id", documentId);
-        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

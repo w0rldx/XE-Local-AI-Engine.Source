@@ -28,8 +28,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
             // the first user message arrived.
             var conversationIds = await dbContext.Database
                                                  .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL")
-                                                 .ToListAsync(stoppingToken)
-                                                 .ConfigureAwait(false);
+                                                 .ToListAsync(stoppingToken);
 
             if (conversationIds.Count == 0)
             {
@@ -51,8 +50,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                                          .SqlQueryRaw<MessageIdAndContent>(
                                              "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",
                                              conversationId)
-                                         .FirstOrDefaultAsync(stoppingToken)
-                                         .ConfigureAwait(false);
+                                         .FirstOrDefaultAsync(stoppingToken);
 
                 if (row is null)
                 {
@@ -82,8 +80,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 await dbContext.Database
                                .ExecuteSqlRawAsync("UPDATE conversations SET title = {0} WHERE conversation_id = {1}",
                                    [encryptedTitle is null ? DBNull.Value : encryptedTitle, conversationId],
-                                   stoppingToken)
-                               .ConfigureAwait(false);
+                                   stoppingToken);
 
                 backfilled++;
             }

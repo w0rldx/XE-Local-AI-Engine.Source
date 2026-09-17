@@ -62,18 +62,18 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
 
         await migrationService.MigrateAsync();
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "__EFMigrationsHistory").ConfigureAwait(false), "Migrations history table should be created.");
-        AssertEx.True(await TableExistsAsync(connection, "conversations").ConfigureAwait(false), "Node conversations table should be created.");
-        AssertEx.True(await MigrationLockIsEmptyOrMissingAsync(connection).ConfigureAwait(false), "Successful migrations should not leave an active EF migrations lock row behind.");
+        AssertEx.True(await TableExistsAsync(connection, "__EFMigrationsHistory"), "Migrations history table should be created.");
+        AssertEx.True(await TableExistsAsync(connection, "conversations"), "Node conversations table should be created.");
+        AssertEx.True(await MigrationLockIsEmptyOrMissingAsync(connection), "Successful migrations should not leave an active EF migrations lock row behind.");
     }
 
     [Test]
     public async Task MigrateAsync_WhenEfMigrationsLockIsAbandoned_DropsLockAndRetriesMigrations()
     {
         var databasePath = GetDatabasePath("abandoned-lock.sqlite");
-        await CreateAbandonedEfMigrationLockAsync(databasePath).ConfigureAwait(false);
+        await CreateAbandonedEfMigrationLockAsync(databasePath);
 
         // Here the budget is spent TWICE and the two spends are not alike: the first attempt is meant to exhaust it —
         // that is the abandoned lock doing its job — and the retry then has to apply the whole migration set inside
@@ -84,29 +84,29 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
 
         await migrationService.MigrateAsync();
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "__EFMigrationsHistory").ConfigureAwait(false), "Migrations should succeed after stale lock cleanup.");
-        AssertEx.True(await TableExistsAsync(connection, "messages").ConfigureAwait(false), "Node messages table should be created after retry.");
-        AssertEx.True(await MigrationLockIsEmptyOrMissingAsync(connection).ConfigureAwait(false), "Recovered migrations should clear the abandoned lock row.");
+        AssertEx.True(await TableExistsAsync(connection, "__EFMigrationsHistory"), "Migrations should succeed after stale lock cleanup.");
+        AssertEx.True(await TableExistsAsync(connection, "messages"), "Node messages table should be created after retry.");
+        AssertEx.True(await MigrationLockIsEmptyOrMissingAsync(connection), "Recovered migrations should clear the abandoned lock row.");
     }
 
     [Test]
     public async Task MigrateAsync_WhenStartupLockIsHeld_ThrowsWithoutDroppingEfLockTable()
     {
         var databasePath = GetDatabasePath("held-startup-lock.sqlite");
-        await CreateAbandonedEfMigrationLockAsync(databasePath).ConfigureAwait(false);
+        await CreateAbandonedEfMigrationLockAsync(databasePath);
         using var lockFile = new FileStream(databasePath + ".migration.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
 
         await using var serviceProvider = BuildServiceProvider(databasePath, startupLockTimeout: TimeSpan.FromMilliseconds(25));
         var migrationService = serviceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
 
-        var exception = await ThrowsAsync<InvalidOperationException>(() => migrationService.MigrateAsync()).ConfigureAwait(false);
+        var exception = await ThrowsAsync<InvalidOperationException>(() => migrationService.MigrateAsync());
 
         AssertEx.True(exception.Message.Contains("migration startup lock", StringComparison.OrdinalIgnoreCase));
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.True(await TableExistsAsync(connection, "__EFMigrationsLock").ConfigureAwait(false), "EF lock table should remain untouched when startup ownership is not acquired.");
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.True(await TableExistsAsync(connection, "__EFMigrationsLock"), "EF lock table should remain untouched when startup ownership is not acquired.");
     }
 
     private static ServiceProvider BuildServiceProvider(string databasePath,
@@ -143,7 +143,7 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
     {
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               CREATE TABLE "__EFMigrationsLock" (
@@ -153,13 +153,13 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
                               INSERT INTO "__EFMigrationsLock" ("Id", "Timestamp") VALUES (1, 'stale');
                               """;
 
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -169,13 +169,13 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
 
-        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, CultureInfo.InvariantCulture) > 0;
     }
 
     private static async Task<bool> MigrationLockIsEmptyOrMissingAsync(SqliteConnection connection)
     {
-        if (!await TableExistsAsync(connection, "__EFMigrationsLock").ConfigureAwait(false))
+        if (!await TableExistsAsync(connection, "__EFMigrationsLock"))
         {
             return true;
         }
@@ -183,7 +183,7 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM \"__EFMigrationsLock\";";
 
-        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, CultureInfo.InvariantCulture) == 0;
     }
 
@@ -197,7 +197,7 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
     {
         try
         {
-            await action().ConfigureAwait(false);
+            await action();
         }
         catch (TException exception)
         {

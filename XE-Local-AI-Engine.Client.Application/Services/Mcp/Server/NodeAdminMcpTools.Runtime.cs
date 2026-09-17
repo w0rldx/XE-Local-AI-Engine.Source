@@ -14,8 +14,8 @@ public sealed partial class NodeAdminMcpTools
     public Task<McpNodeStatusResponse> GetStatusAsync(CancellationToken cancellationToken) =>
         InvokeAuditedAsync("get_status", [], async () =>
         {
-            var settings = await _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken).ConfigureAwait(false);
-            var runtime = await _runtimeAdministrationService.GetStatusAsync(refresh: false, cancellationToken).ConfigureAwait(false);
+            var settings = await _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken);
+            var runtime = await _runtimeAdministrationService.GetStatusAsync(refresh: false, cancellationToken);
             return new McpNodeStatusResponse(GetVersion(), GetProcessUptimeSeconds(), settings.DefaultModelName, runtime.RunningProcessCount);
         });
 
@@ -24,7 +24,7 @@ public sealed partial class NodeAdminMcpTools
     public Task<McpRuntimeStatusResponse> GetRuntimeStatusAsync(CancellationToken cancellationToken) =>
         InvokeAuditedAsync("get_runtime_status", [], async () =>
         {
-            var status = await _runtimeAdministrationService.GetStatusAsync(refresh: false, cancellationToken).ConfigureAwait(false);
+            var status = await _runtimeAdministrationService.GetStatusAsync(refresh: false, cancellationToken);
             return new McpRuntimeStatusResponse(status.Installed?.Tag,
                 status.RecommendedTag,
                 status.UpstreamLatestTag,
@@ -49,11 +49,11 @@ public sealed partial class NodeAdminMcpTools
                     "Variant must be cpu, cuda, vulkan, or omitted.");
             }
 
-            var result = await _runtimeAdministrationService.StartAcquisitionAsync(parsedVariant, cancellationToken).ConfigureAwait(false);
+            var result = await _runtimeAdministrationService.StartAcquisitionAsync(parsedVariant, cancellationToken);
             return result.Accepted
                 ? new McpRuntimeAcquisitionStartResponse("accepted", result.Variant)
                 : new McpRuntimeAcquisitionStartResponse("busy", result.Variant, McpAdminToolFailureCodes.Busy, result.DisplayMessage);
-        }, static response => response.FailureCode is not null).ConfigureAwait(false);
+        }, static response => response.FailureCode is not null);
     }
 
     [McpServerTool(Name = "get_runtime_acquisition")]

@@ -26,11 +26,11 @@ public sealed class GetHfTokenStatusEndpoint(IHfTokenStore tokenStore)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var hasToken = await _tokenStore.HasTokenAsync(ct).ConfigureAwait(false);
+        var hasToken = await _tokenStore.HasTokenAsync(ct);
         await Send.OkAsync(new HfTokenStatusResponse
             {
                 HasToken = hasToken
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

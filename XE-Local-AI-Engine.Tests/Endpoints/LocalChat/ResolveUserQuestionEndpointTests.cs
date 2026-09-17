@@ -37,7 +37,7 @@ public sealed class ResolveUserQuestionEndpointTests
                 }
             }
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await dispatcher.Received(1)
@@ -46,8 +46,7 @@ public sealed class ResolveUserQuestionEndpointTests
                                                                                                     && evt.Answers[0].Question == "Which auth method?"
                                                                                                     && evt.Answers[0].Selected.Count == 1
                                                                                                     && evt.Answers[0].Selected[0] == "OAuth"
-                                                                                                    && evt.Answers[0].Other == null))
-                        .ConfigureAwait(false);
+                                                                                                    && evt.Answers[0].Other == null));
     }
 
     [Test]
@@ -71,13 +70,12 @@ public sealed class ResolveUserQuestionEndpointTests
                 }
             }
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await dispatcher.Received(1)
                         .DispatchUserQuestionAnsweredAsync(Arg.Is<UserQuestionAnsweredEvent>(evt => evt.Answers[0].Selected.Count == 0
-                                                                                                    && evt.Answers[0].Other == "mTLS"))
-                        .ConfigureAwait(false);
+                                                                                                    && evt.Answers[0].Other == "mTLS"));
     }
 
     [Test]
@@ -91,13 +89,13 @@ public sealed class ResolveUserQuestionEndpointTests
         using var client = factory.CreateClient();
 
         using var first = CreateRequest(factory, NewBody("question-dupe"));
-        using var firstResponse = await client.SendAsync(first).ConfigureAwait(false);
+        using var firstResponse = await client.SendAsync(first);
         using var second = CreateRequest(factory, NewBody("question-dupe"));
-        using var secondResponse = await client.SendAsync(second).ConfigureAwait(false);
+        using var secondResponse = await client.SendAsync(second);
 
         AssertEx.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
-        await dispatcher.Received(2).DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>()).ConfigureAwait(false);
+        await dispatcher.Received(2).DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>());
     }
 
     [Test]
@@ -108,10 +106,10 @@ public sealed class ResolveUserQuestionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, NewBody(string.Empty));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await dispatcher.DidNotReceive().DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>()).ConfigureAwait(false);
+        await dispatcher.DidNotReceive().DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>());
     }
 
     [Test]
@@ -135,10 +133,10 @@ public sealed class ResolveUserQuestionEndpointTests
                 }
             }
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await dispatcher.DidNotReceive().DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>()).ConfigureAwait(false);
+        await dispatcher.DidNotReceive().DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>());
     }
 
     [Test]
@@ -153,10 +151,10 @@ public sealed class ResolveUserQuestionEndpointTests
             requestId = "question-none",
             answers = Array.Empty<object>()
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await dispatcher.DidNotReceive().DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>()).ConfigureAwait(false);
+        await dispatcher.DidNotReceive().DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>());
     }
 
     [Test]
@@ -171,10 +169,10 @@ public sealed class ResolveUserQuestionEndpointTests
             Content = JsonContent.Create(NewBody("question-xyz"))
         };
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        await dispatcher.DidNotReceive().DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>()).ConfigureAwait(false);
+        await dispatcher.DidNotReceive().DispatchUserQuestionAnsweredAsync(Arg.Any<UserQuestionAnsweredEvent>());
     }
 
     private static object NewBody(string requestId)

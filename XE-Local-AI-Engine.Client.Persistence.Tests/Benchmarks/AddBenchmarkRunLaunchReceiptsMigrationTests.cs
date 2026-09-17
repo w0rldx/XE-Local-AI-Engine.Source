@@ -16,10 +16,9 @@ public sealed class AddBenchmarkRunLaunchReceiptsMigrationTests
         // Pinned AT this migration, not at head: the judge half of the block moved to benchmark_judge_attempts when
         // the 1-5 judge was retired, so head no longer carries it and only this point in the chain can assert it.
         await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-run-launch-receipts.sqlite",
-                                                              "20260816174029_AddBenchmarkRunLaunchReceipts")
-                                                          .ConfigureAwait(false);
+                                                              "20260816174029_AddBenchmarkRunLaunchReceipts");
 
-        var columns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("benchmark_runs");
         foreach (var phase in new[]
                  {
                      "primary",
@@ -54,9 +53,9 @@ public sealed class AddBenchmarkRunLaunchReceiptsMigrationTests
                 "ix_benchmark_runs_project_primary_kv_cache_type",
                 unique: false,
                 "project_id",
-                "primary_kv_cache_type").ConfigureAwait(false),
+                "primary_kv_cache_type"),
             "Comparing a project's runs by KV-cache type must be indexed.");
-        AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_runs", "primary_kv_cache_type").ConfigureAwait(false),
+        AssertEx.Null(await probe.ColumnDefaultAsync("benchmark_runs", "primary_kv_cache_type"),
             "Legacy rows must stay NULL rather than be backfilled with a type they never launched with.");
     }
 }

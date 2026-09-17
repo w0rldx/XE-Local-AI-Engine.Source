@@ -52,7 +52,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
     public async Task<PreviewGgufImportResult> PreviewAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
-        var inspection = await InspectSupportedAsync(sourcePath, allowQuantizationRequired: true, cancellationToken).ConfigureAwait(false);
+        var inspection = await InspectSupportedAsync(sourcePath, allowQuantizationRequired: true, cancellationToken);
         var modelBaseName = InferModelBaseName(inspection.SourceDisplayName, inspection.DetectedQuantization);
         ResolvedGgufAcquisitionIdentity? identity = null;
         if (inspection.DetectedQuantization is not null)
@@ -104,7 +104,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             throw new GgufImportApplicationException("InvalidPreviewToken", "The import preview is missing, expired, or does not match the selected file.");
         }
 
-        var inspection = await InspectSupportedAsync(command.SourcePath, allowQuantizationRequired: true, cancellationToken).ConfigureAwait(false);
+        var inspection = await InspectSupportedAsync(command.SourcePath, allowQuantizationRequired: true, cancellationToken);
         if (!InspectionMatches(preview.Inspection, inspection))
         {
             throw new GgufImportApplicationException("StalePreview", "The selected file changed after it was previewed.");
@@ -142,7 +142,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             await using var scope = _scopeFactory.CreateAsyncScope();
             var preflight = scope.ServiceProvider.GetRequiredService<IGgufAcquisitionPreflight>();
             reservation = await preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent(PreflightKind.Import, command.ModelBaseName, command.Quantization),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
         catch (ArgumentException exception)
         {
@@ -162,7 +162,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             throw new GgufImportApplicationException("ModelConflict", "The model name or destination is already in use.");
         }
 
-        await using (reservation.ConfigureAwait(false))
+        await using (reservation)
         {
             var registration = _operations.Start(AcquisitionKind.Import,
                 reservation.Identity.CanonicalModelName,
@@ -207,7 +207,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         PreparedGgufImport? prepared = null;
         GgufImportCommitReceipt? committed = null;
         ProviderMapMutationReceipt? mapReceipt = null;
-        await using (lease.ConfigureAwait(false))
+        await using (lease)
         {
             try
             {
@@ -223,15 +223,15 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                         identity.RelativeSidecarPath,
                         LocalModelOrigin.Imported),
                     progress,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 UpdateAndPublish(operationId, GgufAcquisitionPhase.Committing);
-                committed = await _importer.CommitAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+                committed = await _importer.CommitAsync(prepared, CancellationToken.None);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
-                var claim = await mapStore.TryClaimLlamaCppAsync(lease, identity.CanonicalModelName, CancellationToken.None).ConfigureAwait(false);
+                var claim = await mapStore.TryClaimLlamaCppAsync(lease, identity.CanonicalModelName, CancellationToken.None);
                 if (claim is ProviderMapClaimResult.Conflict)
                 {
                     throw new GgufImportApplicationException("ModelConflict", "The model is mapped to an incompatible provider.");
@@ -249,7 +249,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             }
             catch (OperationCanceledException)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -265,7 +265,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             catch (GgufImportCommitException exception)
             {
                 committed = exception.CommitReceipt;
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -278,7 +278,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             }
             catch (GgufImportException exception)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -291,7 +291,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             }
             catch (GgufImportApplicationException exception)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName))
                 {
                     PublishCompensationFailure(operationId);
                     return;
@@ -301,7 +301,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             }
             catch (Exception exception)
             {
-                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName).ConfigureAwait(false))
+                if (!await CompensateAsync(prepared, committed, mapReceipt, lease, identity.CanonicalModelName))
                 {
                     PublishCompensationFailure(operationId);
                     _logger.LogWarning(exception, "GGUF import failed for {ModelName} and compensation was incomplete.", identity.CanonicalModelName);
@@ -328,7 +328,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
-                var restore = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None).ConfigureAwait(false);
+                var restore = await mapStore.TryRestoreAsync(lease, mapReceipt, CancellationToken.None);
                 scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
                 if (restore == ProviderMapRestoreResult.Superseded)
                 {
@@ -352,12 +352,12 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             {
                 if (mayRollbackCommittedArtifacts)
                 {
-                    await _importer.RollbackCommittedAsync(committed, CancellationToken.None).ConfigureAwait(false);
+                    await _importer.RollbackCommittedAsync(committed, CancellationToken.None);
                 }
             }
             else if (prepared is not null)
             {
-                await _importer.DiscardPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+                await _importer.DiscardPreparedAsync(prepared, CancellationToken.None);
             }
         }
         catch (Exception exception)
@@ -386,7 +386,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
     {
         try
         {
-            var inspection = await _inspector.InspectAsync(new GgufImportSource(sourcePath), cancellationToken).ConfigureAwait(false);
+            var inspection = await _inspector.InspectAsync(new GgufImportSource(sourcePath), cancellationToken);
             var blocking = inspection.Rejections.FirstOrDefault(rejection => !allowQuantizationRequired
                                                                              || rejection != GgufImportRejectionCode.QuantizationRequired);
             if (blocking != default || inspection.Rejections.Contains(GgufImportRejectionCode.InvalidSource))
@@ -431,7 +431,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         {
             // Fire-and-forget status push with no request token in scope; cancellation is intentionally not
             // propagated (MA0032/CA2016 opt-out).
-            await _eventPublisher.PublishStatusAsync(statusEvent, CancellationToken.None).ConfigureAwait(false);
+            await _eventPublisher.PublishStatusAsync(statusEvent, CancellationToken.None);
         }
         catch (Exception exception)
         {

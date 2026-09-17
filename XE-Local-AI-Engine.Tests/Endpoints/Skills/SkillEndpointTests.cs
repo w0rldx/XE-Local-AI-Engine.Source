@@ -49,7 +49,7 @@ public sealed class SkillEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -64,7 +64,7 @@ public sealed class SkillEndpointTests
         {
             Content = JsonContent.Create(BuildCreateBody(SkillName()))
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -76,7 +76,7 @@ public sealed class SkillEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ItemRoute(Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -97,7 +97,7 @@ public sealed class SkillEndpointTests
                 enabled = true
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -109,7 +109,7 @@ public sealed class SkillEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -127,12 +127,12 @@ public sealed class SkillEndpointTests
             Content = JsonContent.Create(BuildCreateBody(name))
         };
         factory.AddNodeBearerToken(createRequest);
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
 
         AssertEx.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         AssertEx.NotNull(createResponse.Headers.Location);
 
-        var createdPayload = await createResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var createdPayload = await createResponse.Content.ReadAsStringAsync();
         using var createdDocument = JsonDocument.Parse(createdPayload);
         var created = createdDocument.RootElement;
         AssertEx.Equal(name, created.GetProperty("name").GetString());
@@ -143,11 +143,11 @@ public sealed class SkillEndpointTests
         // NameGenerator and that the GET returns the full skill (including body).
         using var getRequest = new HttpRequestMessage(HttpMethod.Get, createResponse.Headers.Location);
         factory.AddNodeBearerToken(getRequest);
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var getPayload = await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var getPayload = await getResponse.Content.ReadAsStringAsync();
         using var getDocument = JsonDocument.Parse(getPayload);
         var skill = getDocument.RootElement;
         AssertEx.Equal(name, skill.GetProperty("name").GetString());
@@ -164,7 +164,7 @@ public sealed class SkillEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ItemRoute(Guid.NewGuid()));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -176,15 +176,15 @@ public sealed class SkillEndpointTests
         using var client = factory.CreateClient();
 
         var name = SkillName();
-        await CreateSkillAsync(factory, client, name).ConfigureAwait(false);
+        await CreateSkillAsync(factory, client, name);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
@@ -202,7 +202,7 @@ public sealed class SkillEndpointTests
         using var client = factory.CreateClient();
 
         var name = SkillName();
-        var skillId = await CreateSkillAsync(factory, client, name).ConfigureAwait(false);
+        var skillId = await CreateSkillAsync(factory, client, name);
 
         using var request = new HttpRequestMessage(HttpMethod.Put, ItemRoute(skillId))
         {
@@ -215,11 +215,11 @@ public sealed class SkillEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
         AssertEx.True(root.GetProperty("body").GetString()!.Contains("v2", StringComparison.Ordinal), "Body update round-trips.");
@@ -245,7 +245,7 @@ public sealed class SkillEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -267,7 +267,7 @@ public sealed class SkillEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -288,7 +288,7 @@ public sealed class SkillEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -299,17 +299,17 @@ public sealed class SkillEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await CreateSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
+        var skillId = await CreateSkillAsync(factory, client, SkillName());
 
         using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(skillId));
         factory.AddNodeBearerToken(deleteRequest);
-        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(deleteRequest);
 
         AssertEx.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         using var getRequest = new HttpRequestMessage(HttpMethod.Get, ItemRoute(skillId));
         factory.AddNodeBearerToken(getRequest);
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
 
         AssertEx.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
     }
@@ -322,7 +322,7 @@ public sealed class SkillEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, ItemRoute(Guid.NewGuid()));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -334,10 +334,10 @@ public sealed class SkillEndpointTests
             Content = JsonContent.Create(BuildCreateBody(name))
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         return document.RootElement.GetProperty("id").GetGuid();
     }

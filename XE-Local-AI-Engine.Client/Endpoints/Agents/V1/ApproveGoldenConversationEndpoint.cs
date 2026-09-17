@@ -26,13 +26,13 @@ public sealed class ApproveGoldenConversationEndpoint(IGoldenConversationService
 
     public override async Task HandleAsync(ApproveGoldenConversationRequest req, CancellationToken ct)
     {
-        var record = await _goldenConversationService.ApproveHarvestedAsync(req.AgentDefinitionId, req.GoldenConversationId, ct).ConfigureAwait(false);
+        var record = await _goldenConversationService.ApproveHarvestedAsync(req.AgentDefinitionId, req.GoldenConversationId, ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

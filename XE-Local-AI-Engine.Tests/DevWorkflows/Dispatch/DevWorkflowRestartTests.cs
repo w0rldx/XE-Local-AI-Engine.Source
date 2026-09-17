@@ -58,14 +58,14 @@ public sealed class DevWorkflowRestartTests
     public async Task ARunKilledBeforeItMaterialized_MaterializesOnTheFirstTickAfterTheRestart()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GateOnly);
 
-        await harness.RestartAsync().ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.RestartAsync();
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, (await harness.ReadNodeRunAsync(runId, "approve")).Status);
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.materialized"),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "node.materialized"),
             "the graph is materialized once, whichever dispatcher gets there first.");
     }
 
@@ -77,18 +77,18 @@ public sealed class DevWorkflowRestartTests
     public async Task ARunKilledJustAfterItStarted_IsNotMaterializedTwice()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GateOnly);
+        _ = await harness.AdvanceAsync(runId);
 
-        await harness.RestartAsync().ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.RestartAsync();
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(expected: 1, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count);
-        AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.materialized"));
+        AssertEx.Equal(expected: 1, (await harness.ReadNodeRunsAsync(runId)).Count);
+        AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "node.materialized"));
 
-        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -100,23 +100,23 @@ public sealed class DevWorkflowRestartTests
     public async Task AnAgentKilledMidStep_ResumesItsOwnSessionWithoutSpendingAnAttempt()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
 
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
 
-        var collapsed = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var collapsed = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, collapsed.Status);
         AssertEx.Equal(expected: 1, collapsed.Attempt, "a restart is not a failure, so it is not an attempt.");
         AssertEx.Equal(sessionId, collapsed.WorkSessionId, "the row keeps its session; that is what makes the resume a continuation.");
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), "node.interrupted");
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId), "node.interrupted");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(expected: 1, harness.Agent.Created.Count, "the resumed node run must not start a second session.");
         AssertEx.Contains(harness.Agent.Calls, call => call == ("resume", sessionId));
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research")).Status);
     }
 
     /// <summary>
@@ -127,15 +127,15 @@ public sealed class DevWorkflowRestartTests
     public async Task AnAgentKilledWhileItsSessionWasParked_ResumesFromThatPause()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused);
 
-        await harness.RestartAsync().ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.RestartAsync();
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var resumed = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var resumed = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, resumed.Status);
         AssertEx.Equal(sessionId, resumed.WorkSessionId);
         AssertEx.Equal(expected: 1, resumed.Attempt);
@@ -150,20 +150,20 @@ public sealed class DevWorkflowRestartTests
     public async Task AnAgentWhoseSessionLandedBeforeTheCrash_SettlesOnItRatherThanStartingOver()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
 
         // Completed, but the node run is still Running: nothing polled it before the host died.
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        await harness.RestartAsync().ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research");
+        await harness.RestartAsync();
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(expected: 1, harness.Agent.Created.Count, "a finished session must not be replaced by a second one doing the same work again.");
-        var settled = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var settled = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, settled.Status);
         AssertEx.Equal(sessionId, settled.WorkSessionId);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -177,18 +177,18 @@ public sealed class DevWorkflowRestartTests
         // No resumes allowed, so the first park blocks the node run for a human WITH its session still attached — which
         // is the state the two rules have to be told apart in.
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxSessionResumesPerNodeRun", "0"));
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var spentSessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var spentSessionId = await harness.ReadSessionIdAsync(runId, "research");
 
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "research")).Status);
 
-        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var retried = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var retried = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(expected: 2, retried.Attempt);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, retried.Status);
         AssertEx.True(retried.WorkSessionId is { } fresh && fresh != spentSessionId,
@@ -205,13 +205,13 @@ public sealed class DevWorkflowRestartTests
     public async Task AnAgentWhoseSessionWasDeleted_BlocksForAHumanAfterTheRestart()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await harness.Agent.DeleteAsync(await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false)).ConfigureAwait(false);
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.Agent.DeleteAsync(await harness.ReadSessionIdAsync(runId, "research"));
+        await harness.RestartAsync();
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "no longer exists");
@@ -226,13 +226,13 @@ public sealed class DevWorkflowRestartTests
     public async Task AToolNodeKilledMidCommand_CountsItsReRunAsASecondAttempt()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleTool);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
 
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
 
-        var reconciled = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var reconciled = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, reconciled.Status);
         AssertEx.Equal(expected: 2, reconciled.Attempt, "the command batch has to run again from the start, so the budget pays for it.");
     }
@@ -245,16 +245,16 @@ public sealed class DevWorkflowRestartTests
     public async Task ARunThatHasSpentItsAttemptBudget_BlocksItsInterruptedNodeRunsInsteadOfLooping()
     {
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
-        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleTool);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
 
         // The first restart spends the run's one re-attempt; the second finds the budget gone.
-        await harness.RestartAsync().ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
+        await harness.RestartAsync();
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, blocked.FailureClass);
     }
@@ -268,24 +268,24 @@ public sealed class DevWorkflowRestartTests
     public async Task ARecoveryThatDiesBeforeItCommits_LeavesTheNodeRunForTheNextBootToRepairExactlyOnce()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleTool);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
 
-        await harness.FailRecoveryAsync().ConfigureAwait(false);
-        await harness.FailRecoveryAsync().ConfigureAwait(false);
+        await harness.FailRecoveryAsync();
+        await harness.FailRecoveryAsync();
 
-        var stranded = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var stranded = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, stranded.Status, "A recovery that did not commit leaves the row exactly as the dead host left it.");
         AssertEx.Equal(expected: 1, stranded.Attempt);
 
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
 
-        var repaired = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var repaired = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, repaired.Status, "The boot that does commit finds the row and repairs it.");
         AssertEx.Equal(expected: 2, repaired.Attempt, "One interruption costs one attempt, however many boots died trying to record it.");
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.interrupted"),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "node.interrupted"),
             "and one interrupted event, for the same reason.");
     }
 
@@ -297,14 +297,14 @@ public sealed class DevWorkflowRestartTests
     public async Task ARecoveryThatDiesBeforeItCommits_StillBlocksAnAgentWhoseSessionIsGoneOnTheNextBoot()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.Agent.DeleteAsync(await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false)).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.Agent.DeleteAsync(await harness.ReadSessionIdAsync(runId, "research"));
 
-        await harness.FailRecoveryAsync().ConfigureAwait(false);
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.FailRecoveryAsync();
+        await harness.RestartAsync();
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass);
     }
@@ -317,18 +317,18 @@ public sealed class DevWorkflowRestartTests
     public async Task ARecoveryThatDiesBeforeItCommits_StillEnforcesTheAttemptBudgetOnTheNextBoot()
     {
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
-        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleTool);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
 
         // The first restart spends the run's one re-attempt; the second dies before it can record anything, and the
         // third has to find the budget gone rather than a Pending row nothing accounted for.
-        await harness.RestartAsync().ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
-        await harness.FailRecoveryAsync().ConfigureAwait(false);
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
+        await harness.FailRecoveryAsync();
+        await harness.RestartAsync();
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, blocked.FailureClass);
         AssertEx.Equal(expected: 2,
@@ -353,20 +353,19 @@ public sealed class DevWorkflowRestartTests
                                                             { "nodeKey": "validate-b", "nodeType": "Tool" }],
                                                   "edges": [{ "from": "validate-a", "to": "validate-b" }]
                                                 }
-                                                """)
-                                 .ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate-a", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate-b", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+                                                """);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate-a", DevWorkflowNodeRunStatus.Running);
+        await harness.TransitionNodeRunAsync(runId, "validate-b", DevWorkflowNodeRunStatus.Running);
 
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
 
-        var nodeRuns = await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false);
+        var nodeRuns = await harness.ReadNodeRunsAsync(runId);
         AssertEx.Equal(expected: 1,
             nodeRuns.Sum(static nodeRun => nodeRun.Attempt - 1),
             "The run spent one re-attempt because one is all it had, however many of its node runs were interrupted.");
 
-        var unfunded = await harness.ReadNodeRunAsync(runId, "validate-b").ConfigureAwait(false);
+        var unfunded = await harness.ReadNodeRunAsync(runId, "validate-b");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, unfunded.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, unfunded.FailureClass);
         AssertEx.Equal(expected: 1, unfunded.Attempt, "A row nothing could pay for must not read as having tried again.");
@@ -390,18 +389,17 @@ public sealed class DevWorkflowRestartTests
                                                             { "nodeKey": "validate-b", "nodeType": "Tool" }],
                                                   "edges": [{ "from": "validate-a", "to": "validate-b" }]
                                                 }
-                                                """)
-                                 .ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+                                                """);
+        _ = await harness.AdvanceAsync(runId);
 
         // The answer is durable and the attempt it buys is not: the host died before the dispatcher could turn this
         // decision into one. It reserves the run's only re-attempt all the same.
-        await harness.DecideAsync(runId, "validate-a", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate-b", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "validate-a", DevWorkflowDecisionKind.Retry);
+        await harness.TransitionNodeRunAsync(runId, "validate-b", DevWorkflowNodeRunStatus.Running);
 
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
 
-        var unfunded = await harness.ReadNodeRunAsync(runId, "validate-b").ConfigureAwait(false);
+        var unfunded = await harness.ReadNodeRunAsync(runId, "validate-b");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, unfunded.Status, "The pending Retry has promised the only slot, so nothing is left for the interrupted row.");
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, unfunded.FailureClass);
         AssertEx.Equal(expected: 1, unfunded.Attempt, "A row nothing could pay for must not read as having tried again.");
@@ -423,14 +421,13 @@ public sealed class DevWorkflowRestartTests
                                                   "nodes": [{ "nodeKey": "validate", "nodeType": "Tool", "maxAttempts": 1 }],
                                                   "edges": []
                                                 }
-                                                """)
-                                 .ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+                                                """);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
 
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status, "The run-wide budget is untouched; this row simply has no attempt of its own left.");
         AssertEx.Equal(expected: 1, blocked.Attempt, "1 of 1 must not become 2 of 1.");
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason),
@@ -448,17 +445,17 @@ public sealed class DevWorkflowRestartTests
     public async Task ANodeRunThatKeepsMovingUnderRecovery_IsSettledForAHumanRatherThanLeftInFlight()
     {
         await using var harness = DevWorkflowHarness.WithASecondWriter();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         // From here every session read re-attempts the row, so each pass judges a row that has already moved on.
-        harness.Drift.Target = (runId, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Id);
+        harness.Drift.Target = (runId, (await harness.ReadNodeRunAsync(runId, "research")).Id);
 
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
 
-        AssertEx.Empty(await harness.ReadInterruptedNodeRunsAsync().ConfigureAwait(false),
+        AssertEx.Empty(await harness.ReadInterruptedNodeRunsAsync(),
             "Nothing may still be in flight when the dispatcher starts: it polls neither a Queued row nor a Running sandbox one.");
-        var settled = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var settled = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, settled.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Interrupted, settled.FailureClass);
         AssertEx.Equal(DevWorkflowDecisionKind.Abandon, settled.PendingDecisionKind, "and it asks for an answer, or nobody would look at it.");
@@ -479,22 +476,21 @@ public sealed class DevWorkflowRestartTests
     public async Task Recovery_LeavesTelemetryNull()
     {
         await using var harness = DevWorkflowHarness.WithASecondWriter();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         // What the collector WOULD have found, had this path crossed it.
         await DevWorkflowNodeRunTelemetryTests
               .AppendStepConsumptionAsync(harness,
                   runId,
                   "research",
-                  """{"providerCalls":2,"estimatedInputTokens":120,"toolCallsCompleted":1,"toolSchemaTokens":40}""")
-              .ConfigureAwait(false);
+                  """{"providerCalls":2,"estimatedInputTokens":120,"toolCallsCompleted":1,"toolSchemaTokens":40}""");
 
         // From here every session read re-attempts the row, so recovery gives up on it and settles it for a human.
-        harness.Drift.Target = (runId, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Id);
-        await harness.RestartAsync().ConfigureAwait(false);
+        harness.Drift.Target = (runId, (await harness.ReadNodeRunAsync(runId, "research")).Id);
+        await harness.RestartAsync();
 
-        var settled = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var settled = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, settled.Status, "The verdict is the reconciler's, unchanged.");
         AssertEx.Equal(DevWorkflowFailureClasses.Interrupted, settled.FailureClass);
         DevWorkflowNodeRunTelemetryTests.AssertEmptyTelemetry(settled,
@@ -508,20 +504,20 @@ public sealed class DevWorkflowRestartTests
     public async Task AHumanWait_SurvivesARestartUntouched(DevWorkflowNodeRunStatus wait)
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GateOnly);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         if (wait == DevWorkflowNodeRunStatus.Blocked)
         {
-            await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked).ConfigureAwait(false);
+            await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked);
         }
 
-        var before = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
-        await harness.RestartAsync().ConfigureAwait(false);
-        var after = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        var before = await harness.ReadNodeRunAsync(runId, "approve");
+        await harness.RestartAsync();
+        var after = await harness.ReadNodeRunAsync(runId, "approve");
 
         AssertEx.Equal(wait, after.Status);
         AssertEx.Equal(before.Attempt, after.Attempt);
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.interrupted"),
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.interrupted"),
             "nothing was interrupted: a durable human wait is exactly where it should be.");
     }
 
@@ -533,15 +529,15 @@ public sealed class DevWorkflowRestartTests
     public async Task ADecisionTakenJustBeforeTheCrash_IsAppliedAfterTheRestart()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GateOnly);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve);
 
-        await harness.RestartAsync().ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.RestartAsync();
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "approve")).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -552,18 +548,18 @@ public sealed class DevWorkflowRestartTests
     public async Task ARunKilledBeforeItsOwnTerminalWasWritten_TerminalizesAfterTheRestart()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GateOnly);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         // Every node run terminal, the run row not yet: the window a crash between the two writes leaves behind.
-        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Succeeded).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Succeeded);
+        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId)).Status);
 
-        await harness.RestartAsync().ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.RestartAsync();
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowWorkItemStatus.Completed, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Completed, (await harness.ReadWorkItemAsync(runId)).Status);
     }
 
     /// <summary>
@@ -576,15 +572,15 @@ public sealed class DevWorkflowRestartTests
     public async Task ADrainKilledBeforeItSettled_CompletesAfterTheRestart(DevWorkflowRunStatus draining, DevWorkflowRunStatus settled)
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.TransitionRunAsync(runId, draining).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.TransitionRunAsync(runId, draining);
 
-        await harness.RestartAsync().ConfigureAwait(false);
-        AssertEx.Equal(draining, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "the reconciler never touches a run row; the intent stands.");
+        await harness.RestartAsync();
+        AssertEx.Equal(draining, (await harness.ReadRunAsync(runId)).Status, "the reconciler never touches a run row; the intent stands.");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(settled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(settled, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -595,26 +591,26 @@ public sealed class DevWorkflowRestartTests
     public async Task ADecisionTakenWhilePaused_SurvivesARestartAndSettlesOnTheResume()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GateOnly);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId)).Status);
 
-        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve);
+        await harness.RestartAsync();
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(DevWorkflowRunStatus.Paused,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "a paused run stays paused; the answer waits rather than restarting the run behind the operator's back.");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Running).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Running);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "approve")).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -626,25 +622,24 @@ public sealed class DevWorkflowRestartTests
     public async Task ARestart_DeletesNeverDrivenOrphansAndKeepsEveryDrivenSession()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var owned = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var owned = await harness.ReadSessionIdAsync(runId, "research");
 
         // Exactly what a crash between CreateAsync and AttachWorkSessionAsync leaves: a real workflow-kind session row,
         // never started, that no node run has ever pointed at.
-        var orphan = (await harness.Agent.CreateAsync("Orphaned research", "objective", Guid.NewGuid()).ConfigureAwait(false)).Id;
+        var orphan = (await harness.Agent.CreateAsync("Orphaned research", "objective", Guid.NewGuid())).Id;
 
         // And the shape a re-attempt leaves behind: driven, then released when the retry took a fresh session.
-        var superseded = (await harness.Agent.CreateAsync("Superseded attempt", "objective", Guid.NewGuid()).ConfigureAwait(false)).Id;
-        _ = await harness.Agent.StartAsync(superseded).ConfigureAwait(false);
+        var superseded = (await harness.Agent.CreateAsync("Superseded attempt", "objective", Guid.NewGuid())).Id;
+        _ = await harness.Agent.StartAsync(superseded);
 
-        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.RestartAsync();
 
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => harness.Agent.GetAsync(orphan),
-                              "a never-driven unreferenced session holds no transcript and nothing can ever reach it, so the restart cleans it up.")
-                          .ConfigureAwait(false);
-        _ = await harness.Agent.GetAsync(superseded).ConfigureAwait(false);
-        _ = await harness.Agent.GetAsync(owned).ConfigureAwait(false);
+                              "a never-driven unreferenced session holds no transcript and nothing can ever reach it, so the restart cleans it up.");
+        _ = await harness.Agent.GetAsync(superseded);
+        _ = await harness.Agent.GetAsync(owned);
     }
 
     /// <summary>
@@ -657,16 +652,16 @@ public sealed class DevWorkflowRestartTests
     public async Task ARecoveryRefusedItsBudgetOnEveryPassItHad_StillSettlesTheRowOnAnUncountedPass()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleTool);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
 
         // Three refusals is exactly the number of passes recovery has, so the last of them lands on the settling one.
-        var (logger, collapses) = await RecoverWithARefusingStoreAsync(harness, refusals: 3).ConfigureAwait(false);
+        var (logger, collapses) = await RecoverWithARefusingStoreAsync(harness, refusals: 3);
 
-        AssertEx.Empty(await harness.ReadInterruptedNodeRunsAsync().ConfigureAwait(false),
+        AssertEx.Empty(await harness.ReadInterruptedNodeRunsAsync(),
             "No node run may be left Queued or Running: the dispatcher admits Pending rows and follows Running AGENT ones, so nothing picks a stranded Tool row up.");
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
         AssertEx.Equal(expected: 4, collapses, "A refused pass wrote nothing, so it must not consume one of the three.");
         AssertEx.False(logger.HasEntry(LogLevel.Warning, "gave up"), "The cap was never reached, so nothing was left unsettled.");
     }
@@ -680,15 +675,15 @@ public sealed class DevWorkflowRestartTests
     public async Task ARecoveryRefusedItsBudgetForever_StopsAtTheCapAndNamesTheRowsItLeftUnsettled()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleTool);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
 
-        var (logger, collapses) = await RecoverWithARefusingStoreAsync(harness, refusals: int.MaxValue).ConfigureAwait(false);
+        var (logger, collapses) = await RecoverWithARefusingStoreAsync(harness, refusals: int.MaxValue);
 
         AssertEx.Equal(expected: 5, collapses, "RecoveryPasses + 2 attempts: an extra pass per refusal, and a persistent refusal still terminates.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "validate")).Status,
             "Every collapse rolled back, so the row stands exactly as the dead host left it. The log is what makes that findable.");
         AssertEx.ContainsSingle(logger.Entries,
             entry => entry.Level == LogLevel.Warning
@@ -734,8 +729,7 @@ public sealed class DevWorkflowRestartTests
         await new DevWorkflowStartupReconciler(ScopesServing(scope.ServiceProvider, store),
                   harness.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
                   logger)
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
 
         return (logger, collapses);
     }

@@ -45,7 +45,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+        var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
         var commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds);
 
         // Full binary-aware patch. Captured from standard output; the worker writes the file, since the SPI
@@ -54,14 +54,14 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             DiffCommand($"{request.RunId}-patch-diff",
                 commandTimeout,
                 "diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         // Name-status summary used to build changed-files.json.
         var statusResult = await _provider.ExecuteAsync(handle,
             DiffCommand($"{request.RunId}-patch-status",
                 commandTimeout,
                 "diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         if (!IsSuccessful(patchResult) || !IsSuccessful(statusResult))
         {
@@ -90,12 +90,11 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
 
         var changedFilesRelative = RunRelativePath(request.RunId, "changed-files.json");
         var changedFilesJson = JsonSerializer.Serialize(changedFiles, ChangedFilesJsonOptions);
-        await File.WriteAllTextAsync(Path.Combine(patchesDirectory, "changed-files.json"), changedFilesJson, cancellationToken)
-                  .ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(patchesDirectory, "changed-files.json"), changedFilesJson, cancellationToken);
 
         var patchText = patchResult.StandardOutput;
         var patchBytes = Encoding.UTF8.GetByteCount(patchText);
-        var maxPatchBytes = await _runtimeSettings.GetAgentHomeMaxPatchBytesAsync(cancellationToken).ConfigureAwait(false);
+        var maxPatchBytes = await _runtimeSettings.GetAgentHomeMaxPatchBytesAsync(cancellationToken);
         if (patchBytes > maxPatchBytes)
         {
             // Over budget: keep the changed-file metadata, drop the oversized patch.
@@ -114,8 +113,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             };
         }
 
-        await File.WriteAllTextAsync(Path.Combine(patchesDirectory, "changes.patch"), patchText, cancellationToken)
-                  .ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(patchesDirectory, "changes.patch"), patchText, cancellationToken);
 
         _logger.LogInformation("Exported patch for run {RunId}: {ChangedCount} changed file(s), {Bytes} byte(s).",
             request.RunId,

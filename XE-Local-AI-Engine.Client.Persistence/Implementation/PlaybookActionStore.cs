@@ -43,7 +43,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         };
 
         _ = _dbContext.PlaybookActions.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -55,8 +55,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         // Load tracked (not AsNoTracking) so SaveChanges re-encrypts; the materialization interceptor has already
         // decrypted Behavior/TriggerCondition on load, so the comparison below is plaintext-vs-plaintext.
         var entity = await _dbContext.PlaybookActions
-                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -109,7 +108,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             entity.Version++;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -123,11 +122,10 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         // Serialize the version/state guard, the cap re-check and the Enabled write into one transaction so a concurrent
         // edit/promote cannot slip between the checks and the write. Any early return disposes the transaction, rolling
         // back with nothing written.
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var entity = await _dbContext.PlaybookActions
-                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken);
         if (entity is null)
         {
             return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.NotFound, Record: null);
@@ -145,8 +143,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         // below-cap count and both enable, because the count read and the Enabled write commit atomically.
         var enabled = (int)PlaybookActionState.Enabled;
         var enabledCount = await _dbContext.PlaybookActions
-                                           .CountAsync(action => action.AgentDefinitionId == entity.AgentDefinitionId && action.State == enabled, cancellationToken)
-                                           .ConfigureAwait(false);
+                                           .CountAsync(action => action.AgentDefinitionId == entity.AgentDefinitionId && action.State == enabled, cancellationToken);
         if (enabledCount >= maxEnabledActions)
         {
             return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.CapReached, Record: null);
@@ -160,8 +157,8 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         // State transition (Suggested -> Enabled) is config-affecting, so Version bumps — mirrors UpdateAsync's rule.
         entity.Version++;
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.Committed, ToRecord(entity));
     }
@@ -169,8 +166,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.PlaybookActions
-                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -178,7 +174,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         }
 
         _ = _dbContext.PlaybookActions.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }
@@ -187,8 +183,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
     {
         var entity = await _dbContext.PlaybookActions
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -200,8 +195,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
                                        .Where(action => action.AgentDefinitionId == agentDefinitionId)
                                        .OrderBy(action => action.Priority)
                                        .ThenBy(action => action.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -215,8 +209,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
                                        .Where(action => action.AgentDefinitionId == agentDefinitionId && action.State == enabled)
                                        .OrderBy(action => action.Priority)
                                        .ThenBy(action => action.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

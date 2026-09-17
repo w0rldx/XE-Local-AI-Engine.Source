@@ -39,19 +39,19 @@ public sealed class LaunchPolicyFileHashCache : IDisposable
                       ?? throw new InvalidOperationException("The fingerprinted file has no parent directory."));
 
         var gate = _gates.GetOrAdd(normalizedPath, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
-        await gate.WaitAsync(ct).ConfigureAwait(false);
+        await gate.WaitAsync(ct);
         try
         {
             while (true)
             {
-                var before = await CaptureStampAsync(normalizedPath, ct).ConfigureAwait(false);
+                var before = await CaptureStampAsync(normalizedPath, ct);
                 if (_entries.TryGetValue(normalizedPath, out var cached) && cached.Stamp == before)
                 {
                     return cached.Sha256;
                 }
 
-                var sha256 = await ComputeFullSha256Async(normalizedPath, ct).ConfigureAwait(false);
-                var after = await CaptureStampAsync(normalizedPath, ct).ConfigureAwait(false);
+                var sha256 = await ComputeFullSha256Async(normalizedPath, ct);
+                var after = await CaptureStampAsync(normalizedPath, ct);
                 if (after != before)
                 {
                     continue;
@@ -104,7 +104,7 @@ public sealed class LaunchPolicyFileHashCache : IDisposable
             FileShare.Read | FileShare.Delete,
             bufferSize: 128 * 1024,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct));
     }
 
     private static async Task<FileStamp> CaptureStampAsync(string filePath, CancellationToken ct)
@@ -119,7 +119,7 @@ public sealed class LaunchPolicyFileHashCache : IDisposable
         return new FileStamp(file.Length,
             file.LastWriteTimeUtc.Ticks,
             file.CreationTimeUtc.Ticks,
-            await GetGuardSha256CoreAsync(filePath, ct).ConfigureAwait(false));
+            await GetGuardSha256CoreAsync(filePath, ct));
     }
 
     private static async Task<string> GetGuardSha256CoreAsync(string filePath, CancellationToken ct)
@@ -146,7 +146,7 @@ public sealed class LaunchPolicyFileHashCache : IDisposable
             var read = 0;
             while (read < requested)
             {
-                var count = await stream.ReadAsync(buffer.AsMemory(read, requested - read), ct).ConfigureAwait(false);
+                var count = await stream.ReadAsync(buffer.AsMemory(read, requested - read), ct);
                 if (count == 0)
                 {
                     break;

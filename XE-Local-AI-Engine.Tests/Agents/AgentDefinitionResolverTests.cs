@@ -35,10 +35,10 @@ public sealed class AgentDefinitionResolverTests
     {
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
 
-        var resolved = await resolver.ResolveAsync(agentDefinitionId: null, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(agentDefinitionId: null, "qwen3:8b");
 
         AssertEx.True(resolved is null, "A null binding must resolve to null (default persona).");
-        await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -48,7 +48,7 @@ public sealed class AgentDefinitionResolverTests
         var missingId = Guid.NewGuid();
         store.GetByIdAsync(missingId, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
 
-        var resolved = await resolver.ResolveAsync(missingId, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(missingId, "qwen3:8b");
 
         AssertEx.True(resolved is null, "A binding to a deleted definition must resolve to null (default persona).");
     }
@@ -60,7 +60,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], version: 4, modelProfile: "qwen3:8b", reasoningEffort: "high");
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved, "A bound definition must resolve to a runtime projection.");
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
@@ -78,7 +78,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition("Backend Buddy", allowedTools: ["GetCurrentTime"]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(definition.Id, resolved!.AgentDefinitionId);
@@ -98,7 +98,7 @@ public sealed class AgentDefinitionResolverTests
         };
         store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
 
-        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 2, resolved!.AllowedTools.Count);
@@ -127,7 +127,7 @@ public sealed class AgentDefinitionResolverTests
         };
         store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
 
-        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 2, resolved!.AllowedTools.Count); // whole offer preserved
@@ -152,7 +152,7 @@ public sealed class AgentDefinitionResolverTests
         };
         store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
 
-        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         // Flags are identity: MCP stays true, the read-only clock stays false — no node tightening.
@@ -191,7 +191,7 @@ public sealed class AgentDefinitionResolverTests
         };
         store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
 
-        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == "spawn_subagent"),
@@ -207,7 +207,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["spawn_subagent"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == "spawn_subagent");
@@ -221,7 +221,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == "spawn_subagent"),
@@ -244,7 +244,7 @@ public sealed class AgentDefinitionResolverTests
         skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([SkillRecord(enabledId, "kubernetes-debug", "Debug k8s issues", "## Body", version: 3)]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.NotNull(resolved!.Skills);
@@ -266,12 +266,12 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedSkillIds: []);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.NotNull(resolved!.Skills);
         AssertEx.Equal(expected: 0, resolved.Skills!.Count);
-        await skillStore.DidNotReceive().ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await skillStore.DidNotReceive().ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -297,7 +297,7 @@ public sealed class AgentDefinitionResolverTests
                           resources: [ResourceRecord(skillId, "references/runbook.md", "Runbook", "step one")])
                   ]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         var skill = AssertEx.NotNull(resolved).Skills![0];
         AssertEx.True(skill.IsImported, "an imported row must resolve as imported.");
@@ -335,7 +335,7 @@ public sealed class AgentDefinitionResolverTests
                           resources: [ResourceRecord(skillId, "references/runbook.md", "Runbook", "step one")])
                   ]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         var skill = AssertEx.NotNull(resolved).Skills![0];
         AssertEx.False(skill.IsImported, "a local row must not resolve as imported.");
@@ -366,8 +366,8 @@ public sealed class AgentDefinitionResolverTests
                           resources: [ResourceRecord(skillId, "references/runbook.md", "Runbook", "step one")])
                   ]));
 
-        var first = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
-        var second = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var first = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
+        var second = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         var firstSkill = AssertEx.NotNull(first).Skills![0];
         var secondSkill = AssertEx.NotNull(second).Skills![0];
@@ -400,7 +400,7 @@ public sealed class AgentDefinitionResolverTests
         };
         store.GetByIdAsync(seededPersona.Id, Arg.Any<CancellationToken>()).Returns(seededPersona);
 
-        var resolved = await resolver.ResolveAsync(seededPersona.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(seededPersona.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
@@ -416,7 +416,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["Calculate", "NotOffered"]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
@@ -441,8 +441,7 @@ public sealed class AgentDefinitionResolverTests
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
         // Active model local (activeModelIsCloud: false); pin is cloud.
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false)
-                                     .ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false);
 
         AssertEx.NotNull(resolved);
         AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == KnowledgeSearchToolName),
@@ -460,8 +459,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [KnowledgeSearchToolName, "GetCurrentTime"], modelProfile: CloudPinnedModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false)
-                                     .ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false);
 
         AssertEx.NotNull(resolved);
         AssertEx.True(resolved!.AllowedTools.Any(tool => tool.Name == KnowledgeSearchToolName),
@@ -483,7 +481,7 @@ public sealed class AgentDefinitionResolverTests
             });
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         var gated = resolved!.AllowedTools.Single(tool => tool.Name == "GetCurrentTime");
@@ -513,7 +511,7 @@ public sealed class AgentDefinitionResolverTests
             });
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         var projected = resolved!.AllowedTools.Single(tool => tool.Name == mcpTool);
@@ -545,7 +543,7 @@ public sealed class AgentDefinitionResolverTests
             });
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         // Network tool: tightened by the node category rule; the per-agent false is a no-op.
@@ -567,7 +565,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: IncapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == CapabilityGatedToolName),
@@ -587,7 +585,7 @@ public sealed class AgentDefinitionResolverTests
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
         // The caller's active model is the incapable one; the pinned tool-capable model must win the gating decision.
-        var resolved = await resolver.ResolveAsync(definition.Id, IncapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, IncapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == CapabilityGatedToolName);
@@ -605,7 +603,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: false).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: false);
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 0, resolved!.AllowedTools.Count);
@@ -619,7 +617,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == "GetCurrentTime");
@@ -638,7 +636,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: null);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.True(resolved!.ModelProfile is null, "A definition pinning no model must project a null ModelProfile.");
@@ -663,7 +661,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: IncapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: true, honorModelProfile: false).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: true, honorModelProfile: false);
 
         AssertEx.NotNull(resolved);
         AssertEx.True(resolved!.ModelProfile is null, "A suppressed pin must project a null ModelProfile so the user's pick wins.");
@@ -685,7 +683,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: IncapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: true, honorModelProfile: true).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: true, honorModelProfile: true);
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(IncapableModel, resolved!.ModelProfile);
@@ -704,7 +702,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: []);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
@@ -722,7 +720,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [AskUserTool.ToolName]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count(tool => tool.Name == AskUserTool.ToolName));
@@ -742,7 +740,7 @@ public sealed class AgentDefinitionResolverTests
             });
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.True(resolved!.AllowedTools.Single(tool => tool.Name == AskUserTool.ToolName).RequiresApproval,
@@ -766,7 +764,7 @@ public sealed class AgentDefinitionResolverTests
         };
         store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
 
-        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == AskUserTool.ToolName);
@@ -783,7 +781,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
 
         AssertEx.NotNull(resolved);
         AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == AskUserTool.ToolName),
@@ -799,7 +797,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: []);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: false).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: false);
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 0, resolved!.AllowedTools.Count);
@@ -812,7 +810,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], version: 7, modelProfile: "qwen3:8b", reasoningEffort: "low");
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
         AssertEx.NotNull(resolved);
 
         var builder = new LocalChatRuntimePackageBuilder();
@@ -852,8 +850,8 @@ public sealed class AgentDefinitionResolverTests
             Description = "second"
         };
 
-        var hashFirst = await ResolveAndHashAsync(resolver, store, builder, first).ConfigureAwait(false);
-        var hashSecond = await ResolveAndHashAsync(resolver, store, builder, second).ConfigureAwait(false);
+        var hashFirst = await ResolveAndHashAsync(resolver, store, builder, first);
+        var hashSecond = await ResolveAndHashAsync(resolver, store, builder, second);
 
         AssertEx.Equal(hashFirst, hashSecond);
     }
@@ -878,10 +876,10 @@ public sealed class AgentDefinitionResolverTests
             AllowedToolNames = ["GetCurrentTime", "Calculate"]
         };
 
-        var baseHash = await ResolveAndHashAsync(resolver, store, builder, baseDefinition).ConfigureAwait(false);
-        var versionHash = await ResolveAndHashAsync(resolver, store, builder, versionBumped).ConfigureAwait(false);
-        var instructionsHash = await ResolveAndHashAsync(resolver, store, builder, instructionsChanged).ConfigureAwait(false);
-        var toolsHash = await ResolveAndHashAsync(resolver, store, builder, toolsChanged).ConfigureAwait(false);
+        var baseHash = await ResolveAndHashAsync(resolver, store, builder, baseDefinition);
+        var versionHash = await ResolveAndHashAsync(resolver, store, builder, versionBumped);
+        var instructionsHash = await ResolveAndHashAsync(resolver, store, builder, instructionsChanged);
+        var toolsHash = await ResolveAndHashAsync(resolver, store, builder, toolsChanged);
 
         AssertEx.True(baseHash != versionHash, "Bumping Version must change the config hash.");
         AssertEx.True(baseHash != instructionsHash, "Changing Instructions must change the config hash.");
@@ -904,8 +902,8 @@ public sealed class AgentDefinitionResolverTests
             reasoningEffort: "high");
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var byId = AssertEx.NotNull(await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false));
-        var byRecord = AssertEx.NotNull(await resolver.ResolveAsync(definition, ToolCapableModel).ConfigureAwait(false));
+        var byId = AssertEx.NotNull(await resolver.ResolveAsync(definition.Id, ToolCapableModel));
+        var byRecord = AssertEx.NotNull(await resolver.ResolveAsync(definition, ToolCapableModel));
 
         AssertEx.Equal(byId.ResolvedSystemPrompt, byRecord.ResolvedSystemPrompt);
         AssertEx.Equal<string?>(byId.ModelProfile, byRecord.ModelProfile);
@@ -925,13 +923,13 @@ public sealed class AgentDefinitionResolverTests
         // ONE store read for TWO resolutions: the id overload fetches, the record overload projects the snapshot it was
         // handed. This is the hand-off contract the spawn seam depends on — a record overload that secretly re-read by
         // id would make that spawn cost two reads again, and no assertion above would notice.
-        await store.Received(1).GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).GetByIdAsync(definition.Id, Arg.Any<CancellationToken>());
 
         // The config hash is the contract the runtime package is keyed on, so prove the two projections hash alike
         // through the real builder rather than trusting the field walk above to be exhaustive.
         var builder = new LocalChatRuntimePackageBuilder();
-        var idHash = await ResolveAndHashAsync(resolver, store, builder, definition).ConfigureAwait(false);
-        var recordHash = await ResolveAndHashAsync(resolver, store, builder, definition, throughTheRecordOverload: true).ConfigureAwait(false);
+        var idHash = await ResolveAndHashAsync(resolver, store, builder, definition);
+        var recordHash = await ResolveAndHashAsync(resolver, store, builder, definition, throughTheRecordOverload: true);
         AssertEx.Equal(idHash, recordHash);
     }
 
@@ -942,12 +940,12 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: false);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
         // The default-path regression guard: a disabled playbook must not even query the store.
-        await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -961,7 +959,7 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
@@ -981,7 +979,7 @@ public sealed class AgentDefinitionResolverTests
                          EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
                      ]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.";
@@ -1003,7 +1001,7 @@ public sealed class AgentDefinitionResolverTests
                          EnabledAction(definition.Id, "Always cite the source.", priority: 1)
                      ]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Contains(resolved!.ResolvedSystemPrompt, "Always cite the source.");
@@ -1025,8 +1023,8 @@ public sealed class AgentDefinitionResolverTests
                          EnabledAction(enabled.Id, "Run the tests first.", priority: 1)
                      ]));
 
-        var disabledHash = await ResolveAndHashAsync(resolver, store, builder, disabled).ConfigureAwait(false);
-        var enabledHash = await ResolveAndHashAsync(resolver, store, builder, enabled).ConfigureAwait(false);
+        var disabledHash = await ResolveAndHashAsync(resolver, store, builder, disabled);
+        var enabledHash = await ResolveAndHashAsync(resolver, store, builder, enabled);
 
         AssertEx.True(disabledHash != enabledHash, "Enabling a playbook with an action must change the config hash.");
     }
@@ -1045,11 +1043,11 @@ public sealed class AgentDefinitionResolverTests
 
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Run the tests first.", priority: 1)]));
-        var firstHash = await ResolveAndHashAsync(resolver, store, builder, definition).ConfigureAwait(false);
+        var firstHash = await ResolveAndHashAsync(resolver, store, builder, definition);
 
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Prefer small commits.", priority: 1)]));
-        var secondHash = await ResolveAndHashAsync(resolver, store, builder, definition).ConfigureAwait(false);
+        var secondHash = await ResolveAndHashAsync(resolver, store, builder, definition);
 
         AssertEx.True(firstHash != secondHash, "Changing the injected memory text must change the config hash (memory rides the hashed prompt).");
     }
@@ -1072,11 +1070,11 @@ public sealed class AgentDefinitionResolverTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
 
         store.GetByIdAsync(disabled.Id, Arg.Any<CancellationToken>()).Returns(disabled);
-        var disabledResolved = await resolver.ResolveAsync(disabled.Id, "qwen3:8b").ConfigureAwait(false);
-        var disabledHash = await ResolveAndHashAsync(resolver, store, builder, disabled).ConfigureAwait(false);
+        var disabledResolved = await resolver.ResolveAsync(disabled.Id, "qwen3:8b");
+        var disabledHash = await ResolveAndHashAsync(resolver, store, builder, disabled);
 
-        var enabledResolved = await resolver.ResolveAsync(enabledNoActions.Id, "qwen3:8b").ConfigureAwait(false);
-        var enabledHash = await ResolveAndHashAsync(resolver, store, builder, enabledNoActions).ConfigureAwait(false);
+        var enabledResolved = await resolver.ResolveAsync(enabledNoActions.Id, "qwen3:8b");
+        var enabledHash = await ResolveAndHashAsync(resolver, store, builder, enabledNoActions);
 
         AssertEx.NotNull(disabledResolved);
         AssertEx.NotNull(enabledResolved);
@@ -1100,7 +1098,7 @@ public sealed class AgentDefinitionResolverTests
                          EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
                      ]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "anything").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "anything");
 
         AssertEx.NotNull(resolved);
         var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.";
@@ -1124,7 +1122,7 @@ public sealed class AgentDefinitionResolverTests
                          EnabledAction(definition.Id, "Write a changelog.", priority: 9)
                      ]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "   ").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "   ");
 
         AssertEx.NotNull(resolved);
         var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.\n- Write a changelog.";
@@ -1148,7 +1146,7 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([highPriority, lowPriority, ignored]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "run the tests").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "run the tests");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 1, ranker.CallCount);
@@ -1168,7 +1166,7 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "anything").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "anything");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
@@ -1184,7 +1182,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal($"{ScaffoldText}\n\n{SystemPrompt}", resolved!.ResolvedSystemPrompt);
@@ -1199,7 +1197,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], disableBaseScaffold: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
@@ -1221,8 +1219,8 @@ public sealed class AgentDefinitionResolverTests
         store.GetByIdAsync(filtered.Id, Arg.Any<CancellationToken>()).Returns(filtered);
         store.GetByIdAsync(optedOut.Id, Arg.Any<CancellationToken>()).Returns(optedOut);
 
-        var resolvedFiltered = await resolver.ResolveAsync(filtered.Id, "qwen3:8b").ConfigureAwait(false);
-        var resolvedOptedOut = await resolver.ResolveAsync(optedOut.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolvedFiltered = await resolver.ResolveAsync(filtered.Id, "qwen3:8b");
+        var resolvedOptedOut = await resolver.ResolveAsync(optedOut.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolvedFiltered);
         AssertEx.NotNull(resolvedOptedOut);
@@ -1246,7 +1244,7 @@ public sealed class AgentDefinitionResolverTests
                          EnabledAction(definition.Id, "Run the tests first.", priority: 1)
                      ]));
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved);
         var expected = $"{ScaffoldText}\n\n{SystemPrompt}\n\n## Operating Playbook\n- Run the tests first.";
@@ -1268,8 +1266,8 @@ public sealed class AgentDefinitionResolverTests
             DisableBaseScaffold = true
         };
 
-        var withScaffoldHash = await ResolveAndHashAsync(resolver, store, builder, withScaffold).ConfigureAwait(false);
-        var optedOutHash = await ResolveAndHashAsync(resolver, store, builder, optedOut).ConfigureAwait(false);
+        var withScaffoldHash = await ResolveAndHashAsync(resolver, store, builder, withScaffold);
+        var optedOutHash = await ResolveAndHashAsync(resolver, store, builder, optedOut);
 
         AssertEx.True(withScaffoldHash != optedOutHash, "Toggling DisableBaseScaffold must change the config hash.");
     }
@@ -1308,8 +1306,8 @@ public sealed class AgentDefinitionResolverTests
 
         // Either seam, one hash: the overload under test must not move a config-hash input.
         var resolved = throughTheRecordOverload
-            ? await resolver.ResolveAsync(definition, "qwen3:8b").ConfigureAwait(false)
-            : await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+            ? await resolver.ResolveAsync(definition, "qwen3:8b")
+            : await resolver.ResolveAsync(definition.Id, "qwen3:8b");
         AssertEx.NotNull(resolved);
 
         var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),

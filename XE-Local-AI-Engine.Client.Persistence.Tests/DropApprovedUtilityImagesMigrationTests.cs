@@ -16,19 +16,18 @@ public sealed class DropApprovedUtilityImagesMigrationTests
     [Test]
     public async Task Migrate_ToPriorMigration_StillHasApprovedUtilityImages()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("approved-utility-images-before.sqlite", PriorMigrationId)
-                                                          .ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("approved-utility-images-before.sqlite", PriorMigrationId);
 
-        AssertEx.True(await probe.TableExistsAsync("approved_utility_images").ConfigureAwait(false),
+        AssertEx.True(await probe.TableExistsAsync("approved_utility_images"),
             "The table must still exist one migration before the drop, or this test is not measuring the drop.");
     }
 
     [Test]
     public async Task Migrate_ToLatest_DropsApprovedUtilityImages()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("approved-utility-images-after.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("approved-utility-images-after.sqlite");
 
-        AssertEx.False(await probe.TableExistsAsync("approved_utility_images").ConfigureAwait(false),
+        AssertEx.False(await probe.TableExistsAsync("approved_utility_images"),
             "approved_utility_images must be gone; Docker is off the inference path and stays there.");
     }
 }

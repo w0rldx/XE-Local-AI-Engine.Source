@@ -33,14 +33,14 @@ public sealed class TranscriptionSessionEndpointTests
         {
             using var forbidden = create();
             factory.AddNonOperatorBearerToken(forbidden);
-            using var forbiddenResponse = await client.SendAsync(forbidden).ConfigureAwait(false);
+            using var forbiddenResponse = await client.SendAsync(forbidden);
             AssertEx.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode,
                 $"'{description}' must answer 403 for an authenticated non-operator.");
 
             // The control: without it a route that is broken for everyone would pass the test above.
             using var allowed = create();
             factory.AddNodeBearerToken(allowed);
-            using var allowedResponse = await client.SendAsync(allowed).ConfigureAwait(false);
+            using var allowedResponse = await client.SendAsync(allowed);
             AssertEx.True(allowedResponse.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden),
                 $"'{description}' must not answer 401/403 for an operator (got {(int)allowedResponse.StatusCode}).");
         }
@@ -56,7 +56,7 @@ public sealed class TranscriptionSessionEndpointTests
         foreach (var (description, create) in Routes())
         {
             using var request = create();
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
+            using var response = await client.SendAsync(request);
             AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"'{description}' must answer 401 without a token.");
         }
     }
@@ -78,10 +78,10 @@ public sealed class TranscriptionSessionEndpointTests
             translate = true,
             maxWindowSeconds = 7
         });
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
         AssertEx.Equal(HttpStatusCode.OK, createResponse.StatusCode);
 
-        var created = await ReadJsonAsync(createResponse).ConfigureAwait(false);
+        var created = await ReadJsonAsync(createResponse);
         var sessionId = created.GetProperty("session").GetProperty("id").GetGuid();
         AssertEx.Equal("interview.wav", created.GetProperty("session").GetProperty("title").GetString());
         AssertEx.Equal("Created", created.GetProperty("session").GetProperty("status").GetString());
@@ -94,10 +94,10 @@ public sealed class TranscriptionSessionEndpointTests
         AssertEx.Equal(expected: 7, created.GetProperty("config").GetProperty("maxWindowSeconds").GetInt32());
 
         using var getRequest = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions/{sessionId}");
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var fetched = await ReadJsonAsync(getResponse).ConfigureAwait(false);
+        var fetched = await ReadJsonAsync(getResponse);
         AssertEx.Equal(sessionId, fetched.GetProperty("session").GetProperty("id").GetGuid());
         AssertEx.Equal("interview.wav", fetched.GetProperty("session").GetProperty("title").GetString());
 
@@ -126,7 +126,7 @@ public sealed class TranscriptionSessionEndpointTests
         {
             sourceKind
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, service.CreateCallCount, "The service must never see an unknown source kind.");
@@ -150,7 +150,7 @@ public sealed class TranscriptionSessionEndpointTests
             languageMode = "override",
             languageOverride
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, service.CreateCallCount);
@@ -173,7 +173,7 @@ public sealed class TranscriptionSessionEndpointTests
             sourceKind = "File",
             maxWindowSeconds
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, service.CreateCallCount);
@@ -194,7 +194,7 @@ public sealed class TranscriptionSessionEndpointTests
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}/file");
         request.Content = form;
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.Equal(expected: 0, service.BeginUploadCallCount, "No upload slot may be minted for a session that does not exist.");
@@ -211,10 +211,10 @@ public sealed class TranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var defaultRequest = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions");
-        using var defaultResponse = await client.SendAsync(defaultRequest).ConfigureAwait(false);
+        using var defaultResponse = await client.SendAsync(defaultRequest);
         AssertEx.Equal(HttpStatusCode.OK, defaultResponse.StatusCode);
 
-        var body = await ReadJsonAsync(defaultResponse).ConfigureAwait(false);
+        var body = await ReadJsonAsync(defaultResponse);
         AssertEx.Equal(expected: 137, body.GetProperty("totalCount").GetInt32());
         AssertEx.Equal(expected: 1, body.GetProperty("items").GetArrayLength());
 
@@ -223,7 +223,7 @@ public sealed class TranscriptionSessionEndpointTests
         AssertEx.Equal(expected: 0, service.LastOffset);
 
         using var ceilingRequest = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions?limit=200&offset=25");
-        using var ceilingResponse = await client.SendAsync(ceilingRequest).ConfigureAwait(false);
+        using var ceilingResponse = await client.SendAsync(ceilingRequest);
         AssertEx.Equal(HttpStatusCode.OK, ceilingResponse.StatusCode);
         AssertEx.Equal(expected: 200, service.LastLimit);
         AssertEx.Equal(expected: 25, service.LastOffset);
@@ -231,11 +231,11 @@ public sealed class TranscriptionSessionEndpointTests
         // Past the ceiling the request is refused rather than silently trimmed: a page the caller did not ask for,
         // returned as though it had, is how a client comes to believe it has seen every row.
         using var oversizeRequest = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions?limit=201");
-        using var oversizeResponse = await client.SendAsync(oversizeRequest).ConfigureAwait(false);
+        using var oversizeResponse = await client.SendAsync(oversizeRequest);
         AssertEx.Equal(HttpStatusCode.BadRequest, oversizeResponse.StatusCode);
 
         using var negativeRequest = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions?offset=-1");
-        using var negativeResponse = await client.SendAsync(negativeRequest).ConfigureAwait(false);
+        using var negativeResponse = await client.SendAsync(negativeRequest);
         AssertEx.Equal(HttpStatusCode.BadRequest, negativeResponse.StatusCode);
     }
 
@@ -252,7 +252,7 @@ public sealed class TranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}/cancel");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
         AssertEx.Equal(expected: 1, service.CancelCallCount);
@@ -269,7 +269,7 @@ public sealed class TranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}/cancel");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -285,7 +285,7 @@ public sealed class TranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -301,7 +301,7 @@ public sealed class TranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
@@ -317,7 +317,7 @@ public sealed class TranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -362,7 +362,7 @@ public sealed class TranscriptionSessionEndpointTests
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
     {
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<JsonElement>(payload, JsonOptions);
     }
 

@@ -23,7 +23,7 @@ public sealed class NodeSqliteConnectionInterceptor(NodeSqlitePragmaSettings set
 
     public override async Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
     {
-        await NodeSqlitePragmas.ApplyAsync(connection, _settings, _logger, cancellationToken).ConfigureAwait(false);
-        await base.ConnectionOpenedAsync(connection, eventData, cancellationToken).ConfigureAwait(false);
+        await NodeSqlitePragmas.ApplyAsync(connection, _settings, _logger, cancellationToken);
+        await base.ConnectionOpenedAsync(connection, eventData, cancellationToken);
     }
 }

@@ -30,7 +30,7 @@ public sealed class SpawnSerializer : ISpawnSerializer
 
         // Bounded wait: a queued same-model spawn that cannot get its turn within the timeout returns a sanitized
         // "busy" result instead of blocking the parent tool call indefinitely. A cancelled parent surfaces as OCE.
-        var acquired = await gate.WaitAsync(timeout, ct).ConfigureAwait(false);
+        var acquired = await gate.WaitAsync(timeout, ct);
         if (!acquired)
         {
             return onTimeout();
@@ -38,7 +38,7 @@ public sealed class SpawnSerializer : ISpawnSerializer
 
         try
         {
-            return await run(ct).ConfigureAwait(false);
+            return await run(ct);
         }
         finally
         {

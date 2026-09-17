@@ -63,11 +63,11 @@ public sealed class TrainingRunService(
             throw new TrainingRunRejectedException("The base checkpoint's licensing has to be confirmed before a run can start.");
         }
 
-        var license = await _licenseGate.GetAsync(command.BaseArtifactId, cancellationToken).ConfigureAwait(false)
+        var license = await _licenseGate.GetAsync(command.BaseArtifactId, cancellationToken)
                       ?? throw new TrainingRunRejectedException("The base checkpoint was not found.");
-        var resolved = await _defaults.ResolveAsync(command.BaseArtifactId, command.Options, cancellationToken).ConfigureAwait(false);
+        var resolved = await _defaults.ResolveAsync(command.BaseArtifactId, command.Options, cancellationToken);
 
-        var dataset = await _datasetStore.GetDatasetAsync(command.DatasetId, cancellationToken).ConfigureAwait(false)
+        var dataset = await _datasetStore.GetDatasetAsync(command.DatasetId, cancellationToken)
                       ?? throw new TrainingRunRejectedException("The training dataset was not found.");
         if (dataset.Status != TrainingDatasetStatus.Ready)
         {
@@ -75,10 +75,10 @@ public sealed class TrainingRunService(
         }
 
         var freezeId = Guid.NewGuid();
-        var freeze = await MaterializeFreezeAsync(dataset, freezeId, cancellationToken).ConfigureAwait(false);
+        var freeze = await MaterializeFreezeAsync(dataset, freezeId, cancellationToken);
         try
         {
-            return await EnqueueAsync(command, resolved, license, freeze, cancellationToken).ConfigureAwait(false);
+            return await EnqueueAsync(command, resolved, license, freeze, cancellationToken);
         }
         catch
         {
@@ -96,7 +96,7 @@ public sealed class TrainingRunService(
 
     public async Task<bool> CancelAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        var run = await _runStore.GetAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await _runStore.GetAsync(runId, cancellationToken);
         if (run is null || run.Status is TrainingRunStatus.Succeeded or TrainingRunStatus.Failed or TrainingRunStatus.Cancelled)
         {
             return false;
@@ -109,8 +109,7 @@ public sealed class TrainingRunService(
             return true;
         }
 
-        _ = await _runStore.CompleteRunAsync(runId, TrainingWorkStatus.Cancelled, "Cancelled before the run started.", cancellationToken)
-                           .ConfigureAwait(false);
+        _ = await _runStore.CompleteRunAsync(runId, TrainingWorkStatus.Cancelled, "Cancelled before the run started.", cancellationToken);
         _signal.Wake();
         return true;
     }
@@ -157,19 +156,19 @@ public sealed class TrainingRunService(
     {
         // The export service is the canonical writer: template-agnostic JSONL with rejected samples excluded.
         // Re-implementing the same line format here would guarantee the two drift apart.
-        var canonical = await _exportService.ExportAsync(dataset.Id, DatasetExportFormat.Jsonl, cancellationToken).ConfigureAwait(false);
+        var canonical = await _exportService.ExportAsync(dataset.Id, DatasetExportFormat.Jsonl, cancellationToken);
         var plaintext = Encoding.UTF8.GetBytes(canonical);
         if (plaintext.Length == 0)
         {
             throw new TrainingRunRejectedException("The dataset has no reviewable samples to train on.");
         }
 
-        var samples = await _datasetStore.ListAllSamplesAsync(dataset.Id, cancellationToken).ConfigureAwait(false);
+        var samples = await _datasetStore.ListAllSamplesAsync(dataset.Id, cancellationToken);
         var eligible = samples.Where(static sample => sample.ReviewState != TrainingSampleReviewState.Rejected).ToArray();
-        var holdoutFraction = await ResolveHoldoutFractionAsync(dataset, cancellationToken).ConfigureAwait(false);
+        var holdoutFraction = await ResolveHoldoutFractionAsync(dataset, cancellationToken);
         var split = Split(eligible, holdoutFraction);
 
-        await _workspace.WriteFrozenDatasetAsync(dataset.Id, freezeId, plaintext, cancellationToken).ConfigureAwait(false);
+        await _workspace.WriteFrozenDatasetAsync(dataset.Id, freezeId, plaintext, cancellationToken);
         return new TrainingRunFreezeV1
         {
             FreezeId = freezeId,
@@ -186,7 +185,7 @@ public sealed class TrainingRunService(
 
     private async Task<double> ResolveHoldoutFractionAsync(TrainingDatasetRecord dataset, CancellationToken cancellationToken)
     {
-        var definition = await _datasetStore.GetDefinitionAsync(dataset.DefinitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await _datasetStore.GetDefinitionAsync(dataset.DefinitionId, cancellationToken);
         if (definition is null)
         {
             return DatasetDefinitionBodyV1.DefaultHoldoutFraction;
@@ -216,7 +215,7 @@ public sealed class TrainingRunService(
         // The installed counterpart is what an adapter is served against and the base side of a comparison; it is
         // recorded at creation so a later re-install under the same name cannot silently swap the base out from under
         // the run — the fingerprint travels with the link.
-        var link = await _linker.ResolveAsync(license.RepoId, command.LinkedModelName, cancellationToken).ConfigureAwait(false);
+        var link = await _linker.ResolveAsync(license.RepoId, command.LinkedModelName, cancellationToken);
         var run = await _runStore.CreateAndEnqueueAsync(new TrainingRunEnqueueCommand(command.DatasetId,
                                          command.ExpectedDatasetVersion,
                                          command.BaseArtifactId,
@@ -225,8 +224,7 @@ public sealed class TrainingRunService(
                                          JsonSerializer.SerializeToUtf8Bytes(_licenseGate.BuildConfirmation(license), TrainingJson.Options),
                                          link?.ModelName,
                                          link?.ContentFingerprint),
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+                                     cancellationToken);
         _signal.Wake();
         return run;
     }

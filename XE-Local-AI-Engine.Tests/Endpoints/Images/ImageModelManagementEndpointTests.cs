@@ -39,11 +39,11 @@ public sealed class ImageModelManagementEndpointTests
                 modelName = "sd-1.5"
             })
         };
-        using var cancelResponse = await client.SendAsync(cancel).ConfigureAwait(false);
+        using var cancelResponse = await client.SendAsync(cancel);
         AssertEx.Equal(HttpStatusCode.Unauthorized, cancelResponse.StatusCode, "Cancelling a download must require the operator token.");
 
         using var delete = new HttpRequestMessage(HttpMethod.Delete, $"{ApiPrefix}/images/models/sd-1.5");
-        using var deleteResponse = await client.SendAsync(delete).ConfigureAwait(false);
+        using var deleteResponse = await client.SendAsync(delete);
         AssertEx.Equal(HttpStatusCode.Unauthorized, deleteResponse.StatusCode, "Deleting a model must require the operator token.");
     }
 
@@ -61,10 +61,10 @@ public sealed class ImageModelManagementEndpointTests
         {
             modelName = "sd-1.5"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal("sd-1.5", body.GetProperty("modelName").GetString(), "The reply must echo the name so the caller can match it to the row it clicked.");
         AssertEx.True(body.GetProperty("cancelled").GetBoolean(), "An in-flight download that was signalled must report cancelled.");
         AssertEx.Equal("sd-1.5", coordinator.LastCancelledModelName);
@@ -84,10 +84,10 @@ public sealed class ImageModelManagementEndpointTests
         {
             modelName = "already-finished"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, "Cancelling a finished download is idempotent, not an error.");
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.False(body.GetProperty("cancelled").GetBoolean(), "Nothing was in flight, so nothing may be claimed to have stopped.");
     }
 
@@ -102,7 +102,7 @@ public sealed class ImageModelManagementEndpointTests
         {
             modelName = "   "
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Null(coordinator.LastCancelledModelName, "A blank name must be rejected at the boundary.");
@@ -116,7 +116,7 @@ public sealed class ImageModelManagementEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/images/models/sd-1.5", body: null);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
         AssertEx.Equal("sd-1.5", store.LastDeletedModelName);
@@ -132,9 +132,9 @@ public sealed class ImageModelManagementEndpointTests
         using var client = factory.CreateClient();
 
         using var first = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/images/models/never-installed", body: null);
-        using var firstResponse = await client.SendAsync(first).ConfigureAwait(false);
+        using var firstResponse = await client.SendAsync(first);
         using var second = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/images/models/never-installed", body: null);
-        using var secondResponse = await client.SendAsync(second).ConfigureAwait(false);
+        using var secondResponse = await client.SendAsync(second);
 
         AssertEx.Equal(HttpStatusCode.NoContent, firstResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.NoContent, secondResponse.StatusCode);
@@ -149,7 +149,7 @@ public sealed class ImageModelManagementEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/images/models/%20%20", body: null);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, store.DeleteCallCount, "A whitespace-only route segment must be rejected before the store is touched.");
@@ -194,7 +194,7 @@ public sealed class ImageModelManagementEndpointTests
                 }
             }
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
@@ -236,7 +236,7 @@ public sealed class ImageModelManagementEndpointTests
                 }
             }
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         AssertEx.Null(coordinator.LastRequest?.Parts[0].SizeBytes);
@@ -268,7 +268,7 @@ public sealed class ImageModelManagementEndpointTests
                 }
             }
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var started = coordinator.LastRequest;
@@ -296,10 +296,10 @@ public sealed class ImageModelManagementEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/models/downloads", ValidStartPayload());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var body = document.RootElement;
         AssertEx.True(body.EnumerateObject()
                           .Select(static property => property.Name)
@@ -338,8 +338,8 @@ public sealed class ImageModelManagementEndpointTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var error = document.RootElement.GetProperty("errors")[0];
@@ -380,10 +380,10 @@ public sealed class ImageModelManagementEndpointTests
                 }
             }
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var error = document.RootElement.GetProperty("errors")[0];
         AssertEx.Equal("generalErrors", error.GetProperty("name").GetString());
         AssertEx.Equal("The file-set declares the 'Diffusion' part more than once.", error.GetProperty("reason").GetString());

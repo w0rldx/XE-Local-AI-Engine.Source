@@ -31,12 +31,12 @@ public sealed class ResolveToolApprovalEndpoint(IWorkerEventDispatcher eventDisp
         // Application-internal dispatcher parameter rather than the ApprovalResolvedEvent, which is the cross-repo
         // SignalR contract the platform hub produces and which must not learn about a loopback-only concept.
         await _eventDispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent(req.RequestId, req.Approved),
-            req.Scope ?? ApprovalScope.Once).ConfigureAwait(false);
+            req.Scope ?? ApprovalScope.Once);
 
         await Send.OkAsync(new ResolveToolApprovalResponse
         {
             RequestId = req.RequestId,
             Approved = req.Approved
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

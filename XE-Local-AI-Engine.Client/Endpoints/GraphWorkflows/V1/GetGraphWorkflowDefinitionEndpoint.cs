@@ -22,7 +22,7 @@ public sealed class GetGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionS
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var definition = await _definitions.GetAsync(req.DefinitionId, ct).ConfigureAwait(false);
-        await Send.OkAsync(definition.ToResponse(), ct).ConfigureAwait(false);
+        var definition = await _definitions.GetAsync(req.DefinitionId, ct);
+        await Send.OkAsync(definition.ToResponse(), ct);
     }
 }

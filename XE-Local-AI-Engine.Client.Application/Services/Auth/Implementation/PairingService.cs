@@ -43,22 +43,21 @@ public sealed class PairingService : IPairingService
         using var response = await client.PostAsJsonAsync(_platformOptions.Value.PairingEndpoint,
             request,
             SerializerOptions,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            throw await CreatePairingExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+            throw await CreatePairingExceptionAsync(response, cancellationToken);
         }
 
-        var pairingResponse = await response.Content.ReadFromJsonAsync<PairClientResponse>(SerializerOptions, cancellationToken)
-                                            .ConfigureAwait(false);
+        var pairingResponse = await response.Content.ReadFromJsonAsync<PairClientResponse>(SerializerOptions, cancellationToken);
 
         if (pairingResponse is null)
         {
             throw new PairingException("Central Platform returned an empty pairing response.");
         }
 
-        await _tokenStore.StoreTokensAsync(pairingResponse).ConfigureAwait(false);
+        await _tokenStore.StoreTokensAsync(pairingResponse);
 
         _logger.LogInformation("Worker node {NodeName} paired successfully with client node id {ClientNodeId}.",
             request.NodeName,
@@ -70,14 +69,14 @@ public sealed class PairingService : IPairingService
     public async Task UnpairAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await _tokenStore.ClearTokensAsync().ConfigureAwait(false);
+        await _tokenStore.ClearTokensAsync();
         _logger.LogInformation("Worker node credentials cleared locally.");
     }
 
     private static async Task<PairingException> CreatePairingExceptionAsync(HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
-        var errorBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
         var message = string.IsNullOrWhiteSpace(errorBody)
             ? $"Pairing failed with status code {(int)response.StatusCode}."
             : $"Pairing failed: {errorBody}";

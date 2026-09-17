@@ -27,16 +27,16 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
     public async Task<bool> PurgeAsync(Guid documentId, CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         // Read the stored extension up front so the server-named bytes file can be located after the row is gone; a
         // missing row means there is nothing to delete.
-        var extension = await ReadExtensionAsync(connection, transaction, documentId, cancellationToken).ConfigureAwait(false);
+        var extension = await ReadExtensionAsync(connection, transaction, documentId, cancellationToken);
         if (extension is null)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.RollbackAsync(cancellationToken);
             return false;
         }
 
@@ -47,7 +47,7 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
             vectorsCommand.Transaction = transaction;
             vectorsCommand.CommandText = "DELETE FROM knowledge_chunk_vectors WHERE document_id = $document_id;";
             AddParameter(vectorsCommand, "$document_id", documentId);
-            _ = await vectorsCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await vectorsCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await using (var chunksCommand = connection.CreateCommand())
@@ -55,7 +55,7 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
             chunksCommand.Transaction = transaction;
             chunksCommand.CommandText = "DELETE FROM knowledge_document_chunks WHERE document_id = $document_id;";
             AddParameter(chunksCommand, "$document_id", documentId);
-            _ = await chunksCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await chunksCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await using (var sectionsCommand = connection.CreateCommand())
@@ -63,7 +63,7 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
             sectionsCommand.Transaction = transaction;
             sectionsCommand.CommandText = "DELETE FROM knowledge_document_sections WHERE document_id = $document_id;";
             AddParameter(sectionsCommand, "$document_id", documentId);
-            _ = await sectionsCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await sectionsCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await using (var documentCommand = connection.CreateCommand())
@@ -71,14 +71,14 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
             documentCommand.Transaction = transaction;
             documentCommand.CommandText = "DELETE FROM knowledge_documents WHERE document_id = $document_id;";
             AddParameter(documentCommand, "$document_id", documentId);
-            _ = await documentCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await documentCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
 
         // Only after the rows are gone remove the encrypted bytes from disk; a best-effort failure leaves an orphan blob
         // that a later purge also covers rather than a live row without its content.
-        await _blobStore.DeleteBytesAsync(documentId, extension, cancellationToken).ConfigureAwait(false);
+        await _blobStore.DeleteBytesAsync(documentId, extension, cancellationToken);
         return true;
     }
 
@@ -88,7 +88,7 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
         command.Transaction = transaction;
         command.CommandText = "SELECT extension FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is null or DBNull ? null : result as string ?? string.Empty;
     }
 }

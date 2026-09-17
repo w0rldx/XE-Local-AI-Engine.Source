@@ -39,15 +39,15 @@ public sealed class ConnectionEndpointTests
         using var connectRequest = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/connection/connect");
         using var enableRequest = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/connection/auto-connect/enable");
         using var disconnectRequest = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/connection/disconnect");
-        using var statusResponse = await client.SendAsync(statusRequest).ConfigureAwait(false);
-        using var connectResponse = await client.SendAsync(connectRequest).ConfigureAwait(false);
-        using var enableResponse = await client.SendAsync(enableRequest).ConfigureAwait(false);
-        using var disconnectResponse = await client.SendAsync(disconnectRequest).ConfigureAwait(false);
+        using var statusResponse = await client.SendAsync(statusRequest);
+        using var connectResponse = await client.SendAsync(connectRequest);
+        using var enableResponse = await client.SendAsync(enableRequest);
+        using var disconnectResponse = await client.SendAsync(disconnectRequest);
 
-        var status = await ReadJsonAsync<ConnectionStatusResponse>(statusResponse).ConfigureAwait(false);
-        var connected = await ReadJsonAsync<ConnectionStatusResponse>(connectResponse).ConfigureAwait(false);
-        var enabled = await ReadJsonAsync<ConnectionStatusResponse>(enableResponse).ConfigureAwait(false);
-        var disconnected = await ReadJsonAsync<ConnectionStatusResponse>(disconnectResponse).ConfigureAwait(false);
+        var status = await ReadJsonAsync<ConnectionStatusResponse>(statusResponse);
+        var connected = await ReadJsonAsync<ConnectionStatusResponse>(connectResponse);
+        var enabled = await ReadJsonAsync<ConnectionStatusResponse>(enableResponse);
+        var disconnected = await ReadJsonAsync<ConnectionStatusResponse>(disconnectResponse);
 
         AssertEx.Equal(HttpStatusCode.OK, statusResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, connectResponse.StatusCode);
@@ -80,8 +80,8 @@ public sealed class ConnectionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/connection/auto-connect/disable");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var status = await ReadJsonAsync<ConnectionStatusResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var status = await ReadJsonAsync<ConnectionStatusResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(tokenStore.AutoConnectOnStart);
@@ -106,10 +106,10 @@ public sealed class ConnectionEndpointTests
         using var client = factory.CreateClient();
 
         using var connectRequest = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/connection/connect");
-        using var connectResponse = await client.SendAsync(connectRequest).ConfigureAwait(false);
+        using var connectResponse = await client.SendAsync(connectRequest);
 
         AssertEx.Equal(HttpStatusCode.Conflict, connectResponse.StatusCode);
-        using var document = JsonDocument.Parse(await connectResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await connectResponse.Content.ReadAsStringAsync());
         AssertEx.Equal("WorkerNotPaired", document.RootElement.GetProperty("conflictType").GetString());
     }
 
@@ -124,10 +124,10 @@ public sealed class ConnectionEndpointTests
         using var client = factory.CreateClient();
 
         using var connectRequest = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/connection/connect");
-        using var connectResponse = await client.SendAsync(connectRequest).ConfigureAwait(false);
+        using var connectResponse = await client.SendAsync(connectRequest);
 
         AssertEx.Equal(HttpStatusCode.Conflict, connectResponse.StatusCode);
-        using var document = JsonDocument.Parse(await connectResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await connectResponse.Content.ReadAsStringAsync());
         AssertEx.Equal("WorkerTokenExpired", document.RootElement.GetProperty("conflictType").GetString());
     }
 
@@ -158,7 +158,7 @@ public sealed class ConnectionEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 }

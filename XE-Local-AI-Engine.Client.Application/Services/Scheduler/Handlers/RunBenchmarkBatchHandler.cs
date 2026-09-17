@@ -163,7 +163,7 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         var store = services.GetRequiredService<IBenchmarkStore>();
         var freezeService = services.GetRequiredService<IBenchmarkRunFreezeService>();
 
-        var project = await store.GetProjectAsync(parameters.ProjectId, cancellationToken).ConfigureAwait(false);
+        var project = await store.GetProjectAsync(parameters.ProjectId, cancellationToken);
         if (project is null)
         {
             throw new ScheduledJobExecutionException("The scheduled benchmark project could not be found. It may have been deleted.");
@@ -173,7 +173,7 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         // Counted over WORK ITEMS of every kind, not over run statuses: judging, fidelity and pairwise work outlives
         // the run it belongs to, so the previous matrix can hold the single-consumer queue and the GPU for hours while
         // every one of its runs already reads Succeeded — and the next fire piled a second matrix on top of it.
-        var active = await store.CountActiveWorkAsync(parameters.ProjectId, cancellationToken).ConfigureAwait(false);
+        var active = await store.CountActiveWorkAsync(parameters.ProjectId, cancellationToken);
         var activeCount = active.Values.Sum();
         if (activeCount > 0)
         {
@@ -185,12 +185,11 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
                 breakdown);
             await ReportAsync(context,
                     $"Skipped: benchmark project {parameters.ProjectId} still has {activeCount} work item(s) queued or running ({breakdown}), so no cells were enqueued.",
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
             return;
         }
 
-        await EnqueueMatrixAsync(context, freezeService, parameters, project.Version, cancellationToken).ConfigureAwait(false);
+        await EnqueueMatrixAsync(context, freezeService, parameters, project.Version, cancellationToken);
     }
 
     /// <summary>
@@ -233,8 +232,7 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
                                                      expectedVersion,
                                                      kvCacheType,
                                                      parameters.RepeatCount,
-                                                     parameters.Warmup), freezeScope, cancellationToken)
-                                                 .ConfigureAwait(false);
+                                                     parameters.Warmup), freezeScope, cancellationToken);
                 expectedVersion += created.Count;
                 runsCreated += created.Count;
                 cellsStarted++;
@@ -260,7 +258,7 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 
         var summary = $"Benchmark project {parameters.ProjectId}: {cellsStarted}/{cells.Count} cell(s) enqueued, {runsCreated} run(s) created"
                       + (failures.Count == 0 ? "." : $". Not enqueued — {string.Join("; ", failures)}.");
-        await ReportAsync(context, summary, cancellationToken).ConfigureAwait(false);
+        await ReportAsync(context, summary, cancellationToken);
 
         if (cellsStarted == 0)
         {

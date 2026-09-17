@@ -43,10 +43,10 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     public async Task NormalizeVectorsAsync_MakesEveryNonZeroRowUnitLength_AndLeavesZeroRowsUntouched()
     {
         var databasePath = GetDatabasePath("normalize-core.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
         var ids = new List<Guid>();
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             ids.Add(await InsertAsync(connection, new[]
             {
@@ -54,37 +54,37 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
                 4f,
                 0f,
                 0f
-            }).ConfigureAwait(false)); // norm 5
+            })); // norm 5
             ids.Add(await InsertAsync(connection, new[]
             {
                 -2f,
                 2f,
                 1f,
                 0f
-            }).ConfigureAwait(false));
+            }));
             ids.Add(await InsertAsync(connection, new[]
             {
                 0f,
                 0f,
                 0f,
                 0f
-            }).ConfigureAwait(false)); // zero: untouched
+            })); // zero: untouched
         }
 
         long written;
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             // Small batch to exercise rowid paging across multiple transactions.
-            written = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 2, CancellationToken.None).ConfigureAwait(false);
+            written = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 2, CancellationToken.None);
         }
 
         AssertEx.Equal(expected: 2L, written);
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            AssertEx.True(Math.Abs(await NormOfAsync(connection, ids[0]).ConfigureAwait(false) - 1f) < 1e-5f, "First non-zero row must be unit length.");
-            AssertEx.True(Math.Abs(await NormOfAsync(connection, ids[1]).ConfigureAwait(false) - 1f) < 1e-5f, "Second non-zero row must be unit length.");
-            AssertEx.True(await NormOfAsync(connection, ids[2]).ConfigureAwait(false) == 0f, "The zero-magnitude row must be left exactly zero.");
+            AssertEx.True(Math.Abs(await NormOfAsync(connection, ids[0]) - 1f) < 1e-5f, "First non-zero row must be unit length.");
+            AssertEx.True(Math.Abs(await NormOfAsync(connection, ids[1]) - 1f) < 1e-5f, "Second non-zero row must be unit length.");
+            AssertEx.True(await NormOfAsync(connection, ids[2]) == 0f, "The zero-magnitude row must be left exactly zero.");
         }
     }
 
@@ -92,9 +92,9 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     public async Task NormalizeVectorsAsync_IsIdempotent_WhenRunTwice()
     {
         var databasePath = GetDatabasePath("normalize-idempotent.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
         Guid id;
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             id = await InsertAsync(connection, new[]
             {
@@ -102,14 +102,14 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
                 8f,
                 0f,
                 0f
-            }).ConfigureAwait(false);
+            });
         }
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            _ = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None).ConfigureAwait(false);
-            _ = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None).ConfigureAwait(false);
-            AssertEx.True(Math.Abs(await NormOfAsync(connection, id).ConfigureAwait(false) - 1f) < 1e-5f,
+            _ = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None);
+            _ = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None);
+            AssertEx.True(Math.Abs(await NormOfAsync(connection, id) - 1f) < 1e-5f,
                 "Re-normalizing an already-unit vector must leave it unit length (idempotent in effect).");
         }
     }
@@ -118,10 +118,10 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     public async Task NormalizeVectorsAsync_OnEmptyDatabase_WritesNothing()
     {
         var databasePath = GetDatabasePath("normalize-empty.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var written = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var written = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None);
 
         AssertEx.Equal(expected: 0L, written);
     }
@@ -130,9 +130,9 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     public async Task RunOnceAsync_NormalizesRows_SetsMarker_AndLatchesState()
     {
         var databasePath = GetDatabasePath("runonce.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
         Guid id;
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             id = await InsertAsync(connection, new[]
             {
@@ -140,7 +140,7 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
                 12f,
                 0f,
                 0f
-            }).ConfigureAwait(false); // norm 13
+            }); // norm 13
         }
 
         await using var provider = BuildProvider(databasePath);
@@ -148,20 +148,20 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
         using var service = new KnowledgeVectorNormalizationBackfillService(provider.GetRequiredService<IServiceScopeFactory>(), state,
             NullLogger<KnowledgeVectorNormalizationBackfillService>.Instance);
 
-        await service.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await service.RunOnceAsync(CancellationToken.None);
 
         AssertEx.True(state.IsComplete, "The state latch must flip after a completed pass.");
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            AssertEx.True(Math.Abs(await NormOfAsync(connection, id).ConfigureAwait(false) - 1f) < 1e-5f, "The row must be normalized after RunOnce.");
-            AssertEx.True(await IsMarkerSetAsync(connection).ConfigureAwait(false), "The durable completion marker must be set.");
+            AssertEx.True(Math.Abs(await NormOfAsync(connection, id) - 1f) < 1e-5f, "The row must be normalized after RunOnce.");
+            AssertEx.True(await IsMarkerSetAsync(connection), "The durable completion marker must be set.");
         }
 
         // Second run: marker already set → the state still latches (fresh state), proving the skip-but-latch path.
         var secondState = new KnowledgeVectorNormalizationState();
         using var secondService = new KnowledgeVectorNormalizationBackfillService(
             provider.GetRequiredService<IServiceScopeFactory>(), secondState, NullLogger<KnowledgeVectorNormalizationBackfillService>.Instance);
-        await secondService.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await secondService.RunOnceAsync(CancellationToken.None);
         AssertEx.True(secondState.IsComplete, "A run that finds the marker already set must still latch the state.");
     }
 
@@ -187,7 +187,7 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
         command.Parameters.AddWithValue("$dim", vector.Length);
         command.Parameters.AddWithValue("$blob", MemoryMarshal.AsBytes<float>(vector).ToArray());
         command.Parameters.AddWithValue("$model", EmbeddingModel);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
         return chunkId;
     }
 
@@ -196,7 +196,7 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT embedding FROM knowledge_chunk_vectors WHERE chunk_id = $cid;";
         command.Parameters.AddWithValue("$cid", chunkId);
-        var blob = (byte[])(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+        var blob = (byte[])(await command.ExecuteScalarAsync())!;
         return TensorPrimitives.Norm(MemoryMarshal.Cast<byte, float>(blob));
     }
 
@@ -204,21 +204,21 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT EXISTS(SELECT 1 FROM chat_maintenance_state WHERE name = 'knowledge_vector_normalization_v1');";
-        return Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture) != 0;
+        return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0;
     }
 
     // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises a service
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await connection.OpenAsync();
+        await EnsureForeignKeysOffAsync(connection);
         return connection;
     }
 
@@ -226,12 +226,12 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     {
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

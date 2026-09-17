@@ -40,13 +40,13 @@ public sealed class DefaultExceptionHandlerTests
         httpContext.Request.Method = "POST";
         httpContext.Request.Path = "/api/local/v1/diagnostics/exception-probe";
 
-        var handled = await handler.TryHandleAsync(httpContext, new InvalidOperationException("boom"), CancellationToken.None).ConfigureAwait(false);
+        var handled = await handler.TryHandleAsync(httpContext, new InvalidOperationException("boom"), CancellationToken.None);
         AssertEx.True(handled, "The default handler must handle the exception.");
         // WriteAsJsonAsync overwrites Response.ContentType unless the media type is passed explicitly — pin the RFC 7807 type.
         AssertEx.Contains(httpContext.Response.ContentType, "application/problem+json", StringComparison.OrdinalIgnoreCase);
 
         responseBody.Position = 0;
-        using var document = await JsonDocument.ParseAsync(responseBody).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseBody);
         AssertEx.True(document.RootElement.TryGetProperty("traceId", out var traceIdElement), "ProblemDetails must carry a traceId extension.");
         var problemDetailsTraceId = traceIdElement.GetString();
 
@@ -71,14 +71,13 @@ public sealed class DefaultExceptionHandlerTests
         using var responseBody = new MemoryStream();
         httpContext.Response.Body = responseBody;
 
-        var handled = await handler.TryHandleAsync(httpContext, new KeyNotFoundException(SensitiveMessage), CancellationToken.None)
-                                   .ConfigureAwait(false);
+        var handled = await handler.TryHandleAsync(httpContext, new KeyNotFoundException(SensitiveMessage), CancellationToken.None);
 
         AssertEx.True(handled);
         AssertEx.Equal(StatusCodes.Status500InternalServerError, httpContext.Response.StatusCode);
         AssertEx.Contains(httpContext.Response.ContentType, "application/problem+json", StringComparison.OrdinalIgnoreCase);
         responseBody.Position = 0;
-        using var document = await JsonDocument.ParseAsync(responseBody).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseBody);
         AssertEx.Equal(StatusCodes.Status500InternalServerError, document.RootElement.GetProperty("status").GetInt32());
         AssertEx.Equal("An unexpected error occurred", document.RootElement.GetProperty("detail").GetString());
         AssertEx.False(document.RootElement.GetRawText().Contains(SensitiveMessage, StringComparison.Ordinal));

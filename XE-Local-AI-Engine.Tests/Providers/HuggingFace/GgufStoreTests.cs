@@ -876,7 +876,7 @@ public sealed class GgufStoreTests
                 return toCopy;
             }
 
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return 0;
         }
 

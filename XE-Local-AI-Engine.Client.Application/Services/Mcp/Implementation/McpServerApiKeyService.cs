@@ -46,7 +46,7 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         var key = KeyScheme + secret;
         var prefix = KeyScheme + secret[..PrefixSecretCharacters];
 
-        var record = await _store.SetAsync(prefix, HashKey(key), (int)scope, cancellationToken).ConfigureAwait(false);
+        var record = await _store.SetAsync(prefix, HashKey(key), (int)scope, cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
         return new GeneratedMcpServerApiKey(key, ToView(record));
@@ -54,7 +54,7 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
 
     public async Task<McpServerApiKeyView?> GetAsync(CancellationToken cancellationToken = default)
     {
-        var record = await _store.GetAsync(cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetAsync(cancellationToken);
         return record is null ? null : ToView(record);
     }
 
@@ -70,7 +70,7 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
             return null;
         }
 
-        var record = await _store.GetAsync(cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetAsync(cancellationToken);
         if (record is null)
         {
             // No key generated => the endpoint authenticates nobody. Fail closed: an ungenerated credential must never
@@ -95,7 +95,7 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
 
         if (!await _store.TouchLastUsedAsync(record.GenerationId,
                 _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                cancellationToken).ConfigureAwait(false))
+                cancellationToken))
         {
             return null;
         }

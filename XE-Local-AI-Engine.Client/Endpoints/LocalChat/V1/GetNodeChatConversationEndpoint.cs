@@ -19,13 +19,13 @@ public sealed class GetNodeChatConversationEndpoint(INodeChatPersistenceService 
 
     public override async Task HandleAsync(GetNodeChatConversationRequest req, CancellationToken ct)
     {
-        var conversation = await _chatPersistence.GetConversationAsync(req.ConversationId, ct).ConfigureAwait(false);
+        var conversation = await _chatPersistence.GetConversationAsync(req.ConversationId, ct);
         if (conversation is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(conversation.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(conversation.ToResponse(), ct);
     }
 }

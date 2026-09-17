@@ -31,10 +31,10 @@ public sealed class ListRunningModelsEndpointTests
     [Test]
     public async Task ListRunning_WhenTheLivenessProbeFails_DegradesToAnEmptyList()
     {
-        using var response = await ListWithFailingSupervisorAsync(new HttpRequestException("connection refused")).ConfigureAwait(false);
+        using var response = await ListWithFailingSupervisorAsync(new HttpRequestException("connection refused"));
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ListRunningModelsResponse>().ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<ListRunningModelsResponse>();
         AssertEx.NotNull(body);
         AssertEx.Empty(body!.Items);
     }
@@ -43,8 +43,7 @@ public sealed class ListRunningModelsEndpointTests
     public async Task ListRunning_WhenTheProcessHandleCannotBeQueried_DegradesToAnEmptyList()
     {
         // Process.HasExited on a handle the supervisor no longer owns — the real, expected supervisor failure.
-        using var response = await ListWithFailingSupervisorAsync(new InvalidOperationException("No process is associated with this object."))
-            .ConfigureAwait(false);
+        using var response = await ListWithFailingSupervisorAsync(new InvalidOperationException("No process is associated with this object."));
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -52,7 +51,7 @@ public sealed class ListRunningModelsEndpointTests
     [Test]
     public async Task ListRunning_WhenTheSupervisorFailsUnexpectedly_StaysAServerError()
     {
-        using var response = await ListWithFailingSupervisorAsync(new KeyNotFoundException("a defect in the snapshot mapper")).ConfigureAwait(false);
+        using var response = await ListWithFailingSupervisorAsync(new KeyNotFoundException("a defect in the snapshot mapper"));
 
         AssertEx.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
@@ -64,7 +63,7 @@ public sealed class ListRunningModelsEndpointTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
 
-        var (status, body) = await EjectAsync(supervisor, new EjectRunningModelRequest { ModelName = modelName }).ConfigureAwait(false);
+        var (status, body) = await EjectAsync(supervisor, new EjectRunningModelRequest { ModelName = modelName });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         AssertEx.Contains(body, "A model name is required.");
@@ -76,8 +75,7 @@ public sealed class ListRunningModelsEndpointTests
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
 
-        var (status, body) = await EjectAsync(supervisor, new EjectRunningModelRequest { ModelName = "model-a", Role = "vision" })
-            .ConfigureAwait(false);
+        var (status, body) = await EjectAsync(supervisor, new EjectRunningModelRequest { ModelName = "model-a", Role = "vision" });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         AssertEx.Contains(body, "Role is not supported.");
@@ -95,8 +93,7 @@ public sealed class ListRunningModelsEndpointTests
         supervisor.EjectAsync("model-a", ModelRole.Embedding, force: true, Arg.Any<CancellationToken>()).Returns(outcome);
 
         var (status, body) = await EjectAsync(supervisor,
-                                     new EjectRunningModelRequest { ModelName = "  model-a  ", Role = "EMBEDDING", Force = true })
-                                 .ConfigureAwait(false);
+                                     new EjectRunningModelRequest { ModelName = "  model-a  ", Role = "EMBEDDING", Force = true });
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         var response = AssertEx.NotNull(JsonSerializer.Deserialize<EjectRunningModelResponse>(body, WebJsonOptions));
@@ -115,8 +112,7 @@ public sealed class ListRunningModelsEndpointTests
 
         var (status, _) = await EjectAsync(supervisor,
                                   new EjectRunningModelRequest { ModelName = "model-a" },
-                                  authenticate: false)
-                              .ConfigureAwait(false);
+                                  authenticate: false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, status);
         await supervisor.DidNotReceiveWithAnyArgs().EjectAsync(default!, default, default, default);
@@ -141,8 +137,8 @@ public sealed class ListRunningModelsEndpointTests
             factory.AddNodeBearerToken(request);
         }
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        return (response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
     private static async Task<HttpResponseMessage> ListWithFailingSupervisorAsync(Exception failure)
@@ -162,6 +158,6 @@ public sealed class ListRunningModelsEndpointTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, RunningRoute);
         factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 }

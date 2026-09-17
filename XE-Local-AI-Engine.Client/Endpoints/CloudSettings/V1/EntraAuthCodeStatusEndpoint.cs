@@ -29,6 +29,6 @@ public sealed class EntraAuthCodeStatusEndpoint(IEntraAuthCodeSignInCoordinator 
         {
             State = status.State.ToString(),
             ExpiresAtUtc = status.ExpiresAtUtc
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

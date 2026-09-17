@@ -228,7 +228,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // stopped waiting. A local turn sends no hub messages, so reporting to the dispatcher is the whole surface.
             _lifecycleTracker.ClearActiveInvocation(package.InvocationId);
             _logger.LogInformation("Rejecting local invocation {InvocationId}: the node is draining for shutdown.", package.InvocationId);
-            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, NodeDrainingMessage, FailureCategory.Cancelled).ConfigureAwait(false);
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, NodeDrainingMessage, FailureCategory.Cancelled);
             return;
         }
 
@@ -260,13 +260,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
             try
             {
                 var efficiency = providerBudget.CaptureEfficiencySnapshot();
-                await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens).ConfigureAwait(false);
+                await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens);
                 await dispatcher.ReportTurnTelemetryAsync(package.InvocationId,
                                     stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
                                     stream?.UsageSnapshot is { } turnUsage
                                         ? new TurnUsageTotals(turnUsage.InputTokens, turnUsage.OutputTokens, turnUsage.TotalTokens, turnUsage.ReasoningTokens)
-                                        : null)
-                                .ConfigureAwait(false);
+                                        : null);
             }
             catch (Exception exception)
             {
@@ -290,7 +289,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // next turn without a restart. INSIDE the try because this read, unlike the options read it replaces, can
             // throw — above the try a throw would fail the turn with no failure ever reported. On invocationToken
             // because an operator Cancel or the turn watchdog cancels THAT one, not the caller's.
-            var toolRelevanceActive = await _runtimeSettings.GetToolRelevanceEnabledAsync(invocationToken).ConfigureAwait(false)
+            var toolRelevanceActive = await _runtimeSettings.GetToolRelevanceEnabledAsync(invocationToken)
                                       && !package.DisableToolRelevanceFilter;
             using var toolRelevanceScope = ToolRelevanceScope.BeginScope(toolRelevanceActive,
                 toolRelevanceActive ? _toolRelevanceCoreSet.GetCoreToolNames() : FrozenSet<string>.Empty);
@@ -302,7 +301,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             ModelResolution modelResolution;
             using (NodeActivitySource.Source.StartActivity("chat.invocation.resolve_model"))
             {
-                modelResolution = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
+                modelResolution = await ResolveModelAsync(package.ModelProfile, invocationToken);
             }
 
             var resolvedModel = modelResolution.Model;
@@ -327,8 +326,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 dispatchDecision = await dispatchScope.ServiceProvider
                                                       .GetRequiredService<IReasoningEffortDispatcher>()
-                                                      .DispatchAsync(BuildDispatchRequest(package, resolvedModel), invocationToken)
-                                                      .ConfigureAwait(false);
+                                                      .DispatchAsync(BuildDispatchRequest(package, resolvedModel), invocationToken);
             }
 
             // The model the turn was AUTHORISED for, and its capability flags, captured before the dispatch block can
@@ -357,7 +355,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 // envelope row. Two category labels: the tier, and the authored effort — which is `auto` by the
                 // branch condition above, and is what separates the dispatched population from the pre-`auto` one in
                 // the same query. Only an `auto` turn reaches this line, so every other turn's envelope carries nulls.
-                await dispatcher.ReportEffortDispatchAsync(package.InvocationId, ReasoningTierLabels.For(dispatched.Tier), AutoReasoningEffort).ConfigureAwait(false);
+                await dispatcher.ReportEffortDispatchAsync(package.InvocationId, ReasoningTierLabels.For(dispatched.Tier), AutoReasoningEffort);
             }
 
             var modelWasSwapped = dispatchDecision is { } swapCandidate
@@ -392,7 +390,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             if (shouldSendHubMessages)
             {
-                await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken).ConfigureAwait(false);
+                await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken);
             }
 
             var transport = new StreamTransport(this, sender, dispatcher, context, package, sendEncrypted, sendPlain);
@@ -402,7 +400,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             if (modelResolution.Substituted)
             {
                 await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
-                    BuildModelSubstitutedNoticeMessage(modelResolution.RequestedModel, resolvedModel)).ConfigureAwait(false);
+                    BuildModelSubstitutedNoticeMessage(modelResolution.RequestedModel, resolvedModel));
             }
 
             // Surface what `auto` resolved to, for the same reason: a decision the user did not make must be visible.
@@ -415,8 +413,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                                    BuildEffortDispatchedNoticeMessage(announced.Tier, announced.Effort, resolvedModel, swapped: false),
-                                   announced.ReasonCode)
-                               .ConfigureAwait(false);
+                                   announced.ReasonCode);
             }
 
             // Seed the per-root-invocation spawn context (Depth 0) for this turn so the spawn_subagent tool (when the
@@ -437,8 +434,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // non-`auto` turn, and on an `auto` turn that did not swap, the two are the same id and the resolver
             // de-duplicates, so the pin set is exactly what it was before.
             var turnPins = await ExternalProviderInvocationPin
-                                 .ResolveAsync(_externalProviderRegistry, [resolvedModel, originalModel], invocationToken)
-                                 .ConfigureAwait(false);
+                                 .ResolveAsync(_externalProviderRegistry, [resolvedModel, originalModel], invocationToken);
             using var externalBindingPin = ExternalProviderBindingPinScope.Begin(turnPins);
 
             // Seed the active conversation id into the same root tool-loop scope so the AgentHome tool gateway can stage
@@ -452,7 +448,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // Cloud (Codex/Azure) and Ollama models are a no-op here. The load is decoupled from this caller's token in
             // the supervisor, so a user who cancels merely abandons the wait while the load continues in the background.
             var requestedContextTokens = turnPolicy.RequestedContextTokens ?? turnPolicy.ContextCapacityTokens;
-            var localRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
+            var localRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken);
             var effectiveContextTokens = localRuntime.EffectiveContextTokens;
 
             // Fold the launched effective context window into the turn policy so the OUTER conversation
@@ -481,7 +477,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     ModelId = resolvedModel,
                     ProviderName = localRuntime.ProviderName
                 };
-                var decision = await admissionPolicy.EvaluateAsync(admissionContext, invocationToken).ConfigureAwait(false)
+                var decision = await admissionPolicy.EvaluateAsync(admissionContext, invocationToken)
                                ?? throw new InvalidOperationException("The invocation generation admission policy returned no decision.");
                 if (!decision.IsAllowed)
                 {
@@ -497,13 +493,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 // The orchestration path's OUTER conversation budgeter sizes against the effective window via the updated
                 // turnPolicy above. The turn's effective window is also threaded per participant so each
                 // participant's INNER provider-round budgeter sizes against the window ITS model was launched with.
-                await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+                await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken);
             }
             else
             {
                 try
                 {
-                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
+                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken);
 
                     // A swap served the turn. Announce it now, once, naming the model that actually ran. Every other
                     // turn already emitted its notice (or is a silent NORMAL one) before the send.
@@ -512,11 +508,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
                         // The invocation state was seeded with the model the PACKAGE named, and both the persisted
                         // message row and the envelope's provider attribution read it from there — so a swapped turn
                         // that does not correct it is recorded, and measured, against a model that never saw it.
-                        await dispatcher.ReportServedModelAsync(package.InvocationId, resolvedModel).ConfigureAwait(false);
+                        await dispatcher.ReportServedModelAsync(package.InvocationId, resolvedModel);
                         await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                                            BuildEffortDispatchedNoticeMessage(served.Tier, served.Effort, resolvedModel, swapped: true),
-                                           served.ReasonCode)
-                                       .ConfigureAwait(false);
+                                           served.ReasonCode);
                     }
                 }
                 catch (Exception) when (swapRetryEligible && !stream.FirstOutputRecorded && !invocationToken.IsCancellationRequested)
@@ -544,18 +539,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // Re-warm the ORIGINAL model and re-derive its window. The policy and effective-context above were
                     // both measured against the fast model's launched window; carrying them into the re-run would size
                     // this turn's history — and the agent definition's num_ctx — against a window this model never had.
-                    var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken)
-                                                                .ConfigureAwait(false);
+                    var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken);
                     var retryContextTokens = retryRuntime.EffectiveContextTokens;
                     var retryPolicy = preWarmPolicy.WithEffectiveContext(retryContextTokens);
 
                     await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                                        BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),
-                                       ReasoningDispatchReasons.FastModelUnavailable)
-                                   .ConfigureAwait(false);
+                                       ReasoningDispatchReasons.FastModelUnavailable);
 
                     // Exactly once. A second failure is a real failure and fails the turn normally.
-                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, retryPolicy, retryContextTokens, invocationToken).ConfigureAwait(false);
+                    await RunSingleAgentAsync(package, resolvedModel, transport, stream, retryPolicy, retryContextTokens, invocationToken);
                 }
                 catch (Exception) when (modelWasSwapped && dispatchDecision is { } failedSwap)
                 {
@@ -569,8 +562,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // have died before its first token. The seeded (authorised) model stays on the failed row.
                     await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                                        BuildEffortDispatchedNoticeMessage(failedSwap.Tier, failedSwap.Effort, resolvedModel, swapped: true),
-                                       failedSwap.ReasonCode)
-                                   .ConfigureAwait(false);
+                                       failedSwap.ReasonCode);
                     throw;
                 }
             }
@@ -601,7 +593,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                         stream.Sequence,
                         tokenCounts,
                         stream.ReasoningBuilder.Length > 0 ? Encoding.UTF8.GetBytes(stream.ReasoningBuilder.ToString()) : null),
-                    invocationToken).ConfigureAwait(false);
+                    invocationToken);
             }
             else if (sendPlain)
             {
@@ -616,12 +608,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     string.Empty,
                     isComplete: true,
                     stream.ReasoningSequence + 1,
-                    invocationToken).ConfigureAwait(false);
+                    invocationToken);
                 await sender.SendTokenStreamChunkAsync(package.InvocationId,
                     string.Empty,
                     isComplete: true,
                     stream.Sequence + 1,
-                    invocationToken).ConfigureAwait(false);
+                    invocationToken);
                 await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
                 {
                     InvocationId = package.InvocationId,
@@ -635,10 +627,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     FinalReasoning = stream.ReasoningBuilder.ToString(),
                     ReasoningTokens = stream.LastRoundUsage?.ReasoningTokens,
                     GenerationDurationMs = generationDurationMs
-                }, invocationToken).ConfigureAwait(false);
+                }, invocationToken);
             }
 
-            await ReportTerminalTelemetryAsync().ConfigureAwait(false);
+            await ReportTerminalTelemetryAsync();
             // LAST ROUND again: these reach InvocationState's token members, which the terminalize write persists onto
             // the assistant message row (and the resume registry and the memory-extraction hook read from). The turn's
             // cost rode ReportTurnTelemetryAsync a line above and lands on the envelope row instead.
@@ -649,7 +641,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 stream.LastRoundUsage?.ReasoningTokens,
                 generationDurationMs,
                 stream.FinishReason,
-                stream.ToThroughput()).ConfigureAwait(false);
+                stream.ToThroughput());
             invocationOutcome = "completed";
         }
         catch (OperationCanceledException) when (_lifecycleTracker.IsCurrentInvocation(package.InvocationId))
@@ -667,11 +659,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
             // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
             NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", InvocationLifecycleTracker.ClassifyCancellationMetricCategory(cancellationOrigin)));
-            await ReportTerminalTelemetryAsync().ConfigureAwait(false);
-            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory).ConfigureAwait(false);
+            await ReportTerminalTelemetryAsync();
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, cancellationMessage, failureCategory);
             if (shouldSendHubMessages)
             {
-                await TrySendFailureAsync(sender, context, cancellationMessage, failureCategory).ConfigureAwait(false);
+                await TrySendFailureAsync(sender, context, cancellationMessage, failureCategory);
             }
         }
         catch (Exception exception)
@@ -686,11 +678,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", "operator_eject"));
             }
 
-            await ReportTerminalTelemetryAsync().ConfigureAwait(false);
-            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory).ConfigureAwait(false);
+            await ReportTerminalTelemetryAsync();
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory);
             if (shouldSendHubMessages)
             {
-                await TrySendFailureAsync(sender, context, message, failureCategory).ConfigureAwait(false);
+                await TrySendFailureAsync(sender, context, message, failureCategory);
             }
         }
         finally
@@ -714,7 +706,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             _apiToolCallBridge.ClearToolResultTimeout(package.InvocationId);
             _lifecycleTracker.ClearActiveInvocation(package.InvocationId);
             _lifecycleTracker.CompleteActiveInvocation(package.InvocationId, activeInvocationCompletion);
-            await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId).ConfigureAwait(false);
+            await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId);
         }
     }
 
@@ -855,14 +847,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Built once for the whole turn: the offer list is fixed for the invocation, and the budgeter's framing memo is
         // keyed on these string instances (see ApplyContextBudgetAsync).
         var toolBudgetDefinitions = BuildToolBudgetDefinitions(package);
-        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate)
-            .ConfigureAwait(false);
+        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
         // Coarse span over the MAF agent build — another pre-first-token stage. Disposed right after the
         // build so it does not enclose the streaming loop; the agent context keeps its normal await-using scope.
         var buildAgentActivity = NodeActivitySource.Source.StartActivity("chat.invocation.build_agent");
-        await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
+        await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken);
         buildAgentActivity?.Dispose();
 
         // Maps callId → the tool name plus what its Requested event already carried, so FunctionResultContent (which has
@@ -934,7 +925,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // iteration this is a cheap passthrough (the seed was already budgeted); on an approval resume it bounds the
             // folded tool-call + approval history. The protected recent turns — which carry the in-flight round — are
             // never trimmed, so a budgeted list is still valid to send.
-            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, toolBudgetDefinitions, resolvedModel, "tool-loop", turnPolicy, transport, budgetGate).ConfigureAwait(false);
+            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, toolBudgetDefinitions, resolvedModel, "tool-loop", turnPolicy, transport, budgetGate);
             if (!ReferenceEquals(budgetedMessages, currentMessages))
             {
                 currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
@@ -960,7 +951,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 ? _providerStreamResilience.ExecuteStreamingAsync(resolvedModel, ProviderSend, invocationToken)
                 : ProviderSend(invocationToken);
 
-            await foreach (var update in segmentStream.WithCancellation(invocationToken).ConfigureAwait(false))
+            await foreach (var update in segmentStream.WithCancellation(invocationToken))
             {
                 if (approvalPossible)
                 {
@@ -1084,7 +1075,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                     Phase = ToolCallLifecyclePhase.Requested,
                                     Arguments = serializedArguments,
                                     RequiresApproval = false
-                                }).ConfigureAwait(false);
+                                });
                                 break;
 
                             case FunctionResultContent functionResult:
@@ -1122,7 +1113,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                     Phase = ToolCallLifecyclePhase.Completed,
                                     Result = toolResultText,
                                     IsError = functionResult.Exception is not null
-                                }).ConfigureAwait(false);
+                                });
 
                                 // ToolArgumentRepairAIFunction returns this structured result (rather than throwing)
                                 // once a tool is disabled for the rest of the run after repeated invalid-argument
@@ -1133,7 +1124,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 {
                                     await transport.EmitNoticeAsync(TurnNoticeKind.ToolDisabled,
                                         BuildToolDisabledNoticeMessage(toolName),
-                                        toolName).ConfigureAwait(false);
+                                        toolName);
                                 }
 
                                 break;
@@ -1169,7 +1160,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 if (thinkingBuilder is { Length: > 0 })
                 {
-                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString(), invocationToken).ConfigureAwait(false);
+                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString(), invocationToken);
                 }
 
                 if (string.IsNullOrEmpty(textChunk))
@@ -1177,7 +1168,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     continue;
                 }
 
-                await transport.EmitTextAsync(stream, textChunk, invocationToken).ConfigureAwait(false);
+                await transport.EmitTextAsync(stream, textChunk, invocationToken);
             }
 
             // The tool-relevance notice, drained at the end of the FIRST segment so it FOLLOWS the first assistant
@@ -1191,8 +1182,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 if (hiddenToolCount > 0)
                 {
                     await transport.EmitNoticeAsync(TurnNoticeKind.ToolsFiltered,
-                                       BuildToolsFilteredNoticeMessage(hiddenToolCount, Volatile.Read(ref relevanceState.PendingNoticeTotalCount)))
-                                   .ConfigureAwait(false);
+                                       BuildToolsFilteredNoticeMessage(hiddenToolCount, Volatile.Read(ref relevanceState.PendingNoticeTotalCount)));
                 }
             }
 
@@ -1219,13 +1209,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // keeps the unchanged approve/deny path.
                     if (ToolApprovalCoordinator.IsUserQuestionRequest(approvalRequest))
                     {
-                        var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken)
-                                                                       .ConfigureAwait(false);
+                        var answerNote = await _toolApprovalCoordinator.RequestUserAnswerAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken);
                         approvalResponses.Add(approvalRequest.CreateResponse(approved: true, answerNote));
                         continue;
                     }
 
-                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken).ConfigureAwait(false);
+                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, approvalRequest, _lifecycleTracker.SetInvocationDeadline, invocationToken);
                     approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user."));
                 }
 
@@ -1248,7 +1237,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         int? effectiveContextTokens,
         CancellationToken invocationToken)
     {
-        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, effectiveContextTokens, transport, invocationToken).ConfigureAwait(false);
+        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, effectiveContextTokens, transport, invocationToken);
 
         // A participant runs on its OWN model, which the turn-level pin (seeded for the resolved turn model) does not
         // cover — so an external participant's sends would fall through to the transport's weaker unpinned check while
@@ -1258,8 +1247,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var resolvedParticipantPins = await ExternalProviderInvocationPin
                                             .ResolveAsync(_externalProviderRegistry,
                                                 definition.Participants.Select(participant => participant.ModelId),
-                                                invocationToken)
-                                            .ConfigureAwait(false);
+                                                invocationToken);
         using var participantPins = ExternalProviderBindingPinScope.Begin(resolvedParticipantPins);
 
         // Unify with the single-agent path (see TurnPolicy): the workflow seed is budgeted the same way the
@@ -1267,17 +1255,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // any participant is launched with. Previously unbudgeted — the workflow ran on the raw seed regardless of
         // length.
         var budgetGate = new ContextBudgetNoticeGate();
-        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package), resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate)
-            .ConfigureAwait(false);
+        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, BuildToolBudgetDefinitions(package), resolvedModel, "orchestration-seed", turnPolicy, transport, budgetGate);
 
-        await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken).ConfigureAwait(false);
+        await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken);
 
         // Drain to the natural end of WatchAsync rather than breaking on the first TerminalOutput: the factory's
         // session drives the workflow as the stream is pulled and ends the stream right after the terminal output, so
         // a full drain is the documented terminator (an early break would risk truncating a later-superstep delta in
         // autonomous/multi-turn shapes). The terminal output carries no further deltas, so this adds no idle latency.
         string? activeParticipantKey = null;
-        await foreach (var update in session.WatchAsync(invocationToken).ConfigureAwait(false))
+        await foreach (var update in session.WatchAsync(invocationToken))
         {
             if (!string.IsNullOrEmpty(update.ParticipantKey)
                 && !string.Equals(activeParticipantKey, update.ParticipantKey, StringComparison.Ordinal))
@@ -1293,11 +1280,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             switch (update.Kind)
             {
                 case OrchestrationUpdateKind.ReasoningDelta when !string.IsNullOrEmpty(update.Text):
-                    await transport.EmitReasoningAsync(stream, update.Text, invocationToken).ConfigureAwait(false);
+                    await transport.EmitReasoningAsync(stream, update.Text, invocationToken);
                     break;
 
                 case OrchestrationUpdateKind.TextDelta when !string.IsNullOrEmpty(update.Text):
-                    await transport.EmitTextAsync(stream, update.Text, invocationToken).ConfigureAwait(false);
+                    await transport.EmitTextAsync(stream, update.Text, invocationToken);
                     break;
 
                 case OrchestrationUpdateKind.ApprovalRequest when update.RequestId is { } requestId:
@@ -1306,12 +1293,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // Name the tool in the approval description so the card matches the single-agent UX (not the opaque id).
                     var pendingApproval = ToApprovalRequest(update);
                     var approvalDescription = $"Tool '{ApprovalToolName(update)}' requires approval before it runs.";
-                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, _lifecycleTracker.SetInvocationDeadline, invocationToken, approvalDescription)
-                                                                 .ConfigureAwait(false);
+                    var approved = await _toolApprovalCoordinator.RequestToolApprovalAsync(package, pendingApproval, _lifecycleTracker.SetInvocationDeadline, invocationToken, approvalDescription);
                     await session.RespondToApprovalAsync(requestId,
                         approved,
                         approved ? "Approved by user." : "Rejected by user.",
-                        invocationToken).ConfigureAwait(false);
+                        invocationToken);
                     break;
 
                 case OrchestrationUpdateKind.Failure:
@@ -1332,7 +1318,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
     {
         using var context = InvocationExecutionContext.Create(package, Guid.Empty, epochVersion: 0, ReadOnlyMemory<byte>.Empty);
-        await RunAsync(context, cancellationToken).ConfigureAwait(false);
+        await RunAsync(context, cancellationToken);
     }
 
     // Derives the tool-call id that keys a tool-call card in the UI: the wire CallId when present, otherwise the tool
@@ -1357,7 +1343,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var reportTask = _capabilityReporter.ReportToApiAsync(CancellationToken.None);
             if (reportTask is not null)
             {
-                await reportTask.ConfigureAwait(false);
+                await reportTask;
             }
         }
         catch (Exception exception)
@@ -1384,7 +1370,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     MessageId = context.MessageId == Guid.Empty ? null : context.MessageId,
                     Error = error,
                     FailureCategory = failureCategory.ToString()
-                }, CancellationToken.None).ConfigureAwait(false);
+                }, CancellationToken.None);
             }
             else
             {
@@ -1396,7 +1382,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                         Error = error,
                         FailureCategory = failureCategory.ToString()
                     },
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None);
             }
         }
         catch (Exception exception)
@@ -1408,7 +1394,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 MessageId = context.MessageId == Guid.Empty ? null : context.MessageId,
                 Error = error,
                 FailureCategory = failureCategory.ToString()
-            }, CancellationToken.None).ConfigureAwait(false);
+            }, CancellationToken.None);
         }
     }
 

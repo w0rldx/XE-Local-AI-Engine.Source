@@ -63,9 +63,9 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
     public async Task MigrateToAsync(string? targetMigration)
     {
         // The migration runs on its own connection; ours is closed across it so no reader holds a lock during the DDL.
-        await _connection.CloseAsync().ConfigureAwait(false);
-        await ApplyChatAsync(_databasePath, _keyHolder, targetMigration).ConfigureAwait(false);
-        await _connection.OpenAsync().ConfigureAwait(false);
+        await _connection.CloseAsync();
+        await ApplyChatAsync(_databasePath, _keyHolder, targetMigration);
+        await _connection.OpenAsync();
     }
 
     /// <summary>Applies the whole <see cref="NodeIdentityDbContext" /> chain to an empty database.</summary>
@@ -121,10 +121,10 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
 
         try
         {
-            await prepareDatabaseAsync(databasePath).ConfigureAwait(false);
+            await prepareDatabaseAsync(databasePath);
 
             // OpenAsync disposes its own connection when the open throws, so no half-open connection reaches here.
-            return new MigrationSchemaProbe(await OpenAsync(databasePath).ConfigureAwait(false), keyHolder, rootPath, databasePath);
+            return new MigrationSchemaProbe(await OpenAsync(databasePath), keyHolder, rootPath, databasePath);
         }
         catch
         {
@@ -165,7 +165,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         // once it closes — so all it buys at parallel width is throwing away pools this probe has no business
         // touching. Cleared before the dispose so the connection string is read off a live object.
         SqliteConnection.ClearPool(_connection);
-        await _connection.DisposeAsync().ConfigureAwait(false);
+        await _connection.DisposeAsync();
 
         _keyHolder.Dispose();
 
@@ -187,7 +187,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         command.CommandText = sql;
 #pragma warning restore CA2100
         configure?.Invoke(command);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     /// <summary>The first column of the first row of <paramref name="sql" />, with <c>DBNull</c> flattened to null.</summary>
@@ -198,7 +198,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         command.CommandText = sql;
 #pragma warning restore CA2100
         configure?.Invoke(command);
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is DBNull ? null : value;
     }
 
@@ -212,8 +212,8 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         configure?.Invoke(command);
 
         var values = new List<long>();
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             values.Add(reader.GetInt64(ordinal: 0));
         }
@@ -234,9 +234,9 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
 #pragma warning restore CA2100
 
         var steps = new List<string>();
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         var detail = reader.GetOrdinal("detail");
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        while (await reader.ReadAsync())
         {
             steps.Add(reader.GetString(detail));
         }
@@ -249,7 +249,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         await using var command = _connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     public async Task<IReadOnlySet<string>> ColumnsAsync(string tableName)
@@ -257,7 +257,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         await using var command = _connection.CreateCommand();
         command.CommandText = "SELECT name FROM pragma_table_info($table);";
         command.Parameters.AddWithValue("$table", tableName);
-        return await ReadStringsAsync(command).ConfigureAwait(false);
+        return await ReadStringsAsync(command);
     }
 
     /// <summary>The declared default for <paramref name="columnName" />, exactly as SQLite recorded it (or null).</summary>
@@ -267,7 +267,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         command.CommandText = "SELECT dflt_value FROM pragma_table_info($table) WHERE name = $column;";
         command.Parameters.AddWithValue("$table", tableName);
         command.Parameters.AddWithValue("$column", columnName);
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is DBNull or null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
     }
 
@@ -280,7 +280,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         listCommand.CommandText = "SELECT \"unique\" FROM pragma_index_list($table) WHERE name = $index;";
         listCommand.Parameters.AddWithValue("$table", tableName);
         listCommand.Parameters.AddWithValue("$index", indexName);
-        var uniqueFlag = await listCommand.ExecuteScalarAsync().ConfigureAwait(false);
+        var uniqueFlag = await listCommand.ExecuteScalarAsync();
         if (uniqueFlag is null || Convert.ToInt64(uniqueFlag, CultureInfo.InvariantCulture) != (unique ? 1 : 0))
         {
             return false;
@@ -296,8 +296,8 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         infoCommand.Parameters.AddWithValue("$index", indexName);
 
         var actual = new List<string>();
-        await using var reader = await infoCommand.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await infoCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             actual.Add(reader.GetString(ordinal: 0));
         }
@@ -313,7 +313,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         command.Parameters.AddWithValue("$table", tableName);
         command.Parameters.AddWithValue("$column", column);
         command.Parameters.AddWithValue("$principal", principalTable);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     /// <summary>
@@ -332,14 +332,14 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
             command.CommandText = "SELECT MigrationId FROM __EFMigrationsHistory;";
         }
 
-        return await ReadStringsAsync(command).ConfigureAwait(false);
+        return await ReadStringsAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> ReadStringsAsync(SqliteCommand command)
     {
         var values = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             values.Add(reader.GetString(ordinal: 0));
         }
@@ -355,7 +355,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
     internal static async Task ApplyChatAsync(string databasePath, string? targetMigration)
     {
         using var keyHolder = new NullNodeSqliteKeyHolder();
-        await ApplyChatAsync(databasePath, keyHolder, targetMigration).ConfigureAwait(false);
+        await ApplyChatAsync(databasePath, keyHolder, targetMigration);
     }
 
     /// <summary>The identity-chain half of <see cref="ApplyChatAsync(string, string?)" />, to head.</summary>
@@ -370,7 +370,7 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
                       .Options;
 
         await using var context = new NodeIdentityDbContext(options);
-        await context.Database.MigrateAsync().ConfigureAwait(false);
+        await context.Database.MigrateAsync();
     }
 
     private static async Task ApplyChatAsync(string databasePath, INodeSqliteKeyHolder keyHolder, string? targetMigration)
@@ -379,11 +379,11 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
 
         if (targetMigration is null)
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
         else
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(targetMigration).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(targetMigration);
         }
     }
 
@@ -399,14 +399,14 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
 
         try
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
         catch
         {
             // Nobody else holds this connection yet: a failed open would otherwise leave it — and the pool entry it
             // may already have taken — behind, and the pooled file handle is what makes the directory undeletable.
             SqliteConnection.ClearPool(connection);
-            await connection.DisposeAsync().ConfigureAwait(false);
+            await connection.DisposeAsync();
             throw;
         }
 

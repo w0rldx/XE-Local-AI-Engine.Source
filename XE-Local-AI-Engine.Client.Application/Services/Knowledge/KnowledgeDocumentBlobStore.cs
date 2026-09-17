@@ -73,7 +73,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         var encryptedName = dbContext.EncryptKnowledgeFileName(input.OriginalFileName, input.DocumentId);
 
@@ -117,7 +117,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             AddParameter(command, "$chunker_version", KnowledgeIndexVersions.Chunker);
             AddParameter(command, "$created_at_utc", now);
             AddParameter(command, "$updated_at_utc", now);
-            inserted = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            inserted = await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         if (inserted == 0)
@@ -129,8 +129,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                     sourcePath,
                     input.ContentHash,
                     repositorySource,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
             if (existing is not { } row || row.DocumentId == Guid.Empty)
             {
                 return new KnowledgeDocumentAddResult(Guid.Empty, WasInserted: false);
@@ -148,8 +147,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                         sourcePath!,
                         extension,
                         now,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
                 return new KnowledgeDocumentAddResult(row.DocumentId, WasInserted: false, WasUpdated: true);
             }
 
@@ -157,14 +155,14 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             // original row commit and its blob write left the bytes missing, repair them from the identical content.
             if (!File.Exists(BytesPath(row.DocumentId, row.Extension)))
             {
-                await WriteEncryptedBlobAsync(row.DocumentId, row.Extension, input.Content, cancellationToken).ConfigureAwait(false);
+                await WriteEncryptedBlobAsync(row.DocumentId, row.Extension, input.Content, cancellationToken);
 
                 // The prior crash left this row marked Failed (ContentMissingReason) once ingestion could not read its
                 // bytes. Now that they are restored, reset it to Pending so UploadKnowledgeDocumentEndpoint re-enqueues it
                 // — it only enqueues freshly-inserted or Pending rows, so without this the repaired bytes would never be
                 // indexed and every identical re-upload would keep returning the stuck Failed document. Only the
                 // missing-blob branch resets; an intact dedupe hit leaves the status untouched.
-                await ResetDocumentToPendingAsync(connection, row.DocumentId, now, cancellationToken).ConfigureAwait(false);
+                await ResetDocumentToPendingAsync(connection, row.DocumentId, now, cancellationToken);
             }
 
             return new KnowledgeDocumentAddResult(row.DocumentId, WasInserted: false);
@@ -174,11 +172,11 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         // write fails, roll the row back so we never leave a document row without its bytes.
         try
         {
-            await WriteEncryptedBlobAsync(input.DocumentId, extension, input.Content, cancellationToken).ConfigureAwait(false);
+            await WriteEncryptedBlobAsync(input.DocumentId, extension, input.Content, cancellationToken);
         }
         catch
         {
-            await DeleteRowAsync(connection, input.DocumentId, CancellationToken.None).ConfigureAwait(false);
+            await DeleteRowAsync(connection, input.DocumentId, CancellationToken.None);
             throw;
         }
 
@@ -197,7 +195,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         var tempPath = string.Concat(bytesPath, ".", Guid.NewGuid().ToString("N"), ".tmp");
         try
         {
-            await File.WriteAllBytesAsync(tempPath, encryptedBytes, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(tempPath, encryptedBytes, cancellationToken);
             File.Move(tempPath, bytesPath, overwrite: true);
         }
         catch
@@ -212,9 +210,9 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
-        var extension = await SelectExtensionAsync(connection, documentId, cancellationToken).ConfigureAwait(false);
+        var extension = await SelectExtensionAsync(connection, documentId, cancellationToken);
         if (extension is null)
         {
             return null;
@@ -226,7 +224,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             return null;
         }
 
-        var encrypted = await File.ReadAllBytesAsync(bytesPath, cancellationToken).ConfigureAwait(false);
+        var encrypted = await File.ReadAllBytesAsync(bytesPath, cancellationToken);
         return _blobProtector.Decrypt(Guid.Empty, documentId, UploadedFileBlobProtector.FileBytesColumn, encrypted);
     }
 
@@ -256,7 +254,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         var replacementBlobPath = BytesPath(row.DocumentId, extension);
         var backupBlobPath = string.Concat(oldBlobPath, ".", Guid.NewGuid().ToString("N"), ".backup");
         var backedUpOldBlob = false;
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {
             // Remove the old searchable projections before the row is marked Pending. With runtime foreign keys OFF,
@@ -266,7 +264,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 vectorsCommand.Transaction = transaction;
                 vectorsCommand.CommandText = "DELETE FROM knowledge_chunk_vectors WHERE document_id = $document_id;";
                 AddParameter(vectorsCommand, "$document_id", row.DocumentId);
-                _ = await vectorsCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await vectorsCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             await using (var chunksCommand = connection.CreateCommand())
@@ -274,7 +272,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 chunksCommand.Transaction = transaction;
                 chunksCommand.CommandText = "DELETE FROM knowledge_document_chunks WHERE document_id = $document_id;";
                 AddParameter(chunksCommand, "$document_id", row.DocumentId);
-                _ = await chunksCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await chunksCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             await using (var sectionsCommand = connection.CreateCommand())
@@ -282,7 +280,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 sectionsCommand.Transaction = transaction;
                 sectionsCommand.CommandText = "DELETE FROM knowledge_document_sections WHERE document_id = $document_id;";
                 AddParameter(sectionsCommand, "$document_id", row.DocumentId);
-                _ = await sectionsCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await sectionsCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             await using (var updateCommand = connection.CreateCommand())
@@ -330,7 +328,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 AddParameter(updateCommand, "$updated_at_utc", now);
                 AddParameter(updateCommand, "$document_id", row.DocumentId);
                 AddParameter(updateCommand, "$collection_id", collectionId);
-                _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             // Keep the database transaction open until the replacement blob is durably atomically renamed. When the
@@ -341,13 +339,13 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 backedUpOldBlob = true;
             }
 
-            await WriteEncryptedBlobAsync(row.DocumentId, extension, input.Content, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await WriteEncryptedBlobAsync(row.DocumentId, extension, input.Content, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             DeleteFileIfExists(backupBlobPath);
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            await transaction.RollbackAsync(CancellationToken.None);
             DeleteFileIfExists(replacementBlobPath);
             if (backedUpOldBlob && File.Exists(backupBlobPath))
             {
@@ -389,19 +387,19 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             AddParameter(command, "$content_hash", contentHash);
         }
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
         {
             return null;
         }
 
-        var documentId = await reader.IsDBNullAsync(0, cancellationToken).ConfigureAwait(false)
+        var documentId = await reader.IsDBNullAsync(0, cancellationToken)
             ? Guid.Empty
             : Guid.Parse(reader.GetString(0));
-        var extension = await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false)
+        var extension = await reader.IsDBNullAsync(1, cancellationToken)
             ? string.Empty
             : reader.GetString(1);
-        var storedContentHash = await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false)
+        var storedContentHash = await reader.IsDBNullAsync(2, cancellationToken)
             ? string.Empty
             : reader.GetString(2);
         return new DocumentIdentity(documentId, extension, storedContentHash);
@@ -412,7 +410,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT extension FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is null or DBNull ? null : result as string ?? string.Empty;
     }
 
@@ -421,7 +419,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         await using var command = connection.CreateCommand();
         command.CommandText = "DELETE FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     // Resets a repaired dedupe target back to Pending so the upload endpoint re-enqueues it for indexing, clearing the
@@ -438,7 +436,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         AddParameter(command, "$status", KnowledgeDocumentStatus.Pending.ToString());
         AddParameter(command, "$updated_at_utc", updatedAtUtc);
         AddParameter(command, "$document_id", documentId);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private string DocumentsDirectory()

@@ -71,7 +71,7 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
         LastStartPosition = request.Audio.Position;
 
         var head = new byte[16];
-        var read = await request.Audio.ReadAsync(head.AsMemory(), ct).ConfigureAwait(false);
+        var read = await request.Audio.ReadAsync(head.AsMemory(), ct);
         LastAudioHead = head[..read];
 
         _entered.TrySetResult();
@@ -80,7 +80,7 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
         {
             // Await the gate and check the token separately: Task.WaitAsync(ct) takes a fast path when the antecedent
             // is already complete and never consults the token, which silently loses a cancellation the test just made.
-            await Gate.Task.ConfigureAwait(false);
+            await Gate.Task;
             ct.ThrowIfCancellationRequested();
         }
 
@@ -133,11 +133,11 @@ internal sealed class FakeAudioTranscoder : IAudioTranscoder
 
         if (ThrowAfterPartialWrite)
         {
-            await File.WriteAllBytesAsync(destinationPath, [0x52, 0x49, 0x46, 0x46], cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(destinationPath, [0x52, 0x49, 0x46, 0x46], cancellationToken);
             throw new AudioTranscodeException("The audio could not be converted.");
         }
 
-        await File.WriteAllBytesAsync(destinationPath, TranscriptionAudioFixtures.TranscodedWav, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(destinationPath, TranscriptionAudioFixtures.TranscodedWav, cancellationToken);
         return destinationPath;
     }
 }
@@ -234,7 +234,7 @@ internal sealed class TranscriptionStoreReadGate
         }
 
         _ = _entered.TrySetResult();
-        await _released.Task.ConfigureAwait(false);
+        await _released.Task;
     }
 }
 
@@ -251,8 +251,8 @@ internal sealed class GatedTranscriptionSessionStore(ITranscriptionSessionStore 
 
     public async Task<TranscriptionSessionDetailView?> GetWithSegmentsAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var view = await inner.GetWithSegmentsAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        await gate.HoldIfArmedAsync().ConfigureAwait(false);
+        var view = await inner.GetWithSegmentsAsync(sessionId, cancellationToken);
+        await gate.HoldIfArmedAsync();
         return view;
     }
 
@@ -291,8 +291,8 @@ internal sealed class GatedTranscriptionSessionStore(ITranscriptionSessionStore 
     {
         // Gated like GetWithSegmentsAsync: this is the read the live start decides on, so holding it is how a test
         // puts another writer between that decision and the write it leads to.
-        var view = await inner.GetSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        await gate.HoldIfArmedAsync().ConfigureAwait(false);
+        var view = await inner.GetSummaryAsync(sessionId, cancellationToken);
+        await gate.HoldIfArmedAsync();
         return view;
     }
 
@@ -418,7 +418,7 @@ internal sealed class TranscriptionServiceHarness : IAsyncDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using (var scope = provider.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.EnsureCreatedAsync().ConfigureAwait(false);
+            await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.EnsureCreatedAsync();
         }
 
         return new TranscriptionServiceHarness(provider,
@@ -439,15 +439,15 @@ internal sealed class TranscriptionServiceHarness : IAsyncDisposable
         var session = await Service.CreateSessionAsync(new CreateTranscriptionSessionInput
         {
             Config = config
-        }, CancellationToken.None).ConfigureAwait(false);
-        var slot = await Service.BeginUploadAsync(session.Id, extension, CancellationToken.None).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(slot.SourcePath, audio).ConfigureAwait(false);
+        }, CancellationToken.None);
+        var slot = await Service.BeginUploadAsync(session.Id, extension, CancellationToken.None);
+        await File.WriteAllBytesAsync(slot.SourcePath, audio);
         return (session.Id, slot);
     }
 
     public async ValueTask DisposeAsync()
     {
-        await _provider.DisposeAsync().ConfigureAwait(false);
+        await _provider.DisposeAsync();
         try
         {
             if (Directory.Exists(Root))

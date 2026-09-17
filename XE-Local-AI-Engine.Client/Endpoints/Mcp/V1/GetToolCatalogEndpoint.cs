@@ -26,11 +26,11 @@ public sealed class GetToolCatalogEndpoint(ToolCatalogService toolCatalog)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var catalog = await _toolCatalog.GetKnownToolsAsync(ct).ConfigureAwait(false);
+        var catalog = await _toolCatalog.GetKnownToolsAsync(ct);
         await Send.OkAsync(new ToolCatalogResponse
             {
                 Tools = [.. catalog.Select(entry => entry.ToResponse(_toolCatalog))]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

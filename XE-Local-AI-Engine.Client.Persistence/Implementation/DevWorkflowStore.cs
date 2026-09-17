@@ -46,7 +46,7 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         ExecuteMutationAsync(runId,
             expectedVersion,
             operationId,
-            async run => (IReadOnlyList<MutationOutcome>)[await mutate(run).ConfigureAwait(false)],
+            async run => (IReadOnlyList<MutationOutcome>)[await mutate(run)],
             cancellationToken);
 
     /// <summary>
@@ -63,25 +63,25 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
     {
         // Query-first, never insert-then-catch: a caught unique-index violation leaves an Added entity in the change
         // tracker that every later write in the same scope would trip over.
-        if (operationId is { } preflight && await FindOperationAsync(runId, preflight, cancellationToken).ConfigureAwait(false) is { } recorded)
+        if (operationId is { } preflight && await FindOperationAsync(runId, preflight, cancellationToken) is { } recorded)
         {
             return recorded;
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            if (operationId is { } inTransaction && await FindOperationAsync(runId, inTransaction, cancellationToken).ConfigureAwait(false) is { } alreadyRecorded)
+            if (operationId is { } inTransaction && await FindOperationAsync(runId, inTransaction, cancellationToken) is { } alreadyRecorded)
             {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken);
                 return alreadyRecorded;
             }
 
-            var run = await _dbContext.DevWorkflowRuns.SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false)
+            var run = await _dbContext.DevWorkflowRuns.SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken)
                       ?? throw new DevWorkflowNotFoundException($"Development workflow run '{runId}' was not found.");
             EnsureVersion(run, expectedVersion);
 
-            var outcomes = await mutate(run).ConfigureAwait(false);
+            var outcomes = await mutate(run);
             var sequence = 0L;
             for (var index = 0; index < outcomes.Count; index++)
             {
@@ -95,13 +95,13 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
             }
 
             run.UpdatedAtUtc = Now();
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return new DevWorkflowMutationResult(runId, sequence, run.Version, run.Status, run.GraphRevision, outcomes[0].SupersededArtifactId);
         }
         catch (DbUpdateException exception)
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
 
             // Belt to the in-transaction check's braces. On SQLite that check already wins every real race — EF opens
             // transactions as BEGIN IMMEDIATE, so a second writer blocks on the writer lock and sees the recorded
@@ -109,7 +109,7 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
             // the honest answer to the question the catch asks: if the write that beat us used the SAME operation id,
             // the caller wants that result, not an exception. Only a real version mismatch, or a different operation,
             // still throws.
-            if (operationId is { } contested && await FindOperationAsync(runId, contested, cancellationToken).ConfigureAwait(false) is { } settled)
+            if (operationId is { } contested && await FindOperationAsync(runId, contested, cancellationToken) is { } settled)
             {
                 return settled;
             }
@@ -118,7 +118,7 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -227,13 +227,11 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         var attempts = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
                                        .Where(entity => entity.RunId == runId)
                                        .Select(entity => new NodeRunAttempt(entity.Id, entity.Attempt))
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         var recorded = await _dbContext.DevWorkflowDecisions.AsNoTracking()
                                        .Where(entity => entity.RunId == runId && entity.Decision == DevWorkflowDecisionKind.Retry)
                                        .Select(entity => new NodeRunAttempt(entity.NodeRunId, entity.Attempt))
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         var spent = attempts.Sum(static row => row.Attempt - 1);
         var reserved = recorded.Count(decision => attempts.Any(row => row.NodeRunId == decision.NodeRunId && row.Attempt == decision.Attempt));
@@ -251,8 +249,7 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         await _dbContext.DevWorkflowRunEvents.AsNoTracking()
                         .Where(entity => entity.RunId == runId && entity.OperationId == operationId)
                         .Select(entity => entity.EventType)
-                        .SingleOrDefaultAsync(cancellationToken)
-                        .ConfigureAwait(false);
+                        .SingleOrDefaultAsync(cancellationToken);
 
     /// <summary>
     ///     The event already recorded for this operation, rebuilt against the run row as it stands now — a replayed step
@@ -261,14 +258,13 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
     private async Task<DevWorkflowMutationResult?> FindOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken)
     {
         var recorded = await _dbContext.DevWorkflowRunEvents.AsNoTracking()
-                                       .SingleOrDefaultAsync(entity => entity.RunId == runId && entity.OperationId == operationId, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleOrDefaultAsync(entity => entity.RunId == runId && entity.OperationId == operationId, cancellationToken);
         if (recorded is null)
         {
             return null;
         }
 
-        var run = await _dbContext.DevWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false);
+        var run = await _dbContext.DevWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken);
         return run is null
             ? null
             : new DevWorkflowMutationResult(runId, recorded.Sequence, run.Version, run.Status, run.GraphRevision, RecordedSupersededArtifactId(recorded));
@@ -335,7 +331,7 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
             return;
         }
 
-        var workItem = await _dbContext.DevWorkflowWorkItems.SingleOrDefaultAsync(entity => entity.Id == workItemId, cancellationToken).ConfigureAwait(false)
+        var workItem = await _dbContext.DevWorkflowWorkItems.SingleOrDefaultAsync(entity => entity.Id == workItemId, cancellationToken)
                        ?? throw new DevWorkflowNotFoundException($"Development workflow work item '{workItemId}' was not found.");
         if (workItem.Status == target)
         {
@@ -348,12 +344,12 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
     }
 
     private async Task<DevWorkflowNodeRun> LoadNodeRunAsync(Guid runId, Guid nodeRunId, CancellationToken cancellationToken) =>
-        await _dbContext.DevWorkflowNodeRuns.SingleOrDefaultAsync(entity => entity.Id == nodeRunId && entity.RunId == runId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.DevWorkflowNodeRuns.SingleOrDefaultAsync(entity => entity.Id == nodeRunId && entity.RunId == runId, cancellationToken)
         ?? throw new DevWorkflowNotFoundException($"Development workflow node run '{nodeRunId}' was not found on run '{runId}'.");
 
     private async Task RollbackAsync(IDbContextTransaction transaction)
     {
-        await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+        await transaction.RollbackAsync(CancellationToken.None);
         _dbContext.ChangeTracker.Clear();
     }
 

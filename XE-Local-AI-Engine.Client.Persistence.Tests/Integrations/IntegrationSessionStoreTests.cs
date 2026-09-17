@@ -21,7 +21,7 @@ public sealed class IntegrationSessionStoreTests
     public async Task ASessionCreatedThroughAcceptAsync_CarriesTheCommandsPrincipalAndConversation()
     {
         using var fixture = new IntegrationTestFixture();
-        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var seed = await SeedAsync(fixture);
 
         await using var context = fixture.CreateContext();
         var sessionId = Guid.NewGuid();
@@ -38,9 +38,9 @@ public sealed class IntegrationSessionStoreTests
             ReceivedAtUtc: 3_000,
             new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, "execution.accepted", null, OccurredAtUtc: 3_000));
 
-        AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
+        AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
 
-        var session = AssertEx.NotNull(await new IntegrationSessionStore(context).GetByIdAsync(sessionId).ConfigureAwait(false));
+        var session = AssertEx.NotNull(await new IntegrationSessionStore(context).GetByIdAsync(sessionId));
         AssertEx.Equal(seed.PrincipalId, session.PrincipalId);
         AssertEx.Equal(conversationId, session.ConversationId,
             "The conversation id is pre-minted before the accept transaction, and the caller creates the conversation at it afterwards.");
@@ -48,24 +48,24 @@ public sealed class IntegrationSessionStoreTests
         AssertEx.Equal(IntegrationSessionStatus.Active, session.Status);
         AssertEx.Equal(expected: 1L, session.LastSequence);
 
-        AssertEx.Null(await new IntegrationSessionStore(context).GetByIdAsync(Guid.NewGuid()).ConfigureAwait(false));
+        AssertEx.Null(await new IntegrationSessionStore(context).GetByIdAsync(Guid.NewGuid()));
     }
 
     [Test]
     public async Task CloseAsync_IsIdempotentAndAnswersFalseOnlyForAMissingRow()
     {
         using var fixture = new IntegrationTestFixture();
-        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var seed = await SeedAsync(fixture);
 
         await using var context = fixture.CreateContext();
-        var sessionId = await AcceptAsync(context, seed).ConfigureAwait(false);
+        var sessionId = await AcceptAsync(context, seed);
         var store = new IntegrationSessionStore(context);
 
-        AssertEx.True(await store.CloseAsync(sessionId, atUtc: 4_000).ConfigureAwait(false));
-        AssertEx.True(await store.CloseAsync(sessionId, atUtc: 4_100).ConfigureAwait(false), "Closing an already-closed session is a success, not a 404.");
-        AssertEx.False(await store.CloseAsync(Guid.NewGuid(), atUtc: 4_200).ConfigureAwait(false));
+        AssertEx.True(await store.CloseAsync(sessionId, atUtc: 4_000));
+        AssertEx.True(await store.CloseAsync(sessionId, atUtc: 4_100), "Closing an already-closed session is a success, not a 404.");
+        AssertEx.False(await store.CloseAsync(Guid.NewGuid(), atUtc: 4_200));
 
-        var session = AssertEx.NotNull(await store.GetByIdAsync(sessionId).ConfigureAwait(false));
+        var session = AssertEx.NotNull(await store.GetByIdAsync(sessionId));
         AssertEx.Equal(IntegrationSessionStatus.Closed, session.Status);
         AssertEx.Equal(expected: 4_100L, session.LastActivityUtc);
     }
@@ -74,17 +74,16 @@ public sealed class IntegrationSessionStoreTests
     public async Task TheSessionWatermarkHasExactlyTwoWriters_AppendEventAsyncAndTryTerminalizeAsync()
     {
         using var fixture = new IntegrationTestFixture();
-        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var seed = await SeedAsync(fixture);
 
         await using var context = fixture.CreateContext();
         var executionStore = new IntegrationExecutionStore(context);
         var sessionStore = new IntegrationSessionStore(context);
-        var (sessionId, executionId) = await AcceptWithIdsAsync(context, seed).ConfigureAwait(false);
+        var (sessionId, executionId) = await AcceptWithIdsAsync(context, seed);
 
         // Writer one. There is no TouchAsync to test, and there never will be: this is the method that replaces it.
-        await executionStore.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 3, "tool.started", null, OccurredAtUtc: 5_000))
-                            .ConfigureAwait(false);
-        var afterAppend = AssertEx.NotNull(await sessionStore.GetByIdAsync(sessionId).ConfigureAwait(false));
+        await executionStore.AppendEventAsync(new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 3, "tool.started", null, OccurredAtUtc: 5_000));
+        var afterAppend = AssertEx.NotNull(await sessionStore.GetByIdAsync(sessionId));
         AssertEx.Equal(expected: 3L, afterAppend.LastSequence);
         AssertEx.Equal(expected: 5_000L, afterAppend.LastActivityUtc);
 
@@ -98,10 +97,9 @@ public sealed class IntegrationSessionStoreTests
                                               "execution.completed",
                                               EndedAtUtc: 6_000,
                                               FailureCategory: null,
-                                              FailureSummary: null))
-                                          .ConfigureAwait(false));
+                                              FailureSummary: null)));
 
-        var afterTerminal = AssertEx.NotNull(await sessionStore.GetByIdAsync(sessionId).ConfigureAwait(false));
+        var afterTerminal = AssertEx.NotNull(await sessionStore.GetByIdAsync(sessionId));
         AssertEx.Equal(expected: 4L, afterTerminal.LastSequence);
         AssertEx.Equal(expected: 6_000L, afterTerminal.LastActivityUtc);
     }
@@ -112,15 +110,15 @@ public sealed class IntegrationSessionStoreTests
         // The masking rule is the SHAPE of the return, not an if a route has to remember: a missing session and
         // another integrator's session must be one non-result.
         using var fixture = new IntegrationTestFixture();
-        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var seed = await SeedAsync(fixture);
 
         await using var context = fixture.CreateContext();
-        var sessionId = await AcceptAsync(context, seed).ConfigureAwait(false);
+        var sessionId = await AcceptAsync(context, seed);
         var store = new IntegrationSessionStore(context);
 
-        _ = AssertEx.NotNull(await store.GetForPrincipalAsync(sessionId, seed.PrincipalId).ConfigureAwait(false));
-        AssertEx.Null(await store.GetForPrincipalAsync(sessionId, Guid.NewGuid()).ConfigureAwait(false), "Another integrator's session.");
-        AssertEx.Null(await store.GetForPrincipalAsync(Guid.NewGuid(), seed.PrincipalId).ConfigureAwait(false), "An unknown id.");
+        _ = AssertEx.NotNull(await store.GetForPrincipalAsync(sessionId, seed.PrincipalId));
+        AssertEx.Null(await store.GetForPrincipalAsync(sessionId, Guid.NewGuid()), "Another integrator's session.");
+        AssertEx.Null(await store.GetForPrincipalAsync(Guid.NewGuid(), seed.PrincipalId), "An unknown id.");
     }
 
     [Test]
@@ -128,7 +126,7 @@ public sealed class IntegrationSessionStoreTests
     {
         // The lookup behind emit_output: a tool handler holds only the ambient conversation id the runner seeded.
         using var fixture = new IntegrationTestFixture();
-        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var seed = await SeedAsync(fixture);
 
         await using var context = fixture.CreateContext();
         var sessionId = Guid.NewGuid();
@@ -144,11 +142,11 @@ public sealed class IntegrationSessionStoreTests
             seed.KeyPrefix,
             ReceivedAtUtc: 3_000,
             new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, "execution.accepted", null, OccurredAtUtc: 3_000));
-        AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
+        AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
 
         var store = new IntegrationSessionStore(context);
-        AssertEx.Equal(sessionId, AssertEx.NotNull(await store.FindByConversationAsync(conversationId).ConfigureAwait(false)).Id);
-        AssertEx.Null(await store.FindByConversationAsync(Guid.NewGuid()).ConfigureAwait(false),
+        AssertEx.Equal(sessionId, AssertEx.NotNull(await store.FindByConversationAsync(conversationId)).Id);
+        AssertEx.Null(await store.FindByConversationAsync(Guid.NewGuid()),
             "Every non-integration conversation resolves to nothing, which is what makes emit_output inert outside an integration run.");
     }
 
@@ -157,7 +155,7 @@ public sealed class IntegrationSessionStoreTests
     {
         // Duplicate activity stamps are exactly the case an unordered Skip/Take drops or duplicates rows across pages.
         using var fixture = new IntegrationTestFixture();
-        await using (var schema = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var schema = await fixture.CreateSchemaAsync())
         {
             var trigger = IntegrationTestFixture.Trigger();
             var other = IntegrationTestFixture.Trigger("other-feed");
@@ -172,12 +170,12 @@ public sealed class IntegrationSessionStoreTests
             closed.Status = IntegrationSessionStatus.Closed;
             _ = schema.IntegrationSessions.Add(closed);
             _ = schema.IntegrationSessions.Add(IntegrationTestFixture.Session(other.Id, principalId, lastActivityUtc: 8_000));
-            _ = await schema.SaveChangesAsync().ConfigureAwait(false);
+            _ = await schema.SaveChangesAsync();
 
             var store = new IntegrationSessionStore(schema);
-            var first = await store.ListAsync(triggerId: null, status: null, limit: 3, offset: 0).ConfigureAwait(false);
-            var second = await store.ListAsync(triggerId: null, status: null, limit: 3, offset: 3).ConfigureAwait(false);
-            var third = await store.ListAsync(triggerId: null, status: null, limit: 3, offset: 6).ConfigureAwait(false);
+            var first = await store.ListAsync(triggerId: null, status: null, limit: 3, offset: 0);
+            var second = await store.ListAsync(triggerId: null, status: null, limit: 3, offset: 3);
+            var third = await store.ListAsync(triggerId: null, status: null, limit: 3, offset: 6);
 
             var ids = first.Concat(second).Concat(third).Select(static session => session.Id).ToArray();
             AssertEx.Equal(expected: 7, ids.Length);
@@ -185,17 +183,17 @@ public sealed class IntegrationSessionStoreTests
             AssertEx.Equal(closed.Id, first[0].Id, "Newest activity leads.");
             AssertEx.True(ids.SequenceEqual(ids.Distinct()), "The id tiebreaker makes duplicate stamps page deterministically.");
 
-            var byTrigger = await store.ListAsync(other.Id, status: null, limit: 50, offset: 0).ConfigureAwait(false);
-            var byStatus = await store.ListAsync(triggerId: null, IntegrationSessionStatus.Closed, limit: 50, offset: 0).ConfigureAwait(false);
+            var byTrigger = await store.ListAsync(other.Id, status: null, limit: 50, offset: 0);
+            var byStatus = await store.ListAsync(triggerId: null, IntegrationSessionStatus.Closed, limit: 50, offset: 0);
             AssertEx.Equal(expected: 1, byTrigger.Count);
             AssertEx.Equal(expected: 1, byStatus.Count);
             AssertEx.Equal(closed.Id, byStatus[0].Id);
 
             // The pager's total: the whole matching set under the SAME filter, never the window. A three-row page over
             // seven rows must still report seven, or the UI cannot tell a full last page from one with more behind it.
-            AssertEx.Equal(expected: 7, await store.CountAsync(triggerId: null, status: null).ConfigureAwait(false));
-            AssertEx.Equal(expected: 1, await store.CountAsync(other.Id, status: null).ConfigureAwait(false));
-            AssertEx.Equal(expected: 1, await store.CountAsync(triggerId: null, IntegrationSessionStatus.Closed).ConfigureAwait(false));
+            AssertEx.Equal(expected: 7, await store.CountAsync(triggerId: null, status: null));
+            AssertEx.Equal(expected: 1, await store.CountAsync(other.Id, status: null));
+            AssertEx.Equal(expected: 1, await store.CountAsync(triggerId: null, IntegrationSessionStatus.Closed));
         }
     }
 
@@ -203,20 +201,20 @@ public sealed class IntegrationSessionStoreTests
     public async Task DeleteAsync_RemovesTheRowAndIsFalseWhenThePurgeAlreadyDidIt()
     {
         using var fixture = new IntegrationTestFixture();
-        var seed = await SeedAsync(fixture).ConfigureAwait(false);
+        var seed = await SeedAsync(fixture);
 
         await using var context = fixture.CreateContext();
-        var sessionId = await AcceptAsync(context, seed).ConfigureAwait(false);
+        var sessionId = await AcceptAsync(context, seed);
         var store = new IntegrationSessionStore(context);
 
-        AssertEx.True(await store.DeleteAsync(sessionId).ConfigureAwait(false));
-        AssertEx.False(await store.DeleteAsync(sessionId).ConfigureAwait(false),
+        AssertEx.True(await store.DeleteAsync(sessionId));
+        AssertEx.False(await store.DeleteAsync(sessionId),
             "The conversation purge is the mechanism; this is the backstop, so a second call is the ordinary no-op.");
-        AssertEx.Null(await store.GetByIdAsync(sessionId).ConfigureAwait(false));
+        AssertEx.Null(await store.GetByIdAsync(sessionId));
     }
 
     private static async Task<Guid> AcceptAsync(NodeChatDbContext context, SeedState seed) =>
-        (await AcceptWithIdsAsync(context, seed).ConfigureAwait(false)).SessionId;
+        (await AcceptWithIdsAsync(context, seed)).SessionId;
 
     private static async Task<(Guid SessionId, Guid ExecutionId)> AcceptWithIdsAsync(NodeChatDbContext context, SeedState seed)
     {
@@ -233,18 +231,18 @@ public sealed class IntegrationSessionStoreTests
             ReceivedAtUtc: 3_000,
             new IntegrationEventAppend(Guid.NewGuid(), executionId, Sequence: 1, "execution.accepted", null, OccurredAtUtc: 3_000));
 
-        AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4).ConfigureAwait(false));
+        AssertEx.True(await new IntegrationExecutionStore(context).AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
         return (sessionId, executionId);
     }
 
     private static async Task<SeedState> SeedAsync(IntegrationTestFixture fixture)
     {
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var trigger = IntegrationTestFixture.Trigger();
         var key = IntegrationTestFixture.ApiKey();
         _ = context.IntegrationTriggers.Add(trigger);
         _ = context.IntegrationApiKeys.Add(key);
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
         return new SeedState(trigger.Id, trigger.TargetAgentDefinitionId, key.PrincipalId, key.KeyPrefix);
     }
 

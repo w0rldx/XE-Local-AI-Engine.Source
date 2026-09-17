@@ -20,7 +20,7 @@ public sealed class ProtectedLocalApiAuthorizationIntegrationTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedConnectionStatusRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -33,7 +33,7 @@ public sealed class ProtectedLocalApiAuthorizationIntegrationTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedConnectionStatusRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }

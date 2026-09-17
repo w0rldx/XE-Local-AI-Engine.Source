@@ -68,8 +68,8 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     [Test]
     public async Task Telemetry_DoesNotAlterTransitionCommands()
     {
-        var withCollector = await DriveBothGraphsAsync(stub: null).ConfigureAwait(false);
-        var withoutCollector = await DriveBothGraphsAsync(new StubDevWorkflowNodeTelemetrySource()).ConfigureAwait(false);
+        var withCollector = await DriveBothGraphsAsync(stub: null);
+        var withoutCollector = await DriveBothGraphsAsync(new StubDevWorkflowNodeTelemetrySource());
 
         AssertEx.Equal(withoutCollector,
             withCollector,
@@ -86,32 +86,32 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     public async Task Succeeded_Settle_WritesNonEmptyRoute()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(AgentThenGate);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, research.Status);
         var route = ReadRoute(research);
         AssertEx.Equal("approve", string.Join(",", route.Satisfied), "A succeeded node with an out-edge names the successor its edge satisfied.");
         AssertEx.Empty(route.Dead, "Nothing else left this node.");
         AssertEx.False(route.Truncated, "One successor is not a truncation.");
 
-        var gate = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        var gate = await harness.ReadNodeRunAsync(runId, "approve");
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, gate.Status);
         AssertEx.Null(gate.RouteJson, "A node run waiting on a human has not finished, so it has routed nowhere yet.");
 
-        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var answered = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        var answered = await harness.ReadNodeRunAsync(runId, "approve");
         var gateRoute = ReadRoute(answered);
         AssertEx.Equal("done", string.Join(",", gateRoute.Satisfied), "The answered gate routes on the document its own answer wrote.");
         AssertEx.Equal(DevWorkflowDecisionKind.Approve.ToString(), gateRoute.GateAnswer, "And the answer rides along as its own token.");
 
-        var join = await harness.ReadNodeRunAsync(runId, "done").ConfigureAwait(false);
+        var join = await harness.ReadNodeRunAsync(runId, "done");
         var joinRoute = ReadRoute(join);
         AssertEx.Empty(joinRoute.Satisfied, "A node with no out-edges routes nowhere, and says so with an empty document rather than a null one.");
         AssertEx.Empty(joinRoute.Dead, "A node with no out-edges routes nowhere, and says so with an empty document rather than a null one.");
@@ -139,12 +139,12 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             };
 
         await using var harness = NewHarness(stub);
-        var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(AgentThenGate);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, research.Status, "A broken collector may not change the verdict.");
         AssertEx.Null(research.FailureClass, "Nor invent a failure.");
         AssertEx.True(stub.Calls > 0, "The collector has to have been asked, or this proves nothing.");
@@ -165,16 +165,16 @@ public sealed class DevWorkflowNodeRunTelemetryTests
 
         await using (var harness = new DevWorkflowHarness(Host))
         {
-            var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-            await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-            AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false), seen);
+            var runId = await harness.StartRunAsync(AgentThenGate);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            await harness.SettleAgentAsync(runId, "research");
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId), seen);
 
             // The gate is left unanswered and the run cancelled, so the drain settles a live human wait to Cancelled.
-            await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-            AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false), seen);
+            await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId), seen);
         }
 
         // Blocked, Failed and Skipped, all through the retry policy's own settle paths on a real dead branch.
@@ -185,13 +185,13 @@ public sealed class DevWorkflowNodeRunTelemetryTests
                  })
         {
             await using var harness = new DevWorkflowHarness(Host);
-            var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
-            await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
-            AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false), seen);
+            var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid());
+            await harness.AdvanceThroughToolLaneAsync(runId);
+            AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId), seen);
 
-            await harness.DecideAsync(runId, "anydoomed", decision).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-            AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false), seen);
+            await harness.DecideAsync(runId, "anydoomed", decision);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId), seen);
         }
 
         foreach (var status in new[]
@@ -244,13 +244,13 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             "A disposed scope answers nothing — which is exactly why the names have to be persisted on the step row instead.");
 
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await AppendStepConsumptionAsync(harness, runId, "research", detailJson).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(AgentThenGate);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await AppendStepConsumptionAsync(harness, runId, "research", detailJson);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal("""["read_document","search_web"]""",
             AssertEx.NotNull(research.ToolNamesJson, "The names have to reach the column, long after the budget that held them was disposed."));
         AssertEx.Equal(expected: 2, research.ToolCalls, "The counts come off the same row.");
@@ -326,16 +326,16 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.Equal(expected: 0L, legacyDetail.ToolSchemaTokens, "And no schema tokens either, rather than a parse failure.");
 
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(AgentThenGate);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         // Two steps, eleven long names each: past the sixteen-name cap and past the column's 1024 characters.
-        await AppendStepConsumptionAsync(harness, runId, "research", DetailWithNames(LongNames(prefix: "a", count: 11))).ConfigureAwait(false);
-        await AppendStepConsumptionAsync(harness, runId, "research", DetailWithNames(LongNames(prefix: "b", count: 11))).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await AppendStepConsumptionAsync(harness, runId, "research", DetailWithNames(LongNames(prefix: "a", count: 11)));
+        await AppendStepConsumptionAsync(harness, runId, "research", DetailWithNames(LongNames(prefix: "b", count: 11)));
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var json = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).ToolNamesJson);
+        var json = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research")).ToolNamesJson);
         AssertEx.True(json.Length <= 1024, $"tool_names_json is bounded at 1024 characters; this one was {json.Length}.");
         var names = AssertEx.NotNull(JsonSerializer.Deserialize<List<string>>(json, ConsumptionJsonOptions));
         AssertEx.True(names.Count <= 16, "The union re-caps at sixteen, so two capped steps cannot make thirty-two.");
@@ -350,10 +350,10 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     public async Task ADevTaskNodeRun_WritesNoToolNames()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid());
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var tool = await harness.ReadNodeRunAsync(runId, "anysurvivor").ConfigureAwait(false);
+        var tool = await harness.ReadNodeRunAsync(runId, "anysurvivor");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, tool.Status);
         AssertEx.Null(tool.ToolNamesJson, "A node run with no work session has no step rows to read names off.");
         AssertEx.Null(tool.ToolCalls, "And no counts either — a structural row's cost columns are absent, not zero.");
@@ -380,8 +380,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             .Returns([Envelope(conversationId, new string('m', 300))]);
 
         var collected = await new DevWorkflowNodeTelemetrySource(sessions, logs)
-                              .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
-                              .ConfigureAwait(false);
+                              .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None);
 
         var served = AssertEx.NotNull(AssertEx.NotNull(collected).ServedModelName);
         AssertEx.Equal(expected: 256, served.Length, "served_model_name is declared at 256 characters, so the collector may not hand the column more.");
@@ -412,8 +411,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             ]);
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
-                                               .ConfigureAwait(false));
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Equal(expected: 238_000L, collected.AgentTurnMs, "The whole-turn clock is unchanged: it still sums every envelope's own duration.");
         AssertEx.Equal(expected: 179_776L, collected.ModelReadinessMs, "The warm phases of the turns that had one sum; a turn that warmed nothing adds nothing.");
@@ -440,8 +438,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             ]);
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
-                                               .ConfigureAwait(false));
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Equal(expected: 2_000L, collected.AgentTurnMs, "The turns still happened and still took time.");
         AssertEx.Null(collected.ModelReadinessMs, "None of them warmed a local runtime, which is not the same as warming one in no time.");
@@ -469,8 +466,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         loads.RecordLoad(LoadObservation("some-other-model", globalFree: 11, admitted: 22));
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
-                                               .ConfigureAwait(false));
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Equal(expected: 7_340_032_000L, collected.VramFreeAtLoadBytes, "The reading belongs to the model the envelopes say actually served.");
         AssertEx.Equal(expected: 5_368_709_120L, collected.VramAdmittedBytes);
@@ -497,8 +493,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         loads.RecordLoad(LoadObservation("llama-3.1", globalFree: 7_340_032_000, admitted: 5_368_709_120));
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
-                                               .ConfigureAwait(false));
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Null(collected.VramFreeAtLoadBytes, "Another model's load says nothing about the one that served this run.");
         AssertEx.Null(collected.VramAdmittedBytes);
@@ -519,8 +514,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             .Returns([Envelope(conversationId, "llama-3.1", durationMs: 900)]);
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
-                                               .ConfigureAwait(false));
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Null(collected.VramFreeAtLoadBytes);
         AssertEx.Null(collected.VramAdmittedBytes);
@@ -549,8 +543,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         loads.RecordLoad(LoadObservation("Qwen3-1.7B-GGUF:Q8_0", globalFree: 7_340_032_000, admitted: 5_368_709_120));
 
         var collected = AssertEx.NotNull(await new DevWorkflowNodeTelemetrySource(sessions, logs, development: null, localModelLoads: loads)
-                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None)
-                                               .ConfigureAwait(false));
+                                               .CollectAsync(NodeRunWithSession(sessionId), DevWorkflowNodeRunStatus.Succeeded, CancellationToken.None));
 
         AssertEx.Equal("qwen3-1.7b-gguf:q8_0", collected.ServedModelName);
         AssertEx.Equal(expected: 7_340_032_000L, collected.VramFreeAtLoadBytes, "The served name is the load key, compared the way every other (model, role) key is.");
@@ -580,7 +573,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         var loads = harness.Services.GetRequiredService<ILlamaServerLoadTelemetry>();
         loads.RecordLoad(LoadObservation("Qwen3-1.7B-GGUF:Q8_0", globalFree: 7_340_032_000, admitted: 5_368_709_120));
 
-        var admitted = await SettleAgentNodeServedByAsync(harness, servedName).ConfigureAwait(false);
+        var admitted = await SettleAgentNodeServedByAsync(harness, servedName);
 
         AssertEx.Equal(servedName, admitted.ServedModelName, "The envelope's own model name is the key the collector joins on.");
         AssertEx.Equal(expected: 7_340_032_000L,
@@ -591,7 +584,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         // A Ready reload that carried no admission replaced the process the reading described, so the key is dropped.
         loads.RecordLoad(LoadObservation("qwen3-1.7B-gguf:Q8_0", globalFree: null, admitted: null));
 
-        var cleared = await SettleAgentNodeServedByAsync(harness, servedName).ConfigureAwait(false);
+        var cleared = await SettleAgentNodeServedByAsync(harness, servedName);
 
         AssertEx.Equal(servedName, cleared.ServedModelName, "The same model still served, which is what makes the nulls a clearing rather than a miss.");
         AssertEx.Null(cleared.VramFreeAtLoadBytes, "An unadmitted reload drops the reading rather than letting it describe a replaced process.");
@@ -606,13 +599,13 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     /// </summary>
     private static async Task<DevWorkflowNodeRunSnapshot> SettleAgentNodeServedByAsync(DevWorkflowHarness harness, string servedModelName)
     {
-        var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(AgentThenGate);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
         await using (var scope = harness.Services.CreateAsyncScope())
         {
-            var session = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId).ConfigureAwait(false);
+            var session = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId);
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
             _ = await dbContext.Database.ExecuteSqlAsync($"""
                                                           INSERT INTO agent_execution_logs
@@ -623,13 +616,13 @@ public sealed class DevWorkflowNodeRunTelemetryTests
                                                                   {Guid.NewGuid()}, {session.ConversationId}, {Guid.NewGuid()},
                                                                   {Guid.NewGuid()}, {servedModelName}, 'local', '', 'completed', 1500, 1,
                                                                   {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()});
-                                                          """).ConfigureAwait(false);
+                                                          """);
         }
 
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, research.Status, "The node has to have settled, or nothing collected its cost at all.");
         return research;
     }
@@ -726,22 +719,22 @@ public sealed class DevWorkflowNodeRunTelemetryTests
 
         await using (var harness = stub is null ? new DevWorkflowHarness() : NewHarness(stub))
         {
-            var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-            await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-            await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-            await RecordAsync(harness, runId, lines).ConfigureAwait(false);
+            var runId = await harness.StartRunAsync(AgentThenGate);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            await harness.SettleAgentAsync(runId, "research");
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            await RecordAsync(harness, runId, lines);
         }
 
         await using (var harness = stub is null ? new DevWorkflowHarness() : NewHarness(stub))
         {
-            var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
-            await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
-            await harness.DecideAsync(runId, "anydoomed", DevWorkflowDecisionKind.Skip).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-            await RecordAsync(harness, runId, lines).ConfigureAwait(false);
+            var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid());
+            await harness.AdvanceThroughToolLaneAsync(runId);
+            await harness.DecideAsync(runId, "anydoomed", DevWorkflowDecisionKind.Skip);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            await RecordAsync(harness, runId, lines);
         }
 
         return string.Join(Environment.NewLine, lines);
@@ -752,19 +745,19 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         // The event Outcome is compared here rather than in the shared trail helper: it belongs to THIS tuple (plan
         // section 5) and it is the field a later enrichment would reach for, but the rest of the namespace asserts on
         // the trail as a list of types.
-        foreach (var entry in await harness.ReadEventsAsync(runId).ConfigureAwait(false))
+        foreach (var entry in await harness.ReadEventsAsync(runId))
         {
             lines.Add($"event {entry.EventType} outcome={entry.Outcome}");
         }
 
-        foreach (var nodeRun in (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).OrderBy(static row => row.NodeKey, StringComparer.Ordinal))
+        foreach (var nodeRun in (await harness.ReadNodeRunsAsync(runId)).OrderBy(static row => row.NodeKey, StringComparer.Ordinal))
         {
             lines.Add($"{nodeRun.NodeKey} {nodeRun.Status} attempt={nodeRun.Attempt} failure={nodeRun.FailureClass} reason={nodeRun.TerminalReason}");
         }
 
-        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var run = await harness.ReadRunAsync(runId);
         lines.Add($"run {run.Status} failure={run.FailureClass}");
-        lines.Add($"workItem {(await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status}");
+        lines.Add($"workItem {(await harness.ReadWorkItemAsync(runId)).Status}");
     }
 
     /// <summary>
@@ -826,7 +819,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     /// <summary>Writes one step's consumption row onto the node run's session, exactly as the supervisor would.</summary>
     internal static async Task AppendStepConsumptionAsync(DevWorkflowHarness harness, Guid runId, string nodeKey, string detailJson)
     {
-        var sessionId = await harness.ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false);
+        var sessionId = await harness.ReadSessionIdAsync(runId, nodeKey);
         await using var scope = harness.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
                        .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
@@ -834,8 +827,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
                            WorkSessionEventTypes.StepEnded,
                            Guid.NewGuid(),
                            "Completed",
-                           detailJson))
-                       .ConfigureAwait(false);
+                           detailJson));
     }
 
     private static string SerializeConsumption(ProviderCallConsumption consumption) =>

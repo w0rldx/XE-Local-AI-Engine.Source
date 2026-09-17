@@ -32,21 +32,21 @@ public sealed class ListAgentExecutionLogsEndpoint(
 
     public override async Task HandleAsync(ListAgentExecutionLogsRequest req, CancellationToken ct)
     {
-        var agent = await _agentDefinitions.GetByIdAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
+        var agent = await _agentDefinitions.GetByIdAsync(req.AgentDefinitionId, ct);
         if (agent is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         var limit = req.Limit is { } requested && requested > 0 ? Math.Min(requested, MaxPageSize) : DefaultPageSize;
         var offset = req.Offset is { } requestedOffset && requestedOffset > 0 ? requestedOffset : 0;
 
-        var records = await _executionLogs.ListByAgentAsync(req.AgentDefinitionId, limit, offset, ct).ConfigureAwait(false);
+        var records = await _executionLogs.ListByAgentAsync(req.AgentDefinitionId, limit, offset, ct);
         await Send.OkAsync(new ListAgentExecutionLogsResponse
             {
                 Items = [.. records.Select(static record => record.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

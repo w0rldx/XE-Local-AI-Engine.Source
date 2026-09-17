@@ -197,7 +197,7 @@ public sealed class AgentHomeToolGatewayTests
                     SelectedFolderIds = request.SelectedFolderIds,
                     RuntimeProfile = request.RuntimeProfile
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             return _runResult!;
         }

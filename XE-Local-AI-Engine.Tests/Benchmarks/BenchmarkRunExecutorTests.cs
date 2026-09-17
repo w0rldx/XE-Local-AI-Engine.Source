@@ -702,7 +702,7 @@ public sealed class BenchmarkRunExecutorTests
                   if (cancelNext)
                   {
                       AssertEx.True(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Primary));
-                      await Task.FromCanceled(call.ArgAt<CancellationToken>(1)).ConfigureAwait(false);
+                      await Task.FromCanceled(call.ArgAt<CancellationToken>(1));
                       return;
                   }
 

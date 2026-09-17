@@ -54,13 +54,13 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         BenchmarkTaskItemDraft draft,
         CancellationToken cancellationToken = default)
     {
-        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken);
 
         // The generator's id is minted HERE rather than by the store, because every case it expands into is derived
         // from it: the id is the seed material that makes one probe's haystacks its own.
-        var (input, children) = await ToInputAsync(projectId, Guid.NewGuid(), draft, cancellationToken).ConfigureAwait(false);
+        var (input, children) = await ToInputAsync(projectId, Guid.NewGuid(), draft, cancellationToken);
         EnsureLeafCap(existing, children?.Count ?? 1);
-        return await _benchmarkStore.CreateTaskItemAsync(projectId, expectedProjectVersion, input, children, cancellationToken).ConfigureAwait(false);
+        return await _benchmarkStore.CreateTaskItemAsync(projectId, expectedProjectVersion, input, children, cancellationToken);
     }
 
     public async Task<BenchmarkTaskItemRecord> UpdateAsync(Guid projectId,
@@ -69,23 +69,23 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         BenchmarkTaskItemDraft draft,
         CancellationToken cancellationToken = default)
     {
-        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken);
         EnsureNotGenerated(existing, itemId);
-        var (input, children) = await ToInputAsync(projectId, itemId, draft, cancellationToken).ConfigureAwait(false);
+        var (input, children) = await ToInputAsync(projectId, itemId, draft, cancellationToken);
         if (children is not null)
         {
             // Re-expansion REPLACES this generator's cases, so only the difference counts against the cap.
             EnsureLeafCap(existing, children.Count - existing.Count(item => item.ParentItemId == itemId));
         }
 
-        return await _benchmarkStore.UpdateTaskItemAsync(projectId, itemId, expectedVersion, input, children, cancellationToken).ConfigureAwait(false);
+        return await _benchmarkStore.UpdateTaskItemAsync(projectId, itemId, expectedVersion, input, children, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid projectId, Guid itemId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken);
         EnsureNotGenerated(existing, itemId);
-        await _benchmarkStore.DeleteTaskItemAsync(projectId, itemId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        await _benchmarkStore.DeleteTaskItemAsync(projectId, itemId, expectedVersion, cancellationToken);
     }
 
     public Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderAsync(Guid projectId,
@@ -177,7 +177,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
             CountsTowardScore: draft.CountsTowardScore);
 
         var children = string.Equals(kind, BenchmarkTaskItemKinds.Niah, StringComparison.Ordinal)
-            ? await ExpandAsync(projectId, itemId, draft.GeneratorConfig, cancellationToken).ConfigureAwait(false)
+            ? await ExpandAsync(projectId, itemId, draft.GeneratorConfig, cancellationToken)
             : null;
 
         // Checked on the WRITTEN bytes rather than on the draft, so a generator's own override — one `exact` criterion
@@ -186,8 +186,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         // criterion per case — is held to the same rule as one an operator typed.
         await EnsureOverridesFitRubricAsync(projectId,
                 [input, .. children ?? []],
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         return (input, children);
     }
 
@@ -212,7 +211,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
             return;
         }
 
-        var revision = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var revision = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
         if (revision?.PolicyJson is not { } policyJson)
         {
             return;
@@ -311,7 +310,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
 
         // The project's window is the refusal's other number, and it is read here so the operator is told while still
         // looking at the form. The freeze re-checks it anyway: a project's context can be edited after expansion.
-        var project = await _benchmarkStore.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false)
+        var project = await _benchmarkStore.GetProjectAsync(projectId, cancellationToken)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
         var criterionId = BenchmarkNiahGenerator.CriterionIdOf(config);
         return

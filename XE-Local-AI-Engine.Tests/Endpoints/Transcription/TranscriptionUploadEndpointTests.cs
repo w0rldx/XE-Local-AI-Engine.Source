@@ -36,8 +36,8 @@ public sealed class TranscriptionUploadEndpointTests
             extraServices: services => services.Configure<SecurityOptions>(options => options.MaxUploadFileSizeMb = 1));
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(factory, client).ConfigureAwait(false);
-        using var response = await UploadAsync(factory, client, sessionId, "big.wav", new byte[2 * 1024 * 1024]).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(factory, client);
+        using var response = await UploadAsync(factory, client, sessionId, "big.wav", new byte[2 * 1024 * 1024]);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, transcriber.CallCount, "An oversize upload must never reach the runtime.");
@@ -51,14 +51,14 @@ public sealed class TranscriptionUploadEndpointTests
         await using var factory = FactoryWith(transcriber);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(factory, client).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(factory, client);
 
         using var form = new MultipartFormDataContent();
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/file");
         request.Content = form;
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync());
         AssertEx.Equal(expected: 0, transcriber.CallCount);
     }
 
@@ -71,12 +71,12 @@ public sealed class TranscriptionUploadEndpointTests
         await using var factory = FactoryWith(transcriber, transcoderAvailable: false);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(factory, client).ConfigureAwait(false);
-        using var response = await UploadAsync(factory, client, sessionId, "podcast.ogg", TranscriptionAudioFixtures.Ogg).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(factory, client);
+        using var response = await UploadAsync(factory, client, sessionId, "podcast.ogg", TranscriptionAudioFixtures.Ogg);
 
         AssertEx.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
 
-        var body = await ReadJsonAsync(response).ConfigureAwait(false);
+        var body = await ReadJsonAsync(response);
         AssertEx.Equal("ffmpeg-required", body.GetProperty("reason").GetString());
         AssertEx.Equal("Ogg", body.GetProperty("detectedContainer").GetString());
         AssertEx.True(body.GetProperty("ffmpegRequired").GetBoolean());
@@ -99,10 +99,10 @@ public sealed class TranscriptionUploadEndpointTests
         await using var factory = FactoryWith(transcriber);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(factory, client).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(factory, client);
         var root = factory.Services.GetRequiredService<INodeDataDirectory>().Root;
 
-        using var response = await UploadAsync(factory, client, sessionId, "../../../escaped.wav", ReadFixtureWav()).ConfigureAwait(false);
+        using var response = await UploadAsync(factory, client, sessionId, "../../../escaped.wav", ReadFixtureWav());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expected: 1, transcriber.CallCount);
@@ -113,7 +113,7 @@ public sealed class TranscriptionUploadEndpointTests
         AssertEx.False(File.Exists(traversalTarget), $"Nothing may be written at '{traversalTarget}'.");
         AssertEmptyUploadDirectory(factory);
 
-        var body = await ReadJsonAsync(response).ConfigureAwait(false);
+        var body = await ReadJsonAsync(response);
         AssertEx.Equal("Completed", body.GetProperty("session").GetProperty("status").GetString());
     }
 
@@ -126,8 +126,8 @@ public sealed class TranscriptionUploadEndpointTests
         await using var factory = FactoryWith(transcriber);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(factory, client).ConfigureAwait(false);
-        using var response = await UploadAsync(factory, client, sessionId, "..", ReadFixtureWav()).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(factory, client);
+        using var response = await UploadAsync(factory, client, sessionId, "..", ReadFixtureWav());
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, transcriber.CallCount);
@@ -149,7 +149,7 @@ public sealed class TranscriptionUploadEndpointTests
         await using var factory = FactoryWith(transcriber);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(factory, client).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(factory, client);
 
         // A well-formed part header followed by bytes and then nothing: no closing boundary ever arrives.
         const string boundary = "xe-truncated-boundary";
@@ -162,9 +162,9 @@ public sealed class TranscriptionUploadEndpointTests
         content.Headers.ContentType = MediaTypeHeaderValue.Parse($"multipart/form-data; boundary={boundary}");
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/file");
         request.Content = content;
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync());
         AssertEx.Equal(expected: 0, transcriber.CallCount, "A truncated body must never reach the runtime.");
         AssertEmptyUploadDirectory(factory);
     }
@@ -184,7 +184,7 @@ public sealed class TranscriptionUploadEndpointTests
         await using var factory = FactoryWith(transcriber);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(factory, client).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(factory, client);
 
         using var form = new MultipartFormDataContent();
         using var first = new ByteArrayContent(ReadFixtureWav());
@@ -196,9 +196,9 @@ public sealed class TranscriptionUploadEndpointTests
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/file");
         request.Content = form;
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync());
         AssertEx.Equal(expected: 0, transcriber.CallCount, "Neither file may be transcribed when the request is ambiguous.");
         AssertEmptyUploadDirectory(factory);
     }
@@ -210,7 +210,7 @@ public sealed class TranscriptionUploadEndpointTests
         await using var factory = FactoryWith(transcriber);
         using var client = factory.CreateClient();
 
-        using var response = await UploadAsync(factory, client, Guid.NewGuid(), "clip.wav", ReadFixtureWav()).ConfigureAwait(false);
+        using var response = await UploadAsync(factory, client, Guid.NewGuid(), "clip.wav", ReadFixtureWav());
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEmptyUploadDirectory(factory);
@@ -236,10 +236,10 @@ public sealed class TranscriptionUploadEndpointTests
             sourceKind = "File"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await ReadJsonAsync(response).ConfigureAwait(false);
+        var body = await ReadJsonAsync(response);
         return body.GetProperty("session").GetProperty("id").GetGuid();
     }
 
@@ -256,7 +256,7 @@ public sealed class TranscriptionUploadEndpointTests
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/file");
         request.Content = form;
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string route)
@@ -269,7 +269,7 @@ public sealed class TranscriptionUploadEndpointTests
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
     {
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<JsonElement>(payload, JsonOptions);
     }
 

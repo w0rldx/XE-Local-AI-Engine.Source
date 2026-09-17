@@ -20,11 +20,11 @@ public sealed class InstalledGgufSnapshotStoreTests
         using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
-        var entry = await SeedAsync(directory.Path, registry, Convert.ToHexString).ConfigureAwait(false);
+        var entry = await SeedAsync(directory.Path, registry, Convert.ToHexString);
         var store = new InstalledGgufSnapshotStore(registry, options);
-        var candidate = AssertEx.NotNull(await store.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None).ConfigureAwait(false));
+        var candidate = AssertEx.NotNull(await store.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None));
 
-        var snapshot = await store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
+        var snapshot = await store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None);
 
         AssertEx.Equal(entry.ModelName, snapshot.ModelName);
         // The physical member always carries the canonical lowercase digest, whatever case the registry recorded.
@@ -37,12 +37,11 @@ public sealed class InstalledGgufSnapshotStoreTests
         using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
-        var entry = await SeedAsync(directory.Path, registry, static _ => new string('a', 64)).ConfigureAwait(false);
+        var entry = await SeedAsync(directory.Path, registry, static _ => new string('a', 64));
         var store = new InstalledGgufSnapshotStore(registry, options);
-        var candidate = AssertEx.NotNull(await store.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None).ConfigureAwait(false));
+        var candidate = AssertEx.NotNull(await store.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None));
 
-        var exception = await AssertEx.ThrowsAsync<InstalledGgufSnapshotException>(() => store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None))
-                                      .ConfigureAwait(false);
+        var exception = await AssertEx.ThrowsAsync<InstalledGgufSnapshotException>(() => store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None));
 
         AssertEx.Equal("InstalledModelMemberFingerprintMismatch", exception.Code);
     }
@@ -53,19 +52,19 @@ public sealed class InstalledGgufSnapshotStoreTests
         using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
-        var entry = await SeedAsync(directory.Path, registry, Convert.ToHexStringLower).ConfigureAwait(false);
+        var entry = await SeedAsync(directory.Path, registry, Convert.ToHexStringLower);
         var store = new InstalledGgufSnapshotStore(registry, options);
-        var candidate = AssertEx.NotNull(await store.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None).ConfigureAwait(false));
+        var candidate = AssertEx.NotNull(await store.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None));
 
-        _ = await store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
-        _ = await store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
+        _ = await store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None);
+        _ = await store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None);
         var (hitsWhenUnchanged, missesWhenUnchanged) = (store.MemberHashMemo.Hits, store.MemberHashMemo.Misses);
 
         // A re-write the memo MUST notice: same bytes, so the digest is unchanged and verification still passes, but
         // the timestamp moved, which is exactly the key half that has to invalidate.
         var weightPath = AssertEx.NotNull(entry.LocalPath);
         File.SetLastWriteTimeUtc(weightPath, File.GetLastWriteTimeUtc(weightPath).AddMinutes(5));
-        var snapshot = await store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
+        var snapshot = await store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None);
 
         AssertEx.Equal(expected: 1L, hitsWhenUnchanged, "the second acquire of an unchanged member must not re-hash it");
         AssertEx.Equal(expected: 1L, missesWhenUnchanged, "only the first acquire may hash the member");
@@ -105,7 +104,7 @@ public sealed class InstalledGgufSnapshotStoreTests
     {
         var path = Path.Combine(root, "legacy-Q4_K_M.gguf");
         var bytes = WeightBytes;
-        await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(path, bytes);
         var entry = new GgufModelRegistryEntry
         {
             ModelName = "local/legacy:Q4_K_M",
@@ -119,7 +118,7 @@ public sealed class InstalledGgufSnapshotStoreTests
             DownloadedAtUtc = DateTimeOffset.UnixEpoch,
             Role = GgufRole.Chat
         };
-        await registry.UpsertAsync(entry, CancellationToken.None).ConfigureAwait(false);
-        return AssertEx.NotNull(await registry.FindAsync(entry.ModelName, CancellationToken.None).ConfigureAwait(false));
+        await registry.UpsertAsync(entry, CancellationToken.None);
+        return AssertEx.NotNull(await registry.FindAsync(entry.ModelName, CancellationToken.None));
     }
 }

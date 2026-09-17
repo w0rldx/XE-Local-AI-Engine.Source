@@ -29,13 +29,13 @@ public sealed class GenerateIntegrationApiKeyEndpoint(IIntegrationApiKeyService 
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var generated = await _apiKeyService.GenerateAsync(req.Label, req.AllowedTriggerIds, req.PrincipalId, ct).ConfigureAwait(false);
+        var generated = await _apiKeyService.GenerateAsync(req.Label, req.AllowedTriggerIds, req.PrincipalId, ct);
 
         await Send.OkAsync(new GenerateIntegrationApiKeyResponse
             {
                 Key = generated.Key,
                 View = IntegrationMapper.ToView(generated.View)
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

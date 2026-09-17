@@ -39,22 +39,22 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-durability-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreDurabilityMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreDurabilityMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection);
 
         foreach (var column in DurabilityColumns)
         {
             AssertEx.True(columns.Contains(column), $"agent_execution_logs should expose the {column} column after the migration.");
         }
 
-        AssertEx.True(await IndexExistsAsync(connection, EnvelopeUniqueIndexName).ConfigureAwait(false),
+        AssertEx.True(await IndexExistsAsync(connection, EnvelopeUniqueIndexName),
             "The migration should create the filtered unique envelope index.");
     }
 
@@ -63,17 +63,17 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-durability-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection);
 
         foreach (var column in DurabilityColumns)
         {
             AssertEx.True(columns.Contains(column), $"A fresh migrate-to-head should expose the {column} column.");
         }
 
-        AssertEx.True(await IndexExistsAsync(connection, EnvelopeUniqueIndexName).ConfigureAwait(false),
+        AssertEx.True(await IndexExistsAsync(connection, EnvelopeUniqueIndexName),
             "A fresh migrate-to-head should create the filtered unique envelope index.");
     }
 
@@ -82,22 +82,22 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-durability-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreDurabilityMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreDurabilityMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnNamesAsync(connection);
 
         foreach (var column in DurabilityColumns)
         {
             AssertEx.False(columns.Contains(column), $"Rolling back one migration should drop the {column} column.");
         }
 
-        AssertEx.False(await IndexExistsAsync(connection, EnvelopeUniqueIndexName).ConfigureAwait(false),
+        AssertEx.False(await IndexExistsAsync(connection, EnvelopeUniqueIndexName),
             "Rolling back one migration should drop the filtered unique envelope index.");
     }
 
@@ -119,7 +119,7 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -128,7 +128,7 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'index' AND name = $name;";
         command.Parameters.AddWithValue("$name", indexName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<HashSet<string>> GetColumnNamesAsync(SqliteConnection connection)
@@ -138,8 +138,8 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
         command.CommandText = "PRAGMA table_info(agent_execution_logs);";
 
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             columns.Add(reader.GetString(reader.GetOrdinal("name")));
         }

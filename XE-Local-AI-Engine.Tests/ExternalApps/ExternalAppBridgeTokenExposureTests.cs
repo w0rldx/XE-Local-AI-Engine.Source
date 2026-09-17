@@ -42,18 +42,17 @@ public sealed class ExternalAppBridgeTokenExposureTests
     public async Task InstanceDetail_NeverCarriesTheInstancesBridgeToken()
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(AppId,
                                         DisplayName: null,
                                         manifest.ManifestVersion,
                                         manifest.ManifestSha256,
                                         new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true))
-                                    .ConfigureAwait(false);
-        await harness.WaitUntilIdleAsync(admitted.Id).ConfigureAwait(false);
+                                        AcceptPermissions: true));
+        await harness.WaitUntilIdleAsync(admitted.Id);
 
-        var token = AssertEx.NotNull(AssertEx.NotNull(await harness.ReadAsync(admitted.Id).ConfigureAwait(false)).BridgeToken);
-        var detail = await harness.Service.GetAsync(admitted.Id).ConfigureAwait(false);
+        var token = AssertEx.NotNull(AssertEx.NotNull(await harness.ReadAsync(admitted.Id)).BridgeToken);
+        var detail = await harness.Service.GetAsync(admitted.Id);
 
         var serialized = JsonSerializer.Serialize(detail);
         AssertEx.False(serialized.Contains(token, StringComparison.Ordinal), "The instance detail the SPA renders must not carry the application's bridge credential.");

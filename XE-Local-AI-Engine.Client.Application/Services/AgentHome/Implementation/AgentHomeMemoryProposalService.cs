@@ -82,8 +82,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
                 continue;
             }
 
-            await ReadJsonlFileAsync(filePath, fileName, proposals, rejections, cancellationToken)
-                .ConfigureAwait(false);
+            await ReadJsonlFileAsync(filePath, fileName, proposals, rejections, cancellationToken);
         }
 
         _logger.LogInformation("Memory proposal collection for run {RunId}: {ProposalCount} accepted, {RejectionCount} rejected.",
@@ -107,7 +106,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
         string[] lines;
         try
         {
-            lines = await File.ReadAllLinesAsync(filePath, cancellationToken).ConfigureAwait(false);
+            lines = await File.ReadAllLinesAsync(filePath, cancellationToken);
         }
         catch (IOException ex)
         {

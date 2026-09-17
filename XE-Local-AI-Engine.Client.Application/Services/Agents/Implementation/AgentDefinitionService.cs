@@ -34,16 +34,16 @@ internal sealed class AgentDefinitionService(
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        await ValidateAsync(input, cancellationToken).ConfigureAwait(false);
-        return await _store.AddAsync(input, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, cancellationToken);
+        return await _store.AddAsync(input, cancellationToken);
     }
 
     public async Task<AgentDefinitionRecord?> UpdateAsync(Guid id, AgentDefinitionInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        await ValidateAsync(input, cancellationToken).ConfigureAwait(false);
-        return await _store.UpdateAsync(id, input, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, cancellationToken);
+        return await _store.UpdateAsync(id, input, cancellationToken);
     }
 
     public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -70,10 +70,10 @@ internal sealed class AgentDefinitionService(
 
         if (Guid.TryParse(key, out var id))
         {
-            return await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+            return await _store.GetByIdAsync(id, cancellationToken);
         }
 
-        var definitions = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var definitions = await _store.ListAsync(cancellationToken);
         return definitions.FirstOrDefault(definition => string.Equals(definition.Name, key, StringComparison.Ordinal));
     }
 
@@ -119,7 +119,7 @@ internal sealed class AgentDefinitionService(
 
         // Unknown tool names are a warning, not a failure: a name that is not currently in the catalog may belong to a
         // tool that is reinstalled later, and the resolver already drops anything not in the live offer at runtime.
-        var knownToolNames = new HashSet<string>(await _localToolOfferProvider.GetKnownToolNamesAsync(cancellationToken).ConfigureAwait(false), StringComparer.Ordinal);
+        var knownToolNames = new HashSet<string>(await _localToolOfferProvider.GetKnownToolNamesAsync(cancellationToken), StringComparer.Ordinal);
         var unknownToolNames = allowedToolNames
                                .Where(name => !knownToolNames.Contains(name))
                                .ToArray();
@@ -130,7 +130,7 @@ internal sealed class AgentDefinitionService(
                 string.Join(", ", unknownToolNames));
         }
 
-        await ValidateOrchestrationTopologyAsync(input, cancellationToken).ConfigureAwait(false);
+        await ValidateOrchestrationTopologyAsync(input, cancellationToken);
     }
 
     /// <summary>
@@ -197,7 +197,7 @@ internal sealed class AgentDefinitionService(
         // A participant id that no longer resolves is a warning, not a failure: a definition may be deleted or created
         // out of order, and the runtime resolver already drops dangling participants and degrades. The author is warned
         // so the orchestration can be repaired before it silently runs short-handed.
-        var knownIds = (await _store.ListAsync(cancellationToken).ConfigureAwait(false))
+        var knownIds = (await _store.ListAsync(cancellationToken))
                        .Select(record => record.Id)
                        .ToHashSet();
         var missingParticipants = participantIds

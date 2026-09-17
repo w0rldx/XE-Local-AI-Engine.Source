@@ -24,13 +24,13 @@ public sealed class SetMcpServerEnabledEndpoint(IMcpServerService mcpServerServi
 
     public override async Task HandleAsync(SetMcpServerEnabledRequest req, CancellationToken ct)
     {
-        var record = await _mcpServerService.SetEnabledAsync(req.McpServerId, req.Enabled, ct).ConfigureAwait(false);
+        var record = await _mcpServerService.SetEnabledAsync(req.McpServerId, req.Enabled, ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

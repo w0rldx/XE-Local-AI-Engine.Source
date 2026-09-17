@@ -36,13 +36,13 @@ public sealed class ResolveUserQuestionEndpoint(IWorkerEventDispatcher eventDisp
                              answer.Other))
                          .ToArray();
 
-        await _eventDispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent(req.RequestId, answers)).ConfigureAwait(false);
+        await _eventDispatcher.DispatchUserQuestionAnsweredAsync(new UserQuestionAnsweredEvent(req.RequestId, answers));
 
         // The answers are the operator's words: the response echoes the correlation id and a count only, never content.
         await Send.OkAsync(new ResolveUserQuestionResponse
         {
             RequestId = req.RequestId,
             AnswerCount = answers.Length
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

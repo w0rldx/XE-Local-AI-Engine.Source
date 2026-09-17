@@ -32,7 +32,7 @@ public sealed class IntegrationTriggerStore(NodeChatDbContext dbContext, TimePro
         };
 
         _ = _dbContext.IntegrationTriggers.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return ToSnapshot(entity);
     }
 
@@ -40,7 +40,7 @@ public sealed class IntegrationTriggerStore(NodeChatDbContext dbContext, TimePro
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var entity = await _dbContext.IntegrationTriggers.SingleOrDefaultAsync(row => row.Id == command.TriggerId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.IntegrationTriggers.SingleOrDefaultAsync(row => row.Id == command.TriggerId, cancellationToken);
         if (entity is null || entity.Version != command.ExpectedVersion)
         {
             return false;
@@ -57,7 +57,7 @@ public sealed class IntegrationTriggerStore(NodeChatDbContext dbContext, TimePro
 
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -71,13 +71,13 @@ public sealed class IntegrationTriggerStore(NodeChatDbContext dbContext, TimePro
 
     public async Task<IntegrationTriggerSnapshot?> GetByIdAsync(Guid triggerId, CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.IntegrationTriggers.AsNoTracking().SingleOrDefaultAsync(row => row.Id == triggerId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.IntegrationTriggers.AsNoTracking().SingleOrDefaultAsync(row => row.Id == triggerId, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
     public async Task<IntegrationTriggerSnapshot?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.IntegrationTriggers.AsNoTracking().SingleOrDefaultAsync(row => row.Name == name, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.IntegrationTriggers.AsNoTracking().SingleOrDefaultAsync(row => row.Name == name, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
@@ -85,14 +85,13 @@ public sealed class IntegrationTriggerStore(NodeChatDbContext dbContext, TimePro
     {
         var entities = await _dbContext.IntegrationTriggers.AsNoTracking()
                                        .OrderBy(row => row.Name)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return [.. entities.Select(ToSnapshot)];
     }
 
     public async Task<bool> DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default)
     {
-        var deleted = await _dbContext.IntegrationTriggers.Where(row => row.Id == triggerId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        var deleted = await _dbContext.IntegrationTriggers.Where(row => row.Id == triggerId).ExecuteDeleteAsync(cancellationToken);
         return deleted > 0;
     }
 

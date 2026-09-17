@@ -87,7 +87,7 @@ public sealed class TranscriptionService : ITranscriptionService
         ArgumentNullException.ThrowIfNull(input);
 
         var modelId = string.IsNullOrWhiteSpace(input.ModelId)
-            ? await _runtimeService.ResolveEffectiveModelIdAsync(cancellationToken).ConfigureAwait(false)
+            ? await _runtimeService.ResolveEffectiveModelIdAsync(cancellationToken)
             : input.ModelId.Trim();
         var createdAt = _timeProvider.GetUtcNow();
         var sessionId = Guid.NewGuid();
@@ -102,9 +102,9 @@ public sealed class TranscriptionService : ITranscriptionService
             ModelId = modelId,
             ConfigJson = JsonSerializer.Serialize(Normalize(input.Config), ConfigJsonOptions),
             CreatedAtUtc = createdAt.ToUnixTimeMilliseconds()
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
 
-        return await store.GetWithSegmentsAsync(sessionId, cancellationToken).ConfigureAwait(false)
+        return await store.GetWithSegmentsAsync(sessionId, cancellationToken)
                ?? throw new InvalidOperationException("The transcription session vanished immediately after it was created.");
     }
 
@@ -112,14 +112,14 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                          .GetWithSegmentsAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                          .GetWithSegmentsAsync(sessionId, cancellationToken);
     }
 
     public async Task<TranscriptionSessionSummaryView?> GetSessionSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                          .GetSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                          .GetSummaryAsync(sessionId, cancellationToken);
     }
 
     public async Task<TranscriptionSessionPage> ListSessionsAsync(int limit, int offset, CancellationToken cancellationToken)
@@ -129,8 +129,8 @@ public sealed class TranscriptionService : ITranscriptionService
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>();
-        var items = await store.ListAsync(boundedLimit, boundedOffset, cancellationToken).ConfigureAwait(false);
-        var total = await store.CountAsync(cancellationToken).ConfigureAwait(false);
+        var items = await store.ListAsync(boundedLimit, boundedOffset, cancellationToken);
+        var total = await store.CountAsync(cancellationToken);
         return new TranscriptionSessionPage(items, total);
     }
 
@@ -141,11 +141,11 @@ public sealed class TranscriptionService : ITranscriptionService
         // That race is benign BY CONTRACT: every store write is keyed on the session id and returns false for a
         // session that no longer exists, and AppendSegmentsAsync checks existence itself because the node connection
         // leaves PRAGMA foreign_keys off. Tracking the run task to join on it would buy nothing this relies on.
-        _ = await CancelAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        _ = await CancelAsync(sessionId, cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                          .DeleteAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                          .DeleteAsync(sessionId, cancellationToken);
     }
 
     public async Task<bool> CancelAsync(Guid sessionId, CancellationToken cancellationToken)
@@ -158,7 +158,7 @@ public sealed class TranscriptionService : ITranscriptionService
         // still running against it. EndAsync is a no-op for an unknown session and hands back the in-flight end's
         // own task for one already ending, so awaiting it joins that teardown rather than racing it.
         var wasLive = _live.IsLive(sessionId);
-        await _live.EndAsync(sessionId, LiveEndReason.Cancelled, cancellationToken).ConfigureAwait(false);
+        await _live.EndAsync(sessionId, LiveEndReason.Cancelled, cancellationToken);
 
         if (!_inFlight.TryGetValue(sessionId, out var source))
         {
@@ -167,7 +167,7 @@ public sealed class TranscriptionService : ITranscriptionService
 
         try
         {
-            await source.CancelAsync().ConfigureAwait(false);
+            await source.CancelAsync();
         }
         catch (ObjectDisposedException)
         {
@@ -206,21 +206,21 @@ public sealed class TranscriptionService : ITranscriptionService
         try
         {
             // Read and validated UNDER the guard, so the status this run acts on cannot change beneath it.
-            var session = await GetSessionAsync(slot.SessionId, cancellationToken).ConfigureAwait(false);
+            var session = await GetSessionAsync(slot.SessionId, cancellationToken);
             if (session is null || IsTerminal(session.Status))
             {
                 return TranscribeFileResult.SessionNotFound();
             }
 
             // Sniffed before the runtime is touched: a container this node cannot handle is an answer, not a daemon error.
-            var container = await DetectContainerAsync(slot.SourcePath, cancellationToken).ConfigureAwait(false);
+            var container = await DetectContainerAsync(slot.SourcePath, cancellationToken);
             var refusal = RefuseIfUnsupported(container);
             if (refusal is not null)
             {
                 return refusal;
             }
 
-            return await RunAndTerminalizeAsync(slot, session, container, linked.Token).ConfigureAwait(false);
+            return await RunAndTerminalizeAsync(slot, session, container, linked.Token);
         }
         finally
         {
@@ -232,7 +232,7 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         // The summary, not the transcript: this method needs a status, a model, a config and a source kind, and
         // decrypting every segment of a long session to reach them is work nobody asked for.
-        var session = await GetSessionSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await GetSessionSummaryAsync(sessionId, cancellationToken);
         if (session is null)
         {
             return new StartLiveResult
@@ -247,7 +247,7 @@ public sealed class TranscriptionService : ITranscriptionService
 
         // The MAX sequence, never the segment count: a transcript with a gap in it would otherwise re-allocate a
         // sequence the unique (session_id, seq) index already holds.
-        var lastSeq = await GetLastSeqAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var lastSeq = await GetLastSeqAsync(sessionId, cancellationToken);
 
         if (IsTerminal(session.Status))
         {
@@ -288,14 +288,14 @@ public sealed class TranscriptionService : ITranscriptionService
         // Compare-and-set, not a blind write from the status read above. A start racing a graceful end would
         // otherwise overwrite the terminal status that end had just written and resurrect a finished session.
         var previousStatus = session.Status;
-        if (!await TryTransitionAsync(sessionId, previousStatus, TranscriptionSessionStatus.Transcribing, cancellationToken).ConfigureAwait(false))
+        if (!await TryTransitionAsync(sessionId, previousStatus, TranscriptionSessionStatus.Transcribing, cancellationToken))
         {
-            return await DescribeMovedRowAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            return await DescribeMovedRowAsync(sessionId, cancellationToken);
         }
 
         try
         {
-            await _live.StartLiveSessionAsync(sessionId, options, cancellationToken).ConfigureAwait(false);
+            await _live.StartLiveSessionAsync(sessionId, options, cancellationToken);
         }
         catch (LiveSessionAlreadyRegisteredException)
         {
@@ -315,7 +315,7 @@ public sealed class TranscriptionService : ITranscriptionService
             // A row reading Transcribing with no registry entry accepts no audio and never ends, which is worse than
             // a start the caller can see failed. Compare-and-set again: a false result means the row moved on while
             // this start was failing, and whoever moved it owns it now.
-            if (!await TryTransitionAsync(sessionId, TranscriptionSessionStatus.Transcribing, previousStatus, CancellationToken.None).ConfigureAwait(false))
+            if (!await TryTransitionAsync(sessionId, TranscriptionSessionStatus.Transcribing, previousStatus, CancellationToken.None))
             {
                 _logger.LogDebug("Rolling transcription session {SessionId} back to {Status} found the row already moved on.", sessionId, previousStatus);
             }
@@ -356,8 +356,7 @@ public sealed class TranscriptionService : ITranscriptionService
                                }
                            ],
                            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
     }
 
     public async Task CompleteLiveAsync(Guid sessionId,
@@ -376,17 +375,17 @@ public sealed class TranscriptionService : ITranscriptionService
         switch (finalStatus)
         {
             case TranscriptionSessionStatus.Completed:
-                _ = await store.CompleteAsync(sessionId, detectedLanguage, durationMs, updatedAtUtc, cancellationToken).ConfigureAwait(false);
+                _ = await store.CompleteAsync(sessionId, detectedLanguage, durationMs, updatedAtUtc, cancellationToken);
                 break;
 
             // The error pair is what makes a failure readable; a failed end with neither still records the status
             // rather than throwing on the store's own argument guards.
             case TranscriptionSessionStatus.Failed when !string.IsNullOrWhiteSpace(errorCode) && !string.IsNullOrWhiteSpace(errorMessage):
-                _ = await store.FailAsync(sessionId, errorCode, errorMessage, updatedAtUtc, cancellationToken).ConfigureAwait(false);
+                _ = await store.FailAsync(sessionId, errorCode, errorMessage, updatedAtUtc, cancellationToken);
                 break;
 
             default:
-                _ = await store.SetStatusAsync(sessionId, finalStatus, updatedAtUtc, cancellationToken).ConfigureAwait(false);
+                _ = await store.SetStatusAsync(sessionId, finalStatus, updatedAtUtc, cancellationToken);
                 break;
         }
     }
@@ -398,8 +397,7 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                          .ListSegmentsAfterAsync(sessionId, afterSeq, limit, cancellationToken)
-                          .ConfigureAwait(false);
+                          .ListSegmentsAfterAsync(sessionId, afterSeq, limit, cancellationToken);
     }
 
     /// <summary>
@@ -407,7 +405,7 @@ public sealed class TranscriptionService : ITranscriptionService
     /// </summary>
     private async Task<StartLiveResult> DescribeMovedRowAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var current = await GetSessionSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var current = await GetSessionSummaryAsync(sessionId, cancellationToken);
         if (current is null)
         {
             return new StartLiveResult
@@ -422,7 +420,7 @@ public sealed class TranscriptionService : ITranscriptionService
             // start cannot begin from, and the caller is told so rather than being handed a resurrected row.
             Outcome = _live.IsLive(sessionId) ? StartLiveOutcome.AlreadyLive : StartLiveOutcome.SessionAlreadyFinished,
             Status = current.Status,
-            LastSeq = await GetLastSeqAsync(sessionId, cancellationToken).ConfigureAwait(false)
+            LastSeq = await GetLastSeqAsync(sessionId, cancellationToken)
         };
     }
 
@@ -433,15 +431,14 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                          .TryTransitionStatusAsync(sessionId, expected, desired, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken)
-                          .ConfigureAwait(false);
+                          .TryTransitionStatusAsync(sessionId, expected, desired, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
     }
 
     private async Task<long> GetLastSeqAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                          .GetLastSeqAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                          .GetLastSeqAsync(sessionId, cancellationToken);
     }
 
     // Which lanes a source kind implies. A file has none, and that is a malformed request rather than a refused
@@ -474,22 +471,22 @@ public sealed class TranscriptionService : ITranscriptionService
         {
             // The status moves and the cancellation source is registered BEFORE the transcode, so a cancel arriving
             // during conversion reaches the converter's child process instead of being refused as "not running".
-            _ = await SetStatusAsync(slot.SessionId, TranscriptionSessionStatus.Transcribing, CancellationToken.None).ConfigureAwait(false);
-            return await RunAsync(slot, session, container, cancellationToken).ConfigureAwait(false);
+            _ = await SetStatusAsync(slot.SessionId, TranscriptionSessionStatus.Transcribing, CancellationToken.None);
+            return await RunAsync(slot, session, container, cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            _ = await SetStatusAsync(slot.SessionId, TranscriptionSessionStatus.Cancelled, CancellationToken.None).ConfigureAwait(false);
+            _ = await SetStatusAsync(slot.SessionId, TranscriptionSessionStatus.Cancelled, CancellationToken.None);
             return TranscribeFileResult.Cancelled();
         }
         catch (AudioTranscodeException exception)
         {
-            return await FailAsync(slot.SessionId, "transcode-failed", exception.Message).ConfigureAwait(false);
+            return await FailAsync(slot.SessionId, "transcode-failed", exception.Message);
         }
         catch (WhisperRuntimeException exception)
         {
             // The provider's message is already sanitized for display; it is the whole error text on purpose.
-            return await FailAsync(slot.SessionId, "runtime-failed", exception.Message).ConfigureAwait(false);
+            return await FailAsync(slot.SessionId, "runtime-failed", exception.Message);
         }
         catch (Exception exception)
         {
@@ -499,7 +496,7 @@ public sealed class TranscriptionService : ITranscriptionService
             // state nothing ever leaves, because the only writer has already unwound. The same reason
             // ImageJobCoordinator terminalizes an image job on a bare Exception.
             _logger.LogError(exception, "Transcription of session {SessionId} failed unexpectedly.", slot.SessionId);
-            return await FailAsync(slot.SessionId, "transcription-failed", "The transcription failed.").ConfigureAwait(false);
+            return await FailAsync(slot.SessionId, "transcription-failed", "The transcription failed.");
         }
     }
 
@@ -516,17 +513,17 @@ public sealed class TranscriptionService : ITranscriptionService
             // Named through the slot BEFORE the converter runs: a converter killed halfway still leaves a partial
             // file, and that file is audio.
             var destination = slot.AddOwnedPath(".wav");
-            audioPath = await _transcoder.ToWav16kMonoAsync(slot.SourcePath, destination, cancellationToken).ConfigureAwait(false);
+            audioPath = await _transcoder.ToWav16kMonoAsync(slot.SourcePath, destination, cancellationToken);
             contentType = "audio/wav";
         }
 
-        _ = await _supervisor.EnsureRunningAsync(session.ModelId, cancellationToken).ConfigureAwait(false);
+        _ = await _supervisor.EnsureRunningAsync(session.ModelId, cancellationToken);
 
         var config = DeserializeConfig(session.ConfigJson);
         var explicitLanguage = string.Equals(config.LanguageMode, "override", StringComparison.OrdinalIgnoreCase);
 
         var stream = new FileStream(audioPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
-        await using (stream.ConfigureAwait(false))
+        await using (stream)
         {
             var pending = new List<(TranscriptChannel Channel, WhisperTranscriptSegment Segment)>();
             string? detectedLanguage = null;
@@ -543,7 +540,7 @@ public sealed class TranscriptionService : ITranscriptionService
                     LanguageMode = explicitLanguage ? WhisperLanguageMode.Explicit : WhisperLanguageMode.Auto,
                     LanguageCode = explicitLanguage ? config.LanguageOverride : null,
                     Translate = config.Translate
-                }, cancellationToken).ConfigureAwait(false);
+                }, cancellationToken);
 
                 detectedLanguage ??= transcribed.DetectedLanguageCode;
                 durationSeconds = Math.Max(durationSeconds, transcribed.DurationSeconds);
@@ -572,18 +569,18 @@ public sealed class TranscriptionService : ITranscriptionService
                 var completedAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
                 if (segments.Count > 0)
                 {
-                    _ = await store.AppendSegmentsAsync(slot.SessionId, segments, completedAt, CancellationToken.None).ConfigureAwait(false);
+                    _ = await store.AppendSegmentsAsync(slot.SessionId, segments, completedAt, CancellationToken.None);
                 }
 
                 _ = await store.CompleteAsync(slot.SessionId,
                     detectedLanguage,
                     ToMilliseconds(durationSeconds),
                     completedAt,
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None);
             }
         }
 
-        var completed = await GetSessionAsync(slot.SessionId, CancellationToken.None).ConfigureAwait(false);
+        var completed = await GetSessionAsync(slot.SessionId, CancellationToken.None);
         return completed is null
             ? TranscribeFileResult.SessionNotFound()
             : TranscribeFileResult.Succeeded(completed);
@@ -632,9 +629,9 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         var header = new byte[AudioContainerSniffer.HeaderBytes];
         var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: AudioContainerSniffer.HeaderBytes, useAsync: true);
-        await using (stream.ConfigureAwait(false))
+        await using (stream)
         {
-            var read = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
+            var read = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken);
             return AudioContainerSniffer.Detect(header.AsSpan(0, read));
         }
     }
@@ -643,8 +640,7 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                       .FailAsync(sessionId, errorCode, message, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), CancellationToken.None)
-                       .ConfigureAwait(false);
+                       .FailAsync(sessionId, errorCode, message, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), CancellationToken.None);
         return TranscribeFileResult.RuntimeFailed(errorCode, message);
     }
 
@@ -652,8 +648,7 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                          .SetStatusAsync(sessionId, status, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken)
-                          .ConfigureAwait(false);
+                          .SetStatusAsync(sessionId, status, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
     }
 
     private static bool IsTerminal(TranscriptionSessionStatus status) =>

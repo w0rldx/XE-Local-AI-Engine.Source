@@ -24,7 +24,7 @@ public sealed class BenchmarkQueueSignal : IBenchmarkQueueSignal, IDisposable
 
     public async Task WaitAsync(TimeSpan pollInterval, CancellationToken cancellationToken)
     {
-        _ = await _signal.WaitAsync(pollInterval, cancellationToken).ConfigureAwait(false);
+        _ = await _signal.WaitAsync(pollInterval, cancellationToken);
     }
 
     public void Dispose() =>

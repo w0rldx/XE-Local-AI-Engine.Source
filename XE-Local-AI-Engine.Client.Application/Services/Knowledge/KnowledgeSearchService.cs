@@ -106,16 +106,16 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         // so query vectors are only ever compared against chunk vectors built by that identical model.
         var ftsArm = RunFtsArmAsync(request.Query, candidatePool, request.DocumentId, collectionId, cancellationToken);
         var embedArm = RunEmbedArmAsync(request.Query, cancellationToken);
-        await Task.WhenAll(ftsArm, embedArm).ConfigureAwait(false);
+        await Task.WhenAll(ftsArm, embedArm);
 
         // Carry each arm's SCORE into fusion, not just its rank. The two raw scales are incomparable and oriented
         // differently — FTS5 BM25 is more-NEGATIVE-for-stronger, cosine is higher-for-stronger — so orient both to
         // "higher = more relevant" here (negate BM25) and leave the per-arm normalization/blend to the fusion service.
         // Score-agnostic RRF (RankFusionStrategy.Rrf) ignores these scores, so this is a strict superset of the old path.
-        var ftsRanked = (await ftsArm.ConfigureAwait(false))
+        var ftsRanked = (await ftsArm)
                         .Select(hit => new RankFusionInput(hit.ChunkId, -hit.Bm25Score))
                         .ToList();
-        var (queryVector, resolvedModel, vectorIdentity) = await embedArm.ConfigureAwait(false);
+        var (queryVector, resolvedModel, vectorIdentity) = await embedArm;
 
         var vectorRanked = new List<RankFusionInput>();
         if (!queryVector.IsEmpty)
@@ -129,8 +129,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                                                    candidatePool,
                                                    request.DocumentId,
                                                    collectionId,
-                                                   cancellationToken)
-                                               .ConfigureAwait(false);
+                                                   cancellationToken);
             RecordStage("vector", vectorStart);
             vectorRanked = vectorHits.Select(hit => new RankFusionInput(hit.ChunkId, hit.Score)).ToList();
         }
@@ -142,13 +141,13 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         }
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         // Hydrate the fused candidate POOL once (bounded to candidatePool, in one batched query) in fused order, then drop
         // content duplicates BEFORE any top-`limit` cut so near-identical chunks stored under different ids do not crowd
         // out distinct results. The higher-RRF-ranked occurrence of a duplicate is kept (the pool is in fused order), so
         // the dedup is deterministic.
-        var pool = await HydratePoolAsync(connection, fused, candidatePool, collectionId, cancellationToken).ConfigureAwait(false);
+        var pool = await HydratePoolAsync(connection, fused, candidatePool, collectionId, cancellationToken);
         var deduped = DeduplicateByContent(pool);
 
         // Optional rerank stage: when a reranker model is configured, the deduped pool is rescored by a local cross-encoder
@@ -163,12 +162,12 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             Stopwatch.GetElapsedTime(searchStart),
             TimeSpan.FromMilliseconds(Math.Max(1, _options.RetrievalLatencyBudgetMilliseconds)));
         var selections = rerankDecision.ShouldRerank
-            ? await RerankWithinBudgetAsync(request.Query, deduped, limit, searchStart, cancellationToken).ConfigureAwait(false)
+            ? await RerankWithinBudgetAsync(request.Query, deduped, limit, searchStart, cancellationToken)
             : deduped.Take(limit).ToList();
 
         // Neighbor expansion (when requested) is resolved for the whole final top-k in one batched call rather than one
         // round trip per hit; the content ordering and fallback are identical to expanding each hit individually.
-        var contents = await ResolveContentsAsync(selections, request.ExpandNeighbors, cancellationToken).ConfigureAwait(false);
+        var contents = await ResolveContentsAsync(selections, request.ExpandNeighbors, cancellationToken);
 
         var hits = new List<KnowledgeSearchHit>(selections.Count);
         for (var index = 0; index < selections.Count; index++)
@@ -217,7 +216,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var start = Stopwatch.GetTimestamp();
         try
         {
-            return await _ftsSearch.SearchAsync(query, candidatePool, documentId, collectionId, cancellationToken).ConfigureAwait(false);
+            return await _ftsSearch.SearchAsync(query, candidatePool, documentId, collectionId, cancellationToken);
         }
         finally
         {
@@ -233,7 +232,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var start = Stopwatch.GetTimestamp();
         try
         {
-            return await TryEmbedQueryAsync(query, cancellationToken).ConfigureAwait(false);
+            return await TryEmbedQueryAsync(query, cancellationToken);
         }
         finally
         {
@@ -254,7 +253,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
         var expandStart = Stopwatch.GetTimestamp();
         var anchors = selections.Select(static selection => new KnowledgeNeighborAnchor(selection.Row.DocumentId, selection.Row.ChunkIndex)).ToList();
-        var expanded = await _contextExpansion.ExpandBatchAsync(anchors, NeighborWindow, cancellationToken).ConfigureAwait(false);
+        var expanded = await _contextExpansion.ExpandBatchAsync(anchors, NeighborWindow, cancellationToken);
         RecordStage("expand", expandStart);
 
         var contents = new List<string>(selections.Count);
@@ -289,8 +288,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var hydrated = await HydrateChunksAsync(connection,
                 pooled.Select(static entry => entry.ChunkId).ToList(),
                 collectionId,
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
 
         var pool = new List<ChunkSelection>(pooled.Count);
         foreach (var entry in pooled)
@@ -339,7 +337,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
         var documents = pool.Select(static candidate => candidate.Row.Content).ToList();
         var rerankStart = Stopwatch.GetTimestamp();
-        var scores = await _reranker.RerankAsync(_options.RerankerModelName, query, documents, cancellationToken).ConfigureAwait(false);
+        var scores = await _reranker.RerankAsync(_options.RerankerModelName, query, documents, cancellationToken);
         RecordStage("rerank", rerankStart);
         if (scores is null || scores.Count != pool.Count)
         {
@@ -380,12 +378,11 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // timeout is only a safety ceiling; this per-search remaining budget wins first. WaitAsync independently
             // bounds the caller even if a provider violates the cancellation contract.
             return await RerankAsync(query, pool, limit, budgetCts.Token)
-                         .WaitAsync(remaining, cancellationToken)
-                         .ConfigureAwait(false);
+                         .WaitAsync(remaining, cancellationToken);
         }
         catch (TimeoutException)
         {
-            await budgetCts.CancelAsync().ConfigureAwait(false);
+            await budgetCts.CancelAsync();
             return pool.Take(limit).ToList();
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && budgetCts.IsCancellationRequested)
@@ -409,7 +406,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // same resolved name as the scope key). A later same-dimension model swap changes this name and excludes the
             // now-incompatible old vectors instead of silently mis-comparing them. The confidence bit is irrelevant here —
             // search degrades to lexical-only on any embedding failure regardless of why the name is what it is.
-            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
             var embeddingModelName = resolution.Name;
             var cacheFamilyIdentity = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, _options.EmbeddingVectorMode);
             if (_queryEmbeddingCache.TryGet(cacheFamilyIdentity, query, out var cached)
@@ -428,7 +425,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             });
 
             // Prefix with the query intent so an asymmetric embedding model builds a query vector, not a passage vector.
-            var generated = await generator.GenerateAsync([_prefixer.ForQuery(query)], options: null, cancellationToken).ConfigureAwait(false);
+            var generated = await generator.GenerateAsync([_prefixer.ForQuery(query)], options: null, cancellationToken);
             if (generated.Count == 0)
             {
                 return new QueryEmbedding(ReadOnlyMemory<float>.Empty, embeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
@@ -501,11 +498,11 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                                    """;
             AddParameter(command, "$collection_id", collectionId);
 
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
             {
                 var chunkId = Guid.Parse(reader.GetString(0));
-                var headingPath = await reader.IsDBNullAsync(ordinal: 4, cancellationToken).ConfigureAwait(false)
+                var headingPath = await reader.IsDBNullAsync(ordinal: 4, cancellationToken)
                     ? null
                     : reader.GetString(4);
                 hydrated[chunkId] = new HydratedChunk(Guid.Parse(reader.GetString(1)),
@@ -516,11 +513,11 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                     ParseDocumentStatus(reader.GetString(6)),
                     reader.GetString(7),
                     reader.GetString(8),
-                    await reader.IsDBNullAsync(9, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(9),
+                    await reader.IsDBNullAsync(9, cancellationToken) ? null : reader.GetString(9),
                     reader.GetString(10),
-                    await reader.IsDBNullAsync(11, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(11),
-                    await reader.IsDBNullAsync(12, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(12),
-                    await reader.IsDBNullAsync(13, cancellationToken).ConfigureAwait(false) ? null : reader.GetInt32(13),
+                    await reader.IsDBNullAsync(11, cancellationToken) ? null : reader.GetString(11),
+                    await reader.IsDBNullAsync(12, cancellationToken) ? null : reader.GetString(12),
+                    await reader.IsDBNullAsync(13, cancellationToken) ? null : reader.GetInt32(13),
                     reader.GetInt32(14),
                     reader.GetInt32(15));
             }

@@ -32,16 +32,16 @@ public sealed class DeleteModelLaunchArgumentsEndpoint(
         if (validationError is not null)
         {
             AddError(validationError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        await _launchArguments.ClearAsync(decodedModelName!, ct).ConfigureAwait(false);
+        await _launchArguments.ClearAsync(decodedModelName!, ct);
         await Send.OkAsync(new ModelLaunchArgumentsResponse
             {
                 ModelName = decodedModelName!,
                 RawArguments = string.Empty
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

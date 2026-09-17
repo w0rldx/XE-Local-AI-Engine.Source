@@ -9,8 +9,7 @@ public sealed partial class BenchmarkStore
     public async Task<BenchmarkFidelityAttemptRecord?> GetFidelityAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default)
     {
         var attempt = await _dbContext.BenchmarkFidelityAttempts.AsNoTracking()
-                                      .SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken);
         return attempt is null ? null : ToRecord(attempt);
     }
 
@@ -19,8 +18,7 @@ public sealed partial class BenchmarkStore
         var attempts = await _dbContext.BenchmarkFidelityAttempts.AsNoTracking()
                                        .Where(entity => entity.RunId == runId)
                                        .OrderByDescending(entity => entity.Sequence)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return [.. attempts.Select(ToRecord)];
     }
 
@@ -30,8 +28,7 @@ public sealed partial class BenchmarkStore
                                       .Where(entity => (entity.Status == BenchmarkJudgeAttemptStatus.Queued || entity.Status == BenchmarkJudgeAttemptStatus.Running)
                                                        && entity.BaseLogitsDigest != null)
                                       .Select(entity => entity.BaseLogitsDigest!)
-                                      .ToListAsync(cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .ToListAsync(cancellationToken);
         return digests.ToHashSet(StringComparer.Ordinal);
     }
 
@@ -48,22 +45,21 @@ public sealed partial class BenchmarkStore
             throw new BenchmarkValidationException("Benchmark fidelity kind must be 'ppl' or 'kld'.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         if (await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
                                                                    && entity.Kind == BenchmarkWorkKind.Fidelity
                                                                    && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running),
-                                cancellationToken)
-                            .ConfigureAwait(false))
+                                cancellationToken))
         {
             throw new BenchmarkConflictException("FidelityAlreadyQueued");
         }
 
-        var attempt = await AppendFidelityWorkAsync(run, kind, Now(), cancellationToken).ConfigureAwait(false);
+        var attempt = await AppendFidelityWorkAsync(run, kind, Now(), cancellationToken);
         run.Version++;
         run.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return attempt.Id;
     }
 
@@ -76,7 +72,6 @@ public sealed partial class BenchmarkStore
         var lastSequence = await _dbContext.BenchmarkFidelityAttempts
                                            .Where(entity => entity.RunId == run.Id)
                                            .MaxAsync(entity => (int?)entity.Sequence, cancellationToken)
-                                           .ConfigureAwait(false)
                            ?? 0;
         var attempt = new BenchmarkFidelityAttempt
         {
@@ -129,14 +124,14 @@ public sealed partial class BenchmarkStore
         string reason,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Fidelity, expectedWorkVersion, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Fidelity, expectedWorkVersion, cancellationToken);
         _dbContext.ChangeTracker.Clear();
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
-        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Fidelity, cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Fidelity, cancellationToken);
         EnsureVersion(work.Version, expectedWorkVersion);
         var attempt = work.FidelityAttemptId is { } attemptId
-            ? await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false)
+            ? await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken)
             : null;
         if (attempt is null || IsAttemptTerminal(attempt.Status))
         {
@@ -164,8 +159,8 @@ public sealed partial class BenchmarkStore
         run.Version++;
         run.LastStreamSequence = checked(run.LastStreamSequence + 1);
         run.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(run);
     }
 
@@ -177,15 +172,15 @@ public sealed partial class BenchmarkStore
         BenchmarkFidelitySuccessCommand? success,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Fidelity, expectedWorkVersion, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Fidelity, expectedWorkVersion, cancellationToken);
         _dbContext.ChangeTracker.Clear();
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
-        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Fidelity, cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Fidelity, cancellationToken);
         EnsureVersion(work.Version, expectedWorkVersion);
         var now = Now();
         TerminalizeWork(work, workStatus, errorMessage, now);
-        var attempt = await TerminalizeFidelityAttemptAsync(work.FidelityAttemptId, attemptStatus, errorMessage, now, cancellationToken).ConfigureAwait(false);
+        var attempt = await TerminalizeFidelityAttemptAsync(work.FidelityAttemptId, attemptStatus, errorMessage, now, cancellationToken);
         if (attempt is null)
         {
             // Already terminal: repeating a terminalization must not write a second measurement.
@@ -210,7 +205,7 @@ public sealed partial class BenchmarkStore
 
         run.FidelityStatus = ToFidelityStatus(attemptStatus);
         run.FidelityErrorMessage = errorMessage;
-        if (attemptStatus == BenchmarkJudgeAttemptStatus.Succeeded && await IsLatestSucceededFidelityAsync(attempt, cancellationToken).ConfigureAwait(false))
+        if (attemptStatus == BenchmarkJudgeAttemptStatus.Succeeded && await IsLatestSucceededFidelityAsync(attempt, cancellationToken))
         {
             // The projection is a copy of the LATEST succeeded attempt. Guarding on the sequence rather than on
             // arrival order is what makes a re-measurement that lands out of order harmless instead of last-writer-wins.
@@ -230,8 +225,8 @@ public sealed partial class BenchmarkStore
         run.Version++;
         run.LastStreamSequence = checked(run.LastStreamSequence + 1);
         run.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(run);
     }
 
@@ -241,8 +236,7 @@ public sealed partial class BenchmarkStore
                                       .Where(entity => entity.RunId == attempt.RunId
                                                        && entity.Status == BenchmarkJudgeAttemptStatus.Succeeded
                                                        && entity.Id != attempt.Id)
-                                      .MaxAsync(entity => (int?)entity.Sequence, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .MaxAsync(entity => (int?)entity.Sequence, cancellationToken);
         return highest is null || attempt.Sequence > highest;
     }
 

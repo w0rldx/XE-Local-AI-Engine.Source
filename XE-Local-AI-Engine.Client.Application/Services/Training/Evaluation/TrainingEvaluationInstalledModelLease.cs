@@ -25,7 +25,7 @@ internal sealed class TrainingEvaluationInstalledModelLeaseProvider(
 
     public async Task<ITrainingEvaluationInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
     {
-        var lease = await _coordinator.AcquireReadSnapshotAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var lease = await _coordinator.AcquireReadSnapshotAsync(modelName, cancellationToken);
         try
         {
             var alias = lease.Snapshot.RegistryAliases.Single(item =>
@@ -33,7 +33,7 @@ internal sealed class TrainingEvaluationInstalledModelLeaseProvider(
             var weight = lease.Snapshot.Members.Single(item =>
                 item.Role == InstalledModelPhysicalMemberRole.Weight
                 && string.Equals(item.RelativePath, alias.WeightRelativePath, StringComparison.Ordinal));
-            var path = await _models.ResolveModelFilePathAsync(modelName, cancellationToken).ConfigureAwait(false)
+            var path = await _models.ResolveModelFilePathAsync(modelName, cancellationToken)
                        ?? throw new InvalidOperationException("InstalledModelPathUnavailable");
             return new EvaluationLease(lease,
                 path,
@@ -43,7 +43,7 @@ internal sealed class TrainingEvaluationInstalledModelLeaseProvider(
         }
         catch
         {
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
             throw;
         }
     }

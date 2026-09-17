@@ -22,7 +22,7 @@ public sealed class GgufDownloadExceptionHandler : IExceptionHandler
             return false;
         }
 
-        await GgufDownloadEndpointSupport.Error(exception).ExecuteAsync(httpContext).ConfigureAwait(false);
+        await GgufDownloadEndpointSupport.Error(exception).ExecuteAsync(httpContext);
         return true;
     }
 }

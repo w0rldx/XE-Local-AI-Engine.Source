@@ -27,7 +27,7 @@ public sealed class GetExternalAppInstanceEndpoint(IExternalAppService apps) : E
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var detail = await _apps.GetAsync(req.InstanceId, ct).ConfigureAwait(false);
-        await Send.OkAsync(ExternalAppMapper.ToView(detail), ct).ConfigureAwait(false);
+        var detail = await _apps.GetAsync(req.InstanceId, ct);
+        await Send.OkAsync(ExternalAppMapper.ToView(detail), ct);
     }
 }

@@ -33,29 +33,25 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
         var compatibleDatabase = Path.Combine(_rootPath, "compatible.sqlite");
         var conflictingDatabase = Path.Combine(_rootPath, "conflicting.sqlite");
         var missingDatabase = Path.Combine(_rootPath, "missing.sqlite");
-        await CreateCompatiblePreMigrationDatabaseAsync(compatibleDatabase).ConfigureAwait(false);
-        await CreateConflictingPreMigrationDatabaseAsync(conflictingDatabase).ConfigureAwait(false);
+        await CreateCompatiblePreMigrationDatabaseAsync(compatibleDatabase);
+        await CreateConflictingPreMigrationDatabaseAsync(conflictingDatabase);
 
-        var compatible = await RunCommandAsync(DesktopLaunch.KnowledgeDowngradePreflightArgument, compatibleDatabase, "compatible-node")
-            .ConfigureAwait(false);
+        var compatible = await RunCommandAsync(DesktopLaunch.KnowledgeDowngradePreflightArgument, compatibleDatabase, "compatible-node");
         AssertEx.Equal(0, compatible.ExitCode, compatible.Output);
-        await AssertPreMigrationSchemaUntouchedAsync(compatibleDatabase, expectedSentinel: "compatible").ConfigureAwait(false);
+        await AssertPreMigrationSchemaUntouchedAsync(compatibleDatabase, expectedSentinel: "compatible");
 
-        var conflicting = await RunCommandAsync(DesktopLaunch.KnowledgeDowngradePreflightArgument, conflictingDatabase, "conflicting-node")
-            .ConfigureAwait(false);
+        var conflicting = await RunCommandAsync(DesktopLaunch.KnowledgeDowngradePreflightArgument, conflictingDatabase, "conflicting-node");
         AssertEx.Equal(3, conflicting.ExitCode, conflicting.Output);
-        await AssertPreMigrationSchemaUntouchedAsync(conflictingDatabase, expectedSentinel: "conflicting").ConfigureAwait(false);
+        await AssertPreMigrationSchemaUntouchedAsync(conflictingDatabase, expectedSentinel: "conflicting");
 
-        var exported = await RunCommandAsync(DesktopLaunch.KnowledgeDowngradeExportArgument, conflictingDatabase, "export-node")
-            .ConfigureAwait(false);
+        var exported = await RunCommandAsync(DesktopLaunch.KnowledgeDowngradeExportArgument, conflictingDatabase, "export-node");
         AssertEx.Equal(3, exported.ExitCode, exported.Output);
-        await AssertPreMigrationSchemaUntouchedAsync(conflictingDatabase, expectedSentinel: "conflicting").ConfigureAwait(false);
+        await AssertPreMigrationSchemaUntouchedAsync(conflictingDatabase, expectedSentinel: "conflicting");
         AssertEx.Equal(1,
             Directory.EnumerateFiles(Path.Combine(_rootPath, "export-node", "backups", "knowledge-downgrade"), "*.sqlite").Count(),
             "The explicit export command must produce exactly one snapshot before reporting the compatibility block.");
 
-        var failed = await RunCommandAsync(DesktopLaunch.KnowledgeDowngradePreflightArgument, missingDatabase, "missing-node")
-            .ConfigureAwait(false);
+        var failed = await RunCommandAsync(DesktopLaunch.KnowledgeDowngradePreflightArgument, missingDatabase, "missing-node");
         AssertEx.Equal(1, failed.ExitCode, failed.Output);
         AssertEx.False(File.Exists(missingDatabase), "A failed read-only preflight must not create the missing database.");
     }
@@ -63,16 +59,16 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
     private static async Task CreateCompatiblePreMigrationDatabaseAsync(string databasePath)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "CREATE TABLE sentinel(value TEXT NOT NULL); INSERT INTO sentinel(value) VALUES ('compatible');";
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task CreateConflictingPreMigrationDatabaseAsync(string databasePath)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               CREATE TABLE sentinel(value TEXT NOT NULL);
@@ -86,18 +82,18 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
                                   ('11111111-1111-1111-1111-111111111111', 'duplicate', 'COLLECTION-A'),
                                   ('22222222-2222-2222-2222-222222222222', 'duplicate', 'COLLECTION-B');
                               """;
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task AssertPreMigrationSchemaUntouchedAsync(string databasePath, string expectedSentinel)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT value FROM sentinel;";
-        AssertEx.Equal(expectedSentinel, Convert.ToString(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture));
+        AssertEx.Equal(expectedSentinel, Convert.ToString(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture));
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('__EFMigrationsHistory', '__EFMigrationsHistory_Identity');";
-        AssertEx.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture),
+        AssertEx.Equal(0L, Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture),
             "Downgrade commands must exit before either startup migration context changes the database.");
     }
 
@@ -119,7 +115,7 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
         var standardError = process.StandardError.ReadToEndAsync(timeout.Token);
         try
         {
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeout.Token);
         }
         catch (OperationCanceledException)
         {
@@ -127,7 +123,7 @@ public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
             throw;
         }
 
-        var output = string.Concat(await standardOutput.ConfigureAwait(false), Environment.NewLine, await standardError.ConfigureAwait(false));
+        var output = string.Concat(await standardOutput, Environment.NewLine, await standardError);
         return new CommandResult(process.ExitCode, output);
     }
 

@@ -20,7 +20,7 @@ public sealed class McpServerApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
         AssertEx.True(generated.Key.StartsWith("xemcp_", StringComparison.Ordinal), "The key must carry the scheme marker so a leaked value is attributable.");
         AssertEx.True(generated.Key.Length > 40, "A 256-bit base64url secret must be substantially longer than its prefix.");
@@ -34,8 +34,8 @@ public sealed class McpServerApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        var first = await service.GenerateAsync().ConfigureAwait(false);
-        var second = await service.GenerateAsync().ConfigureAwait(false);
+        var first = await service.GenerateAsync();
+        var second = await service.GenerateAsync();
 
         AssertEx.True(first.Key != second.Key, "Each generation must mint fresh key material.");
     }
@@ -45,11 +45,11 @@ public sealed class McpServerApiKeyServiceTests
     {
         var service = CreateService(out var store);
 
-        var generated = await service.GenerateAsync(McpServerApiKeyScope.Agentic).ConfigureAwait(false);
+        var generated = await service.GenerateAsync(McpServerApiKeyScope.Agentic);
 
         AssertEx.Equal(McpServerApiKeyScope.Agentic, generated.View.Scope);
-        AssertEx.Equal(McpServerApiKeyScope.Agentic, AssertEx.NotNull(await service.ValidateAsync(generated.Key).ConfigureAwait(false)).Scope);
-        AssertEx.Equal((int)McpServerApiKeyScope.Agentic, AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false)).Scope);
+        AssertEx.Equal(McpServerApiKeyScope.Agentic, AssertEx.NotNull(await service.ValidateAsync(generated.Key)).Scope);
+        AssertEx.Equal((int)McpServerApiKeyScope.Agentic, AssertEx.NotNull(await store.GetAsync()).Scope);
     }
 
     [Test]
@@ -58,9 +58,9 @@ public sealed class McpServerApiKeyServiceTests
         var service = CreateService(out var store);
 
         _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GenerateAsync((McpServerApiKeyScope)42)).ConfigureAwait(false);
+            service.GenerateAsync((McpServerApiKeyScope)42));
 
-        AssertEx.Null(await store.GetAsync().ConfigureAwait(false));
+        AssertEx.Null(await store.GetAsync());
     }
 
     [Test]
@@ -70,8 +70,8 @@ public sealed class McpServerApiKeyServiceTests
         // retained can reproduce it. This is what makes a database backup, a sync folder or a forensic image inert.
         var service = CreateService(out var store);
 
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
-        var stored = AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false));
+        var generated = await service.GenerateAsync();
+        var stored = AssertEx.NotNull(await store.GetAsync());
 
         AssertEx.Equal(32, stored.KeyHash.Length);
         AssertEx.True(stored.KeyHash.Span.SequenceEqual(SHA256.HashData(Encoding.UTF8.GetBytes(generated.Key))),
@@ -85,7 +85,7 @@ public sealed class McpServerApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.Null(await service.GetAsync().ConfigureAwait(false));
+        AssertEx.Null(await service.GetAsync());
     }
 
     [Test]
@@ -96,12 +96,12 @@ public sealed class McpServerApiKeyServiceTests
         // `McpServerApiKeyView` having no key member is the primary enforcement — this pins the behaviour that
         // nothing retrievable can stand in for the key either.
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
-        var fetched = AssertEx.NotNull(await service.GetAsync().ConfigureAwait(false));
+        var fetched = AssertEx.NotNull(await service.GetAsync());
 
         AssertEx.Equal(generated.View.Prefix, fetched.Prefix);
-        AssertEx.Null(await service.ValidateAsync(fetched.Prefix).ConfigureAwait(false),
+        AssertEx.Null(await service.ValidateAsync(fetched.Prefix),
             "Everything still retrievable after generation must be useless as a credential.");
     }
 
@@ -110,7 +110,7 @@ public sealed class McpServerApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.Null(await service.ValidateAsync("xemcp_anything").ConfigureAwait(false),
+        AssertEx.Null(await service.ValidateAsync("xemcp_anything"),
             "A node with no generated key must authenticate nobody — an absent credential is not an open door.");
     }
 
@@ -118,9 +118,9 @@ public sealed class McpServerApiKeyServiceTests
     public async Task ValidateAsync_WithTheCorrectKey_Succeeds()
     {
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
-        var validation = AssertEx.NotNull(await service.ValidateAsync(generated.Key).ConfigureAwait(false));
+        var validation = AssertEx.NotNull(await service.ValidateAsync(generated.Key));
         AssertEx.Equal(McpServerApiKeyScope.Delegate, validation.Scope);
         AssertEx.Equal(generated.View.Prefix, validation.Prefix);
     }
@@ -129,19 +129,19 @@ public sealed class McpServerApiKeyServiceTests
     public async Task ValidateAsync_WithAWrongKey_Fails()
     {
         var service = CreateService(out _);
-        _ = await service.GenerateAsync().ConfigureAwait(false);
+        _ = await service.GenerateAsync();
 
-        AssertEx.Null(await service.ValidateAsync("xemcp_not-the-right-key").ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync("xemcp_not-the-right-key"));
     }
 
     [Test]
     public async Task ValidateAsync_WithNullOrEmpty_Fails()
     {
         var service = CreateService(out _);
-        _ = await service.GenerateAsync().ConfigureAwait(false);
+        _ = await service.GenerateAsync();
 
-        AssertEx.Null(await service.ValidateAsync(presented: null).ConfigureAwait(false));
-        AssertEx.Null(await service.ValidateAsync(string.Empty).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(presented: null));
+        AssertEx.Null(await service.ValidateAsync(string.Empty));
     }
 
     [Test]
@@ -150,22 +150,22 @@ public sealed class McpServerApiKeyServiceTests
         // Guards the comparison against accepting a truncated candidate, which is the failure mode a naive
         // StartsWith/prefix comparison would introduce.
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
-        AssertEx.Null(await service.ValidateAsync(generated.Key[..^1]).ConfigureAwait(false));
-        AssertEx.Null(await service.ValidateAsync(generated.View.Prefix).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(generated.Key[..^1]));
+        AssertEx.Null(await service.ValidateAsync(generated.View.Prefix));
     }
 
     [Test]
     public async Task GenerateAsync_ReplacesThePreviousKey_SoTheOldOneStopsAuthenticating()
     {
         var service = CreateService(out _);
-        var original = await service.GenerateAsync().ConfigureAwait(false);
+        var original = await service.GenerateAsync();
 
-        var replacement = await service.GenerateAsync().ConfigureAwait(false);
+        var replacement = await service.GenerateAsync();
 
-        AssertEx.NotNull(await service.ValidateAsync(replacement.Key).ConfigureAwait(false));
-        AssertEx.Null(await service.ValidateAsync(original.Key).ConfigureAwait(false),
+        AssertEx.NotNull(await service.ValidateAsync(replacement.Key));
+        AssertEx.Null(await service.ValidateAsync(original.Key),
             "Regenerating must immediately invalidate the replaced key — there is no window in which both work.");
     }
 
@@ -173,26 +173,26 @@ public sealed class McpServerApiKeyServiceTests
     public async Task GenerateAsync_RotatesSecretAndScopeAsOneSingletonReplacement()
     {
         var service = CreateService(out _);
-        var original = await service.GenerateAsync(McpServerApiKeyScope.Agentic).ConfigureAwait(false);
+        var original = await service.GenerateAsync(McpServerApiKeyScope.Agentic);
 
-        var replacement = await service.GenerateAsync(McpServerApiKeyScope.Delegate).ConfigureAwait(false);
+        var replacement = await service.GenerateAsync(McpServerApiKeyScope.Delegate);
 
-        AssertEx.Null(await service.ValidateAsync(original.Key).ConfigureAwait(false),
+        AssertEx.Null(await service.ValidateAsync(original.Key),
             "Changing scope must invalidate the prior secret with no dual-valid window.");
         AssertEx.Equal(McpServerApiKeyScope.Delegate,
-            AssertEx.NotNull(await service.ValidateAsync(replacement.Key).ConfigureAwait(false)).Scope);
+            AssertEx.NotNull(await service.ValidateAsync(replacement.Key)).Scope);
     }
 
     [Test]
     public async Task RevokeAsync_RemovesTheKeyAndClosesTheEndpoint()
     {
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
 
-        AssertEx.True(await service.RevokeAsync().ConfigureAwait(false));
+        AssertEx.True(await service.RevokeAsync());
 
-        AssertEx.Null(await service.GetAsync().ConfigureAwait(false));
-        AssertEx.Null(await service.ValidateAsync(generated.Key).ConfigureAwait(false), "A revoked key must no longer authenticate.");
+        AssertEx.Null(await service.GetAsync());
+        AssertEx.Null(await service.ValidateAsync(generated.Key), "A revoked key must no longer authenticate.");
     }
 
     [Test]
@@ -200,19 +200,19 @@ public sealed class McpServerApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.False(await service.RevokeAsync().ConfigureAwait(false));
+        AssertEx.False(await service.RevokeAsync());
     }
 
     [Test]
     public async Task ValidateAsync_OnSuccess_StampsLastUsed()
     {
         var service = CreateService(out var store);
-        var generated = await service.GenerateAsync().ConfigureAwait(false);
+        var generated = await service.GenerateAsync();
         AssertEx.Null(generated.View.LastUsedAt);
 
-        _ = await service.ValidateAsync(generated.Key).ConfigureAwait(false);
+        _ = await service.ValidateAsync(generated.Key);
 
-        AssertEx.True(AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false)).LastUsedAtUtc.HasValue,
+        AssertEx.True(AssertEx.NotNull(await store.GetAsync()).LastUsedAtUtc.HasValue,
             "A successful authentication must stamp last-used.");
     }
 
@@ -220,11 +220,11 @@ public sealed class McpServerApiKeyServiceTests
     public async Task ValidateAsync_OnFailure_DoesNotStampLastUsed()
     {
         var service = CreateService(out var store);
-        _ = await service.GenerateAsync().ConfigureAwait(false);
+        _ = await service.GenerateAsync();
 
-        _ = await service.ValidateAsync("xemcp_wrong").ConfigureAwait(false);
+        _ = await service.ValidateAsync("xemcp_wrong");
 
-        AssertEx.False(AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false)).LastUsedAtUtc.HasValue,
+        AssertEx.False(AssertEx.NotNull(await store.GetAsync()).LastUsedAtUtc.HasValue,
             "A rejected credential must not stamp last-used.");
     }
 
@@ -232,13 +232,13 @@ public sealed class McpServerApiKeyServiceTests
     public async Task ValidateAsync_WhenRotationWinsBetweenReadAndTouch_RejectsOldKeyWithoutStampingReplacement()
     {
         var service = CreateService(out var store);
-        var original = await service.GenerateAsync(McpServerApiKeyScope.Agentic).ConfigureAwait(false);
+        var original = await service.GenerateAsync(McpServerApiKeyScope.Agentic);
         store.RotateImmediatelyBeforeNextTouch();
 
-        var validation = await service.ValidateAsync(original.Key).ConfigureAwait(false);
+        var validation = await service.ValidateAsync(original.Key);
 
         AssertEx.Null(validation, "A key rotated after validation's read must not authenticate from its stale snapshot.");
-        var replacement = AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false));
+        var replacement = AssertEx.NotNull(await store.GetAsync());
         AssertEx.Equal((int)McpServerApiKeyScope.Delegate, replacement.Scope);
         AssertEx.Null(replacement.LastUsedAtUtc, "The stale authentication attempt must not stamp the replacement key.");
     }

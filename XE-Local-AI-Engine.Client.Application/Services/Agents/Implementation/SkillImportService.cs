@@ -68,15 +68,15 @@ internal sealed partial class SkillImportService : ISkillImportService
 
     public async Task<SkillImportPreview> PreviewArchiveAsync(ReadOnlyMemory<byte> archive, CancellationToken cancellationToken = default)
     {
-        var folders = await SkillArchiveReader.ReadAsync(archive, _options, cancellationToken).ConfigureAwait(false);
-        return await BuildPreviewAsync(folders, UploadSourceUri, cancellationToken).ConfigureAwait(false);
+        var folders = await SkillArchiveReader.ReadAsync(archive, _options, cancellationToken);
+        return await BuildPreviewAsync(folders, UploadSourceUri, cancellationToken);
     }
 
     public async Task<SkillImportPreview> PreviewArchiveAsync(Stream archive, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(archive);
 
-        return await PreviewArchiveAsync(await ReadCappedAsync(archive, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        return await PreviewArchiveAsync(await ReadCappedAsync(archive, cancellationToken), cancellationToken);
     }
 
     public Task<SkillImportPreview> PreviewMarkdownAsync(string skillMarkdown, CancellationToken cancellationToken = default)
@@ -90,9 +90,9 @@ internal sealed partial class SkillImportService : ISkillImportService
 
     public async Task<SkillImportPreview> PreviewGitHubRepositoryAsync(string owner, string repository, CancellationToken cancellationToken = default)
     {
-        var archive = await _downloader.DownloadAsync(owner, repository, cancellationToken).ConfigureAwait(false);
-        var folders = await SkillArchiveReader.ReadAsync(archive, _options, cancellationToken).ConfigureAwait(false);
-        return await BuildPreviewAsync(folders, $"github:{owner}/{repository}", cancellationToken).ConfigureAwait(false);
+        var archive = await _downloader.DownloadAsync(owner, repository, cancellationToken);
+        var folders = await SkillArchiveReader.ReadAsync(archive, _options, cancellationToken);
+        return await BuildPreviewAsync(folders, $"github:{owner}/{repository}", cancellationToken);
     }
 
     public async Task<SkillImportResult> CommitAsync(SkillImportCommitRequest request, CancellationToken cancellationToken = default)
@@ -114,7 +114,7 @@ internal sealed partial class SkillImportService : ISkillImportService
         var outcomes = new List<SkillImportOutcome>(selected.Count);
         foreach (var candidate in selected)
         {
-            outcomes.Add(await PersistAsync(candidate, preview.SourceUri, request.ConflictResolution, cancellationToken).ConfigureAwait(false));
+            outcomes.Add(await PersistAsync(candidate, preview.SourceUri, request.ConflictResolution, cancellationToken));
         }
 
         // Single-use: consumed only once the writes succeeded, so a failed commit can be retried against the same
@@ -152,7 +152,7 @@ internal sealed partial class SkillImportService : ISkillImportService
         CancellationToken cancellationToken)
     {
         // Re-read at commit time: a skill with this name may have appeared since the preview was taken.
-        var existing = (await _store.ListAsync(cancellationToken).ConfigureAwait(false))
+        var existing = (await _store.ListAsync(cancellationToken))
             .FirstOrDefault(skill => string.Equals(skill.Name, candidate.Name, StringComparison.OrdinalIgnoreCase));
 
         if (existing is not null && resolution == SkillImportConflictResolution.Skip)
@@ -176,8 +176,8 @@ internal sealed partial class SkillImportService : ISkillImportService
             ContentSha256(candidate));
 
         var stored = existing is null
-            ? await _store.CreateAsync(input, cancellationToken).ConfigureAwait(false)
-            : await _store.UpdateAsync(existing.Id, input, cancellationToken).ConfigureAwait(false);
+            ? await _store.CreateAsync(input, cancellationToken)
+            : await _store.UpdateAsync(existing.Id, input, cancellationToken);
 
         if (stored is null)
         {
@@ -187,14 +187,14 @@ internal sealed partial class SkillImportService : ISkillImportService
         var resources = candidate.Resources
                                  .Select(static resource => new AgentSkillResourceInput(resource.Name, resource.Description, resource.MediaType, resource.Content))
                                  .ToList();
-        await _store.ReplaceResourcesAsync(stored.Id, resources, cancellationToken).ConfigureAwait(false);
+        await _store.ReplaceResourcesAsync(stored.Id, resources, cancellationToken);
 
         return new SkillImportOutcome(candidate.Name, existing is null ? SkillImportStatus.Imported : SkillImportStatus.Replaced);
     }
 
     private async Task<SkillImportPreview> BuildPreviewAsync(IReadOnlyList<SkillArchiveFolder> folders, string sourceUri, CancellationToken cancellationToken)
     {
-        var existingNames = (await _store.ListAsync(cancellationToken).ConfigureAwait(false))
+        var existingNames = (await _store.ListAsync(cancellationToken))
                             .Select(static skill => skill.Name)
                             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -415,13 +415,13 @@ internal sealed partial class SkillImportService : ISkillImportService
 
         while (buffer.Length <= _options.MaxArchiveBytes)
         {
-            var read = await archive.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
+            var read = await archive.ReadAsync(chunk, cancellationToken);
             if (read == 0)
             {
                 return buffer.ToArray();
             }
 
-            await buffer.WriteAsync(chunk.AsMemory(start: 0, read), cancellationToken).ConfigureAwait(false);
+            await buffer.WriteAsync(chunk.AsMemory(start: 0, read), cancellationToken);
         }
 
         throw new SkillImportException($"The archive exceeds the maximum import size of {_options.MaxArchiveBytes / (1024 * 1024)} MB.");

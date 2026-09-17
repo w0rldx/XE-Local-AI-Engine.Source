@@ -83,7 +83,7 @@ internal sealed class CapturingHttpMessageHandler : HttpMessageHandler
     {
         var body = request.Content is null
             ? string.Empty
-            : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            : await request.Content.ReadAsStringAsync(cancellationToken);
 
         Requests.Add(new CapturedRequest(request.Method, request.RequestUri, body));
 

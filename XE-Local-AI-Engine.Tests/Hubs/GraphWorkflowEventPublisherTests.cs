@@ -23,7 +23,7 @@ public sealed class GraphWorkflowEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new GraphWorkflowEventPublisher(hubContext);
 
-        await publisher.PublishAsync(runId, sequence: 42, kind).ConfigureAwait(false);
+        await publisher.PublishAsync(runId, sequence: 42, kind);
 
         // Asserted against the literal, not against kind.ToString(): the client switches on these strings, so a
         // capitalised name would match no arm and silently stop updating the view — and nothing else would catch it.
@@ -47,8 +47,7 @@ public sealed class GraphWorkflowEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new GraphWorkflowEventPublisher(hubContext);
 
-        _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() => publisher.PublishAsync(Guid.NewGuid(), sequence: 1, (GraphWorkflowChangeKind)99))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() => publisher.PublishAsync(Guid.NewGuid(), sequence: 1, (GraphWorkflowChangeKind)99));
     }
 
     [Test]
@@ -61,7 +60,7 @@ public sealed class GraphWorkflowEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new GraphWorkflowEventPublisher(hubContext);
 
-        await publisher.PublishAsync(runId, sequence: 1, GraphWorkflowChangeKind.Run).ConfigureAwait(false);
+        await publisher.PublishAsync(runId, sequence: 1, GraphWorkflowChangeKind.Run);
 
         _ = clients.Received(1).Group($"graph-workflow-run-{runId:N}");
         AssertEx.Equal(expected: 1, clients.ReceivedCalls().Count());

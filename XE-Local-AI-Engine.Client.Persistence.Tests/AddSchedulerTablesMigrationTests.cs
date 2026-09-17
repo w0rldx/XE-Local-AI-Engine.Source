@@ -53,20 +53,20 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-app-tables-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "scheduled_job_definitions").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "scheduled_job_definitions"),
             "Migration should create the scheduled_job_definitions table.");
-        AssertEx.True(await TableExistsAsync(connection, "scheduled_job_runs").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "scheduled_job_runs"),
             "Migration should create the scheduled_job_runs table.");
-        AssertEx.True(await TableExistsAsync(connection, "scheduled_job_run_events").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "scheduled_job_run_events"),
             "Migration should create the scheduled_job_run_events table.");
     }
 
@@ -75,18 +75,18 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-qrtz-tables-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
         foreach (var tableName in ExpectedQrtzTables)
         {
-            AssertEx.True(await TableExistsAsync(connection, tableName).ConfigureAwait(false),
+            AssertEx.True(await TableExistsAsync(connection, tableName),
                 $"Migration should create the {tableName} table.");
         }
     }
@@ -96,18 +96,18 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-triggers-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
         foreach (var triggerName in ExpectedDeleteTriggers)
         {
-            AssertEx.True(await TriggerExistsAsync(connection, triggerName).ConfigureAwait(false),
+            AssertEx.True(await TriggerExistsAsync(connection, triggerName),
                 $"Migration should create the {triggerName} trigger.");
         }
     }
@@ -117,16 +117,16 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-def-columns-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetTableColumnsAsync(connection, "scheduled_job_definitions").ConfigureAwait(false);
+        var columns = await GetTableColumnsAsync(connection, "scheduled_job_definitions");
 
         AssertEx.True(columns.SetEquals(new[]
         {
@@ -159,16 +159,16 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-runs-columns-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetTableColumnsAsync(connection, "scheduled_job_runs").ConfigureAwait(false);
+        var columns = await GetTableColumnsAsync(connection, "scheduled_job_runs");
 
         AssertEx.True(columns.SetEquals(new[]
         {
@@ -196,25 +196,25 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreSchedulerMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreSchedulerMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False(await TableExistsAsync(connection, "scheduled_job_definitions").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "scheduled_job_definitions"),
             "Rollback should drop scheduled_job_definitions.");
-        AssertEx.False(await TableExistsAsync(connection, "scheduled_job_runs").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "scheduled_job_runs"),
             "Rollback should drop scheduled_job_runs.");
-        AssertEx.False(await TableExistsAsync(connection, "scheduled_job_run_events").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "scheduled_job_run_events"),
             "Rollback should drop scheduled_job_run_events.");
 
         foreach (var tableName in ExpectedQrtzTables)
         {
-            AssertEx.False(await TableExistsAsync(connection, tableName).ConfigureAwait(false),
+            AssertEx.False(await TableExistsAsync(connection, tableName),
                 $"Rollback should drop {tableName}.");
         }
     }
@@ -227,7 +227,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -236,7 +236,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<bool> TriggerExistsAsync(SqliteConnection connection, string triggerName)
@@ -244,7 +244,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = $name;";
         command.Parameters.AddWithValue("$name", triggerName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlySet<string>> GetTableColumnsAsync(SqliteConnection connection, string tableName)
@@ -254,7 +254,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
 #pragma warning disable CA2100
         command.CommandText = $"SELECT * FROM {tableName} LIMIT 0;";
 #pragma warning restore CA2100
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);

@@ -69,24 +69,22 @@ public sealed class ContainerBridgeAddressWatcherTests
         };
         using var watcher = CreateWatcher(time, () => addresses.ToArray());
 
-        await watcher.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await watcher.StartAsync(CancellationToken.None);
         AssertEx.True(watcher.IsSameHost(IPAddress.Parse("192.168.1.10")), "The first read happens at start, before the listener can take a connection.");
 
         addresses[0] = IPAddress.Parse("172.18.0.1");
         AssertEx.False(watcher.IsSameHost(IPAddress.Parse("172.18.0.1")), "Nothing may be observed before the interval elapses.");
 
         // Advancing before the timer is armed moves the clock past a window nothing was waiting on.
-        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "The watcher never armed its refresh timer.")
-                      .ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => time.ArmedTimerCount > 0, TestBudgets.Contended, "The watcher never armed its refresh timer.");
 
         time.Advance(ContainerBridgeAddressWatcher.RefreshInterval);
 
         await AssertEx.EventuallyAsync(() => watcher.IsSameHost(IPAddress.Parse("172.18.0.1")),
                           TestBudgets.Contended,
-                          "One interval elapsed and the watcher never re-read the host's addresses.")
-                      .ConfigureAwait(false);
+                          "One interval elapsed and the watcher never re-read the host's addresses.");
 
-        await watcher.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await watcher.StopAsync(CancellationToken.None);
     }
 
     /// <summary>
@@ -105,12 +103,12 @@ public sealed class ContainerBridgeAddressWatcherTests
             NullLogger<ContainerBridgeAddressWatcher>.Instance,
             static () => [IPAddress.Parse("192.168.1.10")]);
 
-        await watcher.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await AssertEx.SettleAsync().ConfigureAwait(false);
+        await watcher.StartAsync(CancellationToken.None);
+        await AssertEx.SettleAsync();
 
         AssertEx.Equal(0, time.ArmedTimerCount, "A disabled bridge must not run a refresh loop.");
 
-        await watcher.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await watcher.StopAsync(CancellationToken.None);
     }
 
     private static ContainerBridgeAddressWatcher CreateWatcher(TimeProvider timeProvider, Func<IReadOnlyList<IPAddress>> addressSource)

@@ -12,11 +12,11 @@ public sealed class AddSlashCommandsMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesSlashCommandsWithUniqueNameIndex()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("slash-commands.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("slash-commands.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("slash_commands").ConfigureAwait(false), "slash_commands must exist.");
+        AssertEx.True(await probe.TableExistsAsync("slash_commands"), "slash_commands must exist.");
 
-        var columns = await probe.ColumnsAsync("slash_commands").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("slash_commands");
         AssertEx.True(columns.IsSupersetOf(new[]
         {
             "id",
@@ -28,7 +28,7 @@ public sealed class AddSlashCommandsMigrationTests
             "updated_at_utc"
         }), "slash_commands must expose the mapped columns.");
 
-        AssertEx.True(await probe.IndexExistsAsync("slash_commands", "IX_slash_commands_name", unique: true, "name").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("slash_commands", "IX_slash_commands_name", unique: true, "name"),
             "slash_commands.name must be uniquely indexed.");
     }
 }

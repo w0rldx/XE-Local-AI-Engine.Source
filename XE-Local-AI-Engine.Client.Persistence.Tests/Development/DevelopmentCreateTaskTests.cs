@@ -24,11 +24,11 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
     [Test]
     public async Task ASecondTask_LivesBesideTheFirstUnderTheSameProject()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
 
         var created = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
                                      Guid.NewGuid(),
@@ -36,15 +36,14 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
                                      "Implement the second slice",
                                      "Do the other half.",
                                      "[\"the other half is done\"]",
-                                     MaxReviewRounds: 5))
-                                 .ConfigureAwait(false);
+                                     MaxReviewRounds: 5));
 
-        var tasks = await store.ListTasksAsync(seed.ProjectId).ConfigureAwait(false);
+        var tasks = await store.ListTasksAsync(seed.ProjectId);
         AssertEx.Equal(expected: 2, tasks.Count, "A project carries as many tasks as its work was decomposed into.");
         AssertEx.True(tasks.All(task => task.ProjectId == seed.ProjectId), "Both tasks belong to the same project, which is what makes the trust decision carry.");
         AssertEx.Equal(seed.TaskId, tasks[0].Id, "The project's own task is still first: the list is ordered by creation.");
 
-        var second = await store.GetTaskAsync(created.TaskId ?? throw new AssertionException("The create answered without naming the task it created.")).ConfigureAwait(false);
+        var second = await store.GetTaskAsync(created.TaskId ?? throw new AssertionException("The create answered without naming the task it created."));
         AssertEx.Equal(DevelopmentTaskStatus.Planned, second.Status, "A task added later starts where a task created with its project starts.");
         AssertEx.Equal("Implement the second slice", second.Title);
         AssertEx.Equal("Do the other half.", second.Requirements);
@@ -52,7 +51,7 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
         AssertEx.Equal(expected: 5, second.MaxReviewRounds, "The review budget is the caller's to set, exactly as it is at project creation.");
         AssertEx.Equal(expected: 1, second.Version);
 
-        var events = await store.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);
+        var events = await store.ListEventsAsync(seed.ProjectId);
         AssertEx.True(events.Any(entry => entry.EventType == "TaskCreated" && entry.TaskId == created.TaskId),
             "The ledger records the task appearing, or the project's history has work in it that nothing accounts for.");
     }
@@ -65,11 +64,11 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
     [Test]
     public async Task ReplayingTheOperation_AnswersWithTheTaskItAlreadyCreated()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
         var operationId = Guid.NewGuid();
 
         var first = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
@@ -77,8 +76,7 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
                                    operationId,
                                    "Implement the second slice",
                                    "Do the other half.",
-                                   "[\"the other half is done\"]"))
-                               .ConfigureAwait(false);
+                                   "[\"the other half is done\"]"));
 
         // A different task id, deliberately: the replay must answer with the task that exists, not create the one the
         // retry was about to ask for.
@@ -87,12 +85,11 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
                                     operationId,
                                     "Implement the second slice",
                                     "Do the other half.",
-                                    "[\"the other half is done\"]"))
-                                .ConfigureAwait(false);
+                                    "[\"the other half is done\"]"));
 
         AssertEx.Equal(first.TaskId, replay.TaskId, "The same operation identity names the same task.");
         AssertEx.Equal(expected: 2,
-            (await store.ListTasksAsync(seed.ProjectId).ConfigureAwait(false)).Count,
+            (await store.ListTasksAsync(seed.ProjectId)).Count,
             "And it wrote no second row: an orphaned task is work nobody is driving.");
     }
 
@@ -111,10 +108,10 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
     [Test]
     public async Task FourChildrenCreatingTheirTasksAtOnce_AllGetOne()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var seedScope = provider.CreateAsyncScope();
         var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await seedScope.ServiceProvider.GetRequiredService<IDevelopmentStore>().CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await seedScope.ServiceProvider.GetRequiredService<IDevelopmentStore>().CreateProjectAsync(seed);
 
         // A scope each, because a DbContext is not shared; a barrier, so they really are inside the write at the same
         // moment rather than merely started together; and Task.Run, because an async lambda runs SYNCHRONOUSLY up to
@@ -132,14 +129,12 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
                                                                              Guid.NewGuid(),
                                                                              $"Slice {index}",
                                                                              $"Implement slice {index}.",
-                                                                             "[\"the slice is done\"]"))
-                                                                         .ConfigureAwait(false);
-                                                   })))
-                                .ConfigureAwait(false);
+                                                                             "[\"the slice is done\"]"));
+                                                   })));
 
         await using var readScope = provider.CreateAsyncScope();
         var reader = readScope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        AssertEx.Equal(expected: 5, (await reader.ListTasksAsync(seed.ProjectId).ConfigureAwait(false)).Count, "the project's own task, plus one per child.");
+        AssertEx.Equal(expected: 5, (await reader.ListTasksAsync(seed.ProjectId)).Count, "the project's own task, plus one per child.");
         AssertEx.Equal(expected: 4,
             created.Select(static result => result.Sequence).Distinct().Count(),
             "each landed on a sequence of its own: the ledger is what the project's history is read from.");
@@ -152,7 +147,7 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
     [Test]
     public async Task ATaskForAProjectThatDoesNotExist_IsRefusedRatherThanOrphaned()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var missingProjectId = Guid.NewGuid();
@@ -162,9 +157,8 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
                               Guid.NewGuid(),
                               "Implement the second slice",
                               "Do the other half.",
-                              "[\"the other half is done\"]")))
-                          .ConfigureAwait(false);
+                              "[\"the other half is done\"]")));
 
-        AssertEx.Empty(await store.ListTasksAsync(missingProjectId).ConfigureAwait(false));
+        AssertEx.Empty(await store.ListTasksAsync(missingProjectId));
     }
 }

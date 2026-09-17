@@ -28,62 +28,62 @@ public sealed class AddBenchmarkLaunchIdentitySchemeMigrationTests
     [Test]
     public async Task Migrate_FromThePrecedingMigration_AddsTheThreeSchemeColumnsAsNullable()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-up.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-up.sqlite", PreviousMigrationId);
 
         foreach (var (table, column) in SchemeColumns)
         {
-            AssertEx.False((await probe.ColumnsAsync(table).ConfigureAwait(false)).Contains(column), $"{table}.{column} must not exist before the migration.");
+            AssertEx.False((await probe.ColumnsAsync(table)).Contains(column), $"{table}.{column} must not exist before the migration.");
         }
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
         foreach (var (table, column) in SchemeColumns)
         {
-            AssertEx.True((await probe.ColumnsAsync(table).ConfigureAwait(false)).Contains(column), $"The migration must add {table}.{column}.");
+            AssertEx.True((await probe.ColumnsAsync(table)).Contains(column), $"The migration must add {table}.{column}.");
             AssertEx.Equal(expected: 0L,
-                (await probe.LongsAsync($"SELECT \"notnull\" FROM pragma_table_info('{table}') WHERE name = '{column}';").ConfigureAwait(false)).Single(),
+                (await probe.LongsAsync($"SELECT \"notnull\" FROM pragma_table_info('{table}') WHERE name = '{column}';")).Single(),
                 $"{table}.{column} must be nullable: a row frozen before the cutover has no scheme, and NULL is what the guard reads as scheme 1.");
-            AssertEx.Null(await probe.ColumnDefaultAsync(table, column).ConfigureAwait(false), $"{table}.{column} must carry no default, so an un-stamped row stays un-stamped.");
+            AssertEx.Null(await probe.ColumnDefaultAsync(table, column), $"{table}.{column} must carry no default, so an un-stamped row stays un-stamped.");
         }
     }
 
     [Test]
     public async Task Migrate_ToLatest_CarriesTheSchemeColumnsAndRecordsTheMigration()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-head.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-head.sqlite");
 
         foreach (var (table, column) in SchemeColumns)
         {
-            AssertEx.True((await probe.ColumnsAsync(table).ConfigureAwait(false)).Contains(column), $"A fresh box must end up with {table}.{column}.");
+            AssertEx.True((await probe.ColumnsAsync(table)).Contains(column), $"A fresh box must end up with {table}.{column}.");
         }
 
-        AssertEx.True((await probe.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false)).Contains(ThisMigrationId),
+        AssertEx.True((await probe.AppliedMigrationsAsync(identityContext: false)).Contains(ThisMigrationId),
             "The scheme migration must be part of the chat chain a fresh box applies.");
     }
 
     [Test]
     public async Task Migrate_WhenRolledBack_DropsOnlyTheSchemeColumns()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-down.sqlite");
 
-        await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreviousMigrationId);
 
         foreach (var (table, column) in SchemeColumns)
         {
-            AssertEx.False((await probe.ColumnsAsync(table).ConfigureAwait(false)).Contains(column), $"Rollback must drop {table}.{column}.");
+            AssertEx.False((await probe.ColumnsAsync(table)).Contains(column), $"Rollback must drop {table}.{column}.");
         }
 
         // The three drops are three SQLite table rebuilds. The neighbouring launch-evidence columns are what a rolled-back
         // build still reads, so losing one of them here would be silent until an operator opened a run's evidence panel.
-        AssertEx.True((await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("benchmark_runs")).IsSupersetOf(new[]
         {
             "primary_intended_launch_identity",
             "primary_effective_launch_identity",
             "primary_launch_executable_sha256"
         }), "Rollback must leave the launch-evidence columns on benchmark_runs intact.");
-        AssertEx.True((await probe.ColumnsAsync("benchmark_judge_attempts").ConfigureAwait(false)).Contains("launch_receipt_json"),
+        AssertEx.True((await probe.ColumnsAsync("benchmark_judge_attempts")).Contains("launch_receipt_json"),
             "Rollback must leave the judge attempt's launch receipt intact.");
-        AssertEx.True((await probe.ColumnsAsync("benchmark_comparisons").ConfigureAwait(false)).Contains("launch_receipt_json"),
+        AssertEx.True((await probe.ColumnsAsync("benchmark_comparisons")).Contains("launch_receipt_json"),
             "Rollback must leave the comparison's launch receipt intact.");
     }
 }

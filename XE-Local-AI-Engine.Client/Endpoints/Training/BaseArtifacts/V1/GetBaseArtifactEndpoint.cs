@@ -24,13 +24,13 @@ public sealed class GetBaseArtifactEndpoint(IBaseArtifactService baseArtifactSer
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)
     {
-        var artifact = await baseArtifactService.GetAsync(request.ArtifactId, ct).ConfigureAwait(false);
+        var artifact = await baseArtifactService.GetAsync(request.ArtifactId, ct);
         if (artifact is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(artifact.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(artifact.ToResponse(), ct);
     }
 }

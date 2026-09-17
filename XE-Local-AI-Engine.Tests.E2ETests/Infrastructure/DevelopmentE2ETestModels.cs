@@ -15,8 +15,8 @@ internal sealed class DevelopmentE2ECoderModel : IDevelopmentCoderModel
         CancellationToken cancellationToken = default)
     {
         liveProgress?.Output(new ChatResponseUpdate(ChatRole.Assistant, "Development E2E live output"));
-        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
-        _ = await tools.WriteFileAsync("feature.txt", "implemented by Development E2E\n", cancellationToken).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+        _ = await tools.WriteFileAsync("feature.txt", "implemented by Development E2E\n", cancellationToken);
         return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Implemented the deterministic E2E feature file.",
                 ["feature.txt"],
                 [],

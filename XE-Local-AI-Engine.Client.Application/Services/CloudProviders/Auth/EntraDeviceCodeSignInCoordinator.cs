@@ -55,7 +55,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     /// <inheritdoc />
     public async Task<EntraDeviceCodeSignInHandle> StartAsync(CancellationToken cancellationToken)
     {
-        var connection = await LoadEntraConnectionOrThrowAsync(cancellationToken).ConfigureAwait(false);
+        var connection = await LoadEntraConnectionOrThrowAsync(cancellationToken);
 
         CancellationTokenSource newCts;
         CancellationTokenSource? superseded;
@@ -72,7 +72,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             CancelPending(superseded);
         }
 
-        var (deviceCodeInfo, credential, completion) = await BeginDeviceCodeFlowAsync(connection, allowPersistence: true, newCts.Token).ConfigureAwait(false);
+        var (deviceCodeInfo, credential, completion) = await BeginDeviceCodeFlowAsync(connection, allowPersistence: true, newCts.Token);
 
         lock (_gate)
         {
@@ -150,7 +150,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
 
         try
         {
-            var info = await deviceCodeReady.Task.ConfigureAwait(false);
+            var info = await deviceCodeReady.Task;
             return new DeviceCodeFlowHandle(info, credential, authenticateTask);
         }
         // A persistence failure does not always surface as CredentialUnavailableException — on a platform with no
@@ -161,7 +161,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         catch (Exception exception) when (allowPersistence && (exception is CredentialUnavailableException || EntraCachePersistenceFailure.IsPersistenceUnavailable(exception)))
         {
             _logger.LogWarning(exception, "Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying device-code sign-in with an in-memory (non-persisted) token cache.");
-            return await BeginDeviceCodeFlowAsync(connection, allowPersistence: false, cancellationToken).ConfigureAwait(false);
+            return await BeginDeviceCodeFlowAsync(connection, allowPersistence: false, cancellationToken);
         }
     }
 
@@ -169,7 +169,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     {
         try
         {
-            var record = await completion.ConfigureAwait(false);
+            var record = await completion;
 
             // Keep the live, already-authenticated credential alive for the chat-client factory to reuse: its MSAL
             // token cache (in-memory always, plus OS-native encrypted disk when available) is what actually holds
@@ -178,7 +178,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             _liveCredentialCache.Store(cacheKey, credential);
 
             // Persist with a fresh token: a superseded/cancelled attempt must not abort this save mid-flight.
-            await _tokenCacheStore.SaveRecordAsync(record, CancellationToken.None).ConfigureAwait(false);
+            await _tokenCacheStore.SaveRecordAsync(record, CancellationToken.None);
 
             if (UpdateStatusIfCurrent(cts, EntraDeviceCodeSignInStatus.Succeeded))
             {
@@ -218,7 +218,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
 
     private async Task<StoredAzureFoundryConnection> LoadEntraConnectionOrThrowAsync(CancellationToken cancellationToken)
     {
-        var config = await _credentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var config = await _credentialStore.LoadConfigAsync(cancellationToken);
         var connection = config?.AzureFoundry;
         if (connection is not { AuthMode: AzureFoundryAuthMode.EntraId }
             || string.IsNullOrWhiteSpace(connection.EntraTenantId)

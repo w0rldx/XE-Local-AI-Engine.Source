@@ -124,7 +124,7 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
                     ProgressLabel = entry.Id
                 },
                 ProgressFor(entry.Id, partIndex: 1),
-                ct).ConfigureAwait(false);
+                ct);
 
             // Part 2 of 2: the weights themselves.
             await _weightStore.EnsureFileAsync(new WhisperWeightFileRequest
@@ -137,7 +137,7 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
                     ProgressLabel = entry.Id
                 },
                 ProgressFor(entry.Id, partIndex: 2),
-                ct).ConfigureAwait(false);
+                ct);
 
             var last = _status.TryGetValue(entry.Id, out var snapshot) ? snapshot : null;
             _status[entry.Id] = new WhisperModelDownloadStatus(entry.Id,

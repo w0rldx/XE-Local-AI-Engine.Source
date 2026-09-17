@@ -490,7 +490,7 @@ dotnet_diagnostic.CA1724.severity = none  # 38 violations (distinct source lines
 dotnet_diagnostic.CA1040.severity = none  # 2 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
 dotnet_diagnostic.CA1034.severity = none  # 81 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
 dotnet_diagnostic.CA1861.severity = none  # 87 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
-dotnet_diagnostic.CA2007.severity = none  # 16744 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA2007.severity = none  # ConfigureAwait is contextual: the application layers and the tests run on hosts with no synchronization context and write no ConfigureAwait at all, and the rule stays off for the library projects too because it also fires on every await using declaration; ConfigureAwaitPolicyTests enforces both halves
 dotnet_diagnostic.S2326.severity = warning  # an unused type parameter is always refactor residue, and generics are pervasive in this codebase
 dotnet_diagnostic.S3427.severity = warning  # overlapping default-argument overloads resolve silently and not the way the author expects; no overload set here relies on that
 dotnet_diagnostic.CA1062.severity = none  # 275 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
@@ -528,8 +528,8 @@ dotnet_diagnostic.MA0048.severity = none
 dotnet_diagnostic.MA0051.severity = none
 # MA0006: string.Equals vs ==/!= — == / != on strings is idiomatic C#; ordinal intent is covered by MA0002.
 dotnet_diagnostic.MA0006.severity = none
-# MA0004: ConfigureAwait(false) — consistent with the existing CA2007=none decision above. This is an
-#         application (ASP.NET Core + Avalonia desktop), not a published library.
+# MA0004: ConfigureAwait(false) — reports the same sites as CA2007 and is off for the same reason;
+#         ConfigureAwaitPolicyTests enforces the rule.
 dotnet_diagnostic.MA0004.severity = none
 # MA0016: prefer collection abstraction over implementation — consistent with the existing CA1002=none.
 dotnet_diagnostic.MA0016.severity = none

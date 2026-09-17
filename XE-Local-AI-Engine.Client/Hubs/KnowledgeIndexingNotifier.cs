@@ -28,7 +28,7 @@ internal sealed class KnowledgeIndexingNotifier(
 
         try
         {
-            await _hubContext.Clients.All.SendAsync(KnowledgeBaseHubEvents.DocumentChanged, payload, cancellationToken).ConfigureAwait(false);
+            await _hubContext.Clients.All.SendAsync(KnowledgeBaseHubEvents.DocumentChanged, payload, cancellationToken);
         }
         catch (Exception exception)
         {

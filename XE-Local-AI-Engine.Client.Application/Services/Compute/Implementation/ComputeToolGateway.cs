@@ -112,7 +112,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// </summary>
     public async Task<string> ExecuteAsync(ComputeRunToolRequest request, CancellationToken cancellationToken = default)
     {
-        var outcome = await ExecuteDetailedAsync(request, requireResourceLimits: false, cancellationToken).ConfigureAwait(false);
+        var outcome = await ExecuteDetailedAsync(request, requireResourceLimits: false, cancellationToken);
         return outcome.Result is { } result
             ? FormatResult(result)
             : outcome.RefusalMessage ?? "run_python rejected.";
@@ -188,10 +188,9 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         SandboxHandle? handle = null;
         try
         {
-            var runtime = await _environment.GetRuntimeAsync(cancellationToken).ConfigureAwait(false);
-            var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
-            handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity, runtime, invocationId), cancellationToken)
-                                    .ConfigureAwait(false);
+            var runtime = await _environment.GetRuntimeAsync(cancellationToken);
+            var identity = await _identityProvider.GetAsync(cancellationToken);
+            handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity, runtime, invocationId), cancellationToken);
             if (string.IsNullOrEmpty(handle.WorkingRoot))
             {
                 // Fails closed for the same reason the boundary check does. The jail is what backs /work inside the
@@ -205,9 +204,8 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
                     "run_python rejected: this node's sandbox cannot give the script a working directory of its own.");
             }
 
-            await EnsureScratchAsync(handle, cancellationToken).ConfigureAwait(false);
-            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(runtime.InterpreterPath, code, invocationId), cancellationToken)
-                                        .ConfigureAwait(false);
+            await EnsureScratchAsync(handle, cancellationToken);
+            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(runtime.InterpreterPath, code, invocationId), cancellationToken);
             return ComputeExecutionOutcome.Executed(result);
         }
         catch (ComputeEnvironmentException exception)
@@ -230,7 +228,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             // that the jail kill missed, because there is no longer a directory outside the jail to miss.
             if (handle is not null)
             {
-                await KillQuietlyAsync(handle).ConfigureAwait(false);
+                await KillQuietlyAsync(handle);
             }
         }
     }
@@ -250,8 +248,8 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// </summary>
     private async Task EnsureScratchAsync(SandboxHandle handle, CancellationToken cancellationToken)
     {
-        await _provider.ResetDirectoryAsync(handle, HomeDirectoryName, cancellationToken).ConfigureAwait(false);
-        await _provider.ResetDirectoryAsync(handle, TempDirectoryName, cancellationToken).ConfigureAwait(false);
+        await _provider.ResetDirectoryAsync(handle, HomeDirectoryName, cancellationToken);
+        await _provider.ResetDirectoryAsync(handle, TempDirectoryName, cancellationToken);
     }
 
     /// <summary>
@@ -263,7 +261,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     {
         try
         {
-            await _provider.KillAsync(handle, CancellationToken.None).ConfigureAwait(false);
+            await _provider.KillAsync(handle, CancellationToken.None);
         }
         catch (Exception exception) when (exception is SandboxHandleInvalidException or IOException or UnauthorizedAccessException)
         {

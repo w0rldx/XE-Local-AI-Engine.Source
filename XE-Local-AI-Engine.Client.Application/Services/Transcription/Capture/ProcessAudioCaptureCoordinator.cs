@@ -130,7 +130,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             return false;
         }
 
-        await capture.StopAsync(cancellationToken).ConfigureAwait(false);
+        await capture.StopAsync(cancellationToken);
         return true;
     }
 
@@ -146,7 +146,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
         var captures = _captures.Values.ToArray();
         foreach (var capture in captures)
         {
-            await capture.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            await capture.StopAsync(CancellationToken.None);
         }
 
         try
@@ -154,8 +154,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             // real-timer: a bound on shutdown, not a wait for an event. It runs off the injected clock, so a test
             // drives it and production still gets three real seconds.
             await Task.WhenAll(captures.Select(capture => capture.Capture))
-                      .WaitAsync(ShutdownDrainTimeout, _timeProvider)
-                      .ConfigureAwait(false);
+                      .WaitAsync(ShutdownDrainTimeout, _timeProvider);
         }
         catch (TimeoutException)
         {
@@ -304,7 +303,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
                 // A stop that won the interlock before Attach finished has already cancelled this token. Bail
                 // before building a recorder only to tear it straight down again.
                 cancellationToken.ThrowIfCancellationRequested();
-                await owner._source.CaptureAsync(sessionId, processId, cancellationToken).ConfigureAwait(false);
+                await owner._source.CaptureAsync(sessionId, processId, cancellationToken);
             }
             catch (OperationCanceledException)
             {

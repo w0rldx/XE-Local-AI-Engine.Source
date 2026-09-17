@@ -30,7 +30,7 @@ public sealed class IntegrationApiKeyStore(NodeChatDbContext dbContext, TimeProv
         };
 
         _ = _dbContext.IntegrationApiKeys.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return ToSnapshot(entity);
     }
 
@@ -39,16 +39,14 @@ public sealed class IntegrationApiKeyStore(NodeChatDbContext dbContext, TimeProv
         var entities = await _dbContext.IntegrationApiKeys.AsNoTracking()
                                        .OrderByDescending(row => row.CreatedAtUtc)
                                        .ThenByDescending(row => row.Id)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return [.. entities.Select(ToSnapshot)];
     }
 
     public async Task<IntegrationApiKeySnapshot?> GetByPrefixAsync(string keyPrefix, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.IntegrationApiKeys.AsNoTracking()
-                                     .SingleOrDefaultAsync(row => row.KeyPrefix == keyPrefix, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .SingleOrDefaultAsync(row => row.KeyPrefix == keyPrefix, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
@@ -57,8 +55,7 @@ public sealed class IntegrationApiKeyStore(NodeChatDbContext dbContext, TimeProv
         // ExecuteUpdate rather than a tracked save: it touches ONLY last_used_at_utc, so the sealed digest is never
         // re-read, re-encrypted or rewritten on the authentication hot path.
         var updated = await _dbContext.IntegrationApiKeys.Where(row => row.Id == keyId)
-                                      .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, atUtc), cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, atUtc), cancellationToken);
         return updated > 0;
     }
 
@@ -67,8 +64,7 @@ public sealed class IntegrationApiKeyStore(NodeChatDbContext dbContext, TimeProv
         // Soft revoke, and ExecuteUpdate for the same reason: execution and audit rows reference the prefix, so the row
         // is stamped rather than deleted, and the digest is left sealed exactly as it was written.
         var updated = await _dbContext.IntegrationApiKeys.Where(row => row.Id == keyId && row.RevokedAtUtc == null)
-                                      .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.RevokedAtUtc, atUtc), cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.RevokedAtUtc, atUtc), cancellationToken);
         return updated > 0;
     }
 

@@ -17,11 +17,11 @@ public sealed class AddNodeSelectedFoldersMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CreatesSelectedFoldersWithAnEncryptedHostPath()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-folders.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-folders.sqlite", ThisMigrationId);
 
-        AssertEx.True(await probe.TableExistsAsync("selected_folders").ConfigureAwait(false), "selected_folders must exist.");
+        AssertEx.True(await probe.TableExistsAsync("selected_folders"), "selected_folders must exist.");
 
-        AssertEx.True((await probe.ColumnsAsync("selected_folders").ConfigureAwait(false)).SetEquals(new[]
+        AssertEx.True((await probe.ColumnsAsync("selected_folders")).SetEquals(new[]
         {
             "id",
             "alias",
@@ -30,25 +30,25 @@ public sealed class AddNodeSelectedFoldersMigrationTests
             "created_at_utc"
         }), "selected_folders must expose exactly the columns this migration created.");
 
-        AssertEx.Equal("BLOB", await ColumnTypeAsync(probe, "host_path").ConfigureAwait(false),
+        AssertEx.Equal("BLOB", await ColumnTypeAsync(probe, "host_path"),
             "The host path must be a BLOB — it is sealed by the node cipher, never a readable path.");
 
         // A grant with no explicit mode is the most restrictive one, not an unbounded one.
-        AssertEx.Equal("0", await probe.ColumnDefaultAsync("selected_folders", "mode").ConfigureAwait(false));
+        AssertEx.Equal("0", await probe.ColumnDefaultAsync("selected_folders", "mode"));
     }
 
     [Test]
     public async Task Migrate_ToThisMigration_RejectsASecondGrantUnderTheSameAlias()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-folders-alias.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-folders-alias.sqlite", ThisMigrationId);
 
-        AssertEx.True(await probe.IndexExistsAsync("selected_folders", "IX_selected_folders_alias", unique: true, "alias").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("selected_folders", "IX_selected_folders_alias", unique: true, "alias"),
             "The alias must be uniquely indexed.");
 
-        await InsertGrantAsync(probe, "projects").ConfigureAwait(false);
+        await InsertGrantAsync(probe, "projects");
 
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertGrantAsync(probe, "projects"),
-            "A second grant under the same alias must be rejected by the database, not merely by the service above it.").ConfigureAwait(false);
+            "A second grant under the same alias must be rejected by the database, not merely by the service above it.");
     }
 
     private static Task InsertGrantAsync(MigrationSchemaProbe probe, string alias)
@@ -67,7 +67,7 @@ public sealed class AddNodeSelectedFoldersMigrationTests
     private static async Task<string> ColumnTypeAsync(MigrationSchemaProbe probe, string columnName)
     {
         var value = await probe.ScalarAsync("SELECT type FROM pragma_table_info('selected_folders') WHERE name = $column;",
-            command => command.Parameters.AddWithValue("$column", columnName)).ConfigureAwait(false);
+            command => command.Parameters.AddWithValue("$column", columnName));
 
         return AssertEx.NotNull(value as string, $"selected_folders.{columnName} must exist.");
     }

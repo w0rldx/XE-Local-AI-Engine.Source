@@ -148,7 +148,7 @@ internal static class RetrievalCapacityBenchmark
         var schemaStarted = Stopwatch.GetTimestamp();
         await using (var migrationContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
         {
-            await migrationContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+            await migrationContext.Database.MigrateAsync(cancellationToken);
         }
 
         var schemaMilliseconds = Stopwatch.GetElapsedTime(schemaStarted).TotalMilliseconds;
@@ -161,24 +161,24 @@ internal static class RetrievalCapacityBenchmark
         await using (var buildContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
         {
             var connection = buildContext.Database.GetDbConnection();
-            await OpenAsync(connection, cancellationToken).ConfigureAwait(false);
-            await DisableFtsMaintenanceAsync(connection, cancellationToken).ConfigureAwait(false);
+            await OpenAsync(connection, cancellationToken);
+            await DisableFtsMaintenanceAsync(connection, cancellationToken);
 
-            (queries, corpusMilliseconds) = await InsertCorpusAsync(buildContext, connection, profile, memory, cancellationToken).ConfigureAwait(false);
+            (queries, corpusMilliseconds) = await InsertCorpusAsync(buildContext, connection, profile, memory, cancellationToken);
 
             var ftsStarted = Stopwatch.GetTimestamp();
-            await ExecuteAsync(connection, "INSERT INTO chunk_fts(chunk_fts) VALUES ('rebuild');", cancellationToken).ConfigureAwait(false);
+            await ExecuteAsync(connection, "INSERT INTO chunk_fts(chunk_fts) VALUES ('rebuild');", cancellationToken);
             ftsIndexMilliseconds = Stopwatch.GetElapsedTime(ftsStarted).TotalMilliseconds;
             memory.Sample();
 
             var vectorStarted = Stopwatch.GetTimestamp();
-            await InsertVectorsAsync(connection, profile, memory, cancellationToken).ConfigureAwait(false);
+            await InsertVectorsAsync(connection, profile, memory, cancellationToken);
             vectorIndexMilliseconds = Stopwatch.GetElapsedTime(vectorStarted).TotalMilliseconds;
             memory.Sample();
 
-            var chunkRows = await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_document_chunks;", cancellationToken).ConfigureAwait(false);
-            var ftsRows = await CountAsync(connection, "SELECT COUNT(*) FROM chunk_fts;", cancellationToken).ConfigureAwait(false);
-            var vectorRows = await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_chunk_vectors;", cancellationToken).ConfigureAwait(false);
+            var chunkRows = await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_document_chunks;", cancellationToken);
+            var ftsRows = await CountAsync(connection, "SELECT COUNT(*) FROM chunk_fts;", cancellationToken);
+            var vectorRows = await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_chunk_vectors;", cancellationToken);
             if (chunkRows != profile.ChunkCount || ftsRows != profile.ChunkCount || vectorRows != profile.ChunkCount)
             {
                 throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture,
@@ -194,7 +194,7 @@ internal static class RetrievalCapacityBenchmark
             queries,
             p95TargetMilliseconds,
             memory,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         memory.Sample();
 
         return new RetrievalCapacityReport(Seed,
@@ -242,7 +242,7 @@ internal static class RetrievalCapacityBenchmark
         var queries = BuildQueries(profile);
         var started = Stopwatch.GetTimestamp();
 
-        await using (var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false))
+        await using (var transaction = await connection.BeginTransactionAsync(cancellationToken))
         {
             await using var documentCommand = connection.CreateCommand();
             documentCommand.Transaction = transaction;
@@ -274,7 +274,7 @@ internal static class RetrievalCapacityBenchmark
                 documentParameters[6].Value = EmbeddingModel;
                 documentParameters[7].Value = VectorIdentity;
                 documentParameters[8].Value = VectorDimensions;
-                _ = await documentCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await documentCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             await using var chunkCommand = connection.CreateCommand();
@@ -313,7 +313,7 @@ internal static class RetrievalCapacityBenchmark
                     chunkParameters[10].Value = (object?)row.Symbol ?? DBNull.Value;
                     chunkParameters[11].Value = $"content-{globalIndex:X8}";
                     chunkParameters[12].Value = $"embedding-{globalIndex:X8}";
-                    _ = await chunkCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    _ = await chunkCommand.ExecuteNonQueryAsync(cancellationToken);
 
                     if ((globalIndex + 1) % InsertBatchSize == 0)
                     {
@@ -322,7 +322,7 @@ internal static class RetrievalCapacityBenchmark
                 }
             }
 
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
         }
 
         return (queries, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
@@ -333,7 +333,7 @@ internal static class RetrievalCapacityBenchmark
         MemorySampler memory,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText =
@@ -358,7 +358,7 @@ internal static class RetrievalCapacityBenchmark
                 parameters[0].Value = StableGuid("chunk", globalIndex);
                 parameters[1].Value = documentId;
                 parameters[3].Value = vectorBytes[VectorDimensionFor(localIndex, globalIndex)];
-                _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                _ = await command.ExecuteNonQueryAsync(cancellationToken);
                 if ((globalIndex + 1) % InsertBatchSize == 0)
                 {
                     memory.Sample();
@@ -366,7 +366,7 @@ internal static class RetrievalCapacityBenchmark
             }
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private static async Task<RetrievalCapacityQueryMetrics> MeasureQueriesAsync(string databasePath,
@@ -384,7 +384,7 @@ internal static class RetrievalCapacityBenchmark
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
         var connection = context.Database.GetDbConnection();
-        await OpenAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenAsync(connection, cancellationToken);
         var ftsSearch = new FtsSearch(context);
         var vectorSearch = new ManagedCosineVectorSearch(context, new CompletedNormalizationState());
         var fusion = new ReciprocalRankFusion();
@@ -398,14 +398,14 @@ internal static class RetrievalCapacityBenchmark
         // namespace would add large exact-vector scans without improving warm-up quality at the 500k/1M profiles.
         foreach (var query in queries.Take(ScenarioCount + 1))
         {
-            _ = await ExecuteQueryAsync(connection, ftsSearch, vectorSearch, fusion, query, cancellationToken).ConfigureAwait(false);
+            _ = await ExecuteQueryAsync(connection, ftsSearch, vectorSearch, fusion, query, cancellationToken);
         }
 
         for (var repetition = 0; repetition < profile.QueryRepetitions; repetition++)
         {
             foreach (var query in queries)
             {
-                var result = await ExecuteQueryAsync(connection, ftsSearch, vectorSearch, fusion, query, cancellationToken).ConfigureAwait(false);
+                var result = await ExecuteQueryAsync(connection, ftsSearch, vectorSearch, fusion, query, cancellationToken);
                 ftsSamples.Add(result.FtsMilliseconds);
                 vectorSamples.Add(result.VectorMilliseconds);
                 fusionSamples.Add(result.FusionMilliseconds);
@@ -450,7 +450,7 @@ internal static class RetrievalCapacityBenchmark
     {
         var endToEndStarted = Stopwatch.GetTimestamp();
         var ftsStarted = Stopwatch.GetTimestamp();
-        var ftsHits = await ftsSearch.SearchAsync(query.Text, K * 4, null, query.CollectionId, cancellationToken).ConfigureAwait(false);
+        var ftsHits = await ftsSearch.SearchAsync(query.Text, K * 4, null, query.CollectionId, cancellationToken);
         var ftsMilliseconds = Stopwatch.GetElapsedTime(ftsStarted).TotalMilliseconds;
 
         IReadOnlyList<VectorSearchHit> vectorHits = [];
@@ -464,8 +464,7 @@ internal static class RetrievalCapacityBenchmark
                                                K * 4,
                                                null,
                                                query.CollectionId,
-                                               cancellationToken)
-                                           .ConfigureAwait(false);
+                                               cancellationToken);
         }
 
         var vectorMilliseconds = Stopwatch.GetElapsedTime(vectorStarted).TotalMilliseconds;
@@ -478,7 +477,7 @@ internal static class RetrievalCapacityBenchmark
             scoreWeight: 1d);
         var selected = fused.Take(K).Select(static hit => hit.ChunkId).ToList();
         var fusionMilliseconds = Stopwatch.GetElapsedTime(fusionStarted).TotalMilliseconds;
-        var hydrated = await HydrateAsync(connection, selected, query.CollectionId, cancellationToken).ConfigureAwait(false);
+        var hydrated = await HydrateAsync(connection, selected, query.CollectionId, cancellationToken);
         var endToEndMilliseconds = Stopwatch.GetElapsedTime(endToEndStarted).TotalMilliseconds;
         return new CapacityQueryResult(hydrated,
             selected.Count,
@@ -517,9 +516,9 @@ internal static class RetrievalCapacityBenchmark
         command.CommandText =
             $"SELECT c.chunk_id FROM knowledge_document_chunks c JOIN knowledge_documents d ON d.document_id = c.document_id WHERE c.chunk_id IN ({string.Join(',', placeholders)}) AND d.collection_id = $collection_id;";
 #pragma warning restore CA2100
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var present = new HashSet<Guid>();
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await reader.ReadAsync(cancellationToken))
         {
             _ = present.Add(Guid.Parse(reader.GetString(0)));
         }
@@ -643,7 +642,7 @@ internal static class RetrievalCapacityBenchmark
     private static async Task DisableFtsMaintenanceAsync(DbConnection connection, CancellationToken cancellationToken) =>
         await ExecuteAsync(connection,
             "DROP TRIGGER IF EXISTS knowledge_document_chunks_au; DROP TRIGGER IF EXISTS knowledge_document_chunks_ad; DROP TRIGGER IF EXISTS knowledge_document_chunks_ai;",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
     private static async Task ExecuteAsync(DbConnection connection, string sql, CancellationToken cancellationToken)
     {
@@ -651,7 +650,7 @@ internal static class RetrievalCapacityBenchmark
 #pragma warning disable CA2100 // Callers are internal benchmark helpers and pass only fixed SQL literals.
         command.CommandText = sql;
 #pragma warning restore CA2100
-        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task<long> CountAsync(DbConnection connection, string sql, CancellationToken cancellationToken)
@@ -660,7 +659,7 @@ internal static class RetrievalCapacityBenchmark
 #pragma warning disable CA2100 // Callers are internal benchmark helpers and pass only fixed SQL literals.
         command.CommandText = sql;
 #pragma warning restore CA2100
-        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(value, CultureInfo.InvariantCulture);
     }
 
@@ -668,7 +667,7 @@ internal static class RetrievalCapacityBenchmark
     {
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await connection.OpenAsync(cancellationToken);
         }
     }
 

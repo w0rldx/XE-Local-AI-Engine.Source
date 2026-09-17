@@ -56,13 +56,13 @@ internal sealed class PlaybookEvalService(
     {
         // Same ownership + Suggested + Analysis guard as the review paths — a missing/cross-agent/non-pending action
         // surfaces ActionFound == false so the endpoint 404s.
-        var suggested = await _playbookActionService.LoadPendingSuggestionAsync(agentId, actionId, cancellationToken).ConfigureAwait(false);
+        var suggested = await _playbookActionService.LoadPendingSuggestionAsync(agentId, actionId, cancellationToken);
         if (suggested is null)
         {
             return new PlaybookEvalOutcome(ActionFound: false, Result: null);
         }
 
-        var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken);
         if (agent is null)
         {
             return new PlaybookEvalOutcome(ActionFound: false, Result: null);
@@ -70,7 +70,7 @@ internal sealed class PlaybookEvalService(
 
         // Baseline = the agent's current resolved prompt (Instructions + Enabled actions). Candidate = baseline + the
         // Suggested action's behaviour. The gate measures the marginal effect of promoting THIS action.
-        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(agentId, cancellationToken).ConfigureAwait(false);
+        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(agentId, cancellationToken);
 
         // Mirror ListEnabledByAgentAsync ordering (Priority, then CreatedAtUtc): once the Suggested action is promoted
         // it is re-ordered by that same key, so the candidate prompt must place it per priority — not merely append it
@@ -84,14 +84,14 @@ internal sealed class PlaybookEvalService(
         var baselinePrompt = PlaybookPromptComposer.Compose(agent.Instructions, enabled);
         var candidatePrompt = PlaybookPromptComposer.Compose(agent.Instructions, candidateActions);
 
-        var goldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentId, cancellationToken).ConfigureAwait(false);
+        var goldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentId, cancellationToken);
         var goldenCaseTotal = goldenCases.Count;
 
         // Fingerprint the behaviour-affecting inputs over the FULL enabled golden set (before any per-run cap) so the
         // promote gate can detect a base-instruction / sibling-action / golden-set / model change after this eval ran.
         // The model identity (weight digest) is folded in alongside the name so a same-name weight swap between eval and
         // promote invalidates the fingerprint; an unresolvable identity records the explicit unverified sentinel.
-        var modelIdentity = await _modelIdentityResolver.ResolveAsync(_options.ModelName, cancellationToken).ConfigureAwait(false);
+        var modelIdentity = await _modelIdentityResolver.ResolveAsync(_options.ModelName, cancellationToken);
         var fingerprint = PlaybookEvalFingerprint.Compute(suggested.Id,
             suggested.Version,
             agent.Instructions,
@@ -105,7 +105,7 @@ internal sealed class PlaybookEvalService(
         if (goldenCases.Count == 0)
         {
             _logger.LogWarning("Eval for agent {AgentId} action {ActionId} has no golden cases; recording a failing result (needs golden cases).", agentId, actionId);
-            return await PersistAsync(agentId, actionId, BuildEmptyResult(suggested.Version, fingerprint), cancellationToken).ConfigureAwait(false);
+            return await PersistAsync(agentId, actionId, BuildEmptyResult(suggested.Version, fingerprint), cancellationToken);
         }
 
         if (goldenCases.Count > _options.MaxGoldenCases)
@@ -120,7 +120,7 @@ internal sealed class PlaybookEvalService(
         // Route the configured eval model to the runtime that serves it (persisted map, else the configured default
         // provider = ollama — an un-repointed model behaves exactly as before). Node-local only — never the
         // shared/cloud singleton.
-        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken).ConfigureAwait(false);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken);
         var selection = new LocalModelSelection
         {
             ModelName = _options.ModelName,
@@ -133,11 +133,11 @@ internal sealed class PlaybookEvalService(
         var caseResults = new List<PlaybookEvalCaseResult>(goldenCases.Count);
         foreach (var goldenCase in goldenCases)
         {
-            caseResults.Add(await ScoreCaseAsync(goldenCase, baselinePrompt, candidatePrompt, chatClient, cancellationToken).ConfigureAwait(false));
+            caseResults.Add(await ScoreCaseAsync(goldenCase, baselinePrompt, candidatePrompt, chatClient, cancellationToken));
         }
 
         var result = BuildResult(suggested.Version, goldenCaseTotal, caseResults, fingerprint);
-        return await PersistAsync(agentId, actionId, result, cancellationToken).ConfigureAwait(false);
+        return await PersistAsync(agentId, actionId, result, cancellationToken);
     }
 
     private async Task<PlaybookEvalCaseResult> ScoreCaseAsync(GoldenConversationRecord goldenCase,
@@ -157,11 +157,11 @@ internal sealed class PlaybookEvalService(
 
         // Both arms run at the SAME configured effort (null by default, which is the pre-existing behaviour): the gate
         // measures the injected prompt, so an effort difference between the two would confound it.
-        var baselineText = await _evalAgentRunner.RunAsync(chatClient, baselinePrompt, turns, _options.ReasoningEffort, cancellationToken).ConfigureAwait(false);
-        var candidateText = await _evalAgentRunner.RunAsync(chatClient, candidatePrompt, turns, _options.ReasoningEffort, cancellationToken).ConfigureAwait(false);
+        var baselineText = await _evalAgentRunner.RunAsync(chatClient, baselinePrompt, turns, _options.ReasoningEffort, cancellationToken);
+        var candidateText = await _evalAgentRunner.RunAsync(chatClient, candidatePrompt, turns, _options.ReasoningEffort, cancellationToken);
 
-        var baselineScore = await _evalJudge.ScoreAsync(goldenCase, baselineText, chatClient, cancellationToken).ConfigureAwait(false);
-        var candidateScore = await _evalJudge.ScoreAsync(goldenCase, candidateText, chatClient, cancellationToken).ConfigureAwait(false);
+        var baselineScore = await _evalJudge.ScoreAsync(goldenCase, baselineText, chatClient, cancellationToken);
+        var candidateScore = await _evalJudge.ScoreAsync(goldenCase, candidateText, chatClient, cancellationToken);
 
         // Regression criterion: a case the baseline passed and the candidate fails is a regression.
         var regressed = baselineScore.Pass && !candidateScore.Pass;
@@ -224,7 +224,7 @@ internal sealed class PlaybookEvalService(
 
         // Recording persists the JSON on the action under the ownership guard and yields the updated record, which we
         // thread out via the outcome so the endpoint maps the response directly with no second, unscoped fetch.
-        var updated = await _playbookActionService.RecordEvalResultAsync(agentId, actionId, json, cancellationToken).ConfigureAwait(false);
+        var updated = await _playbookActionService.RecordEvalResultAsync(agentId, actionId, json, cancellationToken);
         return new PlaybookEvalOutcome(ActionFound: true, result, updated);
     }
 }

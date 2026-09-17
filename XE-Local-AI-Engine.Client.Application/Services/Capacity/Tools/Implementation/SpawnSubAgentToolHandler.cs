@@ -74,7 +74,7 @@ internal sealed class SpawnSubAgentToolHandler : IClientLocalToolHandler
         await using var scope = _scopeFactory.CreateAsyncScope();
         var spawnService = scope.ServiceProvider.GetRequiredService<ISubAgentSpawnService>();
 
-        return await spawnService.SpawnAsync(request, cancellationToken).ConfigureAwait(false);
+        return await spawnService.SpawnAsync(request, cancellationToken);
     }
 
     private static string? ValidateStringBounds(SubAgentSpawnRequest request)

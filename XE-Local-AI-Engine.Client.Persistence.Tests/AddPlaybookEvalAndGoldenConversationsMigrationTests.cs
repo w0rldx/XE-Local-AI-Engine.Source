@@ -29,23 +29,23 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
     {
         var databasePath = GetDatabasePath("eval-golden-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePlaybookEvalMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePlaybookEvalMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var actionColumns = await GetPlaybookActionColumnInfoAsync(connection).ConfigureAwait(false);
+        var actionColumns = await GetPlaybookActionColumnInfoAsync(connection);
         AssertEx.True(actionColumns.ContainsKey("eval_result"), "Migration should add the eval_result column.");
         AssertEx.False(actionColumns["eval_result"], "eval_result should be nullable.");
 
-        AssertEx.True(await TableExistsAsync(connection, "golden_conversations").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "golden_conversations"),
             "Migration should create the golden_conversations table.");
 
-        var goldenColumns = await GetGoldenConversationColumnInfoAsync(connection).ConfigureAwait(false);
+        var goldenColumns = await GetGoldenConversationColumnInfoAsync(connection);
         // MigrateAsync() runs to head, which now includes the later AddGoldenConversationHarvestProvenance migration, so
         // the three provenance columns are present alongside the columns this migration introduced.
         AssertEx.True(new HashSet<string>(goldenColumns.Keys, StringComparer.Ordinal).SetEquals(new[]
@@ -67,7 +67,7 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         AssertEx.False(goldenColumns["assertion"], "assertion should be nullable.");
         AssertEx.False(goldenColumns["rubric"], "rubric should be nullable.");
 
-        AssertEx.True(await IndexExistsAsync(connection, "IX_golden_conversations_agent_definition_id").ConfigureAwait(false),
+        AssertEx.True(await IndexExistsAsync(connection, "IX_golden_conversations_agent_definition_id"),
             "Migration should index golden_conversations.agent_definition_id.");
     }
 
@@ -78,19 +78,19 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         var agentId = Guid.NewGuid();
         var goldenId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         // SQLite enforces foreign keys only when the pragma is on for the connection.
-        await EnableForeignKeysAsync(connection).ConfigureAwait(false);
-        await InsertAgentAsync(connection, agentId).ConfigureAwait(false);
-        await InsertGoldenConversationAsync(connection, goldenId, agentId).ConfigureAwait(false);
+        await EnableForeignKeysAsync(connection);
+        await InsertAgentAsync(connection, agentId);
+        await InsertGoldenConversationAsync(connection, goldenId, agentId);
 
-        AssertEx.Equal(expected: 1L, await CountGoldenConversationsForAgentAsync(connection, agentId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 1L, await CountGoldenConversationsForAgentAsync(connection, agentId));
 
-        await DeleteAgentAsync(connection, agentId).ConfigureAwait(false);
+        await DeleteAgentAsync(connection, agentId);
 
-        AssertEx.Equal(expected: 0L, await CountGoldenConversationsForAgentAsync(connection, agentId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0L, await CountGoldenConversationsForAgentAsync(connection, agentId));
     }
 
     [Test]
@@ -98,21 +98,21 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
     {
         var databasePath = GetDatabasePath("eval-golden-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookEvalMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookEvalMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var actionColumns = await GetPlaybookActionColumnInfoAsync(connection).ConfigureAwait(false);
+        var actionColumns = await GetPlaybookActionColumnInfoAsync(connection);
         AssertEx.False(actionColumns.ContainsKey("eval_result"), "Rollback should drop the eval_result column.");
         // The pre-eval playbook_actions schema must survive the rollback intact.
         AssertEx.True(actionColumns.ContainsKey("behavior"), "Rollback should retain the original playbook_actions schema.");
 
-        AssertEx.False(await TableExistsAsync(connection, "golden_conversations").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "golden_conversations"),
             "Rollback should drop the golden_conversations table.");
     }
 
@@ -144,7 +144,7 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         command.Parameters.AddWithValue("$created", value: 1234L);
         command.Parameters.AddWithValue("$updated", value: 1234L);
 
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task InsertGoldenConversationAsync(SqliteConnection connection, Guid goldenId, Guid agentId)
@@ -168,7 +168,7 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         command.Parameters.AddWithValue("$created", value: 1234L);
         command.Parameters.AddWithValue("$updated", value: 1234L);
 
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task DeleteAgentAsync(SqliteConnection connection, Guid agentId)
@@ -176,7 +176,7 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         await using var command = connection.CreateCommand();
         command.CommandText = "DELETE FROM agent_definitions WHERE id = $id;";
         command.Parameters.AddWithValue("$id", agentId.ToString());
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<long> CountGoldenConversationsForAgentAsync(SqliteConnection connection, Guid agentId)
@@ -184,20 +184,20 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM golden_conversations WHERE agent_definition_id = $id;";
         command.Parameters.AddWithValue("$id", agentId.ToString());
-        return (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+        return (long)(await command.ExecuteScalarAsync())!;
     }
 
     private static async Task EnableForeignKeysAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA foreign_keys = ON;";
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -206,7 +206,7 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<bool> IndexExistsAsync(SqliteConnection connection, string indexName)
@@ -214,7 +214,7 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'index' AND name = $name;";
         command.Parameters.AddWithValue("$name", indexName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlyDictionary<string, bool>> GetPlaybookActionColumnInfoAsync(SqliteConnection connection)
@@ -222,22 +222,22 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         await using var command = connection.CreateCommand();
         // Literal PRAGMA (no interpolation) so the analyzer cannot flag a dynamic command string (CA2100).
         command.CommandText = "PRAGMA table_info(playbook_actions);";
-        return await ReadColumnInfoAsync(command).ConfigureAwait(false);
+        return await ReadColumnInfoAsync(command);
     }
 
     private static async Task<IReadOnlyDictionary<string, bool>> GetGoldenConversationColumnInfoAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA table_info(golden_conversations);";
-        return await ReadColumnInfoAsync(command).ConfigureAwait(false);
+        return await ReadColumnInfoAsync(command);
     }
 
     private static async Task<IReadOnlyDictionary<string, bool>> ReadColumnInfoAsync(SqliteCommand command)
     {
         // PRAGMA table_info exposes the per-column NOT NULL flag, which lets the test assert column nullability.
         var columns = new Dictionary<string, bool>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             var name = reader.GetString(reader.GetOrdinal("name"));
             var notNull = reader.GetInt64(reader.GetOrdinal("notnull")) != 0L;

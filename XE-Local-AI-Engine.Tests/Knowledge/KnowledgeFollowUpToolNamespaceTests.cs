@@ -28,8 +28,8 @@ public sealed class KnowledgeFollowUpToolNamespaceTests
         }));
 
         AssertEx.Contains(response, "No knowledge-base document exists");
-        await catalog.Received(1).GetAsync(documentId, "PROJECT-B", Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await catalog.DidNotReceive().GetAsync(documentId, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await catalog.Received(1).GetAsync(documentId, "PROJECT-B", Arg.Any<CancellationToken>());
+        await catalog.DidNotReceive().GetAsync(documentId, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -52,11 +52,9 @@ public sealed class KnowledgeFollowUpToolNamespaceTests
         AssertEx.Equal("PROJECT-B", payload.RootElement.GetProperty("collectionId").GetString());
         AssertEx.Equal(0, payload.RootElement.GetProperty("chunks").GetArrayLength());
         await expansion.Received(1)
-                       .ExpandAsync(documentId, 3, 1, "PROJECT-B", Arg.Any<CancellationToken>())
-                       .ConfigureAwait(false);
+                       .ExpandAsync(documentId, 3, 1, "PROJECT-B", Arg.Any<CancellationToken>());
         await expansion.DidNotReceive()
-                       .ExpandAsync(documentId, 3, 1, Arg.Any<CancellationToken>())
-                       .ConfigureAwait(false);
+                       .ExpandAsync(documentId, 3, 1, Arg.Any<CancellationToken>());
     }
 
     [Test]

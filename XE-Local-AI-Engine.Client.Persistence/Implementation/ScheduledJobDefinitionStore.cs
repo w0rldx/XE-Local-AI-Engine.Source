@@ -42,7 +42,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
         };
 
         _ = _dbContext.ScheduledJobDefinitions.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -51,8 +51,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
     {
         var entity = await _dbContext.ScheduledJobDefinitions
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -68,8 +67,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
 
         var entities = await query
                              .OrderBy(definition => definition.CreatedAtUtc)
-                             .ToListAsync(cancellationToken)
-                             .ConfigureAwait(false);
+                             .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -80,8 +78,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
                                        .AsNoTracking()
                                        .Where(definition => definition.TemplateId == templateId && definition.DeletedAtUtc == null)
                                        .OrderBy(definition => definition.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -92,8 +89,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
                                        .AsNoTracking()
                                        .Where(definition => definition.Enabled && definition.DeletedAtUtc == null)
                                        .OrderBy(definition => definition.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -103,8 +99,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
         ArgumentNullException.ThrowIfNull(input);
 
         var entity = await _dbContext.ScheduledJobDefinitions
-                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -129,7 +124,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
         entity.CreatedBy = input.CreatedBy;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -137,8 +132,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
     public async Task<ScheduledJobDefinitionRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.ScheduledJobDefinitions
-                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -150,7 +144,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
         entity.DisabledAtUtc = enabled ? null : now;
         entity.UpdatedAtUtc = now;
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -158,8 +152,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
     public async Task<bool> SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.ScheduledJobDefinitions
-                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -171,7 +164,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
         entity.Enabled = false;
         entity.UpdatedAtUtc = now;
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }

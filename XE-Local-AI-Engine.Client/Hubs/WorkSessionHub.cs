@@ -73,7 +73,7 @@ public sealed class WorkSessionHub(IWorkSessionService service, IOptions<WorkSes
         WorkSessionDetail session;
         try
         {
-            session = await _service.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            session = await _service.GetAsync(sessionId, cancellationToken);
         }
         catch (KeyNotFoundException)
         {
@@ -83,10 +83,10 @@ public sealed class WorkSessionHub(IWorkSessionService service, IOptions<WorkSes
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
         // and the join reaches nobody. The overlap this creates is harmless — every push is an idempotent notification
         // keyed by sequence.
-        await Groups.AddToGroupAsync(Context.ConnectionId, WorkSessionHubGroups.Session(sessionId), cancellationToken).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, WorkSessionHubGroups.Session(sessionId), cancellationToken);
 
         // One over the cap, so "there is more" is observed rather than inferred from a full page.
-        var events = await _service.ListEventsAsync(sessionId, afterSeq, ReplayCap + 1, cancellationToken).ConfigureAwait(false);
+        var events = await _service.ListEventsAsync(sessionId, afterSeq, ReplayCap + 1, cancellationToken);
         var truncated = events.Count > ReplayCap;
         return new WorkSessionSubscriptionSnapshot(sessionId,
             session.Status.ToString(),

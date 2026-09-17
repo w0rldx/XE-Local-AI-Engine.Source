@@ -47,7 +47,7 @@ public sealed class GraphWorkflowRunEndpointTests
         using var client = Host.Factory.CreateClient();
         using var request = Request(method, route);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require the operator token.");
     }
@@ -65,7 +65,7 @@ public sealed class GraphWorkflowRunEndpointTests
         using var request = Request(method, route);
         Host.Factory.AddNonOperatorBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode, $"{method} {route} is operator-only, so an authenticated non-operator is refused.");
     }
@@ -95,7 +95,7 @@ public sealed class GraphWorkflowRunEndpointTests
         using var request = Request(method, route);
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 on a disabled node, never 500.");
     }
@@ -107,7 +107,7 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task StartRun_Answers202WithTheRunId_AndARetryAnswersTheSameOne()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
         var requestId = Guid.NewGuid();
         var body = JsonSerializer.Serialize(new
         {
@@ -118,22 +118,22 @@ public sealed class GraphWorkflowRunEndpointTests
             }
         });
 
-        using var first = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", body).ConfigureAwait(false);
-        using var second = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", body).ConfigureAwait(false);
+        using var first = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", body);
+        using var second = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", body);
 
         AssertEx.Equal(HttpStatusCode.Accepted, first.StatusCode);
         AssertEx.Equal(HttpStatusCode.Accepted, second.StatusCode);
-        var firstRunId = await RunIdAsync(first).ConfigureAwait(false);
-        AssertEx.Equal(firstRunId, await RunIdAsync(second).ConfigureAwait(false), "the same request id resolves to the run it already started.");
+        var firstRunId = await RunIdAsync(first);
+        AssertEx.Equal(firstRunId, await RunIdAsync(second), "the same request id resolves to the run it already started.");
         AssertEx.NotEqual(Guid.Empty, firstRunId);
     }
 
     [Test]
     public async Task StartRun_WithNoRequestId_Answers400()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
 
-        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", "{}").ConfigureAwait(false);
+        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", "{}");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, "an unminted idempotency key is a caller mistake, not a conflict.");
     }
@@ -145,52 +145,51 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task StartRun_WithAStaleDefinitionVersion_Answers409WithTheRunConflictDiscriminator()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
         var body = JsonSerializer.Serialize(new
         {
             requestId = Guid.NewGuid(),
             definitionVersion = 99
         });
 
-        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", body).ConfigureAwait(false);
+        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", body);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        AssertEx.Equal("GraphWorkflowRunConflict", await ConflictTypeAsync(response).ConfigureAwait(false));
+        AssertEx.Equal("GraphWorkflowRunConflict", await ConflictTypeAsync(response));
     }
 
     /// <summary>The other way: a cancel of a run that has already finished. Same story, same discriminator.</summary>
     [Test]
     public async Task CancelRun_OnATerminalRun_Answers409WithTheRunConflictDiscriminator()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
         // Driven terminal through the store: there is no dispatcher in this slice to finish a run on its own.
         await using (var scope = Host.Factory.Services.CreateAsyncScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-            var run = await store.GetRunAsync(runId).ConfigureAwait(false);
+            var run = await store.GetRunAsync(runId);
             _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId,
                                run.Version,
                                GraphWorkflowRunStatus.Failed,
-                               GraphWorkflowFailureClass.NodeFailed))
-                           .ConfigureAwait(false);
+                               GraphWorkflowFailureClass.NodeFailed));
         }
 
-        using var response = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}").ConfigureAwait(false);
+        using var response = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}");
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        AssertEx.Equal("GraphWorkflowRunConflict", await ConflictTypeAsync(response).ConfigureAwait(false));
+        AssertEx.Equal("GraphWorkflowRunConflict", await ConflictTypeAsync(response));
     }
 
     [Test]
     public async Task CancelRun_OnALiveRun_Answers202AndTheBodyReadsCancelling()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var response = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}").ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode, "cancel is fire-and-forget, so it is accepted rather than done.");
         AssertEx.Equal("Cancelling", document.RootElement.GetProperty("run").GetProperty("status").GetString());
@@ -203,12 +202,12 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task CancelRun_Repeated_Answers202Again()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var first = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}").ConfigureAwait(false);
-        using var repeat = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}").ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await repeat.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var first = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}");
+        using var repeat = await SendAsync("POST", $"{Runs}/{runId}/cancel", "{}");
+        using var document = JsonDocument.Parse(await repeat.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.Accepted, first.StatusCode);
         AssertEx.Equal(HttpStatusCode.Accepted, repeat.StatusCode, "the same ask answered again is not a conflict.");
@@ -219,11 +218,11 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task GetRun_CarriesTheNodeRunSummariesWithoutTheirDocuments()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var response = await SendAsync("GET", $"{Runs}/{runId}").ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync("GET", $"{Runs}/{runId}");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("Pending", document.RootElement.GetProperty("run").GetProperty("status").GetString());
@@ -240,21 +239,20 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task GetRun_CarriesTheGraphTheRunPinned_EvenAfterTheDefinitionIsEditedToAnother()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
-        await ReplaceGraphAsync(definitionId, GraphWorkflowGraphs.BranchOnJson).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
+        await ReplaceGraphAsync(definitionId, GraphWorkflowGraphs.BranchOnJson);
 
-        using var response = await SendAsync("GET", $"{Runs}/{runId}").ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync("GET", $"{Runs}/{runId}");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var graph = document.RootElement.GetProperty("graph");
         AssertEx.Equal("analyze, done, start", NodeKeys(graph), "the run answers with the graph it started on, not with the definition's current one.");
         AssertEx.Equal(expected: 1, graph.GetProperty("schemaVersion").GetInt32());
 
-        using var definition = JsonDocument.Parse(await (await SendAsync("GET", $"{Root}/definitions/{definitionId}").ConfigureAwait(false)).Content
-            .ReadAsStringAsync()
-            .ConfigureAwait(false));
+        using var definition = JsonDocument.Parse(await (await SendAsync("GET", $"{Root}/definitions/{definitionId}")).Content
+            .ReadAsStringAsync());
         AssertEx.Equal("analyze, check, done, review, ship, start",
             NodeKeys(definition.RootElement.GetProperty("graph")),
             "the definition really did move on, so the two reads are answering about different graphs.");
@@ -267,13 +265,12 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task GetRun_CarriesThePinnedGraphInTheSameShapeADefinitionReadDoes()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var run = JsonDocument.Parse(await (await SendAsync("GET", $"{Runs}/{runId}").ConfigureAwait(false)).Content.ReadAsStringAsync().ConfigureAwait(false));
-        using var definition = JsonDocument.Parse(await (await SendAsync("GET", $"{Root}/definitions/{definitionId}").ConfigureAwait(false)).Content
-            .ReadAsStringAsync()
-            .ConfigureAwait(false));
+        using var run = JsonDocument.Parse(await (await SendAsync("GET", $"{Runs}/{runId}")).Content.ReadAsStringAsync());
+        using var definition = JsonDocument.Parse(await (await SendAsync("GET", $"{Root}/definitions/{definitionId}")).Content
+            .ReadAsStringAsync());
 
         // Structural, not raw text: what matters is that the two documents SAY the same thing, and property order is
         // the serializer's business rather than the contract's.
@@ -288,9 +285,9 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task StartRun_OnADefinitionTheValidatorOnlyWarnsAbout_Answers202()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.PauseBetweenTwoAgents).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.PauseBetweenTwoAgents);
 
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var runId = await StartRunAsync(definitionId);
 
         AssertEx.NotEqual(Guid.Empty, runId);
     }
@@ -298,11 +295,11 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task GetNodeRun_CarriesTheDocumentsAsRawJson()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var response = await SendAsync("GET", $"{Runs}/{runId}/nodes/analyze").ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync("GET", $"{Runs}/{runId}/nodes/analyze");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("analyze", document.RootElement.GetProperty("nodeKey").GetString());
@@ -314,10 +311,10 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task GetNodeRun_ForANodeTheRunDoesNotHave_Answers404()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var response = await SendAsync("GET", $"{Runs}/{runId}/nodes/nosuchnode").ConfigureAwait(false);
+        using var response = await SendAsync("GET", $"{Runs}/{runId}/nodes/nosuchnode");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -325,11 +322,11 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task ListRunEvents_PagesFromTheWatermarkAndReportsTruncation()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var response = await SendAsync("GET", $"{Runs}/{runId}/events?afterSeq=0").ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync("GET", $"{Runs}/{runId}/events?afterSeq=0");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var events = document.RootElement.GetProperty("events");
@@ -338,18 +335,18 @@ public sealed class GraphWorkflowRunEndpointTests
         AssertEx.False(document.RootElement.GetProperty("replayTruncated").GetBoolean(), "one event under the cap is not a truncated page.");
         AssertEx.Equal(events[0].GetProperty("seq").GetInt64(), document.RootElement.GetProperty("lastSeq").GetInt64());
 
-        using var past = await SendAsync("GET", $"{Runs}/{runId}/events?afterSeq={document.RootElement.GetProperty("lastSeq").GetInt64()}").ConfigureAwait(false);
-        using var empty = JsonDocument.Parse(await past.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var past = await SendAsync("GET", $"{Runs}/{runId}/events?afterSeq={document.RootElement.GetProperty("lastSeq").GetInt64()}");
+        using var empty = JsonDocument.Parse(await past.Content.ReadAsStringAsync());
         AssertEx.Equal(expected: 0, empty.RootElement.GetProperty("events").GetArrayLength(), "the watermark is exclusive.");
     }
 
     [Test]
     public async Task ListRunEvents_WithANegativeWatermark_Answers400()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var response = await SendAsync("GET", $"{Runs}/{runId}/events?afterSeq=-1").ConfigureAwait(false);
+        using var response = await SendAsync("GET", $"{Runs}/{runId}/events?afterSeq=-1");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -357,7 +354,7 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task ListRuns_WithAStatusThatIsNotAMemberName_Answers400()
     {
-        using var response = await SendAsync("GET", $"{Runs}?status=nosuchstatus").ConfigureAwait(false);
+        using var response = await SendAsync("GET", $"{Runs}?status=nosuchstatus");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -369,11 +366,11 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task ListRuns_CarriesTheRunsThisNodeHasStarted()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var runId = await StartRunAsync(definitionId).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
 
-        using var response = await SendAsync("GET", $"{Runs}?status=Pending&limit=200").ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync("GET", $"{Runs}?status=Pending&limit=200");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(document.RootElement.GetProperty("runs").EnumerateArray().Select(static run => run.GetProperty("id").GetGuid()), runId);
@@ -391,17 +388,16 @@ public sealed class GraphWorkflowRunEndpointTests
     private async Task ReplaceGraphAsync(Guid definitionId, string graphJson)
     {
         await using var scope = Host.Factory.Services.CreateAsyncScope();
-        var current = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        var current = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(definitionId);
         _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>()
-                       .UpdateAsync(definitionId, current.Version, name: null, description: null, graphJson)
-                       .ConfigureAwait(false);
+                       .UpdateAsync(definitionId, current.Version, name: null, description: null, graphJson);
     }
 
     private async Task<Guid> SeedDefinitionAsync(string graphJson)
     {
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
-        var created = await definitions.CreateAsync($"Seeded {Guid.NewGuid():N}", description: null, graphJson).ConfigureAwait(false);
+        var created = await definitions.CreateAsync($"Seeded {Guid.NewGuid():N}", description: null, graphJson);
         return created.Id;
     }
 
@@ -411,14 +407,14 @@ public sealed class GraphWorkflowRunEndpointTests
         {
             requestId = Guid.NewGuid()
         });
-        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", body).ConfigureAwait(false);
+        using var response = await SendAsync("POST", $"{Root}/definitions/{definitionId}/runs", body);
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        return await RunIdAsync(response).ConfigureAwait(false);
+        return await RunIdAsync(response);
     }
 
     private static async Task<Guid> RunIdAsync(HttpResponseMessage response)
     {
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return document.RootElement.GetProperty("runId").GetGuid();
     }
 
@@ -430,10 +426,10 @@ public sealed class GraphWorkflowRunEndpointTests
     [Test]
     public async Task StartRun_WithABodyOverTheCap_Returns413InTheDeclaredShape()
     {
-        using var response = await SendAsync("POST", DefinitionRuns, OversizedStartBody()).ConfigureAwait(false);
+        using var response = await SendAsync("POST", DefinitionRuns, OversizedStartBody());
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode, "start must refuse a body over the cap before it looks the definition up.");
-        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, $"POST {DefinitionRuns}").ConfigureAwait(false);
+        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, $"POST {DefinitionRuns}");
     }
 
     /// <summary>A body whose bulk is in the run INPUT, the member this route's cap exists to bound.</summary>
@@ -445,7 +441,7 @@ public sealed class GraphWorkflowRunEndpointTests
 
     private static async Task<string?> ConflictTypeAsync(HttpResponseMessage response)
     {
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return document.RootElement.GetProperty("conflictType").GetString();
     }
 
@@ -454,7 +450,7 @@ public sealed class GraphWorkflowRunEndpointTests
         using var client = Host.Factory.CreateClient();
         using var request = Request(method, route, body);
         Host.Factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage Request(string method, string route, string? body = null)

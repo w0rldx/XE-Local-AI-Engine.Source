@@ -13,9 +13,9 @@ public sealed class AddBenchmarkProfileRevisionBindingMigrationTests
     [Test]
     public async Task Migrate_ToLatest_BindsBenchmarksToTheirProfile()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-profile-revision-binding.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-profile-revision-binding.sqlite");
 
-        var columns = await probe.ColumnsAsync("model_fit_benchmarks").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("model_fit_benchmarks");
         AssertEx.True(columns.IsSupersetOf(new[]
         {
             "profile_id",
@@ -26,7 +26,7 @@ public sealed class AddBenchmarkProfileRevisionBindingMigrationTests
         AssertEx.True(await probe.IndexExistsAsync("model_fit_benchmarks",
                 "IX_model_fit_benchmarks_profile_id",
                 unique: false,
-                "profile_id").ConfigureAwait(false),
+                "profile_id"),
             "The per-profile benchmark lookup must be indexed.");
     }
 }

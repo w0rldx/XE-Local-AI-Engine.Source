@@ -22,7 +22,7 @@ internal static class SqliteFileProbe
     public static async Task<byte[]> ReadAllBytesAsync(string databasePath)
     {
         SqliteConnection.ClearAllPools();
-        return await File.ReadAllBytesAsync(databasePath).ConfigureAwait(false);
+        return await File.ReadAllBytesAsync(databasePath);
     }
 
     /// <summary>

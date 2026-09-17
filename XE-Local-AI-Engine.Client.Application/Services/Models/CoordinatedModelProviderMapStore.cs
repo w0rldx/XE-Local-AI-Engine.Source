@@ -31,7 +31,7 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
         CancellationToken cancellationToken = default)
     {
         ValidateMutationLease(lease, modelName);
-        var current = await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var current = await _persistence.ReadAsync(modelName, cancellationToken);
         if (current is not null)
         {
             return string.Equals(current.ProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
@@ -39,13 +39,13 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
                 : new ProviderMapClaimResult.Conflict(current.ProviderName);
         }
 
-        var inserted = await _persistence.TryInsertAsync(modelName, LlamaServerProviderConstants.ProviderName, cancellationToken).ConfigureAwait(false);
+        var inserted = await _persistence.TryInsertAsync(modelName, LlamaServerProviderConstants.ProviderName, cancellationToken);
         if (inserted is not null)
         {
             return new ProviderMapClaimResult.Created(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted, WasRemoval: false));
         }
 
-        current = await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false)
+        current = await _persistence.ReadAsync(modelName, cancellationToken)
                   ?? throw new InvalidOperationException("The provider-map claim lost a race but no current row is readable.");
         return string.Equals(current.ProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
             ? new ProviderMapClaimResult.CompatibleExisting(current)
@@ -60,7 +60,7 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
     {
         ValidateMutationLease(lease, modelName);
         ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
-        var current = await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var current = await _persistence.ReadAsync(modelName, cancellationToken);
         if (current is null)
         {
             if (expectedRevision is not null)
@@ -68,9 +68,9 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
                 return new ProviderMapMutationResult.Superseded(Current: null);
             }
 
-            var inserted = await _persistence.TryInsertAsync(modelName, providerName, cancellationToken).ConfigureAwait(false);
+            var inserted = await _persistence.TryInsertAsync(modelName, providerName, cancellationToken);
             return inserted is null
-                ? new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false))
+                ? new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken))
                 : new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted, WasRemoval: false));
         }
 
@@ -79,9 +79,9 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
             return new ProviderMapMutationResult.Superseded(current);
         }
 
-        var updated = await _persistence.TryUpdateAsync(modelName, providerName, current.Revision, cancellationToken).ConfigureAwait(false);
+        var updated = await _persistence.TryUpdateAsync(modelName, providerName, current.Revision, cancellationToken);
         return updated is null
-            ? new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false))
+            ? new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken))
             : new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: current, Mutation: updated, WasRemoval: false));
     }
 
@@ -99,7 +99,7 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
                 throw new ArgumentException("The provider-map removal receipt is malformed.", nameof(receipt));
             }
 
-            var restored = await _persistence.TryInsertAsync(receipt.Prior.ModelName, receipt.Prior.ProviderName, cancellationToken).ConfigureAwait(false);
+            var restored = await _persistence.TryInsertAsync(receipt.Prior.ModelName, receipt.Prior.ProviderName, cancellationToken);
             return restored is null ? ProviderMapRestoreResult.Superseded : ProviderMapRestoreResult.Restored;
         }
 
@@ -113,14 +113,14 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
             var deleted = await _persistence.TryDeleteAsync(receipt.ModelName,
                 receipt.Mutation.ProviderName,
                 receipt.Mutation.Revision,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             return deleted ? ProviderMapRestoreResult.Restored : ProviderMapRestoreResult.Superseded;
         }
 
         var updated = await _persistence.TryUpdateAsync(receipt.ModelName,
             receipt.Prior.ProviderName,
             receipt.Mutation.Revision,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         return updated is null ? ProviderMapRestoreResult.Superseded : ProviderMapRestoreResult.Restored;
     }
 
@@ -134,7 +134,7 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedProvider);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedRevision);
 
-        var current = await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var current = await _persistence.ReadAsync(modelName, cancellationToken);
         if (current is null)
         {
             return new ProviderMapRemovalResult.Absent();
@@ -146,10 +146,10 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
             return new ProviderMapRemovalResult.Superseded(current);
         }
 
-        var removed = await _persistence.TryDeleteAsync(modelName, expectedProvider, expectedRevision, cancellationToken).ConfigureAwait(false);
+        var removed = await _persistence.TryDeleteAsync(modelName, expectedProvider, expectedRevision, cancellationToken);
         if (!removed)
         {
-            current = await _persistence.ReadAsync(modelName, cancellationToken).ConfigureAwait(false);
+            current = await _persistence.ReadAsync(modelName, cancellationToken);
             return current is null ? new ProviderMapRemovalResult.Absent() : new ProviderMapRemovalResult.Superseded(current);
         }
 

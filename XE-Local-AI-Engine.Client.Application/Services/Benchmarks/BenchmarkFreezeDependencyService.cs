@@ -36,7 +36,7 @@ public sealed class BenchmarkFreezeDependencyService(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resolvedRuntime);
-        var agent = await _agentDefinitions.GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false)
+        var agent = await _agentDefinitions.GetByIdAsync(agentDefinitionId, cancellationToken)
                     ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
         if (agent.Kind != AgentDefinitionKind.Single
             || resolvedRuntime.Kind != AgentDefinitionKind.Single
@@ -46,10 +46,10 @@ public sealed class BenchmarkFreezeDependencyService(
             throw new BenchmarkEligibilityException("The selected agent definition changed during benchmark resolution.");
         }
 
-        var playbookRows = await _playbooks.ListByAgentAsync(agent.Id, cancellationToken).ConfigureAwait(false);
-        var skillRows = await LoadAssignedSkillsAsync(agent, cancellationToken).ConfigureAwait(false);
-        var customToolRows = await LoadAssignedCustomToolsAsync(agent, cancellationToken).ConfigureAwait(false);
-        var profiles = await _inferenceProfiles.ListAsync(cancellationToken).ConfigureAwait(false);
+        var playbookRows = await _playbooks.ListByAgentAsync(agent.Id, cancellationToken);
+        var skillRows = await LoadAssignedSkillsAsync(agent, cancellationToken);
+        var customToolRows = await LoadAssignedCustomToolsAsync(agent, cancellationToken);
+        var profiles = await _inferenceProfiles.ListAsync(cancellationToken);
 
         return new BenchmarkFreezeDependencySetV1(Hash(agent),
             Hash(playbookRows.OrderBy(static item => item.Id).ToArray()),
@@ -64,9 +64,9 @@ public sealed class BenchmarkFreezeDependencyService(
         var result = new List<object>();
         foreach (var id in (agent.AllowedSkillIds ?? []).Distinct().Order())
         {
-            var skill = await _skills.GetByIdAsync(id, cancellationToken).ConfigureAwait(false)
+            var skill = await _skills.GetByIdAsync(id, cancellationToken)
                         ?? throw new BenchmarkEligibilityException("An assigned benchmark skill no longer exists.");
-            var resources = await _skills.ListResourcesAsync(id, cancellationToken).ConfigureAwait(false);
+            var resources = await _skills.ListResourcesAsync(id, cancellationToken);
             result.Add(new
             {
                 Skill = skill,
@@ -81,7 +81,7 @@ public sealed class BenchmarkFreezeDependencyService(
     {
         var assignedNames = agent.AllowedToolNames.Where(static name => name.StartsWith("custom__", StringComparison.Ordinal))
                                  .ToHashSet(StringComparer.Ordinal);
-        var rows = await _customTools.ListAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await _customTools.ListAsync(cancellationToken);
         if (assignedNames.Except(rows.Select(static row => row.Name), StringComparer.Ordinal).Any())
         {
             throw new BenchmarkEligibilityException("An assigned benchmark custom tool no longer exists.");

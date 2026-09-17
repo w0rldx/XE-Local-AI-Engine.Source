@@ -31,16 +31,16 @@ public sealed class WorkSessionAgentSeederTests
 
         // Two boots must not duplicate a row. The fixture strips every hosted service, so the seeder is driven here
         // rather than by host startup.
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
+        await seeder.StartAsync(CancellationToken.None);
 
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var slugs = await store.ListSeededSlugsAsync().ConfigureAwait(false);
+        var slugs = await store.ListSeededSlugsAsync();
         AssertEx.Contains(slugs, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         AssertEx.Contains(slugs, AgentDefaults.WorkSessionResearchAgentSeedSlug);
 
-        var definitions = await store.ListAsync().ConfigureAwait(false);
+        var definitions = await store.ListAsync();
         AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == AgentDefaults.WorkSessionGeneralAgentSeedSlug));
         AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == AgentDefaults.WorkSessionResearchAgentSeedSlug));
     }
@@ -52,28 +52,28 @@ public sealed class WorkSessionAgentSeederTests
         await using var factory = new TestServerWebAppFactory();
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = new WorkSessionAgentSeeder(scopeFactory, NullLogger<WorkSessionAgentSeeder>.Instance);
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
 
         using (var scope = factory.Services.CreateScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-            var general = (await store.ListAsync().ConfigureAwait(false)).Single(definition => definition.SeedSlug == AgentDefaults.WorkSessionGeneralAgentSeedSlug);
-            AssertEx.True(await store.DeleteAsync(general.Id).ConfigureAwait(false));
+            var general = (await store.ListAsync()).Single(definition => definition.SeedSlug == AgentDefaults.WorkSessionGeneralAgentSeedSlug);
+            AssertEx.True(await store.DeleteAsync(general.Id));
         }
 
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
 
         using (var scope = factory.Services.CreateScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-            AssertEx.Contains(await store.ListSeededSlugsAsync().ConfigureAwait(false), AgentDefaults.WorkSessionGeneralAgentSeedSlug);
+            AssertEx.Contains(await store.ListSeededSlugsAsync(), AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         }
     }
 
     [Test]
     public async Task GeneralPersona_CarriesTheStateToolsAskUserAndTheClock()
     {
-        var definition = await ReadSeededAsync(Host.Factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
+        var definition = await ReadSeededAsync(Host.Factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
 
         AssertEx.Equal(AgentDefaults.WorkSessionGeneralAgentName, definition.Name);
         AssertEx.Equal(AgentDefinitionSource.Seeded, definition.Source);
@@ -94,7 +94,7 @@ public sealed class WorkSessionAgentSeederTests
     [Test]
     public async Task ResearchPersona_AddsTheKnowledgeBaseReads()
     {
-        var definition = await ReadSeededAsync(Host.Factory, AgentDefaults.WorkSessionResearchAgentSeedSlug).ConfigureAwait(false);
+        var definition = await ReadSeededAsync(Host.Factory, AgentDefaults.WorkSessionResearchAgentSeedSlug);
 
         AssertEx.Contains(definition.AllowedToolNames, SearchKnowledgeBaseToolDefinition.ToolName);
         AssertEx.Contains(definition.AllowedToolNames, ReadDocumentToolDefinition.ToolName);
@@ -111,7 +111,7 @@ public sealed class WorkSessionAgentSeederTests
                      AgentDefaults.WorkSessionResearchAgentSeedSlug
                  })
         {
-            var definition = await ReadSeededAsync(Host.Factory, slug).ConfigureAwait(false);
+            var definition = await ReadSeededAsync(Host.Factory, slug);
             foreach (var (name, requiresApproval) in definition.ToolApprovals)
             {
                 var expected = string.Equals(name, AskUserTool.ToolName, StringComparison.Ordinal);
@@ -151,14 +151,13 @@ public sealed class WorkSessionAgentSeederTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-            _ = await store.AddSeededAsync(edited, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
+            _ = await store.AddSeededAsync(edited, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         }
 
         await new WorkSessionAgentSeeder(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
 
-        var repaired = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
+        var repaired = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         AssertEx.Contains(repaired.AllowedToolNames, "GetCurrentTime");
         AssertEx.False(repaired.AllowedToolNames.Contains("get_current_time", StringComparer.Ordinal), "the dead name must be gone, not merely joined by the live one.");
         AssertEx.True(repaired.ToolApprovals.ContainsKey("GetCurrentTime"), "the approval travels with the rename, or the tool arrives needing a click nobody configured.");
@@ -169,7 +168,7 @@ public sealed class WorkSessionAgentSeederTests
         AssertEx.Equal(AgentDefinitionSource.Seeded, repaired.Source, "the row stays seeded, or the next boot writes a duplicate.");
 
         await using var check = factory.Services.CreateAsyncScope();
-        var definitions = await check.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().ListAsync().ConfigureAwait(false);
+        var definitions = await check.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().ListAsync();
         AssertEx.Equal(expected: 1,
             definitions.Count(static definition => definition.SeedSlug == AgentDefaults.WorkSessionGeneralAgentSeedSlug),
             "the repair updates the row it found; it must not add a second.");
@@ -209,15 +208,13 @@ public sealed class WorkSessionAgentSeederTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             _ = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>()
-                           .AddSeededAsync(both, AgentDefaults.WorkSessionGeneralAgentSeedSlug)
-                           .ConfigureAwait(false);
+                           .AddSeededAsync(both, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         }
 
         await new WorkSessionAgentSeeder(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
 
-        var repaired = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
+        var repaired = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug);
         AssertEx.False(repaired.ToolApprovals.ContainsKey("get_current_time"));
         AssertEx.False(repaired.ToolApprovals["GetCurrentTime"],
             "the correctly named key already had a value, so the legacy one supplies nothing — whichever was written first.");
@@ -233,6 +230,6 @@ public sealed class WorkSessionAgentSeederTests
         // whose violation the seeder's best-effort contract swallows — leaving this test silently unseeded.
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        return AssertEx.NotNull(await store.GetBySeedSlugAsync(slug).ConfigureAwait(false), $"The seeder must have created {slug}.");
+        return AssertEx.NotNull(await store.GetBySeedSlugAsync(slug), $"The seeder must have created {slug}.");
     }
 }

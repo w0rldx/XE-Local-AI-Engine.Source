@@ -28,9 +28,8 @@ public sealed class PostWorkSessionMessageEndpoint(IWorkSessionService service)
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var messageId = await _service.PostFollowUpAsync(req.SessionId, req.Text, ct).ConfigureAwait(false);
-        var session = await _service.GetAsync(req.SessionId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: new PostWorkSessionMessageResponse(messageId, session.ConversationId)))
-                  .ConfigureAwait(false);
+        var messageId = await _service.PostFollowUpAsync(req.SessionId, req.Text, ct);
+        var session = await _service.GetAsync(req.SessionId, ct);
+        await Send.ResultAsync(Results.Accepted(value: new PostWorkSessionMessageResponse(messageId, session.ConversationId)));
     }
 }

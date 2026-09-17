@@ -35,8 +35,7 @@ public sealed class ImageModelStoreFailedDownloadTests
             NullLogger<HuggingFaceImageModelStore>.Instance,
             TimeProvider.System);
 
-        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(Request(), progress: null, CancellationToken.None))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(Request(), progress: null, CancellationToken.None));
 
         var modelDirectory = Path.Combine(models.Path, HuggingFaceImageModelStore.SafeModelDirectorySegment(ModelName));
         AssertEx.False(Directory.Exists(modelDirectory), "A failed download must not leave an orphan empty model directory behind.");
@@ -54,7 +53,7 @@ public sealed class ImageModelStoreFailedDownloadTests
         var modelDirectory = Path.Combine(models.Path, HuggingFaceImageModelStore.SafeModelDirectorySegment(ModelName));
         _ = Directory.CreateDirectory(modelDirectory);
         var partPath = Path.Combine(modelDirectory, "weights.safetensors.part");
-        await File.WriteAllTextAsync(partPath, "half-a-file").ConfigureAwait(false);
+        await File.WriteAllTextAsync(partPath, "half-a-file");
 
         var store = new HuggingFaceImageModelStore(DownloadClient(http, models.Path),
             registry,
@@ -62,8 +61,7 @@ public sealed class ImageModelStoreFailedDownloadTests
             NullLogger<HuggingFaceImageModelStore>.Instance,
             TimeProvider.System);
 
-        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(Request(), progress: null, CancellationToken.None))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(Request(), progress: null, CancellationToken.None));
 
         AssertEx.True(Directory.Exists(modelDirectory), "Cleanup must not delete a directory that still holds resumable bytes.");
         AssertEx.True(File.Exists(partPath), "The partial file must survive so the next attempt resumes from it.");

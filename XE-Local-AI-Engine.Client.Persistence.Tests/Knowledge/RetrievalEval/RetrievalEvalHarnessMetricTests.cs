@@ -52,7 +52,7 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
             ]
         });
 
-        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, [query], ids, K, CancellationToken.None).ConfigureAwait(false);
+        var metrics = await RetrievalEvalHarness.EvaluateAsync(search, [query], ids, K, CancellationToken.None);
 
         var expectedNdcg = ((1d / Math.Log2(3d)) + (1d / Math.Log2(5d))) /
                            (1d + (1d / Math.Log2(3d)) + (1d / Math.Log2(4d)));
@@ -88,7 +88,7 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
         });
 
         var metrics = await RetrievalEvalHarness.EvaluateAsync(search,
-            [answerable, correctAbstention, falsePositive], ids, K, CancellationToken.None).ConfigureAwait(false);
+            [answerable, correctAbstention, falsePositive], ids, K, CancellationToken.None);
 
         AssertClose(1d, metrics.RecallAtK);
         AssertClose(1d, metrics.MeanReciprocalRank);
@@ -126,18 +126,18 @@ public sealed class RetrievalEvalHarnessMetricTests : IDisposable
             _keyHolder,
             RetrievalEvalRepresentativeCorpus.Documents,
             RetrievalEvalCorpus.ScoreFusionSynonyms,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         var answerable = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(),
             RetrievalEvalRepresentativeCorpus.AnswerableQueries,
             fixture.DocumentIdsByKey,
             K,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
         var noAnswer = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateLexicalOnlySearchService(),
             RetrievalEvalRepresentativeCorpus.NoAnswerQueries,
             fixture.DocumentIdsByKey,
             K,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         AssertClose(1d, answerable.RecallAtK);
         AssertEx.True(answerable.NdcgAtK >= 0.80d, $"Representative ordering regressed. {answerable.Summarize()}");

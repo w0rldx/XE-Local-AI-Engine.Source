@@ -40,7 +40,7 @@ public sealed class ImageJobStartupReconciler(
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
-            interrupted = await store.MarkInterruptedFailedAsync(InterruptedReason, NowUnixMs(), cancellationToken).ConfigureAwait(false);
+            interrupted = await store.MarkInterruptedFailedAsync(InterruptedReason, NowUnixMs(), cancellationToken);
         }
         catch (Exception exception)
         {
@@ -59,7 +59,7 @@ public sealed class ImageJobStartupReconciler(
 
         foreach (var jobId in interrupted)
         {
-            await PublishFailedAsync(jobId, cancellationToken).ConfigureAwait(false);
+            await PublishFailedAsync(jobId, cancellationToken);
         }
     }
 
@@ -82,7 +82,7 @@ public sealed class ImageJobStartupReconciler(
 
         try
         {
-            await _eventPublisher.PublishStatusAsync(payload, cancellationToken).ConfigureAwait(false);
+            await _eventPublisher.PublishStatusAsync(payload, cancellationToken);
         }
         catch (Exception exception)
         {

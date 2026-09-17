@@ -234,7 +234,7 @@ public sealed class ProcessGpuVendorProbeTests
 
         public async Task<string> ReadStandardOutputAsync(CancellationToken ct)
         {
-            await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+            await Task.Delay(Timeout.Infinite, ct);
             return string.Empty;
         }
 

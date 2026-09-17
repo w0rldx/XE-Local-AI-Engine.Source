@@ -43,16 +43,16 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         var documentId = Guid.NewGuid();
         var chunkId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
         // The document was successfully indexed once (chunks exist) but its catalog row now shows a re-index that is
         // pending / has failed. Its prior projections are NOT purged, so the search still serves them.
-        await SeedDocumentAsync(databasePath, documentId, storedStatus).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkId, chunkIndex: 0, "alpha content").ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, documentId, storedStatus);
+        await SeedChunkAsync(databasePath, documentId, chunkId, chunkIndex: 0, "alpha content");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, [new FtsSearchHit(chunkId, documentId, 1.0)]);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
 
         AssertEx.Equal(1, result.Results.Count);
         var hit = result.Results[0];
@@ -68,14 +68,14 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         var documentId = Guid.NewGuid();
         var chunkId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId, "Indexed").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkId, chunkIndex: 0, "alpha content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, "Indexed");
+        await SeedChunkAsync(databasePath, documentId, chunkId, chunkIndex: 0, "alpha content");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, [new FtsSearchHit(chunkId, documentId, 1.0)]);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None);
 
         AssertEx.Equal(1, result.Results.Count);
         var hit = result.Results[0];
@@ -124,7 +124,7 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private async Task SeedDocumentAsync(string databasePath, Guid documentId, string status)
@@ -136,7 +136,7 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         }
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -148,13 +148,13 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         command.Parameters.AddWithValue("$hash", "hash-" + documentId.ToString("N"));
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
         command.Parameters.AddWithValue("$status", status);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task SeedChunkAsync(string databasePath, Guid documentId, Guid chunkId, int chunkIndex, string content)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -165,7 +165,7 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         command.Parameters.AddWithValue("$document", documentId);
         command.Parameters.AddWithValue("$index", chunkIndex);
         command.Parameters.AddWithValue("$content", content);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

@@ -13,9 +13,9 @@ public sealed class AddNodeConversationSelectedPathMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsSelectedPathJsonToConversations()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-path.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-path.sqlite");
 
-        var columns = await probe.ColumnsAsync("conversations").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("conversations");
 
         AssertEx.True(columns.Contains("selected_path_json"), "conversations must carry the selected-path column.");
     }

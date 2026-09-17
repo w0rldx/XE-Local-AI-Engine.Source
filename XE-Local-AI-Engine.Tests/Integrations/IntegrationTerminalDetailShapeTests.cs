@@ -154,9 +154,9 @@ public sealed class IntegrationTerminalDetailShapeTests
         // the cancel primitive.
         var harness = new IntegrationInvokeHarness(queueCapacity: 1);
         var trigger = harness.SeedTrigger("sensor-feed");
-        _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name);
 
-        var refused = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var refused = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.Equal(IntegrationAcceptOutcome.QueueFull, refused.Outcome);
         var terminalized = harness.Executions.Rows.Single(row => row.Status == IntegrationExecutionStatus.Failed);

@@ -39,8 +39,7 @@ public sealed class ModelFitQueryService(
                                               useCase,
                                               providerName,
                                               modelName: null,
-                                              cancellationToken)
-                                          .ConfigureAwait(false);
+                                              cancellationToken);
 
         if (summary is null)
         {
@@ -48,8 +47,8 @@ public sealed class ModelFitQueryService(
             return null;
         }
 
-        var recommendations = await _recommendationStore.ListForSnapshotAsync(summary.Id, cancellationToken).ConfigureAwait(false);
-        recommendations = await ApplyNodeInstallStateAsync(recommendations, cancellationToken).ConfigureAwait(false);
+        var recommendations = await _recommendationStore.ListForSnapshotAsync(summary.Id, cancellationToken);
+        recommendations = await ApplyNodeInstallStateAsync(recommendations, cancellationToken);
 
         return new ModelFitLatestRecommendationsView(summary.Id,
             summary.Status,
@@ -78,7 +77,7 @@ public sealed class ModelFitQueryService(
         HashSet<string> installedTags;
         try
         {
-            var installed = await _ollamaModelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
+            var installed = await _ollamaModelService.ListLocalModelsAsync(cancellationToken);
             installedTags = installed
                             .Select(model => model.Name)
                             .OfType<string>()

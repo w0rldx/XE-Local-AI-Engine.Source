@@ -84,8 +84,7 @@ internal sealed class RecordFindingToolHandler(
                                         taskId,
                                         string.IsNullOrWhiteSpace(request.SourceRef) ? null : request.SourceRef,
                                         supersedesId),
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                                    cancellationToken);
 
         return new WorkSessionToolOutcome($"Recorded a {request.Kind} on this work session.", result.Sequence, WorkSessionChangeKind.Finding);
     }

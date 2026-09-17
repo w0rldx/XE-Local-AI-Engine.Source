@@ -53,12 +53,12 @@ public sealed class DevWorkflowMaterializedIsolationTests
     public async Task TwoMaterializedTasksImplementTwoTasksOfTheirOwnAndSoTwoWorkspaces()
     {
         await using var harness = DevWorkflowHarness.WithAScriptedChain();
-        var (runId, projectId, operatorTaskId) = await DecomposeAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
+        var (runId, projectId, operatorTaskId) = await DecomposeAsync(harness, TwoIndependentTasks);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var alpha = await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false);
-        var beta = await harness.ReadNodeRunAsync(runId, "implement#beta").ConfigureAwait(false);
+        var alpha = await harness.ReadNodeRunAsync(runId, "implement#alpha");
+        var beta = await harness.ReadNodeRunAsync(runId, "implement#beta");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, alpha.Status, AssertEx.NotNull(alpha.TerminalReason ?? alpha.OutputJson));
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, beta.Status, AssertEx.NotNull(beta.TerminalReason ?? beta.OutputJson));
 
@@ -68,17 +68,17 @@ public sealed class DevWorkflowMaterializedIsolationTests
         AssertEx.NotEqual(operatorTaskId, alphaTaskId, "and neither of them drives the operator's own task, which is what the fan-out was decomposed FROM.");
         AssertEx.NotEqual(operatorTaskId, betaTaskId);
         AssertEx.Equal(expected: 3,
-            (await harness.ListDevelopmentTasksAsync(projectId).ConfigureAwait(false)).Count,
+            (await harness.ListDevelopmentTasksAsync(projectId)).Count,
             "one project, three tasks: the operator's and one per materialized child.");
 
         // The workspace key itself, composed by the production path rather than re-derived here: the provider builds
         // both its worktree and its runtime directory from (ProjectId, TaskId), and keys the sandbox attach on the same
         // pair, so two children sharing a project are isolated by exactly this value being different.
-        var project = await ReadProjectAsync(harness, projectId).ConfigureAwait(false);
-        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var project = await ReadProjectAsync(harness, projectId);
+        var run = await harness.ReadRunAsync(runId);
         var graph = DevWorkflowGraph.Parse(run.GraphJson);
-        var alphaCheck = await harness.ReadNodeRunAsync(runId, "validate#alpha").ConfigureAwait(false);
-        var betaCheck = await harness.ReadNodeRunAsync(runId, "validate#beta").ConfigureAwait(false);
+        var alphaCheck = await harness.ReadNodeRunAsync(runId, "validate#alpha");
+        var betaCheck = await harness.ReadNodeRunAsync(runId, "validate#beta");
         var alphaWorkspace = Workspace(project, graph, run, alphaCheck);
         var betaWorkspace = Workspace(project, graph, run, betaCheck);
 
@@ -92,11 +92,11 @@ public sealed class DevWorkflowMaterializedIsolationTests
             }).TaskId,
             "a re-attempt is a new workspace too: reusing the last attempt's tree would re-validate the commit it was built from.");
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
-            (await harness.ReadDevelopmentTaskAsync(alphaTaskId).ConfigureAwait(false)).Status,
+            (await harness.ReadDevelopmentTaskAsync(alphaTaskId)).Status,
             "each child drove its own task the whole way, which is what makes the two workspaces two pieces of real work.");
-        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await harness.ReadDevelopmentTaskAsync(betaTaskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await harness.ReadDevelopmentTaskAsync(betaTaskId)).Status);
     }
 
     /// <summary>
@@ -115,12 +115,12 @@ public sealed class DevWorkflowMaterializedIsolationTests
     {
         await using var harness = DevWorkflowHarness.WithAScriptedChain();
         harness.Chain.HoldNextAttempt(count: 2);
-        var (runId, projectId, _) = await DecomposeAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
+        var (runId, projectId, _) = await DecomposeAsync(harness, TwoIndependentTasks);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var alpha = await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false);
-        var beta = await harness.ReadNodeRunAsync(runId, "implement#beta").ConfigureAwait(false);
+        var alpha = await harness.ReadNodeRunAsync(runId, "implement#alpha");
+        var beta = await harness.ReadNodeRunAsync(runId, "implement#beta");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, alpha.Status, $"'implement#alpha' is {alpha.Status}: {alpha.TerminalReason}");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
             beta.Status,
@@ -135,13 +135,13 @@ public sealed class DevWorkflowMaterializedIsolationTests
                      betaTaskId
                  })
         {
-            AssertEx.Contains(await ReadAttemptsAsync(harness, taskId).ConfigureAwait(false),
+            AssertEx.Contains(await ReadAttemptsAsync(harness, taskId),
                 attempt => attempt.Status == DevelopmentAttemptStatus.Running,
                 $"task {taskId:N} has no attempt in flight, so the two children are not really working at once.");
         }
 
         AssertEx.Equal(expected: 3,
-            (await harness.ListDevelopmentTasksAsync(projectId).ConfigureAwait(false)).Count,
+            (await harness.ListDevelopmentTasksAsync(projectId)).Count,
             "and both children got their task while the other was mid-create: the per-project ledger sequence does not refuse the second.");
     }
 
@@ -152,11 +152,11 @@ public sealed class DevWorkflowMaterializedIsolationTests
     /// </summary>
     private static async Task<(Guid RunId, Guid ProjectId, Guid OperatorTaskId)> DecomposeAsync(DevWorkflowHarness harness, string package)
     {
-        var (projectId, operatorTaskId) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasks, "Add the feature.", projectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", package).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        var (projectId, operatorTaskId) = await harness.SeedDevelopmentProjectAsync();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasks, "Add the feature.", projectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", package);
+        await harness.SettleAgentAsync(runId, "decompose");
         return (runId, projectId, operatorTaskId);
     }
 
@@ -186,12 +186,12 @@ public sealed class DevWorkflowMaterializedIsolationTests
     private static async Task<DevelopmentProjectSnapshot> ReadProjectAsync(DevWorkflowHarness harness, Guid projectId)
     {
         await using var scope = harness.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().GetProjectAsync(projectId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().GetProjectAsync(projectId);
     }
 
     private static async Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ReadAttemptsAsync(DevWorkflowHarness harness, Guid taskId)
     {
         await using var scope = harness.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListAttemptsAsync(taskId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListAttemptsAsync(taskId);
     }
 }

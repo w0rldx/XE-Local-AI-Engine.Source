@@ -53,7 +53,7 @@ internal static class WindowsLauncherApplication
         Version requiredRuntime;
         try
         {
-            requiredRuntime = ResolveRequiredAspNetCoreRuntime(await File.ReadAllTextAsync(Path.Combine(baseDirectory, RuntimeConfig), CancellationToken.None).ConfigureAwait(false));
+            requiredRuntime = ResolveRequiredAspNetCoreRuntime(await File.ReadAllTextAsync(Path.Combine(baseDirectory, RuntimeConfig), CancellationToken.None));
         }
         catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException)
         {
@@ -65,7 +65,7 @@ internal static class WindowsLauncherApplication
         string runtimeInventory;
         try
         {
-            runtimeInventory = await CaptureRuntimeInventoryAsync(dotnet).ConfigureAwait(false);
+            runtimeInventory = await CaptureRuntimeInventoryAsync(dotnet);
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException
                                               or Win32Exception)
@@ -102,7 +102,7 @@ internal static class WindowsLauncherApplication
                 return Fail("Windows did not start the managed application.", LaunchFailureExitCode);
             }
 
-            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            await process.WaitForExitAsync(CancellationToken.None);
 
             // The managed host inherits this console, so a non-zero exit whose cause never reached disk (a crash before
             // its Serilog file sink is built) would otherwise leave only a vanished console. Record the code so the
@@ -214,13 +214,13 @@ internal static class WindowsLauncherApplication
         // token is not propagated, explicitly.
         var standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
         var standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
-        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        await process.WaitForExitAsync(CancellationToken.None);
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException(await standardError.ConfigureAwait(false));
+            throw new InvalidOperationException(await standardError);
         }
 
-        return await standardOutput.ConfigureAwait(false);
+        return await standardOutput;
     }
 
     private static int MissingRuntime(Version required)

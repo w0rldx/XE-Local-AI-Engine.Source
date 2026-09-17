@@ -32,16 +32,16 @@ public sealed class GetModelLaunchArgumentsEndpoint(
         if (validationError is not null)
         {
             AddError(validationError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var raw = await _launchArguments.GetRawArgumentsAsync(decodedModelName!, ct).ConfigureAwait(false);
+        var raw = await _launchArguments.GetRawArgumentsAsync(decodedModelName!, ct);
         await Send.OkAsync(new ModelLaunchArgumentsResponse
             {
                 ModelName = decodedModelName!,
                 RawArguments = raw ?? string.Empty
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

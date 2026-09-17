@@ -43,7 +43,7 @@ internal sealed class DefaultMemoryExtractionAgent(
         // default provider = ollama, so an un-repointed model behaves exactly as the analysis path). Node-local only —
         // never the cloud singleton. THIS resolution is the privacy invariant: conversation content only ever reaches a
         // provider.CreateChatClient(...) client, never the shared cloud-capable IChatClient.
-        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ExtractionModelName, cancellationToken).ConfigureAwait(false);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ExtractionModelName, cancellationToken);
         var selection = new LocalModelSelection
         {
             ModelName = _options.ExtractionModelName,
@@ -65,8 +65,7 @@ internal sealed class DefaultMemoryExtractionAgent(
         };
 
         var response = await chatClient
-                             .GetResponseAsync<ExtractionEnvelope>(messages, chatOptions, cancellationToken: cancellationToken)
-                             .ConfigureAwait(false);
+                             .GetResponseAsync<ExtractionEnvelope>(messages, chatOptions, cancellationToken: cancellationToken);
 
         if (!response.TryGetResult(out var envelope) || envelope?.Memories is null)
         {

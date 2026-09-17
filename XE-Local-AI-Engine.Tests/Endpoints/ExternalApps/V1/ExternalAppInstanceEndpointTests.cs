@@ -26,7 +26,7 @@ public sealed class ExternalAppInstanceEndpointTests
     {
         await using var factory = Factory(Substitute.For<IExternalAppService>());
 
-        using var response = await ExternalAppEndpointPayloads.SendAnonymousAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAnonymousAsync(factory, method, route);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require a token.");
     }
@@ -41,7 +41,7 @@ public sealed class ExternalAppInstanceEndpointTests
     {
         await using var factory = Factory(Substitute.For<IExternalAppService>());
 
-        using var response = await ExternalAppEndpointPayloads.SendAsNonOperatorAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAsNonOperatorAsync(factory, method, route);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode, $"{method} {route} is operator-only.");
     }
@@ -92,9 +92,8 @@ public sealed class ExternalAppInstanceEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instances)
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instances);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var items = document.RootElement.GetProperty("items");
@@ -119,9 +118,8 @@ public sealed class ExternalAppInstanceEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instances)
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instances);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var item = document.RootElement.GetProperty("items")[0];
@@ -159,9 +157,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.Instances,
-                                       ExternalAppEndpointPayloads.InstallBody())
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                       ExternalAppEndpointPayloads.InstallBody());
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         AssertEx.Equal("Installing", document.RootElement.GetProperty("status").GetString(), "the admitted status is transient.");
@@ -186,9 +183,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.Instances,
-                                       ExternalAppEndpointPayloads.InstallBody(acceptPermissions: false))
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                       ExternalAppEndpointPayloads.InstallBody(acceptPermissions: false));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, "acceptPermissions", StringComparison.Ordinal);
@@ -210,9 +206,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                        ExternalAppEndpointPayloads.InstallBody(variables: new Dictionary<string, string>(StringComparer.Ordinal)
                                        {
                                            [key] = "value"
-                                       }))
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                       }));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, key, StringComparison.Ordinal);
@@ -239,9 +234,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                        ExternalAppEndpointPayloads.InstallBody(variables: new Dictionary<string, string>(StringComparer.Ordinal)
                                        {
                                            [ExternalAppEndpointPayloads.SecretVariableName] = secret
-                                       }))
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                       }));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, ExternalAppEndpointPayloads.SecretVariableName, StringComparison.Ordinal);
@@ -267,9 +261,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                        ExternalAppEndpointPayloads.InstallBody(variables: new Dictionary<string, string>(StringComparer.Ordinal)
                                        {
                                            [key] = "value"
-                                       }))
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                       }));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, key[..64], StringComparison.Ordinal, "the message still names what was refused.");
@@ -296,8 +289,7 @@ public sealed class ExternalAppInstanceEndpointTests
         _ = body.Remove(omitted);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.Instances, body)
-                                   .ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.Instances, body);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"an install without {omitted} accepts nothing.");
         AssertEx.Empty(apps.ReceivedCalls());
@@ -318,9 +310,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.Instances,
-                                       ExternalAppEndpointPayloads.InstallBody())
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                       ExternalAppEndpointPayloads.InstallBody());
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppAlreadyInstalled", document.RootElement.GetProperty("conflictType").GetString());
@@ -348,9 +339,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.Instances,
-                                       ExternalAppEndpointPayloads.InstallBody(manifestVersion: manifestVersion, manifestSha256: manifestSha256))
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                       ExternalAppEndpointPayloads.InstallBody(manifestVersion: manifestVersion, manifestSha256: manifestSha256));
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppManifestChanged", document.RootElement.GetProperty("conflictType").GetString());
@@ -366,9 +356,8 @@ public sealed class ExternalAppInstanceEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instance)
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instance);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.Empty(body);
@@ -388,9 +377,8 @@ public sealed class ExternalAppInstanceEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instance)
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instance);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -425,9 +413,8 @@ public sealed class ExternalAppInstanceEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instance)
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.Instance);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         var ports = document.RootElement.GetProperty("publishedPorts");
         var open = ports.EnumerateArray().Single(static port => port.GetProperty("service").GetString() == "web");
@@ -473,9 +460,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                                [ExternalAppEndpointPayloads.SecretVariableName] = ExternalAppVariableMask.Value,
                                                [ExternalAppEndpointPayloads.PlainVariableName] = "http://127.0.0.1:9999"
                                            }
-                                       })
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                       });
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, "the write is complete when it returns, so it is 200 and not 202.");
 
@@ -504,9 +490,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                        new
                                        {
                                            variables = new Dictionary<string, string>(StringComparer.Ordinal)
-                                       })
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                       });
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, "expectedVersion", StringComparison.Ordinal);
@@ -533,9 +518,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                        {
                                            expectedVersion = 3L,
                                            variables = new Dictionary<string, string>(StringComparer.Ordinal)
-                                       })
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                       });
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppVersionConflict", document.RootElement.GetProperty("conflictType").GetString());
@@ -563,9 +547,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                        {
                                            expectedVersion = 7L,
                                            variables = new Dictionary<string, string>(StringComparer.Ordinal)
-                                       })
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                       });
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppInvalidTransition", document.RootElement.GetProperty("conflictType").GetString());
@@ -586,9 +569,8 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.Instances,
-                                       ExternalAppEndpointPayloads.InstallBody())
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                       ExternalAppEndpointPayloads.InstallBody());
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, ExternalAppEndpointPayloads.SecretVariableName, StringComparison.Ordinal);

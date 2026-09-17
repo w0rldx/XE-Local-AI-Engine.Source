@@ -18,11 +18,11 @@ public sealed class GetImageRuntimeStatusEndpoint(ImageRuntimeOrchestrationServi
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var installed = await imageRuntime.ReadInstalledRuntimeAsync(ct).ConfigureAwait(false);
+        var installed = await imageRuntime.ReadInstalledRuntimeAsync(ct);
         await Send.OkAsync(new ImageRuntimeStatusResponse
         {
             ManagedRuntime = installed?.ToResponse(),
             Activity = imageRuntime.GetActivitySnapshot().ToResponse()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

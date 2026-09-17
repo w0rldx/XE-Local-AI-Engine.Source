@@ -28,8 +28,8 @@ public sealed class GetTranscriptionRecommendationEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var entry = await _runtimeService.GetRecommendedModelAsync(ct).ConfigureAwait(false);
-        var backend = await _whisperRuntime.SelectBackendAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(entry.ToRecommendationResponse(backend), ct).ConfigureAwait(false);
+        var entry = await _runtimeService.GetRecommendedModelAsync(ct);
+        var backend = await _whisperRuntime.SelectBackendAsync(ct);
+        await Send.OkAsync(entry.ToRecommendationResponse(backend), ct);
     }
 }

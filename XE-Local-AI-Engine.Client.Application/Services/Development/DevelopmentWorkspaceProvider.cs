@@ -180,7 +180,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             snapshot.TaskId.ToString("N"));
         Directory.CreateDirectory(Path.GetDirectoryName(worktreePath)!);
         Directory.CreateDirectory(runtimePath);
-        await EnsureBuildConfigurationBarrierAsync(Path.GetDirectoryName(worktreePath)!, cancellationToken).ConfigureAwait(false);
+        await EnsureBuildConfigurationBarrierAsync(Path.GetDirectoryName(worktreePath)!, cancellationToken);
 
         // Created HERE and not only in DevelopmentWorkspaceTools, which runs after this method returns. A provider with
         // a mount layer binds these directories at create time, and a bind source the daemon has to invent is created
@@ -199,13 +199,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             canonicalRepositoryRoot,
             "--git-common-dir",
             "The trusted repository Git directory could not be resolved.",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         string baseCommit;
         if (!Directory.Exists(worktreePath))
         {
             var resolve = await git.RunAsync(canonicalRepositoryRoot,
                 AgentHomeGit.Arguments("rev-parse", "--verify", $"refs/heads/{snapshot.BaseBranch}^{{commit}}"),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             EnsureGitSuccess(resolve, "The configured base branch could not be resolved.");
             baseCommit = resolve.StandardOutput.Trim();
 
@@ -214,17 +214,17 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                 worktreePath,
                 snapshot.BaseBranch,
                 baseCommit,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             await WriteWorkspaceManifestAsync(workspaceManifestPath,
                 new WorkspaceManifest(WorkspaceManifestVersion,
                     identity,
                     repository.SelectedFolderId,
                     baseCommit),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
         else
         {
-            var preserved = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
+            var preserved = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken);
             if (preserved.Version is not (1 or WorkspaceManifestVersion)
                 || !string.Equals(preserved.RepositoryIdentityHash, identity, StringComparison.OrdinalIgnoreCase)
                 || preserved.SelectedFolderId is { } manifestFolderId && manifestFolderId != repository.SelectedFolderId)
@@ -240,21 +240,21 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         // directory, so a repository-local exec-bearing key would be executing here, not in the sandbox. Also covers
         // the freshly cloned case, where it is a cheap no-op — the clone's own config already contains nothing but the
         // preserved keys once `origin` has been removed.
-        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(worktreePath, cancellationToken).ConfigureAwait(false);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(worktreePath, cancellationToken);
 
         await ValidatePreservedWorktreeAsync(git,
             worktreePath,
             trustedCommonGitDirectory,
             baseCommit,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         // Derived from the index and rewritten every preparation, immediately after the config rewrite above and before
         // any command of the validation gate runs. Without it, `git diff --check` — the FIRST command of every .NET
         // profile — reports trailing whitespace on every changed line of a repository that legitimately stores CRLF,
         // and the gate fails at command one on a correct change.
-        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, worktreePath, cancellationToken).ConfigureAwait(false);
+        await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, worktreePath, cancellationToken);
 
-        var manifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
+        var manifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken);
         if (manifest.Version != WorkspaceManifestVersion || manifest.SelectedFolderId is null)
         {
             // Upgrading a v1 manifest in place. Warm state rides along with `with` rather than being dropped by a
@@ -267,12 +267,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                 SelectedFolderId = repository.SelectedFolderId,
                 BaseCommit = baseCommit
             };
-            await WriteWorkspaceManifestAsync(workspaceManifestPath, manifest, cancellationToken).ConfigureAwait(false);
+            await WriteWorkspaceManifestAsync(workspaceManifestPath, manifest, cancellationToken);
         }
 
         var branch = await git.RunAsync(worktreePath,
             AgentHomeGit.Arguments("symbolic-ref", "--quiet", "--short", "HEAD"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (branch.ExitCode == 0)
         {
             throw new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches.");
@@ -280,21 +280,21 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
         // BEFORE either sandbox is created, so both the warm restore and the attempt see the same shadowed view. The
         // warm restore runs the repository's own MSBuild, which can read a committed credential exactly as a test can.
-        var secrets = await DetectCommittedSecretsAsync(git, worktreePath, cancellationToken).ConfigureAwait(false);
+        var secrets = await DetectCommittedSecretsAsync(git, worktreePath, cancellationToken);
         if (!manifest.DetectedSecretPaths.SequenceEqual(secrets, StringComparer.Ordinal))
         {
             manifest = manifest with
             {
                 DetectedSecretPaths = secrets
             };
-            await WriteWorkspaceManifestAsync(workspaceManifestPath, manifest, cancellationToken).ConfigureAwait(false);
+            await WriteWorkspaceManifestAsync(workspaceManifestPath, manifest, cancellationToken);
         }
 
         if (secrets.Count > 0)
         {
             // Through the sink, not the store: the snapshot's task and attempt ids are the workspace's isolation keys
             // here, and a caller outside Dev Mode has no rows behind them (see IDevelopmentWorkspaceSecretsSink).
-            await _secretsSink.RecordAsync(snapshot.TaskId, snapshot.AttemptId, secrets, cancellationToken).ConfigureAwait(false);
+            await _secretsSink.RecordAsync(snapshot.TaskId, snapshot.AttemptId, secrets, cancellationToken);
         }
 
         await EnsureWarmRestoreAsync(git,
@@ -306,7 +306,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             manifest,
             baseCommit,
             secrets,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         var attachKey = new SandboxAttachKey
         {
@@ -335,7 +335,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                 _sandbox.Capabilities,
                 _ceilingDefaults,
                 _nodeOptions)
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
 
         return new DevelopmentWorkspaceSession(snapshot.ProjectId,
             snapshot.TaskId,
@@ -369,7 +369,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     {
         var tracked = await git.RunAsync(worktreePath,
             AgentHomeGit.Arguments("ls-files", "-z", "--", "."),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(tracked, "The managed Development worktree's tracked files could not be listed.");
 
         return
@@ -475,7 +475,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         // would refuse every second attempt on a workspace that has legitimately been built once.
         var status = await git.RunAsync(worktreePath,
             AgentHomeGit.Arguments("status", "--porcelain", "--untracked-files=no"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(status, "The managed Development worktree status could not be read before the dependency warm restore.");
         if (!string.IsNullOrWhiteSpace(status.StandardOutput))
         {
@@ -525,7 +525,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                 _sandbox.Capabilities,
                 _ceilingDefaults,
                 _nodeOptions)
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
 
         try
         {
@@ -542,7 +542,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             // per-command budget and the same post-command workspace invariants. Composing a second execution path
             // here is how the warm would drift from what the attempt later re-runs with --no-restore.
             var tools = new DevelopmentWorkspaceTools(_sandbox, warmSession, Options.Create(_options), profile);
-            _ = await tools.RunCommandAsync(DevelopmentCommandIds.DotnetRestore, cancellationToken).ConfigureAwait(false);
+            _ = await tools.RunCommandAsync(DevelopmentCommandIds.DotnetRestore, cancellationToken);
 
             var evidence = tools.CommandEvidence[^1];
             if (!evidence.Completed || evidence.ExitCode != 0)
@@ -555,7 +555,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             // Before PrepareAsync returns, unconditionally. A warm sandbox that outlived this method would be a second
             // container per task with egress, held open for the whole attempt — precisely what the split sandbox design prevents.
-            await _sandbox.KillAsync(warmHandle, CancellationToken.None).ConfigureAwait(false);
+            await _sandbox.KillAsync(warmHandle, CancellationToken.None);
         }
 
         await WriteWorkspaceManifestAsync(workspaceManifestPath,
@@ -564,7 +564,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                 WarmRestoreCommit = baseCommit,
                 WarmRestoreCompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     /// <summary>
@@ -673,12 +673,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             var path = Path.Combine(workspaceParentPath, fileName);
             if (File.Exists(path)
-                && string.Equals(await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false), content, StringComparison.Ordinal))
+                && string.Equals(await File.ReadAllTextAsync(path, cancellationToken), content, StringComparison.Ordinal))
             {
                 continue;
             }
 
-            await File.WriteAllTextAsync(path, content, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(path, content, cancellationToken);
         }
     }
 
@@ -761,7 +761,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             var clone = await git.RunAsync(parent,
                 AgentHomeGit.Arguments([.. StandaloneGitClone.Arguments(canonicalRepositoryRoot, worktreePath, baseBranch)]),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             EnsureGitSuccess(clone, "The managed Development workspace could not be cloned.");
 
             if (!StandaloneGitClone.IsStandalone(worktreePath))
@@ -775,17 +775,17 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             // producing a workspace standing on a different base than the one persisted in the manifest.
             var detach = await git.RunAsync(worktreePath,
                 AgentHomeGit.Arguments("checkout", "--detach", baseCommit),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             EnsureGitSuccess(detach, "The managed Development workspace could not be detached onto its base commit.");
 
             var removeOrigin = await git.RunAsync(worktreePath,
                 AgentHomeGit.Arguments("remote", "remove", "origin"),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             EnsureGitSuccess(removeOrigin, "The managed Development workspace inherited remote could not be removed.");
 
             var remotes = await git.RunAsync(worktreePath,
                 AgentHomeGit.Arguments("remote"),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             EnsureGitSuccess(remotes, "The managed Development workspace remotes could not be listed.");
             if (!string.IsNullOrWhiteSpace(remotes.StandardOutput))
             {
@@ -794,7 +794,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
             var head = await git.RunAsync(worktreePath,
                 AgentHomeGit.Arguments("rev-parse", "--verify", "HEAD^{commit}"),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             EnsureGitSuccess(head, "The managed Development workspace HEAD could not be resolved.");
             if (!string.Equals(head.StandardOutput.Trim(), baseCommit, StringComparison.OrdinalIgnoreCase))
             {
@@ -840,15 +840,15 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             worktreePath,
             "--show-toplevel",
             "The preserved Development worktree is not a valid Git worktree.",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var commonGitDirectory = await ResolveGitPathAsync(git,
             worktreePath,
             "--git-common-dir",
             "The preserved Development worktree Git directory could not be resolved.",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var head = await git.RunAsync(worktreePath,
             AgentHomeGit.Arguments("rev-parse", "--verify", "HEAD^{commit}"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(head, "The preserved Development worktree HEAD could not be resolved.");
 
         if (!PathEquals(topLevel, canonicalWorktree)
@@ -869,7 +869,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     {
         var result = await git.RunAsync(workingDirectory,
             AgentHomeGit.Arguments("rev-parse", argument),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(result, error);
         return Path.TrimEndingDirectorySeparator(Path.GetFullPath(result.StandardOutput.Trim(), workingDirectory));
     }
@@ -882,7 +882,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
 
         await using var stream = File.OpenRead(path);
-        return await JsonSerializer.DeserializeAsync<WorkspaceManifest>(stream, JsonOptions, cancellationToken).ConfigureAwait(false)
+        return await JsonSerializer.DeserializeAsync<WorkspaceManifest>(stream, JsonOptions, cancellationToken)
                ?? throw new DevelopmentWorkspaceSecurityException("The preserved Development workspace manifest is invalid.");
     }
 
@@ -895,7 +895,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             await File.WriteAllBytesAsync(temporaryPath,
                 JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             File.Move(temporaryPath, path, overwrite: true);
         }
         finally

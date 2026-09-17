@@ -731,7 +731,7 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
         {
             _ = Interlocked.Increment(ref _callCount);
             _ = _firstRequest.TrySetResult();
-            await _release.Task.ConfigureAwait(false);
+            await _release.Task;
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {

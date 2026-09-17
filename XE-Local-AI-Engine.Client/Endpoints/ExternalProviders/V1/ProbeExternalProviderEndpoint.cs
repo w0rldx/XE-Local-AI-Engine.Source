@@ -40,24 +40,23 @@ public sealed class ProbeExternalProviderEndpoint(IExternalProviderProbeService 
     public override async Task HandleAsync(ExternalProviderProbeRequest req, CancellationToken ct)
     {
         var result = await _probeService
-                           .ProbeAsync(new ExternalProviderProbeQuery(req.ConnectionId, req.BaseUrl, req.ApiKey), ct)
-                           .ConfigureAwait(false);
+                           .ProbeAsync(new ExternalProviderProbeQuery(req.ConnectionId, req.BaseUrl, req.ApiKey), ct);
 
         switch (result.Outcome)
         {
             // Nothing was sent: the request named a connection that is not stored. A 404 rather than a
             // reachable:false, which would read as "your server is down".
             case ExternalProviderProbeOutcome.UnknownConnection:
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                await Send.NotFoundAsync(ct);
                 return;
 
             // Also nothing sent, but this one the operator can fix by editing the field they just typed.
             case ExternalProviderProbeOutcome.InvalidBaseUrl:
                 AddError(result.Error ?? "The endpoint is not a valid OpenAI-compatible base URL.");
-                await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                await Send.ErrorsAsync(cancellation: ct);
                 return;
             default:
-                await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
+                await Send.OkAsync(result.ToResponse(), ct);
                 return;
         }
     }

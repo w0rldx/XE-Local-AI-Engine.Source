@@ -424,7 +424,7 @@ public sealed class DockerDaemonProbeTests
         async Task<DockerDaemonIdentity> ParkAsync()
         {
             entered.TrySetResult();
-            await release.Task.ConfigureAwait(false);
+            await release.Task;
 
             return ClientFor("daemon-alpha").Identity;
         }
@@ -475,7 +475,7 @@ public sealed class DockerDaemonProbeTests
         async Task<DockerDaemonIdentity> ParkAsync()
         {
             entered.TrySetResult();
-            await release.Task.ConfigureAwait(false);
+            await release.Task;
 
             return ClientFor("daemon-alpha").Identity;
         }
@@ -681,7 +681,7 @@ public sealed class DockerDaemonProbeTests
         {
             Record("write");
             _writeEntered.TrySetResult();
-            await _writeReleased.Task.ConfigureAwait(false);
+            await _writeReleased.Task;
 
             _attestation = attestation;
             WriteCount++;

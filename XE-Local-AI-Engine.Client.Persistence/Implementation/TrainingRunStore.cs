@@ -32,10 +32,9 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("A training run requires both a freeze and resolved options.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var dataset = await _dbContext.TrainingDatasets.AsNoTracking()
                                       .FirstOrDefaultAsync(item => item.Id == command.DatasetId, cancellationToken)
-                                      .ConfigureAwait(false)
                       ?? throw new TrainingNotFoundException("The training dataset was not found.");
         EnsureVersion(dataset.Version, command.ExpectedDatasetVersion);
         if (dataset.Status != TrainingDatasetStatus.Ready || dataset.ContentFingerprint is null)
@@ -45,7 +44,6 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
         var baseArtifact = await _dbContext.TrainingBaseArtifacts.AsNoTracking()
                                            .FirstOrDefaultAsync(item => item.Id == command.BaseArtifactId, cancellationToken)
-                                           .ConfigureAwait(false)
                            ?? throw new TrainingNotFoundException("The training base artifact was not found.");
         if (baseArtifact.Status != TrainingBaseArtifactStatus.Ready)
         {
@@ -83,22 +81,21 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             EnqueuedAtUtc = now
         });
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(run, TrainingWorkStatus.Queued, workErrorMessage: null);
     }
 
     public async Task<TrainingRunRecord?> GetAsync(Guid runId, CancellationToken cancellationToken = default)
     {
         var run = await _dbContext.TrainingRuns.AsNoTracking()
-                                  .FirstOrDefaultAsync(item => item.Id == runId, cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .FirstOrDefaultAsync(item => item.Id == runId, cancellationToken);
         if (run is null)
         {
             return null;
         }
 
-        var work = await FindWorkAsync(runId, tracking: false, cancellationToken).ConfigureAwait(false);
+        var work = await FindWorkAsync(runId, tracking: false, cancellationToken);
         return ToRecord(run, work?.Status, work?.ErrorMessage);
     }
 
@@ -121,19 +118,17 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             filtered = filtered.Where(item => item.Status == status);
         }
 
-        var total = await filtered.CountAsync(cancellationToken).ConfigureAwait(false);
+        var total = await filtered.CountAsync(cancellationToken);
         var runs = await filtered.OrderByDescending(item => item.CreatedAtUtc)
                                  // Secondary key so two runs created in the same millisecond cannot swap pages.
                                  .ThenBy(item => item.Id)
                                  .Skip((query.Page - 1) * query.PageSize)
                                  .Take(query.PageSize)
-                                 .ToListAsync(cancellationToken)
-                                 .ConfigureAwait(false);
+                                 .ToListAsync(cancellationToken);
         var runIds = runs.Select(item => item.Id).ToList();
         var work = await _dbContext.TrainingWorkItems.AsNoTracking()
                                    .Where(item => item.Kind == TrainingWorkKind.TrainingRun && runIds.Contains(item.TargetId))
-                                   .ToDictionaryAsync(item => item.TargetId, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToDictionaryAsync(item => item.TargetId, cancellationToken);
         var items = runs.Select(run => ToRecord(run,
                             work.TryGetValue(run.Id, out var found) ? found.Status : null,
                             work.TryGetValue(run.Id, out var byId) ? byId.ErrorMessage : null))
@@ -147,8 +142,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         // interceptor decrypts it. A `Select` of the column would hand the reaper an undeserializable blob.
         var runs = await _dbContext.TrainingRuns.AsNoTracking()
                                    .Where(item => item.LaunchReceiptJson != null)
-                                   .ToListAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .ToListAsync(cancellationToken);
         return [.. runs.Select(static run => new TrainingRunLaunchReceipt(run.Id, run.LaunchReceiptJson!))];
     }
 
@@ -158,8 +152,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
                                    .Where(item => item.Status == TrainingWorkStatus.Queued)
                                    .OrderBy(item => item.QueueSequence)
                                    .Select(item => (TrainingWorkKind?)item.Kind)
-                                   .FirstOrDefaultAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .FirstOrDefaultAsync(cancellationToken);
         return head;
     }
 
@@ -173,7 +166,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
     {
         while (true)
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
             var candidate = await _dbContext.TrainingWorkItems.AsNoTracking()
                                             .Where(item => item.Status == TrainingWorkStatus.Queued
                                                            && (onlyKind == null || item.Kind == onlyKind))
@@ -183,8 +176,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
                                                 item.QueueSequence,
                                                 item.Version
                                             })
-                                            .FirstOrDefaultAsync(cancellationToken)
-                                            .ConfigureAwait(false);
+                                            .FirstOrDefaultAsync(cancellationToken);
             if (candidate is null)
             {
                 return null;
@@ -200,8 +192,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
                                                                          .SetProperty(item => item.Status, TrainingWorkStatus.Running)
                                                                          .SetProperty(item => item.StartedAtUtc, now)
                                                                          .SetProperty(item => item.Version, nextVersion),
-                                              cancellationToken)
-                                          .ConfigureAwait(false);
+                                              cancellationToken);
             if (claimed == 0)
             {
                 // Another consumer won the compare-and-swap; retry against the next queued row.
@@ -210,23 +201,21 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
             _dbContext.ChangeTracker.Clear();
             var work = await _dbContext.TrainingWorkItems.AsNoTracking()
-                                       .SingleAsync(item => item.QueueSequence == candidate.QueueSequence, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleAsync(item => item.QueueSequence == candidate.QueueSequence, cancellationToken);
             var run = work.Kind == TrainingWorkKind.TrainingRun
-                ? await GetAsync(work.TargetId, cancellationToken).ConfigureAwait(false)
+                ? await GetAsync(work.TargetId, cancellationToken)
                 : null;
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return new TrainingWorkClaim(work.QueueSequence, work.Kind, work.TargetId, work.Version, run);
         }
     }
 
     public async Task<IReadOnlyList<Guid>> RecoverOnStartupAsync(CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var interrupted = await _dbContext.TrainingWorkItems
                                           .Where(item => item.Status == TrainingWorkStatus.Running)
-                                          .ToListAsync(cancellationToken)
-                                          .ConfigureAwait(false);
+                                          .ToListAsync(cancellationToken);
         var now = Now();
         var recovered = new List<Guid>(interrupted.Count);
         foreach (var work in interrupted)
@@ -234,7 +223,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             TerminalizeWork(work, TrainingWorkStatus.Failed, "The training run was interrupted by a host restart.", now);
             if (work.Kind == TrainingWorkKind.TrainingRun)
             {
-                var run = await _dbContext.TrainingRuns.FirstOrDefaultAsync(item => item.Id == work.TargetId, cancellationToken).ConfigureAwait(false);
+                var run = await _dbContext.TrainingRuns.FirstOrDefaultAsync(item => item.Id == work.TargetId, cancellationToken);
                 if (run is not null && !IsTerminal(run.Status))
                 {
                     run.Status = TrainingRunStatus.Failed;
@@ -252,8 +241,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
                 // that a run cannot is their scored prefix, so an operator can resume from the next unscored sample
                 // (ITrainingEvaluationStore.ResumeAsync) instead of paying for the whole hold-out set again.
                 var evaluation = await _dbContext.TrainingEvaluationRuns
-                                                 .FirstOrDefaultAsync(item => item.Id == work.TargetId, cancellationToken)
-                                                 .ConfigureAwait(false);
+                                                 .FirstOrDefaultAsync(item => item.Id == work.TargetId, cancellationToken);
                 if (evaluation is not null && evaluation.Status is not (TrainingEvaluationStatus.Succeeded or TrainingEvaluationStatus.Failed
                         or TrainingEvaluationStatus.Cancelled))
                 {
@@ -267,8 +255,8 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             recovered.Add(work.TargetId);
         }
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return recovered;
     }
 
@@ -282,8 +270,8 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("Only the non-terminal progression is written here; terminal statuses go through CompleteRunAsync.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         EnsureVersion(run.Version, expectedVersion);
         if (IsTerminal(run.Status))
         {
@@ -293,9 +281,9 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         run.Status = status;
         run.Version++;
         run.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        var work = await FindWorkAsync(runId, tracking: false, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        var work = await FindWorkAsync(runId, tracking: false, cancellationToken);
         return ToRecord(run, work?.Status, work?.ErrorMessage);
     }
 
@@ -309,9 +297,9 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("A training run can only be completed into a terminal status.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
-        var work = await FindWorkAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false)
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
+        var work = await FindWorkAsync(runId, tracking: true, cancellationToken)
                    ?? throw new TrainingNotFoundException("The training work item was not found.");
         if (IsTerminal(work.Status))
         {
@@ -333,17 +321,17 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         run.LaunchReceiptJson = null;
         run.Version++;
         run.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(run, work.Status, work.ErrorMessage);
     }
 
     public async Task UpdateProgressAsync(Guid runId, ReadOnlyMemory<byte> progressJson, CancellationToken cancellationToken = default)
     {
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         run.ProgressJson = progressJson.ToArray();
         run.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
     }
 
     public async Task AppendLogTailAsync(Guid runId, string chunk, CancellationToken cancellationToken = default)
@@ -353,7 +341,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             return;
         }
 
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         var existing = run.LogTail is null ? string.Empty : Encoding.UTF8.GetString(run.LogTail);
         var combined = existing + chunk;
         if (combined.Length > MaxLogTailLength)
@@ -363,40 +351,38 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
         run.LogTail = Encoding.UTF8.GetBytes(combined);
         run.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
     }
 
     public async Task SetLaunchReceiptAsync(Guid runId, ReadOnlyMemory<byte>? launchReceiptJson, CancellationToken cancellationToken = default)
     {
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         run.LaunchReceiptJson = launchReceiptJson?.ToArray();
         run.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
     }
 
     public async Task DeleteAsync(Guid runId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         EnsureVersion(run.Version, expectedVersion);
         if (await _dbContext.TrainingWorkItems
                             .AnyAsync(item => item.TargetId == runId
                                               && (item.Status == TrainingWorkStatus.Queued || item.Status == TrainingWorkStatus.Running),
-                                cancellationToken)
-                            .ConfigureAwait(false))
+                                cancellationToken))
         {
             throw new TrainingConflictException("RunActive");
         }
 
         if (await _dbContext.TrainingArtifacts
-                            .AnyAsync(item => item.RunId == runId && item.CommittedModelName != null, cancellationToken)
-                            .ConfigureAwait(false))
+                            .AnyAsync(item => item.RunId == runId && item.CommittedModelName != null, cancellationToken))
         {
             // A promoted artifact is a registry entry with its own lifecycle; deleting the run would orphan its lineage.
             throw new TrainingConflictException("ArtifactPromoted");
         }
 
-        if (await _dbContext.TrainingEvaluationRuns.AnyAsync(item => item.TrainingRunId == runId, cancellationToken).ConfigureAwait(false))
+        if (await _dbContext.TrainingEvaluationRuns.AnyAsync(item => item.TrainingRunId == runId, cancellationToken))
         {
             // An evaluation borrowed this run's frozen membership; deleting the run would leave it describing a freeze
             // nothing can point at. Nothing cascades on this connection, so the guard has to be explicit.
@@ -405,13 +391,13 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
 
         // Explicit ordered deletes: the node connection never sets PRAGMA foreign_keys=ON, so the declared restrict on
         // training_artifacts never fires. Children first, then the work item, then the run itself.
-        _ = await _dbContext.TrainingArtifacts.Where(item => item.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        _ = await _dbContext.TrainingWorkItems.Where(item => item.TargetId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.TrainingArtifacts.Where(item => item.RunId == runId).ExecuteDeleteAsync(cancellationToken);
+        _ = await _dbContext.TrainingWorkItems.Where(item => item.TargetId == runId).ExecuteDeleteAsync(cancellationToken);
         // ExecuteDelete bypasses the tracker; clearing it stops EF reading the removed children as a severed required
         // association when the parent row is deleted (the dataset delete precedent).
         _dbContext.ChangeTracker.Clear();
-        _ = await _dbContext.TrainingRuns.Where(item => item.Id == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.TrainingRuns.Where(item => item.Id == runId).ExecuteDeleteAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<TrainingArtifactRecord> CreateArtifactAsync(TrainingArtifactInput input, CancellationToken cancellationToken = default)
@@ -422,7 +408,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("A training artifact requires a staged path.");
         }
 
-        _ = await RequireRunAsync(input.RunId, tracking: false, cancellationToken).ConfigureAwait(false);
+        _ = await RequireRunAsync(input.RunId, tracking: false, cancellationToken);
         var now = Now();
         var artifact = new TrainingArtifact
         {
@@ -436,7 +422,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             UpdatedAtUtc = now
         };
         _ = _dbContext.TrainingArtifacts.Add(artifact);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         return ToRecord(artifact);
     }
 
@@ -446,16 +432,14 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
                                         .Where(item => item.RunId == runId)
                                         .OrderBy(item => item.CreatedAtUtc)
                                         .ThenBy(item => item.Id)
-                                        .ToListAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ToListAsync(cancellationToken);
         return artifacts.Select(ToRecord).ToArray();
     }
 
     public async Task<TrainingArtifactRecord?> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default)
     {
         var artifact = await _dbContext.TrainingArtifacts.AsNoTracking()
-                                       .FirstOrDefaultAsync(item => item.Id == artifactId, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .FirstOrDefaultAsync(item => item.Id == artifactId, cancellationToken);
         return artifact is null ? null : ToRecord(artifact);
     }
 
@@ -471,14 +455,14 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("A training artifact cannot have a negative size.");
         }
 
-        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken);
         EnsureVersion(artifact.Version, expectedVersion);
         EnsureArtifactMutable(artifact);
         artifact.Sha256 = sha256;
         artifact.SizeBytes = sizeBytes;
         artifact.Version++;
         artifact.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         return ToRecord(artifact);
     }
 
@@ -499,14 +483,14 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("A failed or skipped smoke test requires a reason.");
         }
 
-        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken);
         EnsureVersion(artifact.Version, expectedVersion);
         EnsureArtifactMutable(artifact);
         artifact.SmokeState = state;
         artifact.SmokeReason = ErrorMessageTruncation.Truncate(reason);
         artifact.Version++;
         artifact.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         return ToRecord(artifact);
     }
 
@@ -520,7 +504,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("A registry name is either absent or non-blank.");
         }
 
-        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken);
         EnsureVersion(artifact.Version, expectedVersion);
         EnsureArtifactMutable(artifact);
         if (committedModelName is not null && artifact.SmokeState is TrainingArtifactSmokeState.Pending or TrainingArtifactSmokeState.Failed)
@@ -531,14 +515,14 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         artifact.CommittedModelName = committedModelName;
         artifact.Version++;
         artifact.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         return ToRecord(artifact);
     }
 
     public async Task DeleteArtifactAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken);
         EnsureVersion(artifact.Version, expectedVersion);
         EnsureArtifactMutable(artifact);
         if (artifact.CommittedModelName is not null)
@@ -547,14 +531,14 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         }
 
         if (artifact.QualityDecisionJson is not null
-            || await _dbContext.TrainingEvaluationRuns.AnyAsync(item => item.SourceArtifactId == artifactId, cancellationToken).ConfigureAwait(false))
+            || await _dbContext.TrainingEvaluationRuns.AnyAsync(item => item.SourceArtifactId == artifactId, cancellationToken))
         {
             throw new TrainingConflictException("ArtifactQualityReferenced");
         }
 
         _ = _dbContext.TrainingArtifacts.Remove(artifact);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<TrainingArtifactRecord> SetArtifactQualityDecisionAsync(Guid artifactId,
@@ -568,11 +552,11 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("An artifact quality decision cannot be empty.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken);
         EnsureVersion(artifact.Version, expectedVersion);
         EnsureArtifactMutable(artifact);
-        if (!await _dbContext.TrainingComparisonReports.AnyAsync(item => item.Id == comparisonId, cancellationToken).ConfigureAwait(false))
+        if (!await _dbContext.TrainingComparisonReports.AnyAsync(item => item.Id == comparisonId, cancellationToken))
         {
             throw new TrainingNotFoundException("The comparison report was not found.");
         }
@@ -581,8 +565,8 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         artifact.QualityDecisionJson = decisionJson.ToArray();
         artifact.Version++;
         artifact.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(artifact);
     }
 
@@ -596,8 +580,8 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
             throw new TrainingValidationException("A discard reason is required.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken);
         EnsureVersion(artifact.Version, expectedVersion);
         if (artifact.CommittedModelName is not null)
         {
@@ -620,8 +604,8 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         artifact.DiscardCleanupPending = true;
         artifact.Version++;
         artifact.UpdatedAtUtc = artifact.DiscardedAtUtc.Value;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToRecord(artifact);
     }
 
@@ -629,7 +613,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         long expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        var artifact = await RequireArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        var artifact = await RequireArtifactAsync(artifactId, cancellationToken);
         EnsureVersion(artifact.Version, expectedVersion);
         if (artifact.DiscardedAtUtc is null)
         {
@@ -644,7 +628,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
         artifact.DiscardCleanupPending = false;
         artifact.Version++;
         artifact.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
         return ToRecord(artifact);
     }
 
@@ -678,19 +662,18 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
     private async Task<TrainingRun> RequireRunAsync(Guid runId, bool tracking, CancellationToken cancellationToken)
     {
         var query = tracking ? _dbContext.TrainingRuns : _dbContext.TrainingRuns.AsNoTracking();
-        return await query.FirstOrDefaultAsync(item => item.Id == runId, cancellationToken).ConfigureAwait(false)
+        return await query.FirstOrDefaultAsync(item => item.Id == runId, cancellationToken)
                ?? throw new TrainingNotFoundException("The training run was not found.");
     }
 
     private async Task<TrainingArtifact> RequireArtifactAsync(Guid artifactId, CancellationToken cancellationToken) =>
-        await _dbContext.TrainingArtifacts.FirstOrDefaultAsync(item => item.Id == artifactId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.TrainingArtifacts.FirstOrDefaultAsync(item => item.Id == artifactId, cancellationToken)
         ?? throw new TrainingNotFoundException("The training artifact was not found.");
 
     private async Task<TrainingWorkItem?> FindWorkAsync(Guid targetId, bool tracking, CancellationToken cancellationToken)
     {
         var query = tracking ? _dbContext.TrainingWorkItems : _dbContext.TrainingWorkItems.AsNoTracking();
-        return await query.FirstOrDefaultAsync(item => item.TargetId == targetId && item.Kind == TrainingWorkKind.TrainingRun, cancellationToken)
-                          .ConfigureAwait(false);
+        return await query.FirstOrDefaultAsync(item => item.TargetId == targetId && item.Kind == TrainingWorkKind.TrainingRun, cancellationToken);
     }
 
     private static void EnsureVersion(long actual, long expected)
@@ -705,7 +688,7 @@ public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider t
     {
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {

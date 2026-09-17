@@ -63,6 +63,6 @@ internal sealed class RunInAgentHomeToolHandler : IClientLocalToolHandler
             return $"run_in_agent_home arguments are invalid: {string.Join(" ", validationErrors)}";
         }
 
-        return await _gateway.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
+        return await _gateway.ExecuteAsync(request, cancellationToken);
     }
 }

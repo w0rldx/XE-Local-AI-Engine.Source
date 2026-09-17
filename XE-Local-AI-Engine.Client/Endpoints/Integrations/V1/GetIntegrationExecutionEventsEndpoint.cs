@@ -33,13 +33,12 @@ public sealed class GetIntegrationExecutionEventsEndpoint(IntegrationExecutionQu
         var rows = await _executions.ListEventsAsync(Route<Guid>("executionId"),
                                         Math.Max(req.SinceSeq ?? 0, val2: 0),
                                         IntegrationEventPage.ClampLimit(req.Limit),
-                                        ct)
-                                    .ConfigureAwait(false);
+                                        ct);
 
         await Send.OkAsync(new ListIntegrationExecutionEventsResponse
             {
                 Items = [.. rows.Select(IntegrationMapper.ToEventDto)]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

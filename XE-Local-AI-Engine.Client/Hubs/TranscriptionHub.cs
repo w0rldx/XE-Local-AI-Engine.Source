@@ -143,17 +143,17 @@ public sealed class TranscriptionHub(
         // Join BEFORE anything is read — the status as well as the replay. Reading first leaves a window in which a
         // session that ends in between publishes its terminal status to nobody, and the snapshot this caller gets
         // says Transcribing forever. Joining first can only duplicate, and the client merges by exact Seq.
-        await Groups.AddToGroupAsync(Context.ConnectionId, TranscriptionHubGroups.Session(sessionId), cancellationToken).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, TranscriptionHubGroups.Session(sessionId), cancellationToken);
 
         // The summary, not the session with its transcript: this needs a status and nothing else, and the replay
         // below is already bounded by the cap. Reading the whole session here decrypted every segment twice.
-        var session = await _sessions.GetSessionSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _sessions.GetSessionSummaryAsync(sessionId, cancellationToken);
 
         // A live session with no row is the persist-free (dictation) case and is legitimate; an id that is neither a
         // row nor a live session is not — and it leaves the group it was speculatively added to.
         if (session is null && !_live.IsLive(sessionId))
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, TranscriptionHubGroups.Session(sessionId), cancellationToken).ConfigureAwait(false);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, TranscriptionHubGroups.Session(sessionId), cancellationToken);
             throw new HubException(TranscriptionHubErrors.SessionNotFound);
         }
 
@@ -175,7 +175,7 @@ public sealed class TranscriptionHub(
 
         // One over the cap, so "there is more" is observed rather than inferred from a full page.
         var replayLimit = _options.SegmentReplayLimit;
-        var segments = await _sessions.ListSegmentsAfterAsync(sessionId, afterSeq, replayLimit + 1, cancellationToken).ConfigureAwait(false);
+        var segments = await _sessions.ListSegmentsAfterAsync(sessionId, afterSeq, replayLimit + 1, cancellationToken);
         var replayed = segments.Take(replayLimit).ToList();
 
         // The watermark is the last row the subscriber was actually HANDED. Taking the session's own maximum would
@@ -256,7 +256,7 @@ public sealed class TranscriptionHub(
 
         try
         {
-            await _live.PushAudioAsync(sessionId, (TranscriptChannel)channel, pcm16k, Context.ConnectionAborted).ConfigureAwait(false);
+            await _live.PushAudioAsync(sessionId, (TranscriptChannel)channel, pcm16k, Context.ConnectionAborted);
         }
         catch (ArgumentException)
         {
@@ -285,7 +285,7 @@ public sealed class TranscriptionHub(
 
         // Not the connection's token: an end that stopped halfway because the caller navigated away would leave the
         // lanes running and the row in Transcribing.
-        await _live.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None).ConfigureAwait(false);
+        await _live.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
     }
 
     /// <summary>
@@ -302,7 +302,7 @@ public sealed class TranscriptionHub(
             }
         }
 
-        await base.OnDisconnectedAsync(exception).ConfigureAwait(false);
+        await base.OnDisconnectedAsync(exception);
     }
 
     private void Track(Guid sessionId)

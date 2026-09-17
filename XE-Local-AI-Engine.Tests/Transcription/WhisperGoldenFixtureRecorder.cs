@@ -53,7 +53,7 @@ public sealed class WhisperGoldenFixtureRecorder
         }
 
         var clipPath = RecordedWhisperTranscriber.FixturePath("jfk.wav");
-        var clip = await File.ReadAllBytesAsync(clipPath).ConfigureAwait(false);
+        var clip = await File.ReadAllBytesAsync(clipPath);
         var pcm = WavPayload.Read(clip);
 
         using var httpClient = new HttpClient
@@ -64,8 +64,8 @@ public sealed class WhisperGoldenFixtureRecorder
             httpClient,
             new WhisperRuntimeOptions());
 
-        var singleShot = await TranscribeWholeClipAsync(transcriber, clip).ConfigureAwait(false);
-        var windows = await RecordChunkedPassAsync(transcriber).ConfigureAwait(false);
+        var singleShot = await TranscribeWholeClipAsync(transcriber, clip);
+        var windows = await RecordChunkedPassAsync(transcriber);
 
         var fixture = new GoldenFixture
         {
@@ -110,14 +110,14 @@ public sealed class WhisperGoldenFixtureRecorder
             Translate = false,
             UseVoiceActivityDetection = true,
             DetectLanguage = true
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
 
         return result.Text.Trim();
     }
 
     private static async Task<IReadOnlyList<GoldenWindow>> RecordChunkedPassAsync(IWhisperTranscriber transcriber)
     {
-        var clip = await File.ReadAllBytesAsync(RecordedWhisperTranscriber.FixturePath("jfk.wav")).ConfigureAwait(false);
+        var clip = await File.ReadAllBytesAsync(RecordedWhisperTranscriber.FixturePath("jfk.wav"));
         var pcm = WavPayload.Read(clip);
 
         var recorder = new RecordingWhisperTranscriber(transcriber);
@@ -137,10 +137,10 @@ public sealed class WhisperGoldenFixtureRecorder
         var frameBytes = PushMs * WavPcm16.BytesPerMillisecond;
         for (var offset = 0; offset < pcm.Length; offset += frameBytes)
         {
-            _ = await segmenter.PushAsync(pcm.Slice(offset, Math.Min(frameBytes, pcm.Length - offset)), CancellationToken.None).ConfigureAwait(false);
+            _ = await segmenter.PushAsync(pcm.Slice(offset, Math.Min(frameBytes, pcm.Length - offset)), CancellationToken.None);
         }
 
-        _ = await segmenter.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        _ = await segmenter.FlushAsync(CancellationToken.None);
         return recorder.Windows;
     }
 
@@ -178,14 +178,14 @@ internal sealed class RecordingWhisperTranscriber(IWhisperTranscriber inner) : I
         ArgumentNullException.ThrowIfNull(request);
 
         using var buffer = new MemoryStream();
-        await request.Audio.CopyToAsync(buffer, ct).ConfigureAwait(false);
+        await request.Audio.CopyToAsync(buffer, ct);
         request.Audio.Seek(offset: 0, SeekOrigin.Begin);
 
         var payload = WavPayload.Read(buffer.ToArray());
         var startMs = WindowStartMs();
         var endMs = startMs + (payload.Length / WavPcm16.BytesPerMillisecond);
 
-        var result = await inner.TranscribeAsync(modelId, request, ct).ConfigureAwait(false);
+        var result = await inner.TranscribeAsync(modelId, request, ct);
 
         _windows.Add(new GoldenWindow
         {

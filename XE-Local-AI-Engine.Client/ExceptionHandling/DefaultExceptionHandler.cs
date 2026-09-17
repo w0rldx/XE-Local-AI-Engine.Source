@@ -47,7 +47,7 @@ public class DefaultExceptionHandler(ILogger<DefaultExceptionHandler> logger, IH
 
         // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with application/json,
         // so setting the property beforehand is dead (the same trap ConflictExceptionHandler had).
-        await httpContext.Response.WriteAsJsonAsync(problemDetails, options: null, "application/problem+json; charset=utf-8", cancellationToken).ConfigureAwait(false);
+        await httpContext.Response.WriteAsJsonAsync(problemDetails, options: null, "application/problem+json; charset=utf-8", cancellationToken);
 
         return true;
     }

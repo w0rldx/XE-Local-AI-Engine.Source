@@ -46,7 +46,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         };
 
         _ = _dbContext.AgentDefinitions.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -85,7 +85,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         };
 
         _ = _dbContext.AgentDefinitions.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -97,8 +97,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         // Load tracked (not AsNoTracking) so SaveChanges re-encrypts; the materialization interceptor has already
         // decrypted Instructions/Description on load, so the comparison below is plaintext-vs-plaintext.
         var entity = await _dbContext.AgentDefinitions
-                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -163,7 +162,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             entity.Version++;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -171,8 +170,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.AgentDefinitions
-                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -180,7 +178,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         }
 
         _ = _dbContext.AgentDefinitions.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }
@@ -189,8 +187,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
     {
         var entity = await _dbContext.AgentDefinitions
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(definition => definition.Id == id, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -200,8 +197,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         var entities = await _dbContext.AgentDefinitions
                                        .AsNoTracking()
                                        .OrderBy(definition => definition.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -214,8 +210,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
                                     .AsNoTracking()
                                     .Where(definition => definition.Source == (int)AgentDefinitionSource.Seeded && definition.SeedSlug != null)
                                     .Select(definition => definition.SeedSlug!)
-                                    .ToListAsync(cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ToListAsync(cancellationToken);
 
         return slugs.ToHashSet(StringComparer.Ordinal);
     }
@@ -226,8 +221,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
 
         var entity = await _dbContext.AgentDefinitions
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(definition => definition.Source == (int)AgentDefinitionSource.Seeded && definition.SeedSlug == seedSlug, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(definition => definition.Source == (int)AgentDefinitionSource.Seeded && definition.SeedSlug == seedSlug, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }

@@ -28,10 +28,10 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService r
     public override async Task HandleAsync(GetKldDiskEstimateRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct);
         if (project is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
@@ -49,8 +49,7 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService r
                       Formula = string.Create(CultureInfo.InvariantCulture,
                           $"chunks x contextTokens x vocabSize x {BenchmarkFidelityPolicy.KldBytesPerLogit} bytes per logit, plus a small header"),
                       FitsOnDisk = free - estimated >= BenchmarkFidelityPolicy.KldFreeSpaceHeadroomBytes
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 }
 
@@ -88,16 +87,14 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectServ
                                             req.FidelityChunks,
                                             req.FidelityKldBaseModelName),
                                         req.MeasureExisting,
-                                        ct)
-                                    .ConfigureAwait(false);
-        var runCount = await _records.CountRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
+                                        ct);
+        var runCount = await _records.CountRunsAsync(req.ProjectId, ct);
         await Send.OkAsync(new BenchmarkProjectFidelityChangeResponse
                   {
-                      Project = await BenchmarkProjectDetailProjection.ReadAsync(_records, change.Project, runCount, ct).ConfigureAwait(false),
+                      Project = await BenchmarkProjectDetailProjection.ReadAsync(_records, change.Project, runCount, ct),
                       EnqueuedRunIds = change.EnqueuedRunIds,
                       EnqueuedCount = change.EnqueuedRunIds.Count
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 }
 
@@ -119,17 +116,17 @@ public sealed class StartBenchmarkRunFidelityEndpoint(BenchmarkRecordService rec
     public override async Task HandleAsync(StartRunFidelityRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var run = await _records.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+        var run = await _records.GetRunAsync(req.RunId, ct);
         if (run is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found.")));
             return;
         }
 
-        var project = await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false);
-        _ = await _records.EnqueueFidelityAsync(req.RunId, project?.FidelityKldEnabled == true ? "kld" : "ppl", ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(run.ProjectId, ct);
+        _ = await _records.EnqueueFidelityAsync(req.RunId, project?.FidelityKldEnabled == true ? "kld" : "ppl", ct);
         _signal.Wake();
-        await Send.ResultAsync(Results.Accepted()).ConfigureAwait(false);
+        await Send.ResultAsync(Results.Accepted());
     }
 }
 
@@ -149,13 +146,13 @@ public sealed class ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService
     public override async Task HandleAsync(ListBenchmarkFidelityAttemptsRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _records.GetRunAsync(req.RunId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetRunAsync(req.RunId, ct) is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found.")));
             return;
         }
 
-        var attempts = await _records.ListFidelityAttemptsAsync(req.RunId, ct).ConfigureAwait(false);
+        var attempts = await _records.ListFidelityAttemptsAsync(req.RunId, ct);
         await Send.OkAsync(new ListBenchmarkFidelityAttemptsResponse
                   {
                       Items =
@@ -183,8 +180,7 @@ public sealed class ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService
                               CompletedAtUtc = attempt.CompletedAtUtc
                           })
                       ]
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 }
 
@@ -209,19 +205,19 @@ public sealed class ClearBenchmarkFidelityCacheEndpoint(BenchmarkRecordService r
     public override async Task HandleAsync(GetKldDiskEstimateRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
-        if (await _records.HasLiveFidelityWorkAsync(ct).ConfigureAwait(false))
+        if (await _records.HasLiveFidelityWorkAsync(ct))
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkConflictException("FidelityWorkInFlight"))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkConflictException("FidelityWorkInFlight")));
             return;
         }
 
         _cache.Clear();
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

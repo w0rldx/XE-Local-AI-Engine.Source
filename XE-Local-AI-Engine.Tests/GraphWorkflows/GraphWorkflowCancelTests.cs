@@ -30,19 +30,19 @@ public sealed class GraphWorkflowCancelTests
     public async Task CancellingARunThatNeverTicked_SettlesItWithoutDispatchingAnything()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear);
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        await harness.CancelAsync(runId);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId)).Status);
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
 
-        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var run = await harness.ReadRunAsync(runId);
         AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, run.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.Cancelled,
             run.FailureClass,
             "the drain classifies the terminal it writes: a cancelled run reading None records nothing at all about why it stopped.");
-        foreach (var nodeRun in await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false))
+        foreach (var nodeRun in await harness.ReadNodeRunsAsync(runId))
         {
             AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, nodeRun.Status);
             AssertEx.Null(nodeRun.StartedAtUtc, $"'{nodeRun.NodeKey}' was never dispatched, so it never started.");
@@ -57,13 +57,13 @@ public sealed class GraphWorkflowCancelTests
     public async Task AFullCancel_WritesExactlyOneRunCancelledEvent()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear);
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.CancelAsync(runId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
+        var events = await harness.ReadEventsAsync(runId);
         AssertEx.Equal(expected: 1,
             events.Count(static entry => string.Equals(entry.EventType, GraphWorkflowEventTypes.RunCancelled, StringComparison.Ordinal)),
             "the request writes the event; the settle that follows it is the run row's business.");
@@ -77,12 +77,12 @@ public sealed class GraphWorkflowCancelTests
     public async Task ACancelFromPending_WritesExactlyOneRunCancelledEvent()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear);
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.CancelAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
 
-        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        var events = await harness.ReadEventsAsync(runId);
         AssertEx.Equal(expected: 1, events.Count(static entry => string.Equals(entry.EventType, GraphWorkflowEventTypes.RunCancelled, StringComparison.Ordinal)));
     }
 
@@ -95,14 +95,14 @@ public sealed class GraphWorkflowCancelTests
     public async Task ACancellingRunWhosePinnedGraphNoLongerParses_StillSettlesCancelled()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
-        var runId = await harness.StartRunThroughTheStoreAsync(definitionId, "{ not json at all", [("start", GraphWorkflowNodeKind.Start)]).ConfigureAwait(false);
+        var definitionId = await harness.SeedDefinitionAsync(GraphWorkflowGraphs.InlineLinear);
+        var runId = await harness.StartRunThroughTheStoreAsync(definitionId, "{ not json at all", [("start", GraphWorkflowNodeKind.Start)]);
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.CancelAsync(runId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "start")).Status);
     }
 
     /// <summary>
@@ -113,21 +113,21 @@ public sealed class GraphWorkflowCancelTests
     public async Task CancellingMidRun_SettlesThePendingSiblingsAndLeavesTheFinishedOnesAlone()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineJoinAll);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.CancelAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded,
-            (await harness.ReadNodeRunAsync(runId, "start").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "start")).Status,
             "a cancel does not rewrite what already succeeded.");
 
-        var sibling = await harness.ReadNodeRunAsync(runId, "merge").ConfigureAwait(false);
+        var sibling = await harness.ReadNodeRunAsync(runId, "merge");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, sibling.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.Cancelled, sibling.FailureClass);
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -139,14 +139,14 @@ public sealed class GraphWorkflowCancelTests
     {
         // A private host: the signal channel is the dispatcher's own, and a sibling draining it would decide the answer.
         await using var harness = new GraphWorkflowHarness();
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear).ConfigureAwait(false);
-        await harness.CancelAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear);
+        await harness.CancelAsync(runId);
 
-        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceSafelyAsync(runId);
         AssertEx.True(harness.WasSignalled(runId), "the drain wrote transitions, so it asked for the tick that would finish it.");
 
-        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId).ConfigureAwait(false));
-        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId));
+        await harness.AdvanceSafelyAsync(runId);
         AssertEx.False(harness.WasSignalled(runId), "a drained run writes nothing on a repeat, so nothing re-signals.");
     }
 
@@ -161,13 +161,13 @@ public sealed class GraphWorkflowCancelTests
         await using var lane = new GraphWorkflowInFlightLane<int>(slots: 1);
         var nodeRunId = Guid.NewGuid();
 
-        var flight = await lane.TryStartAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None).ConfigureAwait(false);
+        var flight = await lane.TryStartAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
 
         AssertEx.NotNull(flight);
         AssertEx.True(lane.IsInFlight(nodeRunId));
-        AssertEx.True(await lane.StopAsync(nodeRunId).ConfigureAwait(false), "the first ask is the one that actually cancels.");
-        AssertEx.False(await lane.StopAsync(nodeRunId).ConfigureAwait(false), "the entry is still there, and asking again is not work.");
-        AssertEx.False(await lane.StopAsync(Guid.NewGuid()).ConfigureAwait(false), "and neither is asking about a row nothing is driving.");
+        AssertEx.True(await lane.StopAsync(nodeRunId), "the first ask is the one that actually cancels.");
+        AssertEx.False(await lane.StopAsync(nodeRunId), "the entry is still there, and asking again is not work.");
+        AssertEx.False(await lane.StopAsync(Guid.NewGuid()), "and neither is asking about a row nothing is driving.");
     }
 
     /// <summary>
@@ -178,9 +178,9 @@ public sealed class GraphWorkflowCancelTests
     {
         await using var lane = new GraphWorkflowInFlightLane<int>(slots: 1);
 
-        _ = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None).ConfigureAwait(false);
+        _ = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
 
-        var refused = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => Task.FromResult(result: 2), CancellationToken.None).ConfigureAwait(false);
+        var refused = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => Task.FromResult(result: 2), CancellationToken.None);
 
         AssertEx.Null(refused, "the slot count is the bound, and a full lane simply answers no.");
     }
@@ -202,16 +202,15 @@ public sealed class GraphWorkflowCancelTests
                      current
                  })
         {
-            _ = await lane.TryStartAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None).ConfigureAwait(false);
+            _ = await lane.TryStartAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
         }
 
-        await lane.ForgetSupersededAsync([Row(superseded, GraphWorkflowNodeRunStatus.Running, attempt: 2), Row(current, GraphWorkflowNodeRunStatus.Running, attempt: 1)])
-                  .ConfigureAwait(false);
+        await lane.ForgetSupersededAsync([Row(superseded, GraphWorkflowNodeRunStatus.Running, attempt: 2), Row(current, GraphWorkflowNodeRunStatus.Running, attempt: 1)]);
 
         AssertEx.False(lane.IsInFlight(superseded), "the row is on its second attempt and this entry belongs to the first.");
         AssertEx.True(lane.IsInFlight(current));
 
-        await lane.DiscardAsync(current).ConfigureAwait(false);
+        await lane.DiscardAsync(current);
         AssertEx.False(lane.IsInFlight(current), "removing the entry is the load-bearing half of a discard, not the cancel.");
     }
 
@@ -229,25 +228,25 @@ public sealed class GraphWorkflowCancelTests
         // on is the dispatcher's own.
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
         harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Wedges));
-        var runId = await RunToARunningAgentAsync(harness, instructions).ConfigureAwait(false);
-        var invocationId = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).InvocationId?.ToString(),
+        var runId = await RunToARunningAgentAsync(harness, instructions);
+        var invocationId = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "analyze")).InvocationId?.ToString(),
             "a Running agent row carries the invocation its turn was minted with.");
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.CancelAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "analyze")).Status,
             "ask, do not settle: the turn is still winding down.");
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, (await harness.ReadRunAsync(runId)).Status);
         AssertEx.Equal(expected: 1, harness.Invocations.Cancelled.Count(cancelled => cancelled.ToString() == invocationId), "the runner is asked once, not once per tick.");
 
         harness.Invocations.Release(Guid.Parse(invocationId));
 
-        var analyze = await AdvanceUntilCancelledAsync(harness, runId).ConfigureAwait(false);
+        var analyze = await AdvanceUntilCancelledAsync(harness, runId);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, analyze.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.Cancelled, analyze.FailureClass);
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -261,18 +260,18 @@ public sealed class GraphWorkflowCancelTests
         const string instructions = "drain-does-not-spin";
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
         harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn(GraphWorkflowTurnOutcome.Wedges));
-        var runId = await RunToARunningAgentAsync(harness, instructions).ConfigureAwait(false);
+        var runId = await RunToARunningAgentAsync(harness, instructions);
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.CancelAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
         _ = harness.WasSignalled(runId);
 
-        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId).ConfigureAwait(false), "the stop was already asked, so the repeat has nothing to write.");
-        await harness.AdvanceSafelyAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId), "the stop was already asked, so the repeat has nothing to write.");
+        await harness.AdvanceSafelyAsync(runId);
         AssertEx.False(harness.WasSignalled(runId), "and writing nothing is what stops it asking for another tick.");
         AssertEx.Equal(expected: 1, harness.Invocations.Cancelled.Count, "three ticks of drain, one ask.");
 
-        foreach (var nodeRun in await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false))
+        foreach (var nodeRun in await harness.ReadNodeRunsAsync(runId))
         {
             if (nodeRun.InvocationId is { } invocationId)
             {
@@ -280,7 +279,7 @@ public sealed class GraphWorkflowCancelTests
             }
         }
 
-        _ = await AdvanceUntilCancelledAsync(harness, runId).ConfigureAwait(false);
+        _ = await AdvanceUntilCancelledAsync(harness, runId);
     }
 
     /// <summary>A run of a linear Start → Agent → End graph, ticked until its agent turn is Running.</summary>
@@ -299,14 +298,13 @@ public sealed class GraphWorkflowCancelTests
                                                       { "key": "e2", "from": "analyze", "to": "done" }
                                                     ]
                                                   }
-                                                  """)
-                                 .ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.Invocations.WhenRunningAsync(instructions).WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false)).Status);
+                                                  """);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.Invocations.WhenRunningAsync(instructions).WaitAsync(TestBudgets.Contended);
+        _ = await harness.AdvanceAsync(runId);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "analyze")).Status);
         return runId;
     }
 
@@ -314,13 +312,13 @@ public sealed class GraphWorkflowCancelTests
     {
         for (var tick = 0; tick < maxTicks; tick++)
         {
-            var nodeRun = await harness.ReadNodeRunAsync(runId, "analyze").ConfigureAwait(false);
+            var nodeRun = await harness.ReadNodeRunAsync(runId, "analyze");
             if (GraphWorkflowStateMachine.IsTerminal(nodeRun.Status))
             {
                 return nodeRun;
             }
 
-            _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+            _ = await harness.AdvanceAsync(runId);
         }
 
         throw new AssertionException($"Run {runId} left its agent node unsettled after {maxTicks} ticks.");
@@ -334,7 +332,7 @@ public sealed class GraphWorkflowCancelTests
     private static async Task<int> Parked(StrongBox<bool> leaseAcquired, CancellationToken cancellationToken)
     {
         leaseAcquired.Value = true;
-        await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(Timeout.Infinite, cancellationToken);
         return 1;
     }
 
@@ -385,14 +383,13 @@ public sealed class GraphWorkflowCancelTests
             services.AddScoped<IGraphWorkflowStore>(provider => new GatedDrainGraphWorkflowStore((IGraphWorkflowStore)build(provider), gate));
         });
 
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions);
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).Status
+                         async () => (await harness.ReadNodeRunAsync(runId, "review")).Status
                                      == GraphWorkflowNodeRunStatus.WaitingForApproval,
-                         "the pause never reached WaitingForApproval.")
-                     .ConfigureAwait(false);
+                         "the pause never reached WaitingForApproval.");
 
-        await harness.CancelAsync(runId).ConfigureAwait(false);
+        await harness.CancelAsync(runId);
 
         // The tick runs detached so the test can act inside it. Nothing here waits on a clock: the gate is the
         // rendezvous, and the drain is standing in front of its cancel write when Reached completes.
@@ -402,25 +399,24 @@ public sealed class GraphWorkflowCancelTests
         {
             // Bounded: the project has no global test timeout, so a drain that stopped routing the pause through this
             // write would otherwise hang the whole CI leg instead of failing it.
-            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30));
             refusal = await AssertEx
-                            .ThrowsAsync<GraphWorkflowRunConflictException>(() => harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve))
-                            .ConfigureAwait(false);
+                            .ThrowsAsync<GraphWorkflowRunConflictException>(() => harness.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve));
         }
         finally
         {
             gate.Release();
         }
 
-        _ = await tick.ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await tick;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Contains(refusal.Message, "Cancelling", message: "the operator is told the run stopped, not that somebody else answered.");
-        var review = await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false);
+        var review = await harness.ReadNodeRunAsync(runId, "review");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, review.Status);
         AssertEx.Null(review.DecisionOperationId, "no decision landed, so the drain overwrote none.");
         AssertEx.Null(review.OutputJson, "a pause the drain cancelled wrote no decision document.");
-        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
 }
 
@@ -470,10 +466,10 @@ internal sealed class GatedDrainGraphWorkflowStore(IGraphWorkflowStore inner, Gr
         ArgumentNullException.ThrowIfNull(command);
         if (command.TargetStatus == GraphWorkflowNodeRunStatus.Cancelled)
         {
-            await gate.WaitAsync().ConfigureAwait(false);
+            await gate.WaitAsync();
         }
 
-        return await inner.TransitionNodeRunAsync(command, cancellationToken).ConfigureAwait(false);
+        return await inner.TransitionNodeRunAsync(command, cancellationToken);
     }
 
     public Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>

@@ -58,7 +58,7 @@ public sealed class FakeDockerServer : IAsyncDisposable
         var app = builder.Build();
         app.MapFakeDockerEndpoints(state);
 
-        await app.StartAsync(cancellationToken).ConfigureAwait(false);
+        await app.StartAsync(cancellationToken);
 
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()?.Addresses.SingleOrDefault()
                       ?? throw new InvalidOperationException("Fake Docker server did not publish a listening address.");
@@ -68,6 +68,6 @@ public sealed class FakeDockerServer : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _app.DisposeAsync().ConfigureAwait(false);
+        await _app.DisposeAsync();
     }
 }

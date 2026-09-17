@@ -66,13 +66,13 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         var requestFingerprint = _fingerprint.Compute(request);
         try
         {
-            var existing = await _store.GetAsync(request.RequestId, cancellationToken).ConfigureAwait(false);
+            var existing = await _store.GetAsync(request.RequestId, cancellationToken);
             if (existing is not null)
             {
                 return MapExisting(existing, requestFingerprint);
             }
 
-            var resolution = await _resolver.ResolveAsync(request.Binding, cancellationToken).ConfigureAwait(false);
+            var resolution = await _resolver.ResolveAsync(request.Binding, cancellationToken);
             if (resolution.Binding is not { } binding)
             {
                 return Reject(resolution.FailureCode ?? McpExecutionFailureCodes.InternalFailure, resolution.DisplayMessage);
@@ -92,7 +92,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
             }
 
             if (request.WorkspaceId is { } workspaceId
-                && !await IsWorkspaceAuthorizedAsync(workspaceId, cancellationToken).ConfigureAwait(false))
+                && !await IsWorkspaceAuthorizedAsync(workspaceId, cancellationToken))
             {
                 return Reject(McpAgentRunFailureCodes.WorkspaceNotAuthorized,
                     "Cannot start: the selected workspace is not authorized.");
@@ -112,9 +112,9 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
                     now.ToUnixTimeMilliseconds(),
                     request.Binding.InboundContext.IsAgentic,
                     request.Binding.InboundContext.KeyPrefix),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
-            await _metrics.RefreshAsync(_store, CancellationToken.None).ConfigureAwait(false);
+            await _metrics.RefreshAsync(_store, CancellationToken.None);
             return MapAdmission(admission);
         }
         catch (Exception exception)
@@ -128,7 +128,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
     {
         try
         {
-            var resolved = await _workspaceResolver.ResolveAsync(workspaceId.ToString("D"), cancellationToken).ConfigureAwait(false);
+            var resolved = await _workspaceResolver.ResolveAsync(workspaceId.ToString("D"), cancellationToken);
             return resolved.Id == workspaceId;
         }
         catch (SelectedFolderValidationException)
@@ -146,7 +146,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
 
         try
         {
-            var run = await _store.GetAsync(requestId, cancellationToken).ConfigureAwait(false);
+            var run = await _store.GetAsync(requestId, cancellationToken);
             return run is null ? null : ToView(run);
         }
         catch (Exception exception)
@@ -163,7 +163,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         var boundedLimit = Math.Clamp(limit ?? _options.DefaultListLimit, 1, _options.MaxListLimit);
         try
         {
-            var runs = await _store.ListAsync(boundedLimit, status, cancellationToken).ConfigureAwait(false);
+            var runs = await _store.ListAsync(boundedLimit, status, cancellationToken);
             return runs.Select(ToView).ToArray();
         }
         catch (Exception exception)
@@ -184,7 +184,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         {
             for (var attempt = 0; attempt < 2; attempt++)
             {
-                var current = await _store.GetAsync(requestId, cancellationToken).ConfigureAwait(false);
+                var current = await _store.GetAsync(requestId, cancellationToken);
                 if (current is null)
                 {
                     return new McpAgentRunCancelResult(McpAgentRunCancelKind.NotFound, null, "Run not found.");
@@ -194,7 +194,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
                     current.Version,
                     McpAgentRunStopReason.UserCancellation,
                     _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
 
                 if (stopped.Kind == McpAgentRunStopKind.VersionConflict)
                 {
@@ -209,7 +209,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
 
                 if (stopped.Kind == McpAgentRunStopKind.Requested)
                 {
-                    await _metrics.RefreshAsync(_store, CancellationToken.None).ConfigureAwait(false);
+                    await _metrics.RefreshAsync(_store, CancellationToken.None);
                 }
 
                 _metrics.RecordStop("user", McpAgentRunText.ToLowercaseInvariant(stopped.Kind));

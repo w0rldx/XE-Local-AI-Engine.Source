@@ -7,7 +7,7 @@ internal static class EmbedEndpoint
 {
     public static async Task<IResult> HandleAsync(HttpContext context, FakeOllamaState state, bool legacy)
     {
-        using var body = await FakeOllamaEndpointMapper.ReadJsonAsync(context).ConfigureAwait(false);
+        using var body = await FakeOllamaEndpointMapper.ReadJsonAsync(context);
         if (body is null)
         {
             return Results.BadRequest(new
@@ -24,7 +24,7 @@ internal static class EmbedEndpoint
 
         FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, firstInput);
 
-        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
+        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model))
         {
             return Results.Empty;
         }

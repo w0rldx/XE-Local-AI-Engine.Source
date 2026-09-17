@@ -22,12 +22,12 @@ internal sealed class McpServerService(
 
         Validate(input);
         input = NormalizeTrustTier(input);
-        await EnsureNameAvailableAsync(input.Name, excludeId: null, cancellationToken).ConfigureAwait(false);
+        await EnsureNameAvailableAsync(input.Name, excludeId: null, cancellationToken);
 
         try
         {
             // The store forces Enabled = false on create, so the enabled set is unchanged and no refresh is needed.
-            return await _store.AddAsync(input, cancellationToken).ConfigureAwait(false);
+            return await _store.AddAsync(input, cancellationToken);
         }
         catch (DbUpdateException exception)
         {
@@ -43,13 +43,13 @@ internal sealed class McpServerService(
         Validate(input);
         input = NormalizeTrustTier(input);
 
-        var existing = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var existing = await _store.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return null;
         }
 
-        await EnsureNameAvailableAsync(input.Name, id, cancellationToken).ConfigureAwait(false);
+        await EnsureNameAvailableAsync(input.Name, id, cancellationToken);
 
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
         // enabled flag through to the store regardless of what the request body claims. Environment values the caller
@@ -64,7 +64,7 @@ internal sealed class McpServerService(
         McpServerRecord? updated;
         try
         {
-            updated = await _store.UpdateAsync(id, edit, cancellationToken).ConfigureAwait(false);
+            updated = await _store.UpdateAsync(id, edit, cancellationToken);
         }
         catch (DbUpdateException exception)
         {
@@ -81,7 +81,7 @@ internal sealed class McpServerService(
         // tools either way, so editing it never needs a snapshot refresh.
         if (updated.Enabled)
         {
-            await RefreshConnectionsAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshConnectionsAsync(cancellationToken);
         }
 
         return updated;
@@ -89,7 +89,7 @@ internal sealed class McpServerService(
 
     public async Task<McpServerRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default)
     {
-        var existing = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var existing = await _store.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return null;
@@ -103,27 +103,27 @@ internal sealed class McpServerService(
 
         // Flip only the enabled flag via the dedicated store method: it touches just the flag (single Version bump,
         // timestamp) and leaves the encrypted secret columns untouched, so a toggle never re-encrypts args/env/description.
-        var updated = await _store.SetEnabledAsync(id, enabled, cancellationToken).ConfigureAwait(false);
+        var updated = await _store.SetEnabledAsync(id, enabled, cancellationToken);
         if (updated is null)
         {
             return null;
         }
 
         // The enabled set changed (a server was connected or disconnected), so re-publish the live tool snapshot.
-        await RefreshConnectionsAsync(cancellationToken).ConfigureAwait(false);
+        await RefreshConnectionsAsync(cancellationToken);
 
         return updated;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var existing = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var existing = await _store.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return false;
         }
 
-        var deleted = await _store.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+        var deleted = await _store.DeleteAsync(id, cancellationToken);
         if (!deleted)
         {
             return false;
@@ -132,7 +132,7 @@ internal sealed class McpServerService(
         // Removing an enabled server shrinks the connected set; a disabled server had no live connection to tear down.
         if (existing.Enabled)
         {
-            await RefreshConnectionsAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshConnectionsAsync(cancellationToken);
         }
 
         return true;
@@ -266,7 +266,7 @@ internal sealed class McpServerService(
         // Pre-check against the current registrations so the common case returns a friendly validation error; the unique
         // index is the backstop for a concurrent race (caught as a UniqueViolation by the callers). Name uniqueness is
         // case-insensitive because the qualified tool-name slug derives from it and collisions must be impossible.
-        var existing = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var existing = await _store.ListAsync(cancellationToken);
         var clash = existing.Any(record => record.Id != excludeId
                                            && string.Equals(record.Name, name, StringComparison.OrdinalIgnoreCase));
         if (clash)
@@ -279,7 +279,7 @@ internal sealed class McpServerService(
     {
         try
         {
-            await _connectionManager.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            await _connectionManager.RefreshAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {

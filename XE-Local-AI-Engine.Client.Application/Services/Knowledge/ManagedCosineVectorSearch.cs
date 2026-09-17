@@ -52,8 +52,7 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
                 limit,
                 documentId,
                 collectionId: null,
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     public async Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,
@@ -77,8 +76,7 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
                 limit,
                 documentId,
                 normalizedCollectionId,
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     private async Task<IReadOnlyList<VectorSearchHit>> SearchCoreAsync(ReadOnlyMemory<float> queryVector,
@@ -132,8 +130,7 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
                     limit,
                     documentId,
                     collectionId,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
         finally
         {
@@ -155,7 +152,7 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         if (collectionId is null)
@@ -199,9 +196,9 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         var startTimestamp = Stopwatch.GetTimestamp();
         try
         {
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             long sequence = 0;
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            while (await reader.ReadAsync(cancellationToken))
             {
                 // Honor cancellation between rows: the per-row scoring work does not otherwise observe it, so a large
                 // corpus scan can be abandoned promptly.

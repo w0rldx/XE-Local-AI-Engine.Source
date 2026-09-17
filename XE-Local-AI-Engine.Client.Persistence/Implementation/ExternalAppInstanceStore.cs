@@ -36,7 +36,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
 
     public async Task<ExternalAppInstanceSnapshot?> GetAsync(Guid instanceId, CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.ExternalAppInstances.AsNoTracking().SingleOrDefaultAsync(row => row.Id == instanceId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.ExternalAppInstances.AsNoTracking().SingleOrDefaultAsync(row => row.Id == instanceId, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
@@ -47,8 +47,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         var entities = await _dbContext.ExternalAppInstances.AsNoTracking()
                                        .OrderByDescending(row => row.InstalledAtUtc)
                                        .ThenByDescending(row => row.Id)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return [.. entities.Select(ToSnapshot)];
     }
 
@@ -60,8 +59,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
                                        .Where(row => row.ApplicationId == applicationId)
                                        .OrderByDescending(row => row.InstalledAtUtc)
                                        .ThenByDescending(row => row.Id)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return [.. entities.Select(ToSnapshot)];
     }
 
@@ -106,7 +104,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
 
         // One SaveChanges is one transaction, and both rows are in it: an instance without its first event would leave
         // the feed starting at sequence 2 with nothing recording the accepted permissions.
-        await SaveOrClearAsync(cancellationToken).ConfigureAwait(false);
+        await SaveOrClearAsync(cancellationToken);
 
         return new ExternalAppStatusWriteResult(Applied: true, FirstSequence, Version: 0);
     }
@@ -119,9 +117,9 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         // FIRST, before the read this write mutates. Acquiring it afterwards put the transaction outside the boundary
         // that clears the tracker: a failure to begin one then left the entity mutated and the event queued on this
         // scoped context, and the next save on it — a different caller's — would have committed this transition.
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var entity = await _dbContext.ExternalAppInstances.SingleOrDefaultAsync(row => row.Id == command.InstanceId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.ExternalAppInstances.SingleOrDefaultAsync(row => row.Id == command.InstanceId, cancellationToken);
         if (entity is null || entity.Version != command.ExpectedVersion || !command.ExpectedStatuses.Contains(entity.Status))
         {
             return Lost;
@@ -195,8 +193,8 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
 
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -235,7 +233,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
     {
         ArgumentNullException.ThrowIfNull(variablesJson);
 
-        var entity = await _dbContext.ExternalAppInstances.SingleOrDefaultAsync(row => row.Id == instanceId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.ExternalAppInstances.SingleOrDefaultAsync(row => row.Id == instanceId, cancellationToken);
         if (entity is null || entity.Version != expectedVersion)
         {
             return false;
@@ -249,7 +247,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         entity.UpdatedAtUtc = updatedAtUtc;
         entity.Version++;
 
-        return await SaveCasAsync(cancellationToken).ConfigureAwait(false);
+        return await SaveCasAsync(cancellationToken);
     }
 
     public async Task<ExternalAppStatusWriteResult> CommitUpdateAsync(Guid instanceId,
@@ -266,7 +264,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         ArgumentNullException.ThrowIfNull(variablesJson);
         ArgumentNullException.ThrowIfNull(publishedPortsJson);
 
-        var entity = await _dbContext.ExternalAppInstances.SingleOrDefaultAsync(row => row.Id == instanceId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.ExternalAppInstances.SingleOrDefaultAsync(row => row.Id == instanceId, cancellationToken);
         if (entity is null || entity.Version != expectedVersion)
         {
             return Lost;
@@ -294,7 +292,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         var sequence = entity.LastSequence;
         var version = entity.Version;
 
-        return await SaveCasAsync(cancellationToken).ConfigureAwait(false)
+        return await SaveCasAsync(cancellationToken)
             ? new ExternalAppStatusWriteResult(Applied: true, sequence, version)
             : Lost;
     }
@@ -316,8 +314,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
                                      .Where(row => row.InstanceId == instanceId && row.Sequence > afterSequence)
                                      .OrderBy(row => row.Sequence)
                                      .Take(limit)
-                                     .ToListAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .ToListAsync(cancellationToken);
 
         return
         [
@@ -327,7 +324,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
 
     public async Task<bool> DeleteAsync(Guid instanceId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
@@ -337,18 +334,17 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
             // the events this method had already bulk-deleted were queued for a second DELETE that affected no rows,
             // and a perfectly good uninstall reported itself a lost CAS.
             var deleted = await _dbContext.ExternalAppInstances.Where(row => row.Id == instanceId && row.Version == expectedVersion)
-                                          .ExecuteDeleteAsync(cancellationToken)
-                                          .ConfigureAwait(false);
+                                          .ExecuteDeleteAsync(cancellationToken);
             if (deleted == 0)
             {
-                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.RollbackAsync(cancellationToken);
                 return false;
             }
 
             // Explicitly, and inside the same transaction as the row: cascades never fire on this connection, so an
             // events delete left to the database would leave every event of this instance behind forever.
-            _ = await _dbContext.ExternalAppInstanceEvents.Where(row => row.InstanceId == instanceId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.ExternalAppInstanceEvents.Where(row => row.InstanceId == instanceId).ExecuteDeleteAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (Exception)
         {
@@ -380,7 +376,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
     {
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -405,7 +401,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
     {
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (Exception)
         {

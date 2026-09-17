@@ -39,10 +39,10 @@ public sealed class DatasetGenerationHostedService(
             // claims past a failed recovery orphans them for this process's whole lifetime.
             if (!recovered)
             {
-                recovered = await RecoverAsync(stoppingToken).ConfigureAwait(false);
+                recovered = await RecoverAsync(stoppingToken);
                 if (!recovered)
                 {
-                    await WaitAsync(stoppingToken).ConfigureAwait(false);
+                    await WaitAsync(stoppingToken);
                     continue;
                 }
             }
@@ -55,15 +55,14 @@ public sealed class DatasetGenerationHostedService(
                 {
                     await using var claimScope = _scopeFactory.CreateAsyncScope();
                     var store = claimScope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
-                    work = await store.ClaimNextAsync(stoppingToken).ConfigureAwait(false);
+                    work = await store.ClaimNextAsync(stoppingToken);
                 }
 
                 if (work is not null)
                 {
                     await using var executionScope = _scopeFactory.CreateAsyncScope();
                     await executionScope.ServiceProvider.GetRequiredService<IDatasetGenerationExecutor>()
-                                        .ExecuteAsync(work, stoppingToken)
-                                        .ConfigureAwait(false);
+                                        .ExecuteAsync(work, stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -93,7 +92,7 @@ public sealed class DatasetGenerationHostedService(
 
             if (work is null)
             {
-                await WaitAsync(stoppingToken).ConfigureAwait(false);
+                await WaitAsync(stoppingToken);
             }
         }
     }
@@ -102,7 +101,7 @@ public sealed class DatasetGenerationHostedService(
     {
         try
         {
-            _ = await _signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
+            _ = await _signal.WaitAsync(_pollInterval, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -117,7 +116,7 @@ public sealed class DatasetGenerationHostedService(
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
-            var recovered = await store.RecoverOnStartupAsync(stoppingToken).ConfigureAwait(false);
+            var recovered = await store.RecoverOnStartupAsync(stoppingToken);
             foreach (var datasetId in recovered)
             {
                 // A buffer that survived into this process cannot describe the new run; drop it so a reconnecting client

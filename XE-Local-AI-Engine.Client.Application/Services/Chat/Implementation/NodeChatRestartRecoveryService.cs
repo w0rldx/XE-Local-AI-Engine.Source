@@ -18,7 +18,7 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
         return await _writer.ExecuteConversationExclusiveAsync(Guid.Empty,
             async (dbContext, token) =>
             {
-                await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
 
                 // Terminalize every non-terminal assistant row regardless of Origin (Local loopback AND
                 // Origin=Remote platform mirrors): a restart orphans both the same way. The status list is the
@@ -43,7 +43,7 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                         NodeChatMessageStatusValues.Queued,
                         NodeChatMessageStatusValues.Streaming
                     ],
-                    token).ConfigureAwait(false);
+                    token);
 
                 // Durable run-envelope reconcile: a crash or an envelope-write failure after ANY terminal
                 // message commit — completed, failed, cancelled, or interrupted — can leave that assistant row without an
@@ -79,11 +79,11 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                         NodeChatMessageStatusValues.Cancelled,
                         NodeChatMessageStatusValues.Interrupted
                     ],
-                    token).ConfigureAwait(false);
+                    token);
 
-                await transaction.CommitAsync(token).ConfigureAwait(false);
+                await transaction.CommitAsync(token);
                 return recoveredCount;
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

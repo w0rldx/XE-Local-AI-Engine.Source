@@ -102,7 +102,7 @@ internal sealed class FakeWhisperReadinessProbe(bool ready = true, bool responsi
 
         if (ReadinessGate is { } gate)
         {
-            return await gate.Task.WaitAsync(ct).ConfigureAwait(false);
+            return await gate.Task.WaitAsync(ct);
         }
 
         return Ready;
@@ -257,7 +257,7 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await Supervisor.DisposeAsync().ConfigureAwait(false);
+        await Supervisor.DisposeAsync();
         _httpClient.Dispose();
         HttpHandler.Dispose();
 

@@ -31,15 +31,14 @@ public sealed class ImageModelDeletionTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var store = Store(http, models.Path, registry);
 
-        var weightsPath = await SeedInstalledModelAsync(models.Path, registry).ConfigureAwait(false);
+        var weightsPath = await SeedInstalledModelAsync(models.Path, registry);
         var modelDirectory = Path.GetDirectoryName(weightsPath)!;
 
         using var block = BlockDeletion(weightsPath, modelDirectory);
 
-        _ = await AssertEx.ThrowsAsync<ImageModelInUseException>(() => store.DeleteModelAsync(ModelName, CancellationToken.None))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ImageModelInUseException>(() => store.DeleteModelAsync(ModelName, CancellationToken.None));
 
-        var entry = await registry.FindAsync(ModelName, CancellationToken.None).ConfigureAwait(false);
+        var entry = await registry.FindAsync(ModelName, CancellationToken.None);
         AssertEx.NotNull(entry);
         AssertEx.True(File.Exists(weightsPath), "The weights are still on disk, so the model must still be registered.");
     }
@@ -93,12 +92,12 @@ public sealed class ImageModelDeletionTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var store = Store(http, models.Path, registry);
 
-        var weightsPath = await SeedInstalledModelAsync(models.Path, registry).ConfigureAwait(false);
+        var weightsPath = await SeedInstalledModelAsync(models.Path, registry);
 
-        await store.DeleteModelAsync(ModelName, CancellationToken.None).ConfigureAwait(false);
+        await store.DeleteModelAsync(ModelName, CancellationToken.None);
 
         AssertEx.False(File.Exists(weightsPath), "A successful delete must remove the weights.");
-        AssertEx.Null(await registry.FindAsync(ModelName, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Null(await registry.FindAsync(ModelName, CancellationToken.None));
     }
 
     // Deleting something that was never installed is not an error — the caller's goal (its absence) already holds.
@@ -111,9 +110,9 @@ public sealed class ImageModelDeletionTests
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage());
         using var http = new HttpClient(handler, disposeHandler: false);
 
-        await Store(http, models.Path, registry).DeleteModelAsync("never-installed", CancellationToken.None).ConfigureAwait(false);
+        await Store(http, models.Path, registry).DeleteModelAsync("never-installed", CancellationToken.None);
 
-        AssertEx.Null(await registry.FindAsync("never-installed", CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Null(await registry.FindAsync("never-installed", CancellationToken.None));
     }
 
     private static async Task<string> SeedInstalledModelAsync(string modelsDirectory, ImageModelRegistry registry)
@@ -121,7 +120,7 @@ public sealed class ImageModelDeletionTests
         var modelDirectory = Path.Combine(modelsDirectory, HuggingFaceImageModelStore.SafeModelDirectorySegment(ModelName));
         _ = Directory.CreateDirectory(modelDirectory);
         var weightsPath = Path.Combine(modelDirectory, "weights.safetensors");
-        await File.WriteAllTextAsync(weightsPath, "weights").ConfigureAwait(false);
+        await File.WriteAllTextAsync(weightsPath, "weights");
 
         await registry.UpsertAsync(new ImageModelRegistryEntry
         {
@@ -142,7 +141,7 @@ public sealed class ImageModelDeletionTests
             SizeBytes = 7,
             SourceRevision = "main",
             DownloadedAtUtc = DateTimeOffset.UtcNow
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
 
         return weightsPath;
     }

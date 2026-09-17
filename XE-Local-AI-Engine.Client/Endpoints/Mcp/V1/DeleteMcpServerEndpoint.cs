@@ -18,13 +18,13 @@ public sealed class DeleteMcpServerEndpoint(IMcpServerService mcpServerService)
 
     public override async Task HandleAsync(DeleteMcpServerRequest req, CancellationToken ct)
     {
-        var deleted = await _mcpServerService.DeleteAsync(req.McpServerId, ct).ConfigureAwait(false);
+        var deleted = await _mcpServerService.DeleteAsync(req.McpServerId, ct);
         if (!deleted)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

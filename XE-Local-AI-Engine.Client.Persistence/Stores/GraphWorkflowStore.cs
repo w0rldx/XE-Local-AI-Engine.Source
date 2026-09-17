@@ -94,7 +94,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         _dbContext.GraphWorkflowDefinitions.Add(definition);
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
         {
@@ -151,7 +151,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             throw new ArgumentOutOfRangeException(nameof(command), "A definition node count cannot be negative.");
         }
 
-        var definition = await LoadAsync(command.DefinitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await LoadAsync(command.DefinitionId, cancellationToken);
         if (definition.Version != command.ExpectedVersion)
         {
             throw new GraphWorkflowDefinitionConflictException($"The definition version is stale (expected {command.ExpectedVersion}, current {definition.Version}).");
@@ -186,7 +186,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         definition.UpdatedAtUtc = Now();
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -215,24 +215,22 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                             entity.Version,
                             entity.CreatedAtUtc,
                             entity.UpdatedAtUtc))
-                        .ToListAsync(cancellationToken)
-                        .ConfigureAwait(false);
+                        .ToListAsync(cancellationToken);
 
     public async Task<GraphWorkflowDefinitionSnapshot> GetDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default)
     {
         var definition = await _dbContext.GraphWorkflowDefinitions.AsNoTracking()
                                          .SingleOrDefaultAsync(entity => entity.Id == definitionId, cancellationToken)
-                                         .ConfigureAwait(false)
                          ?? throw new GraphWorkflowNotFoundException($"Graph workflow definition '{definitionId}' was not found.");
         return Snapshot(definition);
     }
 
     public async Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            var definition = await LoadAsync(definitionId, cancellationToken).ConfigureAwait(false);
+            var definition = await LoadAsync(definitionId, cancellationToken);
 
             // Inside the transaction, which is the only place the answer can be true: EF opens SQLite transactions as
             // BEGIN IMMEDIATE, so a writer that starts a run while this delete is in flight blocks on the writer lock
@@ -244,20 +242,19 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             // this delete already removed, because the count below ran while that run did not yet exist. Nothing in
             // this slice starts runs; S1's run store is where the obligation lands.
             var live = await _dbContext.GraphWorkflowRuns.AsNoTracking()
-                                       .AnyAsync(entity => entity.DefinitionId == definitionId && LiveRunStatuses.Contains(entity.Status), cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .AnyAsync(entity => entity.DefinitionId == definitionId && LiveRunStatuses.Contains(entity.Status), cancellationToken);
             if (live)
             {
                 throw new GraphWorkflowDefinitionConflictException($"Graph workflow definition '{definitionId}' cannot be deleted while one of its runs is still live.");
             }
 
             _ = _dbContext.GraphWorkflowDefinitions.Remove(definition);
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            await transaction.RollbackAsync(CancellationToken.None);
             _dbContext.ChangeTracker.Clear();
             throw;
         }
@@ -279,7 +276,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             throw new ArgumentException("A run start cannot create two node runs under the same node key.", nameof(command));
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             // INSIDE the transaction, which is the only place the answer holds: EF opens SQLite transactions as BEGIN
@@ -288,7 +285,6 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             // that has already been deleted — the obligation DeleteDefinitionAsync names.
             var definition = await _dbContext.GraphWorkflowDefinitions.AsNoTracking()
                                              .SingleOrDefaultAsync(entity => entity.Id == command.DefinitionId, cancellationToken)
-                                             .ConfigureAwait(false)
                              ?? throw new GraphWorkflowNotFoundException($"Graph workflow definition '{command.DefinitionId}' was not found.");
             if (definition.Version != command.DefinitionVersion || !string.Equals(definition.GraphHash, command.GraphHash, StringComparison.Ordinal))
             {
@@ -333,8 +329,8 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             }
 
             _ = AddEvent(run, GraphWorkflowEventTypes.RunCreated, nodeKey: null, detailJson: null);
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return RunSnapshot(run);
         }
         catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
@@ -342,14 +338,14 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             // ux_graph_workflow_runs_request_id: another start with the same caller-minted id beat this one. The index
             // IS the lock — the caller's earlier lookup is a fast path, not a gate — so the loser answers with the run
             // that won rather than with an error the caller would have to translate back into a replay.
-            await RollbackAsync(transaction).ConfigureAwait(false);
-            return await FindRunByRequestAsync(command.RequestId, cancellationToken).ConfigureAwait(false)
+            await RollbackAsync(transaction);
+            return await FindRunByRequestAsync(command.RequestId, cancellationToken)
                    ?? throw new GraphWorkflowInvalidTransitionException($"Graph workflow run '{command.RunId}' could not be started and no run holds "
                                                                         + $"request id '{command.RequestId}'.", exception);
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -357,13 +353,12 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
     public async Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default)
     {
         var run = await _dbContext.GraphWorkflowRuns.AsNoTracking()
-                                  .SingleOrDefaultAsync(entity => entity.RequestId == requestId, cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .SingleOrDefaultAsync(entity => entity.RequestId == requestId, cancellationToken);
         return run is null ? null : RunSnapshot(run);
     }
 
     public async Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        RunSnapshot(await _dbContext.GraphWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false)
+        RunSnapshot(await _dbContext.GraphWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken)
                     ?? throw new GraphWorkflowNotFoundException($"Graph workflow run '{runId}' was not found."));
 
     public async Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
@@ -384,8 +379,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         var runs = await query.OrderByDescending(entity => entity.CreatedAtUtc)
                               .ThenByDescending(entity => entity.Id)
                               .Take(limit)
-                              .ToListAsync(cancellationToken)
-                              .ConfigureAwait(false);
+                              .ToListAsync(cancellationToken);
         return [.. runs.Select(RunSnapshot)];
     }
 
@@ -399,8 +393,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         return await _dbContext.GraphWorkflowRuns.AsNoTracking()
                                .Where(entity => ExecutingRunStatuses.Contains(entity.Status))
                                .Take(probeLimit)
-                               .CountAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .CountAsync(cancellationToken);
     }
 
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default)
@@ -453,8 +446,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         var nodeRuns = await _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
                                        .Where(entity => entity.RunId == runId)
                                        .OrderBy(entity => entity.NodeKey)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return [.. nodeRuns.Select(NodeRunSnapshot)];
     }
 
@@ -463,7 +455,6 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         EnsureNotBlank(nodeKey, nameof(nodeKey));
         return NodeRunSnapshot(await _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
                                                .SingleOrDefaultAsync(entity => entity.RunId == runId && entity.NodeKey == nodeKey, cancellationToken)
-                                               .ConfigureAwait(false)
                                ?? throw new GraphWorkflowNotFoundException($"Node run '{nodeKey}' was not found on graph workflow run '{runId}'."));
     }
 
@@ -473,7 +464,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
 
         return ExecuteMutationAsync(command.RunId,
             command.ExpectedVersion,
-            async run => await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false),
+            async run => await ApplyNodeRunTransitionAsync(run, command, cancellationToken),
             cancellationToken);
     }
 
@@ -504,8 +495,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                                                                                       && entity.RunId == run.Id
                                                                                       && entity.Status == GraphWorkflowNodeRunStatus.WaitingForApproval
                                                                                       && entity.DecisionOperationId == null,
-                                                          cancellationToken)
-                                                      .ConfigureAwait(false);
+                                                          cancellationToken);
                         if (nodeRun is null)
                         {
                             return null;
@@ -529,8 +519,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                             nodeRun.NodeKey,
                             Utf8(JsonSerializer.Serialize(new GateDecidedDetailPayload(nodeRun.NodeKey, command.Decision.ToString()), JsonOptions)));
                     },
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
         catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
         {
@@ -547,8 +536,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         CancellationToken cancellationToken = default)
     {
         var nodeRun = await _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
-                                      .SingleOrDefaultAsync(entity => entity.RunId == runId && entity.DecisionOperationId == operationId, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .SingleOrDefaultAsync(entity => entity.RunId == runId && entity.DecisionOperationId == operationId, cancellationToken);
         return nodeRun is null ? null : NodeRunSnapshot(nodeRun);
     }
 
@@ -575,7 +563,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
 
         // The run is read first so an unknown one answers "not found" rather than an empty page: a feed that reports a
         // missing run as a quiet one is the shape a client cannot tell apart from "nothing has happened yet".
-        if (!await _dbContext.GraphWorkflowRuns.AsNoTracking().AnyAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false))
+        if (!await _dbContext.GraphWorkflowRuns.AsNoTracking().AnyAsync(entity => entity.Id == runId, cancellationToken))
         {
             throw new GraphWorkflowNotFoundException($"Graph workflow run '{runId}' was not found.");
         }
@@ -584,8 +572,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                                      .Where(entity => entity.RunId == runId && entity.Seq > afterSeq)
                                      .OrderBy(entity => entity.Seq)
                                      .Take(limit)
-                                     .ToListAsync(cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .ToListAsync(cancellationToken);
         return
         [
             .. events.Select(entity => new GraphWorkflowRunEventSnapshot(entity.Id,
@@ -608,7 +595,6 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                                           entity.Status,
                                           entity.Attempt))
                                       .ToListAsync(cancellationToken)
-                                      .ConfigureAwait(false)
     ];
 
     public async Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
@@ -632,20 +618,19 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         // this would allocate watermarks that are already taken.
         _dbContext.ChangeTracker.Clear();
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            var stranded = await InterruptedNodeRuns().ToListAsync(cancellationToken).ConfigureAwait(false);
+            var stranded = await InterruptedNodeRuns().ToListAsync(cancellationToken);
             if (stranded.Count == 0)
             {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken);
                 return [];
             }
 
             var runIds = stranded.Select(static entity => entity.RunId).Distinct().ToList();
             var runs = await _dbContext.GraphWorkflowRuns.Where(entity => runIds.Contains(entity.Id))
-                                       .ToDictionaryAsync(static entity => entity.Id, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToDictionaryAsync(static entity => entity.Id, cancellationToken);
             var judged = verdicts.ToDictionary(static verdict => verdict.NodeRunId);
             var reconciled = new List<GraphWorkflowReconciledNodeRun>(stranded.Count);
             var repairs = new List<(GraphWorkflowRun Run, TransitionGraphWorkflowNodeRunCommand Command)>();
@@ -685,7 +670,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             foreach (var (run, command) in repairs)
             {
                 EnsureVersion(run, command.ExpectedVersion);
-                var outcome = await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false);
+                var outcome = await ApplyNodeRunTransitionAsync(run, command, cancellationToken);
                 if (outcome.EventType is { } eventType)
                 {
                     // Always, for a node-run move: only the run-level cancel settle records no event, and nothing
@@ -696,13 +681,13 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
                 run.Version++;
             }
 
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return reconciled;
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -720,7 +705,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         CancellationToken cancellationToken) =>
 
         // Never null: this overload's mutate always decides. The nullable core is the conditional-write path.
-        (await TryExecuteMutationAsync(runId, expectedVersion, async run => await mutate(run).ConfigureAwait(false), cancellationToken).ConfigureAwait(false))!;
+        (await TryExecuteMutationAsync(runId, expectedVersion, async run => await mutate(run), cancellationToken))!;
 
     /// <summary>
     ///     The same one-decision-one-event-one-transaction shape, for a mutation that may decline to write: a
@@ -732,16 +717,16 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         Func<GraphWorkflowRun, Task<MutationOutcome?>> mutate,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            var run = await _dbContext.GraphWorkflowRuns.SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false)
+            var run = await _dbContext.GraphWorkflowRuns.SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken)
                       ?? throw new GraphWorkflowNotFoundException($"Graph workflow run '{runId}' was not found.");
             EnsureVersion(run, expectedVersion);
 
-            if (await mutate(run).ConfigureAwait(false) is not { } outcome)
+            if (await mutate(run) is not { } outcome)
             {
-                await RollbackAsync(transaction).ConfigureAwait(false);
+                await RollbackAsync(transaction);
                 return null;
             }
 
@@ -753,8 +738,8 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             // is simply a number no row ever carried.
             var sequence = outcome.EventType is { } eventType ? AddEvent(run, eventType, outcome.NodeKey, outcome.DetailJson) : ++run.Seq;
             run.Version++;
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return new GraphWorkflowMutationResult(runId, sequence);
         }
         catch (DbUpdateConcurrencyException exception)
@@ -762,12 +747,12 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
             // The version check above answers the caller that read a stale number. This is the other half: two writers
             // that each read version N both pass it, and only the token stops the later one from overwriting the
             // earlier without either learning of the other.
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw new GraphWorkflowInvalidTransitionException($"A concurrent writer moved graph workflow run '{runId}' before this write could commit.", exception);
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -783,7 +768,6 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
     {
         var nodeRun = await _dbContext.GraphWorkflowNodeRuns
                                       .SingleOrDefaultAsync(entity => entity.Id == command.NodeRunId && entity.RunId == run.Id, cancellationToken)
-                                      .ConfigureAwait(false)
                       ?? throw new GraphWorkflowNotFoundException($"Node run '{command.NodeRunId}' was not found on graph workflow run '{run.Id}'.");
         var now = Now();
 
@@ -1004,7 +988,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
 
     private async Task RollbackAsync(IDbContextTransaction transaction)
     {
-        await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+        await transaction.RollbackAsync(CancellationToken.None);
         _dbContext.ChangeTracker.Clear();
     }
 
@@ -1026,7 +1010,7 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
     private sealed record GateDecidedDetailPayload(string NodeKey, string Decision);
 
     private async Task<GraphWorkflowDefinition> LoadAsync(Guid definitionId, CancellationToken cancellationToken) =>
-        await _dbContext.GraphWorkflowDefinitions.SingleOrDefaultAsync(entity => entity.Id == definitionId, cancellationToken).ConfigureAwait(false)
+        await _dbContext.GraphWorkflowDefinitions.SingleOrDefaultAsync(entity => entity.Id == definitionId, cancellationToken)
         ?? throw new GraphWorkflowNotFoundException($"Graph workflow definition '{definitionId}' was not found.");
 
     private static GraphWorkflowDefinitionSnapshot Snapshot(GraphWorkflowDefinition definition) =>

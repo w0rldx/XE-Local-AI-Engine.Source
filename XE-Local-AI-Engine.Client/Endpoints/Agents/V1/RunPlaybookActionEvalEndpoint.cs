@@ -31,17 +31,17 @@ public sealed class RunPlaybookActionEvalEndpoint(IPlaybookEvalService playbookE
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)
     {
-        var outcome = await _playbookEvalService.RunEvalAsync(req.AgentDefinitionId, req.ActionId, ct).ConfigureAwait(false);
+        var outcome = await _playbookEvalService.RunEvalAsync(req.AgentDefinitionId, req.ActionId, ct);
 
         // The service enforced ownership, persisted EvalResult, and returned the updated record on the outcome — map it
         // directly. A missing record (ActionFound == false, or the ownership-guarded record returned null) is a 404; no
         // second, unscoped re-fetch.
         if (!outcome.ActionFound || outcome.Action is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(outcome.Action.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(outcome.Action.ToResponse(), ct);
     }
 }

@@ -29,16 +29,16 @@ public sealed class AddPlaybookActionAnalysisColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("analysis-columns-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePlaybookAnalysisMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePlaybookAnalysisMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetPlaybookActionColumnInfoAsync(connection).ConfigureAwait(false);
+        var columns = await GetPlaybookActionColumnInfoAsync(connection);
 
         AssertEx.True(columns.ContainsKey("source_feedback_ids"), "Migration should add the source_feedback_ids column.");
         AssertEx.True(columns.ContainsKey("confidence"), "Migration should add the confidence column.");
@@ -51,16 +51,16 @@ public sealed class AddPlaybookActionAnalysisColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("analysis-columns-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookAnalysisMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookAnalysisMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var columns = await GetPlaybookActionColumnInfoAsync(connection).ConfigureAwait(false);
+        var columns = await GetPlaybookActionColumnInfoAsync(connection);
 
         AssertEx.False(columns.ContainsKey("source_feedback_ids"), "Rollback should drop the source_feedback_ids column.");
         AssertEx.False(columns.ContainsKey("confidence"), "Rollback should drop the confidence column.");
@@ -76,7 +76,7 @@ public sealed class AddPlaybookActionAnalysisColumnsMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -87,8 +87,8 @@ public sealed class AddPlaybookActionAnalysisColumnsMigrationTests : IDisposable
         command.CommandText = "PRAGMA table_info(playbook_actions);";
 
         var columns = new Dictionary<string, bool>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             var name = reader.GetString(reader.GetOrdinal("name"));
             var notNull = reader.GetInt64(reader.GetOrdinal("notnull")) != 0L;

@@ -60,7 +60,7 @@ public sealed class DevWorkflowRunComposerTests
             {
                 InputTokens = 5
             }
-        ]), CancellationToken.None).ConfigureAwait(false);
+        ]), CancellationToken.None);
 
         // The name comes from the definition LIST, which is read including archived rows: a run whose definition was
         // archived after it started must still say what it ran.
@@ -94,7 +94,7 @@ public sealed class DevWorkflowRunComposerTests
         [
             NodeRun(ResearchNodeRunId, "research", DevWorkflowNodeType.Agent, DevWorkflowNodeRunStatus.Succeeded),
             NodeRun(GateNodeRunId, "approval", DevWorkflowNodeType.HumanGate, DevWorkflowNodeRunStatus.Pending)
-        ]), CancellationToken.None).ConfigureAwait(false);
+        ]), CancellationToken.None);
 
         AssertEx.False(response.Nodes[0].HasStaleInputs, "it consumed nothing that was superseded.");
         AssertEx.True(response.Nodes[1].HasStaleInputs, "it consumed the artifact that has since been superseded.");
@@ -124,7 +124,7 @@ public sealed class DevWorkflowRunComposerTests
         sessions.GetAsync(SessionId, Arg.Any<CancellationToken>()).Returns(Session());
         var composer = Composer(store, sessions: sessions);
 
-        var response = await composer.ComposeNodeAsync(RunId, ResearchNodeRunId, CancellationToken.None).ConfigureAwait(false);
+        var response = await composer.ComposeNodeAsync(RunId, ResearchNodeRunId, CancellationToken.None);
 
         AssertEx.Equal(ResearchNodeRunId, response.Id);
         AssertEx.Equal(ArtifactId, response.ProducedArtifactIds[0], "the artifact feed is filtered to what this node produced.");
@@ -147,8 +147,7 @@ public sealed class DevWorkflowRunComposerTests
              .Returns(NodeRun(ResearchNodeRunId, "research", DevWorkflowNodeType.Agent, DevWorkflowNodeRunStatus.Succeeded));
         var composer = Composer(store);
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => composer.ComposeNodeAsync(otherRunId, ResearchNodeRunId, CancellationToken.None))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(() => composer.ComposeNodeAsync(otherRunId, ResearchNodeRunId, CancellationToken.None));
     }
 
     private static DevWorkflowRunComposer Composer(IDevWorkflowStore store,

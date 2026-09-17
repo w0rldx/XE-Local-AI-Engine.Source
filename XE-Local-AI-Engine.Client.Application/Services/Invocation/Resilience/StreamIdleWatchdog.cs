@@ -67,7 +67,7 @@ internal static class StreamIdleWatchdog
     {
         if (idleTimeout <= TimeSpan.Zero)
         {
-            await foreach (var item in streamFactory(cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            await foreach (var item in streamFactory(cancellationToken).WithCancellation(cancellationToken))
             {
                 yield return item;
             }
@@ -95,13 +95,17 @@ internal static class StreamIdleWatchdog
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var moveNext = enumerator.MoveNextAsync();
+                var completedSynchronously = moveNext.IsCompletedSuccessfully;
 
-                // Fast path: a buffered chunk completes synchronously and successfully — take it without allocating a
-                // Task or timer. A synchronous fault/cancel is NOT consumed here; it falls through to AsTask() below and
-                // is rethrown when awaited (consuming the ValueTask exactly once on that path).
-                if (moveNext.IsCompletedSuccessfully)
+                // One projection on every path: the ValueTask is consumed exactly once, and AsTask() over an
+                // already-completed ValueTask<bool> returns a cached Task, so the fast path still allocates nothing.
+                var pending = moveNext.AsTask();
+
+                // Fast path: a buffered chunk, so no timer and no suspension. A synchronous fault or cancel is not
+                // taken here; it is rethrown from the projection on the slow path below.
+                if (completedSynchronously)
                 {
-                    if (!await moveNext.ConfigureAwait(false))
+                    if (!await pending)
                     {
                         yield break;
                     }
@@ -114,17 +118,15 @@ internal static class StreamIdleWatchdog
                     continue;
                 }
 
-                // The pull did not complete synchronously. Project it to a Task ONCE (it may need to outlive this wait if
-                // abandoned) and hand it to the wall-clock-bounded helper (a non-iterator method, so it can catch around
-                // the await). The helper never yields — it returns the outcome and, on abandonment, whether it took
-                // ownership of the enumerator's disposal.
+                // Slow path: a non-iterator helper bounds the wait, so it can catch around the await. It reports the
+                // outcome and whether, on abandonment, it took ownership of the enumerator's disposal.
                 var outcome = await PullNextAsync(enumerator,
-                    moveNext.AsTask(),
+                    pending,
                     idleTimeout,
                     abandonmentGrace,
                     awaitingFirstChunk,
                     providerCts,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
 
                 if (outcome.DisposalHandedOff)
                 {
@@ -159,7 +161,7 @@ internal static class StreamIdleWatchdog
             if (!disposalHandedOff)
             {
                 var disposeTask = enumerator.DisposeAsync().AsTask();
-                if (!await WaitBoundedAsync(disposeTask, abandonmentGrace).ConfigureAwait(false))
+                if (!await WaitBoundedAsync(disposeTask, abandonmentGrace))
                 {
                     Observe(disposeTask);
                     NodeMetrics.ChatStreamProviderAbandonedTotal.Add(1);
@@ -190,7 +192,7 @@ internal static class StreamIdleWatchdog
             // WaitAsync is the same wall-clock bound the previous linked-CTS + Task.Delay + WhenAny race was — its timer
             // fires whether or not the provider honours cancellation — at one timer registration instead of ~7 objects
             // per token. A chunk (or a provider fault) arriving within the window returns/rethrows exactly as before.
-            var moved = await moveTask.WaitAsync(idleTimeout, cancellationToken).ConfigureAwait(false);
+            var moved = await moveTask.WaitAsync(idleTimeout, cancellationToken);
             return new PullOutcome(moved ? PullStatus.Advanced : PullStatus.Completed, DisposalHandedOff: false);
         }
         catch (TimeoutException idleDeadline) when (!IsFaultOf(moveTask, idleDeadline))
@@ -214,8 +216,8 @@ internal static class StreamIdleWatchdog
         // The deadline (or outer cancellation) ended the round — we are done with this enumerator either way. Ask the
         // provider to stop, then give it a bounded grace to honour cancellation. A cooperative provider unwinds
         // MoveNextAsync within the grace (a clean timeout); a non-cooperative one does not and is abandoned.
-        await providerCts.CancelAsync().ConfigureAwait(false);
-        var settled = await WaitBoundedAsync(moveTask, abandonmentGrace).ConfigureAwait(false);
+        await providerCts.CancelAsync();
+        var settled = await WaitBoundedAsync(moveTask, abandonmentGrace);
         var disposalHandedOff = false;
         if (settled)
         {
@@ -255,10 +257,10 @@ internal static class StreamIdleWatchdog
 
         using var delayCts = new CancellationTokenSource();
         var delay = Task.Delay(bound, delayCts.Token);
-        var winner = await Task.WhenAny(task, delay).ConfigureAwait(false);
+        var winner = await Task.WhenAny(task, delay);
         if (ReferenceEquals(winner, task))
         {
-            await delayCts.CancelAsync().ConfigureAwait(false);
+            await delayCts.CancelAsync();
             Observe(delay);
             return true;
         }
@@ -281,7 +283,7 @@ internal static class StreamIdleWatchdog
         {
             try
             {
-                _ = await pending.ConfigureAwait(false);
+                _ = await pending;
             }
             catch
             {
@@ -291,7 +293,7 @@ internal static class StreamIdleWatchdog
             try
             {
                 var disposeTask = enumerator.DisposeAsync().AsTask();
-                if (!await WaitBoundedAsync(disposeTask, grace).ConfigureAwait(false))
+                if (!await WaitBoundedAsync(disposeTask, grace))
                 {
                     Observe(disposeTask);
                 }

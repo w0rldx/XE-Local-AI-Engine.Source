@@ -40,6 +40,6 @@ public sealed class ListImageModelDownloadsEndpoint(IImageModelDownloadCoordinat
         await Send.OkAsync(new ListImageModelDownloadsResponse
         {
             Items = items
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

@@ -35,7 +35,7 @@ public sealed class CustomToolStore(NodeChatDbContext dbContext, TimeProvider ti
         };
 
         _ = _dbContext.CustomTools.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -47,8 +47,7 @@ public sealed class CustomToolStore(NodeChatDbContext dbContext, TimeProvider ti
         // Load tracked (not AsNoTracking) so SaveChanges re-encrypts; the materialization interceptor has already
         // decrypted Description/ConfigJson on load, so the comparison below is plaintext-vs-plaintext.
         var entity = await _dbContext.CustomTools
-                                     .FirstOrDefaultAsync(tool => tool.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(tool => tool.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -81,7 +80,7 @@ public sealed class CustomToolStore(NodeChatDbContext dbContext, TimeProvider ti
             entity.Version++;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -89,8 +88,7 @@ public sealed class CustomToolStore(NodeChatDbContext dbContext, TimeProvider ti
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.CustomTools
-                                     .FirstOrDefaultAsync(tool => tool.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(tool => tool.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -98,7 +96,7 @@ public sealed class CustomToolStore(NodeChatDbContext dbContext, TimeProvider ti
         }
 
         _ = _dbContext.CustomTools.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }
@@ -107,8 +105,7 @@ public sealed class CustomToolStore(NodeChatDbContext dbContext, TimeProvider ti
     {
         var entity = await _dbContext.CustomTools
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(tool => tool.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(tool => tool.Id == id, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -118,8 +115,7 @@ public sealed class CustomToolStore(NodeChatDbContext dbContext, TimeProvider ti
         var entities = await _dbContext.CustomTools
                                        .AsNoTracking()
                                        .OrderBy(tool => tool.Name)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

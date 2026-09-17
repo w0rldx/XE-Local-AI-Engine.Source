@@ -93,7 +93,7 @@ public sealed class DevelopmentManagementServiceTests
 
         var result = await service.StartNextActionAsync(projectId,
             taskId,
-            Guid.NewGuid()).ConfigureAwait(false);
+            Guid.NewGuid());
 
         AssertEx.Equal("Blocked", result.Action);
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, result.TaskStatus);
@@ -153,8 +153,8 @@ public sealed class DevelopmentManagementServiceTests
             "reviewer-model",
             TrustedRepositoryAcknowledged: true);
 
-        var first = await service.CreateProjectAsync(input).ConfigureAwait(false);
-        var retry = await service.CreateProjectAsync(input).ConfigureAwait(false);
+        var first = await service.CreateProjectAsync(input);
+        var retry = await service.CreateProjectAsync(input);
 
         AssertEx.Equal(2, commands.Count);
         AssertEx.Equal(commands[0].ProjectId, commands[1].ProjectId);
@@ -210,7 +210,7 @@ public sealed class DevelopmentManagementServiceTests
         var trust = new FakeModelTrustResolver().Register("local-box", "qwen3");
         var service = CreateService(store, coordinator, supervisor, repositoryBindings, modelTrustResolver: trust);
 
-        var result = await service.StartNextActionAsync(projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+        var result = await service.StartNextActionAsync(projectId, taskId, Guid.NewGuid());
 
         AssertEx.Equal("Attempt", result.Action);
     }

@@ -17,7 +17,7 @@ public sealed partial class DevelopmentStore
             DevelopmentOperationPhases.Completed,
             async () =>
             {
-                if (await _dbContext.DevelopmentProjects.AnyAsync(entity => entity.Id == command.ProjectId, cancellationToken).ConfigureAwait(false))
+                if (await _dbContext.DevelopmentProjects.AnyAsync(entity => entity.Id == command.ProjectId, cancellationToken))
                 {
                     throw new DevelopmentConcurrencyException($"Development project '{command.ProjectId}' already exists.");
                 }
@@ -72,9 +72,9 @@ public sealed partial class DevelopmentStore
                     version: 1,
                     artifactId: null,
                     detailJson: null,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> CreateTaskAsync(DevelopmentCreateTaskCommand command, CancellationToken cancellationToken = default)
@@ -89,7 +89,7 @@ public sealed partial class DevelopmentStore
             {
                 // Checked rather than left to the foreign key: the node connection runs without PRAGMA foreign_keys, so
                 // a task named against a project that does not exist would be inserted and then be unreachable.
-                if (!await _dbContext.DevelopmentProjects.AnyAsync(entity => entity.Id == command.ProjectId, cancellationToken).ConfigureAwait(false))
+                if (!await _dbContext.DevelopmentProjects.AnyAsync(entity => entity.Id == command.ProjectId, cancellationToken))
                 {
                     throw new DevelopmentNotFoundException($"Development project '{command.ProjectId}' was not found.");
                 }
@@ -119,9 +119,9 @@ public sealed partial class DevelopmentStore
                     version: 1,
                     artifactId: null,
                     detailJson: null,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> StartAttemptAsync(DevelopmentStartAttemptCommand command, CancellationToken cancellationToken = default)
@@ -130,20 +130,19 @@ public sealed partial class DevelopmentStore
         EnsureNotBlank(command.ModelId, "modelId");
         EnsureNotBlank(command.Provider, "provider");
 
-        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken);
         return await ExecuteOperationAsync(projectId,
             command.OperationId,
             DevelopmentOperationPhases.Completed,
             async () =>
             {
-                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken).ConfigureAwait(false);
+                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken);
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 EnsureAttemptMayStart(task, command.Role);
 
                 if (command.PredecessorAttemptId is { } predecessorId)
                 {
-                    var predecessor = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == predecessorId && entity.TaskId == task.Id, cancellationToken)
-                                                      .ConfigureAwait(false);
+                    var predecessor = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == predecessorId && entity.TaskId == task.Id, cancellationToken);
                     if (predecessor?.Status != DevelopmentAttemptStatus.Interrupted)
                     {
                         throw new DevelopmentInvalidTransitionException("A replacement attempt must reference an interrupted predecessor on the same task.");
@@ -162,7 +161,7 @@ public sealed partial class DevelopmentStore
                     Status = DevelopmentAttemptStatus.Running,
                     StartedAtUtc = now,
                     StartOperationId = command.OperationId,
-                    CommandProfileJson = await ResolveAttemptCommandProfileAsync(projectId, task.Id, command.Role, cancellationToken).ConfigureAwait(false),
+                    CommandProfileJson = await ResolveAttemptCommandProfileAsync(projectId, task.Id, command.Role, cancellationToken),
                     Version = 1
                 };
                 _dbContext.DevelopmentAttempts.Add(attempt);
@@ -186,8 +185,7 @@ public sealed partial class DevelopmentStore
                                                      && entity.IsValid
                                                      && (entity.Kind == DevelopmentArtifactKind.ValidationReport
                                                          || entity.Kind == DevelopmentArtifactKind.ReviewReport))
-                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken);
                 }
 
                 task.UpdatedAtUtc = now;
@@ -204,9 +202,9 @@ public sealed partial class DevelopmentStore
                     attempt.Version,
                     artifactId: null,
                     detailJson: null,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     /// <summary>
@@ -241,8 +239,7 @@ public sealed partial class DevelopmentStore
                                             .OrderByDescending(entity => entity.StartedAtUtc)
                                             .ThenByDescending(entity => entity.Id)
                                             .Select(entity => entity.CommandProfileJson)
-                                            .FirstOrDefaultAsync(cancellationToken)
-                                            .ConfigureAwait(false);
+                                            .FirstOrDefaultAsync(cancellationToken);
             if (!string.IsNullOrWhiteSpace(inherited))
             {
                 return inherited;
@@ -252,8 +249,7 @@ public sealed partial class DevelopmentStore
         return await _dbContext.DevelopmentProjects.AsNoTracking()
                                .Where(entity => entity.Id == projectId)
                                .Select(entity => entity.CommandProfileJson)
-                               .SingleOrDefaultAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .SingleOrDefaultAsync(cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> TerminalizeAttemptAsync(DevelopmentTerminalizeAttemptCommand command, CancellationToken cancellationToken = default)
@@ -264,13 +260,13 @@ public sealed partial class DevelopmentStore
             throw new ArgumentException("Terminalization requires a terminal attempt status.", nameof(command));
         }
 
-        var (projectId, taskId) = await OwnershipForAttemptAsync(command.AttemptId, cancellationToken).ConfigureAwait(false);
+        var (projectId, taskId) = await OwnershipForAttemptAsync(command.AttemptId, cancellationToken);
         return await ExecuteOperationAsync(projectId,
             command.OperationId,
             DevelopmentOperationPhases.Completed,
             async () =>
             {
-                var attempt = await _dbContext.DevelopmentAttempts.SingleAsync(entity => entity.Id == command.AttemptId, cancellationToken).ConfigureAwait(false);
+                var attempt = await _dbContext.DevelopmentAttempts.SingleAsync(entity => entity.Id == command.AttemptId, cancellationToken);
                 EnsureVersion(attempt.Version, command.ExpectedAttemptVersion, "attempt");
                 if (attempt.Status is not DevelopmentAttemptStatus.Pending and not DevelopmentAttemptStatus.Running)
                 {
@@ -295,22 +291,22 @@ public sealed partial class DevelopmentStore
                     attempt.Version,
                     artifactId: null,
                     detailJson: null,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> TransitionTaskAsync(DevelopmentTransitionTaskCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken);
 
         return await ExecuteOperationAsync(projectId,
             command.OperationId,
             DevelopmentOperationPhases.Completed,
             async () =>
             {
-                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken).ConfigureAwait(false);
+                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken);
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 EnsureLegalTransition(task.Status, command.TargetStatus);
 
@@ -361,8 +357,7 @@ public sealed partial class DevelopmentStore
                                                      && entity.IsValid
                                                      && (entity.Kind == DevelopmentArtifactKind.ValidationReport
                                                          || entity.Kind == DevelopmentArtifactKind.ReviewReport))
-                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken);
                 }
 
                 if (command.TargetStatus == DevelopmentTaskStatus.InReview)
@@ -397,8 +392,8 @@ public sealed partial class DevelopmentStore
                         {
                             reason = command.Reason
                         }, JsonOptions)),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

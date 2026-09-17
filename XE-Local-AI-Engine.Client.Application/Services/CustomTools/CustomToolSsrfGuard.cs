@@ -104,7 +104,7 @@ internal static class CustomToolSsrfGuard
             }
             else
             {
-                addresses = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+                addresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
             }
 
             if (addresses.Length == 0)
@@ -125,7 +125,7 @@ internal static class CustomToolSsrfGuard
             };
             try
             {
-                await socket.ConnectAsync(addresses, port, cancellationToken).ConfigureAwait(false);
+                await socket.ConnectAsync(addresses, port, cancellationToken);
                 return new NetworkStream(socket, ownsSocket: true);
             }
             catch

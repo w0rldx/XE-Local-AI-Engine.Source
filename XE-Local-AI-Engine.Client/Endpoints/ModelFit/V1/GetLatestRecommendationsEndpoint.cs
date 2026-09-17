@@ -30,10 +30,10 @@ public sealed class GetLatestRecommendationsEndpoint(IModelFitQueryService model
     {
         var useCase = string.IsNullOrWhiteSpace(req.UseCase) ? null : req.UseCase;
 
-        var view = await _modelFitQueryService.GetLatestRecommendationsAsync(useCase, AdvisorProviderName, ct).ConfigureAwait(false);
+        var view = await _modelFitQueryService.GetLatestRecommendationsAsync(useCase, AdvisorProviderName, ct);
 
         // Explicit empty state on a cache-miss — never a swallowed 404.
         var response = view is null ? ModelFitMapper.EmptyCache() : view.ToResponse();
-        await Send.OkAsync(response, ct).ConfigureAwait(false);
+        await Send.OkAsync(response, ct);
     }
 }

@@ -39,7 +39,7 @@ public sealed class EntraTokenCacheStore : IEntraTokenCacheStore, IDisposable
 
     public async Task<AuthenticationRecord?> LoadRecordAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (!File.Exists(_recordPath))
@@ -49,10 +49,10 @@ public sealed class EntraTokenCacheStore : IEntraTokenCacheStore, IDisposable
 
             try
             {
-                var protectedPayload = await File.ReadAllBytesAsync(_recordPath, cancellationToken).ConfigureAwait(false);
+                var protectedPayload = await File.ReadAllBytesAsync(_recordPath, cancellationToken);
                 var payload = _protector.Unprotect(protectedPayload);
                 using var stream = new MemoryStream(payload);
-                return await AuthenticationRecord.DeserializeAsync(stream, cancellationToken).ConfigureAwait(false);
+                return await AuthenticationRecord.DeserializeAsync(stream, cancellationToken);
             }
             catch (CryptographicException exception)
             {
@@ -83,13 +83,13 @@ public sealed class EntraTokenCacheStore : IEntraTokenCacheStore, IDisposable
         ArgumentNullException.ThrowIfNull(record);
 
         using var stream = new MemoryStream();
-        await record.SerializeAsync(stream, cancellationToken).ConfigureAwait(false);
+        await record.SerializeAsync(stream, cancellationToken);
         var protectedPayload = _protector.Protect(stream.ToArray());
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            await File.WriteAllBytesAsync(_recordPath, protectedPayload, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(_recordPath, protectedPayload, cancellationToken);
             SecureFilePermissions.Apply(_recordPath);
         }
         finally
@@ -100,7 +100,7 @@ public sealed class EntraTokenCacheStore : IEntraTokenCacheStore, IDisposable
 
     public async Task ClearAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (File.Exists(_recordPath))

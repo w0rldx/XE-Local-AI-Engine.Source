@@ -17,8 +17,8 @@ internal sealed class InferenceBenchmarkResourceSampler
 
     public async Task<ResourceObservation> CaptureAsync(InferenceBenchmarkSpec spec, int? processId, CancellationToken ct)
     {
-        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
-        var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(spec.Backend, ct).ConfigureAwait(false);
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
+        var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(spec.Backend, ct);
         var globalFree = string.Equals(spec.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
             ? null
             : hardware.AvailableVramBytes;

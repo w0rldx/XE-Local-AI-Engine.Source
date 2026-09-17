@@ -14,23 +14,21 @@ public sealed class InstalledGgufDeletionStoreTests
         using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
-        var entry = await SeedLegacyAsync(directory.Path, registry).ConfigureAwait(false);
+        var entry = await SeedLegacyAsync(directory.Path, registry);
         var snapshotStore = new InstalledGgufSnapshotStore(registry, options);
-        var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None)
-                                                            .ConfigureAwait(false));
-        var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
+        var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None));
+        var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None);
         var store = new InstalledGgufDeletionStore(registry, options);
 
-        var staged = await store.StageAsync(snapshot, Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+        var staged = await store.StageAsync(snapshot, Guid.NewGuid(), CancellationToken.None);
         AssertEx.False(File.Exists(entry.LocalPath));
         AssertEx.True(File.Exists(Path.Combine(directory.Path, staged.StagedMembers.Single().QuarantineRelativePath)));
 
-        var registryReceipt = await store.RemoveAliasesByLocalPathAsync(staged, staged.RemovalAliases, CancellationToken.None)
-                                         .ConfigureAwait(false);
-        await store.RestoreAsync(staged, registryReceipt, CancellationToken.None).ConfigureAwait(false);
+        var registryReceipt = await store.RemoveAliasesByLocalPathAsync(staged, staged.RemovalAliases, CancellationToken.None);
+        await store.RestoreAsync(staged, registryReceipt, CancellationToken.None);
 
         AssertEx.True(File.Exists(entry.LocalPath));
-        var restored = AssertEx.NotNull(await registry.FindAsync(entry.ModelName, CancellationToken.None).ConfigureAwait(false));
+        var restored = AssertEx.NotNull(await registry.FindAsync(entry.ModelName, CancellationToken.None));
         AssertEx.Equal(AssertEx.NotNull(entry.RegistryRevision), restored.RegistryRevision);
     }
 
@@ -40,22 +38,21 @@ public sealed class InstalledGgufDeletionStoreTests
         using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
-        var entry = await SeedLegacyAsync(directory.Path, registry).ConfigureAwait(false);
+        var entry = await SeedLegacyAsync(directory.Path, registry);
         var snapshotStore = new InstalledGgufSnapshotStore(registry, options);
-        var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None)
-                                                            .ConfigureAwait(false));
-        var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
+        var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None));
+        var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None);
         var store = new InstalledGgufDeletionStore(registry, options);
         var unrelated = Path.Combine(directory.Path, "unrelated-Q4_K_M.gguf");
-        await File.WriteAllBytesAsync(unrelated, [9, 9, 9]).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(unrelated, [9, 9, 9]);
 
-        var staged = await store.StageAsync(snapshot, Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
-        _ = await store.RemoveAliasesByLocalPathAsync(staged, staged.RemovalAliases, CancellationToken.None).ConfigureAwait(false);
-        await store.PurgeAsync(staged, CancellationToken.None).ConfigureAwait(false);
+        var staged = await store.StageAsync(snapshot, Guid.NewGuid(), CancellationToken.None);
+        _ = await store.RemoveAliasesByLocalPathAsync(staged, staged.RemovalAliases, CancellationToken.None);
+        await store.PurgeAsync(staged, CancellationToken.None);
 
         AssertEx.False(File.Exists(entry.LocalPath));
         AssertEx.True(File.Exists(unrelated));
-        AssertEx.Null(await registry.FindAsync(entry.ModelName, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Null(await registry.FindAsync(entry.ModelName, CancellationToken.None));
     }
 
     [Test]
@@ -64,19 +61,17 @@ public sealed class InstalledGgufDeletionStoreTests
         using var directory = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = GgufStoreTestInfrastructure.Options(directory.Path);
         using var registry = GgufStoreTestInfrastructure.Registry(options);
-        var entry = await SeedLegacyAsync(directory.Path, registry).ConfigureAwait(false);
+        var entry = await SeedLegacyAsync(directory.Path, registry);
         var snapshotStore = new InstalledGgufSnapshotStore(registry, options);
-        var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None)
-                                                            .ConfigureAwait(false));
-        var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None).ConfigureAwait(false);
+        var candidate = AssertEx.NotNull(await snapshotStore.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None));
+        var snapshot = await snapshotStore.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None);
         var store = new InstalledGgufDeletionStore(registry, options);
-        var staged = await store.StageAsync(snapshot, Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(entry.LocalPath, [8, 8, 8]).ConfigureAwait(false);
+        var staged = await store.StageAsync(snapshot, Guid.NewGuid(), CancellationToken.None);
+        await File.WriteAllBytesAsync(entry.LocalPath, [8, 8, 8]);
 
-        _ = await AssertEx.ThrowsAsync<IOException>(() => store.RestoreAsync(staged, registryAliasReceipt: null, CancellationToken.None))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<IOException>(() => store.RestoreAsync(staged, registryAliasReceipt: null, CancellationToken.None));
 
-        var racedBytes = await File.ReadAllBytesAsync(entry.LocalPath).ConfigureAwait(false);
+        var racedBytes = await File.ReadAllBytesAsync(entry.LocalPath);
         AssertEx.True(new byte[]
         {
             8,
@@ -131,7 +126,7 @@ public sealed class InstalledGgufDeletionStoreTests
             3,
             4
         };
-        await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(path, bytes);
         var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var entry = new GgufModelRegistryEntry
         {
@@ -146,8 +141,8 @@ public sealed class InstalledGgufDeletionStoreTests
             DownloadedAtUtc = DateTimeOffset.UnixEpoch,
             Role = GgufRole.Chat
         };
-        await registry.UpsertAsync(entry, CancellationToken.None).ConfigureAwait(false);
-        return AssertEx.NotNull(await registry.FindAsync(entry.ModelName, CancellationToken.None).ConfigureAwait(false));
+        await registry.UpsertAsync(entry, CancellationToken.None);
+        return AssertEx.NotNull(await registry.FindAsync(entry.ModelName, CancellationToken.None));
     }
 
     private static InstalledModelRegistryAliasSnapshot Alias(string modelName,

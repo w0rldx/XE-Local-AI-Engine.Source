@@ -30,7 +30,7 @@ public sealed class CodexStatusEndpoint(CodexSessionService session)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var status = await _session.GetStatusAsync(ct).ConfigureAwait(false);
+        var status = await _session.GetStatusAsync(ct);
 
         await Send.OkAsync(new CodexStatusResponse
         {
@@ -38,6 +38,6 @@ public sealed class CodexStatusEndpoint(CodexSessionService session)
             AccountId = status.AccountId,
             ExpiresAtUtc = status.ExpiresAtUtc,
             LoginPending = status.LoginPending
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

@@ -46,7 +46,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(CancellationToken cancellationToken)
     {
-        return await ListCoreAsync(collectionId: null, sourceKind: null, sourceId: null, cancellationToken).ConfigureAwait(false);
+        return await ListCoreAsync(collectionId: null, sourceKind: null, sourceId: null, cancellationToken);
     }
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId, CancellationToken cancellationToken)
@@ -56,7 +56,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             return [];
         }
 
-        return await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken).ConfigureAwait(false);
+        return await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken);
     }
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId,
@@ -71,7 +71,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             return [];
         }
 
-        return await ListCoreAsync(normalizedCollectionId, sourceKind, sourceId, cancellationToken).ConfigureAwait(false);
+        return await ListCoreAsync(normalizedCollectionId, sourceKind, sourceId, cancellationToken);
     }
 
     private async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListCoreAsync(string? collectionId,
@@ -79,10 +79,10 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         string? sourceId,
         CancellationToken cancellationToken)
     {
-        var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
+        var resolution = await ResolveEmbeddingModelAsync(cancellationToken);
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -99,18 +99,18 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         AddParameter(command, "$source_kind", sourceKind);
         AddParameter(command, "$source_id", sourceId);
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var documents = new List<KnowledgeDocumentSummary>();
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await reader.ReadAsync(cancellationToken))
         {
             var documentId = Guid.Parse(reader.GetString(0));
-            var displayName = await DecryptNameAsync(reader, ordinal: 1, documentId, cancellationToken).ConfigureAwait(false);
+            var displayName = await DecryptNameAsync(reader, ordinal: 1, documentId, cancellationToken);
             var status = ParseStatus(reader.GetString(2));
             var embeddingModel = reader.GetString(5);
             documents.Add(new KnowledgeDocumentSummary(documentId,
                 displayName,
                 status,
-                await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
+                await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : reader.GetString(3),
                 reader.GetInt32(4),
                 embeddingModel,
                 IsStaleIndex(status,
@@ -123,7 +123,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                 reader.GetInt64(8),
                 reader.GetInt64(9),
                 reader.GetString(10),
-                await reader.IsDBNullAsync(11, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(11),
+                await reader.IsDBNullAsync(11, cancellationToken) ? null : reader.GetString(11),
                 reader.GetString(12)));
         }
 
@@ -132,7 +132,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, CancellationToken cancellationToken)
     {
-        return await GetCoreAsync(documentId, collectionId: null, cancellationToken).ConfigureAwait(false);
+        return await GetCoreAsync(documentId, collectionId: null, cancellationToken);
     }
 
     public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, string collectionId, CancellationToken cancellationToken)
@@ -142,15 +142,15 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             return null;
         }
 
-        return await GetCoreAsync(documentId, normalizedCollectionId, cancellationToken).ConfigureAwait(false);
+        return await GetCoreAsync(documentId, normalizedCollectionId, cancellationToken);
     }
 
     private async Task<KnowledgeDocumentDetail?> GetCoreAsync(Guid documentId, string? collectionId, CancellationToken cancellationToken)
     {
-        var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
+        var resolution = await ResolveEmbeddingModelAsync(cancellationToken);
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         KnowledgeDocumentDetail? detail;
         await using (var command = connection.CreateCommand())
@@ -166,19 +166,19 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             AddParameter(command, "$document_id", documentId);
             AddParameter(command, "$collection_id", collectionId);
 
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
             {
                 return null;
             }
 
-            var displayName = await DecryptNameAsync(reader, ordinal: 1, documentId, cancellationToken).ConfigureAwait(false);
+            var displayName = await DecryptNameAsync(reader, ordinal: 1, documentId, cancellationToken);
             var status = ParseStatus(reader.GetString(2));
             var embeddingModel = reader.GetString(5);
             detail = new KnowledgeDocumentDetail(documentId,
                 displayName,
                 status,
-                await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
+                await reader.IsDBNullAsync(ordinal: 3, cancellationToken) ? null : reader.GetString(3),
                 reader.GetInt32(4),
                 embeddingModel,
                 IsStaleIndex(status,
@@ -193,11 +193,11 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                 reader.GetInt64(10),
                 [],
                 reader.GetString(11),
-                await reader.IsDBNullAsync(12, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(12),
+                await reader.IsDBNullAsync(12, cancellationToken) ? null : reader.GetString(12),
                 reader.GetString(13));
         }
 
-        var chunks = await ReadChunksAsync(connection, documentId, cancellationToken).ConfigureAwait(false);
+        var chunks = await ReadChunksAsync(connection, documentId, cancellationToken);
         return detail with
         {
             Chunks = chunks
@@ -207,19 +207,19 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
     public async Task<KnowledgeDocumentStatus?> GetStatusAsync(Guid documentId, CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT status FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is string status ? ParseStatus(status) : null;
     }
 
     public async Task<bool> ResetToPendingAsync(Guid documentId, CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -230,7 +230,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         AddParameter(command, "$status", KnowledgeDocumentStatus.Pending.ToString());
         AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
         AddParameter(command, "$document_id", documentId);
-        var affected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var affected = await command.ExecuteNonQueryAsync(cancellationToken);
         return affected > 0;
     }
 
@@ -238,12 +238,12 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
     {
         // Resolve the current embedding model once. Model/vector comparisons require a confident resolution, but
         // parser/chunker version changes are local deterministic facts and must still reindex during a provider outage.
-        var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
+        var resolution = await ResolveEmbeddingModelAsync(cancellationToken);
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         // Only INDEXED documents can be stale: they carry committed vectors built by a specific model. A non-indexed row
         // still holds the upload-time placeholder (the configured name written by the blob store), which is not a
@@ -262,8 +262,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                                         """;
             AddParameter(selectCommand, "$indexed", indexedStatus);
 
-            await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
             {
                 if (IsStaleIndex(KnowledgeDocumentStatus.Indexed,
                         reader.GetString(1),
@@ -291,10 +291,10 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             AddParameter(updateCommand, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
             AddParameter(updateCommand, "$indexed", indexedStatus);
             AddParameter(updateCommand, "$document_id", staleId);
-            _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return staleIds;
     }
 
@@ -306,9 +306,9 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         // Re-running is safe: the state machine restarts from the top and the index writer purges any partial rows before
         // re-inserting, so a document reset mid-state never duplicates or corrupts its projections.
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         var indexedStatus = KnowledgeDocumentStatus.Indexed.ToString();
         var failedStatus = KnowledgeDocumentStatus.Failed.ToString();
@@ -321,8 +321,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             AddParameter(selectCommand, "$indexed", indexedStatus);
             AddParameter(selectCommand, "$failed", failedStatus);
 
-            await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
             {
                 interruptedIds.Add(Guid.Parse(reader.GetString(0)));
             }
@@ -341,25 +341,25 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             AddParameter(updateCommand, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
             AddParameter(updateCommand, "$indexed", indexedStatus);
             AddParameter(updateCommand, "$failed", failedStatus);
-            _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return interruptedIds;
     }
 
     public async Task<IReadOnlyList<Guid>> ListPendingDocumentIdsAsync(CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT document_id FROM knowledge_documents WHERE status = $pending;";
         AddParameter(command, "$pending", KnowledgeDocumentStatus.Pending.ToString());
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var pendingIds = new List<Guid>();
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await reader.ReadAsync(cancellationToken))
         {
             pendingIds.Add(Guid.Parse(reader.GetString(0)));
         }
@@ -379,20 +379,20 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                               """;
         AddParameter(command, "$document_id", documentId);
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var chunks = new List<KnowledgeDocumentChunkView>();
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await reader.ReadAsync(cancellationToken))
         {
             chunks.Add(new KnowledgeDocumentChunkView(reader.GetInt32(0),
-                await reader.IsDBNullAsync(ordinal: 1, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(1),
+                await reader.IsDBNullAsync(ordinal: 1, cancellationToken) ? null : reader.GetString(1),
                 reader.GetString(2),
-                await reader.IsDBNullAsync(3, cancellationToken).ConfigureAwait(false) ? null : reader.GetInt32(3),
+                await reader.IsDBNullAsync(3, cancellationToken) ? null : reader.GetInt32(3),
                 reader.GetInt32(4),
                 reader.GetInt32(5),
                 reader.GetString(6),
-                await reader.IsDBNullAsync(7, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(7),
-                await reader.IsDBNullAsync(8, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(8),
-                await reader.IsDBNullAsync(9, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(9)));
+                await reader.IsDBNullAsync(7, cancellationToken) ? null : reader.GetString(7),
+                await reader.IsDBNullAsync(8, cancellationToken) ? null : reader.GetString(8),
+                await reader.IsDBNullAsync(9, cancellationToken) ? null : reader.GetString(9)));
         }
 
         return chunks;
@@ -400,7 +400,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     private async Task<string> DecryptNameAsync(DbDataReader reader, int ordinal, Guid documentId, CancellationToken cancellationToken)
     {
-        var encrypted = await reader.GetFieldValueAsync<byte[]>(ordinal, cancellationToken).ConfigureAwait(false);
+        var encrypted = await reader.GetFieldValueAsync<byte[]>(ordinal, cancellationToken);
         return _dbContext.DecryptKnowledgeFileName(encrypted, documentId);
     }
 
@@ -414,7 +414,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         try
         {
             var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
-            return await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+            return await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
         }
         catch (InvalidOperationException)
         {

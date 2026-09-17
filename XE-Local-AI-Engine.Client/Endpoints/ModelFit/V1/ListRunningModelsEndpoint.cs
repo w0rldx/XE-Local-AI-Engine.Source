@@ -32,12 +32,12 @@ public sealed class ListRunningModelsEndpoint(
     {
         try
         {
-            var health = await _runtime.CheckHealthAsync(ct).ConfigureAwait(false);
+            var health = await _runtime.CheckHealthAsync(ct);
             await Send.OkAsync(new ListRunningModelsResponse
                 {
                     Items = [.. health.Select(static process => process.ToResponse())]
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -60,7 +60,7 @@ public sealed class ListRunningModelsEndpoint(
                 {
                     Items = []
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
     }
 }

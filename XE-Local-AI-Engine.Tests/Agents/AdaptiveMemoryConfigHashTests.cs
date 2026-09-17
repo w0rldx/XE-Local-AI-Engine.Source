@@ -32,7 +32,7 @@ public sealed class AdaptiveMemoryConfigHashTests
         var definition = CreateDefinition(playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved, "A bound definition must resolve to a runtime projection.");
         AssertEx.True(resolved!.PlaybookEnabled, "The runtime projection must carry the definition's PlaybookEnabled so the extraction seam can gate without a re-fetch.");
@@ -56,8 +56,8 @@ public sealed class AdaptiveMemoryConfigHashTests
         store.GetByIdAsync(nonTemporary.Id, Arg.Any<CancellationToken>()).Returns(nonTemporary);
         store.GetByIdAsync(temporary.Id, Arg.Any<CancellationToken>()).Returns(temporary);
 
-        var resolvedNonTemporary = await resolver.ResolveAsync(nonTemporary.Id, "qwen3:8b").ConfigureAwait(false);
-        var resolvedTemporary = await resolver.ResolveAsync(temporary.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolvedNonTemporary = await resolver.ResolveAsync(nonTemporary.Id, "qwen3:8b");
+        var resolvedTemporary = await resolver.ResolveAsync(temporary.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolvedNonTemporary);
         AssertEx.NotNull(resolvedTemporary);
@@ -82,7 +82,7 @@ public sealed class AdaptiveMemoryConfigHashTests
         };
         store.GetByIdAsync(retrievalOnly.Id, Arg.Any<CancellationToken>()).Returns(retrievalOnly);
 
-        var resolved = await resolver.ResolveAsync(retrievalOnly.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(retrievalOnly.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolved, "A bound definition must resolve to a runtime projection.");
         AssertEx.True(resolved!.PlaybookEnabled, "Retrieval/injection stays gated on PlaybookEnabled.");
@@ -107,8 +107,8 @@ public sealed class AdaptiveMemoryConfigHashTests
         store.GetByIdAsync(extracting.Id, Arg.Any<CancellationToken>()).Returns(extracting);
         store.GetByIdAsync(retrievalOnly.Id, Arg.Any<CancellationToken>()).Returns(retrievalOnly);
 
-        var resolvedExtracting = await resolver.ResolveAsync(extracting.Id, "qwen3:8b").ConfigureAwait(false);
-        var resolvedRetrievalOnly = await resolver.ResolveAsync(retrievalOnly.Id, "qwen3:8b").ConfigureAwait(false);
+        var resolvedExtracting = await resolver.ResolveAsync(extracting.Id, "qwen3:8b");
+        var resolvedRetrievalOnly = await resolver.ResolveAsync(retrievalOnly.Id, "qwen3:8b");
 
         AssertEx.NotNull(resolvedExtracting);
         AssertEx.NotNull(resolvedRetrievalOnly);

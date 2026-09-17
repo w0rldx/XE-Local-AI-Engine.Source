@@ -19,7 +19,7 @@ public sealed class LoopbackPortTests
         {
             offered.Add(port);
             return Task.FromResult(offered.Count < 3 ? null : $"bound:{port}");
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal($"bound:{offered[2]}", bound);
         AssertEx.Equal(expected: 3, offered.Count);
@@ -36,7 +36,7 @@ public sealed class LoopbackPortTests
         {
             offered.Add(port);
             return Task.FromResult<string?>(null);
-        }, maxAttempts: 3)).ConfigureAwait(false);
+        }, maxAttempts: 3));
 
         AssertEx.Equal(expected: 3, offered.Count);
         foreach (var port in offered)

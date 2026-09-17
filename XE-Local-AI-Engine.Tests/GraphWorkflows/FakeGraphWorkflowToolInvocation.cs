@@ -144,7 +144,7 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
             _parked.Add(parked);
             using (cancellationToken.Register(() => parked.TrySetResult()))
             {
-                await parked.Task.ConfigureAwait(false);
+                await parked.Task;
             }
 
             if (cancellationToken.IsCancellationRequested)

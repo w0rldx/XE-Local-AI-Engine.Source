@@ -61,8 +61,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
 
         // The TYPE is the contract: the store's own KeyNotFoundException for a row that is not there, which is what
         // every other missing-row path in it throws and what a caller can answer for.
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => sink.RecordAsync(Guid.NewGuid(), Guid.NewGuid(), [".env"]))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => sink.RecordAsync(Guid.NewGuid(), Guid.NewGuid(), [".env"]));
     }
 
     /// <summary>Dev Mode's own behaviour, forwarded verbatim: the keys and the paths reach the store unchanged.</summary>
@@ -73,7 +72,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         var taskId = Guid.NewGuid();
         var attemptId = Guid.NewGuid();
 
-        await new DevelopmentStoreWorkspaceSecretsSink(store).RecordAsync(taskId, attemptId, [".env"]).ConfigureAwait(false);
+        await new DevelopmentStoreWorkspaceSecretsSink(store).RecordAsync(taskId, attemptId, [".env"]);
 
         _ = store.Received(1).RecordWorkspaceSecretsAsync(taskId,
             attemptId,
@@ -97,7 +96,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         var nodeRunId = Guid.NewGuid();
         var sink = new RecordingWorkspaceSecretsSink();
 
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "data-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
@@ -110,8 +109,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         using var sandbox = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, sink);
 
-        var session = await provider.PrepareAsync(snapshot, new DevelopmentRepositoryBinding(projectId, snapshot.SelectedFolderId!.Value, "repository", repository, identity))
-                                    .ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, new DevelopmentRepositoryBinding(projectId, snapshot.SelectedFolderId!.Value, "repository", repository, identity));
 
         AssertEx.True(Directory.Exists(session.HostWorktreePath), session.HostWorktreePath);
         AssertEx.Equal(expected: 1, sink.Recorded.Count, "a committed credential must reach the sink, or this test never exercised the blocked call.");
@@ -120,7 +118,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         AssertEx.Equal(".env", sink.Recorded[0].Paths[0]);
 
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
-        var status = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus).ConfigureAwait(false);
+        var status = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
 
         AssertEx.NotNull(status);
         AssertEx.Equal(expected: 1, tools.CommandEvidence.Count);
@@ -175,13 +173,13 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "dev-workflow-spike@example.invalid").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Dev Workflow Spike").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, ".env"), "AWS_SECRET_ACCESS_KEY=devworkflowsentinel\n").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "dev-workflow-spike@example.invalid");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Dev Workflow Spike");
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
+        await File.WriteAllTextAsync(Path.Combine(repository, ".env"), "AWS_SECRET_ACCESS_KEY=devworkflowsentinel\n");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
         return repository;
     }
 }

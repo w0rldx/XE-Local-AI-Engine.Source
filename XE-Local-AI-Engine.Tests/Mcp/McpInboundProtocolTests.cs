@@ -48,8 +48,8 @@ public sealed class McpInboundProtocolTests
         await using var factory = CreateFactory(coordinator, workspaces);
         await using var client = await CreateClientAsync(factory);
 
-        var tools = await client.ListToolsAsync().ConfigureAwait(false);
-        var result = await client.CallToolAsync("list_workspaces").ConfigureAwait(false);
+        var tools = await client.ListToolsAsync();
+        var result = await client.CallToolAsync("list_workspaces");
         var text = GetText(result);
 
         AssertEx.Equal(string.Join('|', ExpectedToolNames),
@@ -74,7 +74,7 @@ public sealed class McpInboundProtocolTests
                     ["request_id"] = requestId.ToString("D"),
                     ["task"] = "inspect",
                     ["model"] = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M"
-                }).ConfigureAwait(false);
+                });
 
             AssertEx.Contains(GetText(start), "accepted");
         }
@@ -84,13 +84,13 @@ public sealed class McpInboundProtocolTests
             new Dictionary<string, object?>
             {
                 ["request_id"] = requestId.ToString("D")
-            }).ConfigureAwait(false);
-        var list = await connectionB.CallToolAsync("list_agent_runs").ConfigureAwait(false);
+            });
+        var list = await connectionB.CallToolAsync("list_agent_runs");
         var cancel = await connectionB.CallToolAsync("cancel_agent_run",
             new Dictionary<string, object?>
             {
                 ["request_id"] = requestId.ToString("D")
-            }).ConfigureAwait(false);
+            });
 
         AssertEx.Contains(GetText(get), requestId.ToString("D"));
         AssertEx.Contains(GetText(list), requestId.ToString("D"));
@@ -113,7 +113,7 @@ public sealed class McpInboundProtocolTests
                     ["request_id"] = requestId.ToString("D"),
                     ["task"] = "inspect",
                     ["model"] = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M"
-                }).ConfigureAwait(false);
+                });
             AssertEx.Contains(GetText(start), "accepted");
         }
 
@@ -123,7 +123,7 @@ public sealed class McpInboundProtocolTests
             new Dictionary<string, object?>
             {
                 ["request_id"] = requestId.ToString("D")
-            }).ConfigureAwait(false);
+            });
 
         AssertEx.Contains(GetText(get), "queued");
         AssertEx.Equal(0, coordinator.CancelCallCount);
@@ -145,7 +145,7 @@ public sealed class McpInboundProtocolTests
                 ["request_id"] = requestId.ToString("D"),
                 ["task"] = "inspect",
                 ["model"] = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M"
-            }).ConfigureAwait(false);
+            });
 
         var admitted = AssertEx.NotNull(coordinator.LastStartRequest);
         AssertEx.True(admitted.Binding.InboundContext.IsAgentic);
@@ -197,11 +197,11 @@ public sealed class McpInboundProtocolTests
             return await McpClient.CreateAsync(transport,
                 clientOptions: null,
                 NullLoggerFactory.Instance,
-                deadline.Token).ConfigureAwait(false);
+                deadline.Token);
         }
         catch
         {
-            await transport.DisposeAsync().ConfigureAwait(false);
+            await transport.DisposeAsync();
             throw;
         }
     }

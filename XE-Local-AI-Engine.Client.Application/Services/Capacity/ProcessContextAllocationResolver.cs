@@ -66,7 +66,7 @@ public sealed class ProcessContextAllocationResolver(
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(resolved);
 
-        var facts = await _modelStore.ResolveModelFootprintFactsAsync(modelName, ct).ConfigureAwait(false);
+        var facts = await _modelStore.ResolveModelFootprintFactsAsync(modelName, ct);
         if (facts is null || facts.ParamCount is not > 0 && facts.FileSizeBytes <= 0)
         {
             return null;
@@ -95,7 +95,7 @@ public sealed class ProcessContextAllocationResolver(
         ProcessContextAllocation? allocation;
         try
         {
-            allocation = await resolution.WaitAsync(ct).ConfigureAwait(false);
+            allocation = await resolution.WaitAsync(ct);
         }
         catch
         {
@@ -293,7 +293,7 @@ public sealed class ProcessContextAllocationResolver(
         KvCacheQuant? kvCacheQuant,
         CancellationToken ct)
     {
-        var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct).ConfigureAwait(false);
+        var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
         var source = ProcessContextAllocationSource.HardwareTier;
         if (!resolved.ExploreMode && resolved.CtxSize > 0)
         {
@@ -309,17 +309,17 @@ public sealed class ProcessContextAllocationResolver(
         {
             var frozenTokens = Math.Max(1, resolved.CtxSize);
             return BuildAllocation(key, contentIdentity, frozenTokens, trainCeiling, source, variant, profile, facts,
-                await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false), kvCacheQuant);
+                await ResolveProcessGpuBudgetAsync(variant, profile, ct), kvCacheQuant);
         }
 
         if (source == ProcessContextAllocationSource.DeterministicOverride)
         {
             var overridden = CapAndAlign(ResolveDeterministicOverride(resolved)!.Value, trainCeiling);
             return BuildAllocation(key, contentIdentity, overridden, trainCeiling, source, variant, profile, facts,
-                await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false), kvCacheQuant);
+                await ResolveProcessGpuBudgetAsync(variant, profile, ct), kvCacheQuant);
         }
 
-        var processGpuBudget = await ResolveProcessGpuBudgetAsync(variant, profile, ct).ConfigureAwait(false);
+        var processGpuBudget = await ResolveProcessGpuBudgetAsync(variant, profile, ct);
         _hardwareAllocationContexts[key] = new HardwareAllocationContext(contentIdentity,
             role,
             variant,
@@ -519,8 +519,7 @@ public sealed class ProcessContextAllocationResolver(
             GpuVariant.Vulkan => "vulkan",
             _ => "cpu"
         };
-        var probed = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct)
-                                                  .ConfigureAwait(false);
+        var probed = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
         return probed is > 0 ? probed : profile.VramBytes;
     }
 

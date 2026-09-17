@@ -42,15 +42,15 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
     public async Task StartAsync_WhenNoDefinitionExists_SeedsOneEnabledManualModelRecommendationJob()
     {
         var dbPath = GetDatabasePath("seed-fresh.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildProvider(dbPath);
         var seeder = ActivatorUtilities.CreateInstance<ModelRecommendationScheduleSeeder>(provider);
 
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
 
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
-        var jobs = await service.ListJobsAsync().ConfigureAwait(false);
+        var jobs = await service.ListJobsAsync();
         var seeded = jobs.Where(j => j.TemplateId == ModelRecommendationCheckHandler.TemplateIdValue).ToList();
 
         AssertEx.Equal(expected: 1, seeded.Count, "Exactly one model-recommendation-check definition must be seeded.");
@@ -59,11 +59,11 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
 
         // The durable Manual Quartz job must be registered (so TriggerNowAsync can fire it) with no trigger.
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
         var jobKey = new JobKey(seeded[0].Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "The seeded Manual job must be registered as a durable Quartz job.");
-        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None);
         AssertEx.Equal(expected: 0, triggers.Count, "The seeded Manual job must have no trigger.");
     }
 
@@ -71,16 +71,16 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
     public async Task StartAsync_WhenRunTwice_DoesNotCreateADuplicate()
     {
         var dbPath = GetDatabasePath("seed-idempotent.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildProvider(dbPath);
         var seeder = ActivatorUtilities.CreateInstance<ModelRecommendationScheduleSeeder>(provider);
 
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await seeder.StartAsync(CancellationToken.None);
+        await seeder.StartAsync(CancellationToken.None);
 
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
-        var jobs = await service.ListJobsAsync().ConfigureAwait(false);
+        var jobs = await service.ListJobsAsync();
         var seeded = jobs.Count(j => j.TemplateId == ModelRecommendationCheckHandler.TemplateIdValue);
 
         AssertEx.Equal(expected: 1, seeded, "Re-running the seeder must not create a duplicate definition.");
@@ -105,7 +105,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
             "The provider must not be able to resolve IScheduledJobManagementService, or the guard is never reached.");
 
         var start = seeder.StartAsync(CancellationToken.None);
-        await start.ConfigureAwait(false);
+        await start;
 
         AssertEx.True(start.IsCompletedSuccessfully,
             "StartAsync must swallow the resolution failure so the node still starts.");
@@ -122,7 +122,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string dbPath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(dbPath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(dbPath);
     }
 
     private static ServiceProvider BuildProvider(string dbPath)

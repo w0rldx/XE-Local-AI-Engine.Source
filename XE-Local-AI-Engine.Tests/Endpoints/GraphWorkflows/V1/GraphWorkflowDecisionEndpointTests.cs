@@ -42,7 +42,7 @@ public sealed class GraphWorkflowDecisionEndpointTests
         using var client = Host.Factory.CreateClient();
         using var request = Request(DecideRoute, Body(Guid.NewGuid(), "Approve"));
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -54,7 +54,7 @@ public sealed class GraphWorkflowDecisionEndpointTests
         using var request = Request(DecideRoute, Body(Guid.NewGuid(), "Approve"));
         Host.Factory.AddNonOperatorBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode, "answering a gate is an operator act.");
     }
@@ -75,7 +75,7 @@ public sealed class GraphWorkflowDecisionEndpointTests
         using var request = Request(DecideRoute, Body(Guid.NewGuid(), "Approve"));
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, "the route must answer 404 on a disabled node, never 500.");
     }
@@ -83,7 +83,7 @@ public sealed class GraphWorkflowDecisionEndpointTests
     [Test]
     public async Task Decide_OnAnUnknownRun_Answers404()
     {
-        using var response = await SendAsync(DecideRoute, Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
+        using var response = await SendAsync(DecideRoute, Body(Guid.NewGuid(), "Approve"));
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -92,9 +92,9 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_OnANodeKeyTheRunDoesNotHave_Answers404()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
 
-        using var response = await SendAsync(RouteFor(runId, "nosuchnode"), Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
+        using var response = await SendAsync(RouteFor(runId, "nosuchnode"), Body(Guid.NewGuid(), "Approve"));
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -105,9 +105,9 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_WithADecisionThatIsNotAMemberName_Answers400(string decision)
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
 
-        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), decision)).ConfigureAwait(false);
+        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), decision));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, "an unknown token is a caller mistake, and the handler must never Enum.Parse it.");
     }
@@ -116,9 +116,9 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_WithNoOperationId_Answers400()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
 
-        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.Empty, "Approve")).ConfigureAwait(false);
+        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.Empty, "Approve"));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, "an unminted idempotency key would replay the first caller's answer.");
     }
@@ -128,13 +128,13 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_Answers200WithTheCurrentStatuses_AndTheSameBodyTwiceAnswersTheSame()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
         var body = Body(Guid.NewGuid(), "Approve", comment: "ship it");
 
-        using var first = await SendAsync(RouteFor(runId, "review"), body).ConfigureAwait(false);
-        using var second = await SendAsync(RouteFor(runId, "review"), body).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await first.Content.ReadAsStringAsync().ConfigureAwait(false));
-        using var replay = JsonDocument.Parse(await second.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var first = await SendAsync(RouteFor(runId, "review"), body);
+        using var second = await SendAsync(RouteFor(runId, "review"), body);
+        using var document = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
+        using var replay = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, first.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, second.StatusCode, "a byte-identical repeat is the same act answered again, not a conflict.");
@@ -152,12 +152,12 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_WithADifferentOperationIdOnAnAnsweredPause_Answers409WithTheStandingDecision()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
-        using var accepted = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Reject")).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
+        using var accepted = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Reject"));
         AssertEx.Equal(HttpStatusCode.OK, accepted.StatusCode);
 
-        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve"));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("GraphWorkflowGateAlreadyDecided", document.RootElement.GetProperty("conflictType").GetString());
@@ -169,15 +169,15 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_WithAnOperationIdAlreadyUsedOnAnotherPauseOfTheRun_Answers409()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoPausesInSequence).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoPausesInSequence);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         var operationId = Guid.NewGuid();
-        using var accepted = await SendAsync(RouteFor(runId, "first"), Body(operationId, "Approve")).ConfigureAwait(false);
+        using var accepted = await SendAsync(RouteFor(runId, "first"), Body(operationId, "Approve"));
         AssertEx.Equal(HttpStatusCode.OK, accepted.StatusCode);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        using var response = await SendAsync(RouteFor(runId, "second"), Body(operationId, "Approve")).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync(RouteFor(runId, "second"), Body(operationId, "Approve"));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode, "not a replay, and not a DbUpdateException either.");
         AssertEx.Equal("GraphWorkflowGateAlreadyDecided", document.RootElement.GetProperty("conflictType").GetString());
@@ -188,11 +188,11 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_WithAnAnswerThePauseDoesNotOffer_Answers409WithTheRunConflictDiscriminator()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoPausesInSequence).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoPausesInSequence);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        using var response = await SendAsync(RouteFor(runId, "first"), Body(Guid.NewGuid(), "Reject")).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync(RouteFor(runId, "first"), Body(Guid.NewGuid(), "Reject"));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("GraphWorkflowRunConflict", document.RootElement.GetProperty("conflictType").GetString());
@@ -202,11 +202,11 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_WhileTheRunIsCancelling_Answers409WithTheRunConflictDiscriminator()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
-        await harness.CancelAsync(runId).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
+        await harness.CancelAsync(runId);
 
-        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve"));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("GraphWorkflowRunConflict", document.RootElement.GetProperty("conflictType").GetString());
@@ -217,10 +217,10 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_WithNoCommentOnAPauseThatRequiresOne_Answers400()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseRequiringComment).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseRequiringComment);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
+        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve"));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -230,7 +230,7 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_WithAPayload_StoresItUnderTheNodeRunOutput()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
         var body = JsonSerializer.Serialize(new
         {
             operationId = Guid.NewGuid(),
@@ -241,10 +241,10 @@ public sealed class GraphWorkflowDecisionEndpointTests
             }
         });
 
-        using var response = await SendAsync(RouteFor(runId, "review"), body).ConfigureAwait(false);
+        using var response = await SendAsync(RouteFor(runId, "review"), body);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        using var stored = await NodeRunAsync(runId, "review").ConfigureAwait(false);
+        using var stored = await NodeRunAsync(runId, "review");
         AssertEx.Equal("XE-42", stored.RootElement.GetProperty("output").GetProperty("output").GetProperty("payload").GetProperty("ticket").GetString());
     }
 
@@ -257,13 +257,13 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_RecordsTheDecidingSubjectFromTheOperatorToken()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await ParkedRunAsync(harness).ConfigureAwait(false);
+        var runId = await ParkedRunAsync(harness);
 
-        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
+        using var response = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Approve"));
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
-        var decided = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetNodeRunAsync(runId, "review").ConfigureAwait(false);
+        var decided = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetNodeRunAsync(runId, "review");
         AssertEx.Equal(OperatorSubject, decided.DecidedBySubject, "the sub claim on the operator token is what the audit trail keeps.");
     }
 
@@ -276,18 +276,18 @@ public sealed class GraphWorkflowDecisionEndpointTests
     public async Task Decide_OnAPassThroughNodeCarryingAnUpstreamDecision_Answers409WithoutAStandingDecision()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseStrandedRejection).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        using var rejected = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Reject")).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseStrandedRejection);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        using var rejected = await SendAsync(RouteFor(runId, "review"), Body(Guid.NewGuid(), "Reject"));
         AssertEx.Equal(HttpStatusCode.OK, rejected.StatusCode);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var passThrough = await harness.ReadNodeRunAsync(runId, "deadend").ConfigureAwait(false);
+        var passThrough = await harness.ReadNodeRunAsync(runId, "deadend");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, passThrough.Status);
         AssertEx.Contains(passThrough.OutputJson, "\"decision\":\"Reject\"", StringComparison.Ordinal, "the pass-through really does carry the pause's answer.");
 
-        using var response = await SendAsync(RouteFor(runId, "deadend"), Body(Guid.NewGuid(), "Approve")).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await SendAsync(RouteFor(runId, "deadend"), Body(Guid.NewGuid(), "Approve"));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("GraphWorkflowRunConflict", document.RootElement.GetProperty("conflictType").GetString());
@@ -296,17 +296,17 @@ public sealed class GraphWorkflowDecisionEndpointTests
 
     private async Task<JsonDocument> NodeRunAsync(Guid runId, string nodeKey)
     {
-        using var response = await SendAsync($"{Root}/runs/{runId}/nodes/{nodeKey}", body: null, "GET").ConfigureAwait(false);
+        using var response = await SendAsync($"{Root}/runs/{runId}/nodes/{nodeKey}", body: null, "GET");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        return JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
     }
 
     private static async Task<Guid> ParkedRunAsync(GraphWorkflowHarness harness)
     {
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval,
-            (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "review")).Status,
             "the run was expected to park on its pause before the route is asked anything.");
         return runId;
     }
@@ -327,7 +327,7 @@ public sealed class GraphWorkflowDecisionEndpointTests
         using var client = Host.Factory.CreateClient();
         using var request = Request(route, body, method);
         Host.Factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage Request(string route, string? body, string method = "POST")

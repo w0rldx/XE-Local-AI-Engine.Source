@@ -41,13 +41,13 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
                      });
         var service = CreateService(binaryManager, supervisor);
 
-        var result = await service.StartAcquisitionAsync(GpuVariant.Cpu).ConfigureAwait(false);
+        var result = await service.StartAcquisitionAsync(GpuVariant.Cpu);
 
         AssertEx.True(result.Accepted);
         AssertEx.True(calls.SequenceEqual(["lease", "ensure"], StringComparer.Ordinal),
             "the mutation lease must be held before the acquisition task is accepted.");
         completion.SetResult(new LlamaBinary("/tmp/llama-server", "b1", GpuVariant.Cpu, true));
-        await lease.Disposed.ConfigureAwait(false);
+        await lease.Disposed;
         AssertEx.Equal(1, lease.DisposeCount);
     }
 
@@ -61,7 +61,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var service = CreateService(binaryManager, supervisor);
 
-        var result = await service.StartAcquisitionAsync(GpuVariant.Cpu).ConfigureAwait(false);
+        var result = await service.StartAcquisitionAsync(GpuVariant.Cpu);
 
         AssertEx.False(result.Accepted);
         AssertEx.Equal(1, result.RunningProcessCount);
@@ -85,11 +85,11 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var service = CreateService(binaryManager, supervisor, installedStore: installedStore);
 
-        var result = await service.StartAcquisitionAsync(GpuVariant.Cpu).ConfigureAwait(false);
+        var result = await service.StartAcquisitionAsync(GpuVariant.Cpu);
 
         AssertEx.False(result.Accepted);
         AssertEx.Contains(result.DisplayMessage!, "source-built", StringComparison.Ordinal);
-        await lease.Disposed.ConfigureAwait(false);
+        await lease.Disposed;
         await binaryManager.DidNotReceiveWithAnyArgs()
                            .EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<ILlamaServerRuntimeMutationLease>(), Arg.Any<CancellationToken>());
     }
@@ -109,11 +109,11 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var service = CreateService(binaryManager, supervisor, sourceBuildActivity: sourceBuildActivity);
 
-        var result = await service.StartAcquisitionAsync(GpuVariant.Cpu).ConfigureAwait(false);
+        var result = await service.StartAcquisitionAsync(GpuVariant.Cpu);
 
         AssertEx.False(result.Accepted);
         AssertEx.Contains(result.DisplayMessage!, "active", StringComparison.Ordinal);
-        await lease.Disposed.ConfigureAwait(false);
+        await lease.Disposed;
         await binaryManager.DidNotReceiveWithAnyArgs()
                            .EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<ILlamaServerRuntimeMutationLease>(), Arg.Any<CancellationToken>());
     }
@@ -131,9 +131,9 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns<Task<InstalledRuntimeState?>>(_ => throw new OperationCanceledException());
         var service = CreateService(Substitute.For<ILlamaCppBinaryManager>(), supervisor, installedStore: installedStore);
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.StartAcquisitionAsync(GpuVariant.Cpu)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.StartAcquisitionAsync(GpuVariant.Cpu));
 
-        await lease.Disposed.ConfigureAwait(false);
+        await lease.Disposed;
         AssertEx.Equal(1, lease.DisposeCount);
     }
 
@@ -150,9 +150,9 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns<Task<InstalledRuntimeState?>>(_ => throw new InvalidOperationException("probe failed"));
         var service = CreateService(Substitute.For<ILlamaCppBinaryManager>(), supervisor, installedStore: installedStore);
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => service.StartAcquisitionAsync(GpuVariant.Cpu)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => service.StartAcquisitionAsync(GpuVariant.Cpu));
 
-        await lease.Disposed.ConfigureAwait(false);
+        await lease.Disposed;
         AssertEx.Equal(1, lease.DisposeCount);
     }
 
@@ -169,13 +169,13 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             releaseCatalog: releaseCatalog,
             variantSelector: variantSelector);
 
-        var result = await service.InstallAsync("b1").ConfigureAwait(false);
+        var result = await service.InstallAsync("b1");
 
         AssertEx.False(result.Succeeded);
         AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
-        await variantSelector.DidNotReceive().SelectVariantAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await variantSelector.DidNotReceive().SelectVariantAsync(Arg.Any<CancellationToken>());
         await releaseCatalog.DidNotReceiveWithAnyArgs()
-                            .ResolveAssetAsync(default!, default, default, default, default).ConfigureAwait(false);
+                            .ResolveAssetAsync(default!, default, default, default, default);
     }
 
     [Test]

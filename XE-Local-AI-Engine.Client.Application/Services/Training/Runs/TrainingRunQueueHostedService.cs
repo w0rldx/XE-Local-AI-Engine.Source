@@ -67,10 +67,10 @@ public sealed class TrainingRunQueueHostedService(
             // claims past a failed recovery orphans them for this process's whole lifetime.
             if (!recovered)
             {
-                recovered = await RecoverAsync(stoppingToken).ConfigureAwait(false);
+                recovered = await RecoverAsync(stoppingToken);
                 if (!recovered)
                 {
-                    await WaitAsync(stoppingToken).ConfigureAwait(false);
+                    await WaitAsync(stoppingToken);
                     continue;
                 }
             }
@@ -82,7 +82,7 @@ public sealed class TrainingRunQueueHostedService(
             {
                 // Peek first: the exclusivity a kind needs has to be held before the claim, and an idle queue must not
                 // take the gate at all — holding it across the poll would starve every other GPU path on a quiet node.
-                var kind = await PeekAsync(stoppingToken).ConfigureAwait(false);
+                var kind = await PeekAsync(stoppingToken);
                 if (kind is TrainingWorkKind.TrainingRun or TrainingWorkKind.EvaluationRun)
                 {
                     admission = _gpuWorkGate.TryBeginExclusive(kind == TrainingWorkKind.TrainingRun
@@ -92,10 +92,10 @@ public sealed class TrainingRunQueueHostedService(
                     {
                         if (kind == TrainingWorkKind.TrainingRun)
                         {
-                            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(stoppingToken).ConfigureAwait(false);
+                            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(stoppingToken);
                             if (lease is not null)
                             {
-                                claim = await ClaimAsync(TrainingWorkKind.TrainingRun, stoppingToken).ConfigureAwait(false);
+                                claim = await ClaimAsync(TrainingWorkKind.TrainingRun, stoppingToken);
                             }
 
                             LogLeaseWait(lease is null);
@@ -103,7 +103,7 @@ public sealed class TrainingRunQueueHostedService(
                         else
                         {
                             // No lease: see the class remarks. The exclusive hold is the exclusivity an evaluation needs.
-                            claim = await ClaimAsync(TrainingWorkKind.EvaluationRun, stoppingToken).ConfigureAwait(false);
+                            claim = await ClaimAsync(TrainingWorkKind.EvaluationRun, stoppingToken);
                         }
                     }
                 }
@@ -114,14 +114,12 @@ public sealed class TrainingRunQueueHostedService(
                     if (claim.Kind == TrainingWorkKind.EvaluationRun)
                     {
                         await executionScope.ServiceProvider.GetRequiredService<IEvaluationRunExecutor>()
-                                            .ExecuteAsync(claim, stoppingToken)
-                                            .ConfigureAwait(false);
+                                            .ExecuteAsync(claim, stoppingToken);
                     }
                     else
                     {
                         await executionScope.ServiceProvider.GetRequiredService<ITrainingRunExecutor>()
-                                            .ExecuteAsync(claim, stoppingToken)
-                                            .ConfigureAwait(false);
+                                            .ExecuteAsync(claim, stoppingToken);
                     }
                 }
             }
@@ -139,7 +137,7 @@ public sealed class TrainingRunQueueHostedService(
             {
                 if (lease is not null)
                 {
-                    await lease.DisposeAsync().ConfigureAwait(false);
+                    await lease.DisposeAsync();
                 }
 
                 admission?.Dispose();
@@ -147,7 +145,7 @@ public sealed class TrainingRunQueueHostedService(
 
             if (claim is null)
             {
-                await WaitAsync(stoppingToken).ConfigureAwait(false);
+                await WaitAsync(stoppingToken);
             }
         }
     }
@@ -178,21 +176,21 @@ public sealed class TrainingRunQueueHostedService(
     {
         await using var peekScope = _scopeFactory.CreateAsyncScope();
         var store = peekScope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        return await store.PeekNextKindAsync(stoppingToken).ConfigureAwait(false);
+        return await store.PeekNextKindAsync(stoppingToken);
     }
 
     private async Task<TrainingWorkClaim?> ClaimAsync(TrainingWorkKind kind, CancellationToken stoppingToken)
     {
         await using var claimScope = _scopeFactory.CreateAsyncScope();
         var store = claimScope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        return await store.ClaimNextAsync(kind, stoppingToken).ConfigureAwait(false);
+        return await store.ClaimNextAsync(kind, stoppingToken);
     }
 
     private async Task WaitAsync(CancellationToken stoppingToken)
     {
         try
         {
-            _ = await _signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
+            _ = await _signal.WaitAsync(_pollInterval, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -207,7 +205,7 @@ public sealed class TrainingRunQueueHostedService(
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-            var recovered = await store.RecoverOnStartupAsync(stoppingToken).ConfigureAwait(false);
+            var recovered = await store.RecoverOnStartupAsync(stoppingToken);
             foreach (var runId in recovered)
             {
                 // A buffer that survived into this process cannot describe the new run; drop it so a reconnecting

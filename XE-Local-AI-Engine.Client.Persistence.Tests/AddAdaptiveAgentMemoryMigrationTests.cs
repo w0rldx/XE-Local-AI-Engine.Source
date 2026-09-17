@@ -33,7 +33,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_AddsMemoryScopeColumn()
     {
-        var columns = await MigrateUpThenReadColumnsAsync("memory-scope-up.sqlite", "playbook_actions").ConfigureAwait(false);
+        var columns = await MigrateUpThenReadColumnsAsync("memory-scope-up.sqlite", "playbook_actions");
 
         AssertEx.True(columns.ContainsKey("memory_scope"), "Migration should add the memory_scope column.");
         AssertEx.False(columns["memory_scope"], "memory_scope should be nullable.");
@@ -42,7 +42,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_AddsDefaultTemporaryChatColumn()
     {
-        var columns = await MigrateUpThenReadColumnsAsync("default-temp-chat-up.sqlite", "agent_definitions").ConfigureAwait(false);
+        var columns = await MigrateUpThenReadColumnsAsync("default-temp-chat-up.sqlite", "agent_definitions");
 
         AssertEx.True(columns.ContainsKey("default_temporary_chat"), "Migration should add the default_temporary_chat column.");
         AssertEx.True(columns["default_temporary_chat"], "default_temporary_chat should be NOT NULL (DEFAULT 0).");
@@ -51,7 +51,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_AddsMemoryExtractionEnabledColumn()
     {
-        var columns = await MigrateUpThenReadColumnsAsync("memory-extraction-enabled-up.sqlite", "agent_definitions").ConfigureAwait(false);
+        var columns = await MigrateUpThenReadColumnsAsync("memory-extraction-enabled-up.sqlite", "agent_definitions");
 
         AssertEx.True(columns.ContainsKey("memory_extraction_enabled"), "Migration should add the memory_extraction_enabled column.");
         AssertEx.True(columns["memory_extraction_enabled"], "memory_extraction_enabled should be NOT NULL (DEFAULT 1).");
@@ -60,7 +60,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_AddsMemoryExcludedColumnToRawConversationsTable()
     {
-        var columns = await MigrateUpThenReadColumnsAsync("memory-excluded-up.sqlite", "conversations").ConfigureAwait(false);
+        var columns = await MigrateUpThenReadColumnsAsync("memory-excluded-up.sqlite", "conversations");
 
         AssertEx.True(columns.ContainsKey("memory_excluded"), "Migration should add the memory_excluded column to the raw conversations table.");
         AssertEx.True(columns["memory_excluded"], "memory_excluded should be NOT NULL (DEFAULT 0).");
@@ -69,7 +69,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_CreatesAgentExecutionLogsTable_MetadataOnly()
     {
-        var columns = await MigrateUpThenReadColumnsAsync("exec-log-up.sqlite", "agent_execution_logs").ConfigureAwait(false);
+        var columns = await MigrateUpThenReadColumnsAsync("exec-log-up.sqlite", "agent_execution_logs");
 
         AssertEx.True(columns.ContainsKey("id"), "agent_execution_logs should have an id column.");
         AssertEx.True(columns.ContainsKey("agent_definition_id"), "agent_execution_logs should have an agent_definition_id column.");
@@ -94,29 +94,29 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("adaptive-memory-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreAdaptiveMemoryMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreAdaptiveMemoryMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var playbookColumns = await GetColumnInfoAsync(connection, "playbook_actions").ConfigureAwait(false);
+        var playbookColumns = await GetColumnInfoAsync(connection, "playbook_actions");
         AssertEx.False(playbookColumns.ContainsKey("memory_scope"), "Rollback should drop the memory_scope column.");
         AssertEx.True(playbookColumns.ContainsKey("behavior"), "Rollback should retain the original playbook_actions schema.");
 
-        var agentColumns = await GetColumnInfoAsync(connection, "agent_definitions").ConfigureAwait(false);
+        var agentColumns = await GetColumnInfoAsync(connection, "agent_definitions");
         AssertEx.False(agentColumns.ContainsKey("default_temporary_chat"), "Rollback should drop the default_temporary_chat column.");
         AssertEx.False(agentColumns.ContainsKey("memory_extraction_enabled"), "Rollback should drop the memory_extraction_enabled column.");
         AssertEx.True(agentColumns.ContainsKey("playbook_enabled"), "Rollback should retain the original agent_definitions schema.");
 
-        var conversationColumns = await GetColumnInfoAsync(connection, "conversations").ConfigureAwait(false);
+        var conversationColumns = await GetColumnInfoAsync(connection, "conversations");
         AssertEx.False(conversationColumns.ContainsKey("memory_excluded"), "Rollback should drop the memory_excluded column.");
         AssertEx.True(conversationColumns.ContainsKey("origin"), "Rollback should retain the original conversations schema.");
 
-        var execLogColumns = await GetColumnInfoAsync(connection, "agent_execution_logs").ConfigureAwait(false);
+        var execLogColumns = await GetColumnInfoAsync(connection, "agent_execution_logs");
         AssertEx.Equal(expected: 0, execLogColumns.Count, "Rollback should drop the agent_execution_logs table entirely.");
     }
 
@@ -124,15 +124,15 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath(fileName);
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAdaptiveMemoryMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAdaptiveMemoryMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        return await GetColumnInfoAsync(connection, tableName).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        return await GetColumnInfoAsync(connection, tableName);
     }
 
     private NodeChatDbContext CreateContext(string databasePath)
@@ -143,7 +143,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -159,8 +159,8 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
 #pragma warning restore CA2100
 
         var columns = new Dictionary<string, bool>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             var name = reader.GetString(reader.GetOrdinal("name"));
             var notNull = reader.GetInt64(reader.GetOrdinal("notnull")) != 0L;

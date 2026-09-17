@@ -97,9 +97,9 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(_probeTimeout);
 
-            await _client.System.PingAsync(timeout.Token).ConfigureAwait(false);
-            var version = await _client.System.GetVersionAsync(timeout.Token).ConfigureAwait(false);
-            var info = await _client.System.GetSystemInfoAsync(timeout.Token).ConfigureAwait(false);
+            await _client.System.PingAsync(timeout.Token);
+            var version = await _client.System.GetVersionAsync(timeout.Token);
+            var info = await _client.System.GetSystemInfoAsync(timeout.Token);
 
             if (string.IsNullOrWhiteSpace(info.ID))
             {
@@ -164,7 +164,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         try
         {
-            var created = await _client.Containers.CreateContainerAsync(parameters, cancellationToken).ConfigureAwait(false);
+            var created = await _client.Containers.CreateContainerAsync(parameters, cancellationToken);
             return created.ID;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -179,8 +179,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         try
         {
-            await _client.Containers.StartContainerAsync(containerId, new ContainerStartParameters(), cancellationToken)
-                         .ConfigureAwait(false);
+            await _client.Containers.StartContainerAsync(containerId, new ContainerStartParameters(), cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -194,7 +193,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         try
         {
-            var inspected = await _client.Containers.InspectContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+            var inspected = await _client.Containers.InspectContainerAsync(containerId, cancellationToken);
             var hostConfig = inspected.HostConfig
                              ?? throw new DockerRuntimeException(DockerDaemonPreflightStatus.ProbeFailed,
                                  $"The Docker daemon returned no host configuration for container '{containerId}', so its isolation settings cannot be verified.");
@@ -253,7 +252,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 }
             };
 
-            var listed = await _client.Containers.ListContainersAsync(parameters, cancellationToken).ConfigureAwait(false);
+            var listed = await _client.Containers.ListContainersAsync(parameters, cancellationToken);
             return [.. listed.Select(container => container.ID)];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -273,8 +272,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                          {
                              Force = true,
                              RemoveVolumes = true
-                         }, cancellationToken)
-                         .ConfigureAwait(false);
+                         }, cancellationToken);
         }
         catch (DockerContainerNotFoundException)
         {
@@ -310,17 +308,16 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 Env = request.Environment?.Select(pair => pair.Key + "=" + pair.Value).ToArray() ?? []
             };
 
-            var created = await _client.Exec.CreateContainerExecAsync(containerId, parameters, cancellationToken).ConfigureAwait(false);
+            var created = await _client.Exec.CreateContainerExecAsync(containerId, parameters, cancellationToken);
             using var stream = await _client.Exec
                                             .StartContainerExecAsync(created.ID, new ContainerExecStartParameters
                                             {
                                                 Detach = false,
                                                 TTY = false
-                                            }, cancellationToken)
-                                            .ConfigureAwait(false);
+                                            }, cancellationToken);
 
-            var captured = await PumpAsync(stream, request.StandardInput, request.MaxCapturedBytes, cancellationToken).ConfigureAwait(false);
-            var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, cancellationToken).ConfigureAwait(false);
+            var captured = await PumpAsync(stream, request.StandardInput, request.MaxCapturedBytes, cancellationToken);
+            var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, cancellationToken);
 
             var (outputText, outputTruncated, errorText, errorTruncated) = captured;
 
@@ -477,7 +474,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         try
         {
-            var created = await _client.Containers.CreateContainerAsync(parameters, cancellationToken).ConfigureAwait(false);
+            var created = await _client.Containers.CreateContainerAsync(parameters, cancellationToken);
             return created.ID;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -492,7 +489,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         try
         {
-            var inspected = await _client.Containers.InspectContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+            var inspected = await _client.Containers.InspectContainerAsync(containerId, cancellationToken);
             return ToInspection(containerId, inspected);
         }
         catch (Exception exception) when (exception is not OperationCanceledException and not DockerRuntimeException)
@@ -568,8 +565,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                     {
                                         WaitBeforeKillSeconds = (uint)Math.Clamp(gracePeriod.TotalSeconds, 0, 600)
                                     },
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                                    cancellationToken);
         }
         catch (DockerContainerNotFoundException)
         {
@@ -590,7 +586,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         try
         {
-            await _client.Images.InspectImageAsync(imageReference, cancellationToken).ConfigureAwait(false);
+            await _client.Images.InspectImageAsync(imageReference, cancellationToken);
             return true;
         }
         catch (DockerImageNotFoundException)
@@ -639,8 +635,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                              },
                              authConfig: null,
                              sink,
-                             deadline.Token)
-                         .ConfigureAwait(false);
+                             deadline.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -685,7 +680,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         try
         {
-            return await CreateNetworkOnceAsync(specification, cancellationToken).ConfigureAwait(false);
+            return await CreateNetworkOnceAsync(specification, cancellationToken);
         }
         catch (DockerApiException apiException) when (apiException.StatusCode == HttpStatusCode.Conflict)
         {
@@ -695,14 +690,14 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             NetworkResponse existing;
             try
             {
-                existing = await _client.Networks.InspectNetworkAsync(specification.Name, cancellationToken).ConfigureAwait(false);
+                existing = await _client.Networks.InspectNetworkAsync(specification.Name, cancellationToken);
             }
             catch (DockerNetworkNotFoundException)
             {
                 // Removed in the gap between the conflict and the inspect. One retry, then it fails classified.
                 try
                 {
-                    return await CreateNetworkOnceAsync(specification, cancellationToken).ConfigureAwait(false);
+                    return await CreateNetworkOnceAsync(specification, cancellationToken);
                 }
                 catch (Exception retryFailure) when (retryFailure is not OperationCanceledException)
                 {
@@ -736,7 +731,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         try
         {
-            await _client.Networks.DeleteNetworkAsync(networkNameOrId, cancellationToken).ConfigureAwait(false);
+            await _client.Networks.DeleteNetworkAsync(networkNameOrId, cancellationToken);
         }
         catch (DockerNetworkNotFoundException)
         {
@@ -766,8 +761,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                       .ListNetworksAsync(new NetworksListParameters
                                       {
                                           Filters = LabelFilter(labels)
-                                      }, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      }, cancellationToken);
 
             return [.. listed.Select(network => network.ID)];
         }
@@ -803,8 +797,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                           // stopped, and the observer would report a crashed application as gone.
                                           All = true,
                                           Filters = LabelFilter(labels)
-                                      }, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      }, cancellationToken);
 
             return
             [
@@ -848,8 +841,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                                     Tail = request.TailLines.ToString(CultureInfo.InvariantCulture),
                                                     Since = request.SinceUtc?.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)
                                                 },
-                                                cancellationToken)
-                                            .ConfigureAwait(false);
+                                                cancellationToken);
 
             var buffer = new byte[16 * 1024];
             var kept = new List<byte>(Math.Min(request.MaxBytes, 64 * 1024));
@@ -860,7 +852,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             // they happened.
             while (true)
             {
-                var read = await stream.ReadOutputAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+                var read = await stream.ReadOutputAsync(buffer, 0, buffer.Length, cancellationToken);
                 if (read.EOF)
                 {
                     break;
@@ -926,7 +918,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 Env = []
             };
 
-            var created = await _client.Exec.CreateContainerExecAsync(containerId, parameters, deadline.Token).ConfigureAwait(false);
+            var created = await _client.Exec.CreateContainerExecAsync(containerId, parameters, deadline.Token);
             using var stream = await _client.Exec
                                             .StartContainerExecAsync(created.ID,
                                                 new ContainerExecStartParameters
@@ -934,11 +926,10 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                                     Detach = false,
                                                     TTY = false
                                                 },
-                                                deadline.Token)
-                                            .ConfigureAwait(false);
+                                                deadline.Token);
 
-            var captured = await PumpAsync(stream, standardInput: null, WriteProbeCaptureBytes, deadline.Token).ConfigureAwait(false);
-            var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, deadline.Token).ConfigureAwait(false);
+            var captured = await PumpAsync(stream, standardInput: null, WriteProbeCaptureBytes, deadline.Token);
+            var inspected = await _client.Exec.InspectContainerExecAsync(created.ID, deadline.Token);
             var exitCode = inspected.ExitCode ?? -1;
 
             if (exitCode != 0)
@@ -1025,8 +1016,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                                        // Assigned rather than initialized into: Labels is interface-typed and null by
                                        // default. CheckDuplicate is deliberately absent — it does not exist in 4.3.3.
                                        Labels = new Dictionary<string, string>(specification.Labels, StringComparer.Ordinal)
-                                   }, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   }, cancellationToken);
 
         return created.ID;
     }
@@ -1335,20 +1325,20 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     {
         if (standardInput is null)
         {
-            return await ReadBoundedAsync(stream, maxBytesPerStream, cancellationToken).ConfigureAwait(false);
+            return await ReadBoundedAsync(stream, maxBytesPerStream, cancellationToken);
         }
 
         var payload = Encoding.UTF8.GetBytes(standardInput);
         var writeTask = SendAsync(stream, payload, cancellationToken);
         try
         {
-            return await ReadBoundedAsync(stream, maxBytesPerStream, cancellationToken).ConfigureAwait(false);
+            return await ReadBoundedAsync(stream, maxBytesPerStream, cancellationToken);
         }
         finally
         {
             // Awaited inside this method, so the stream outlives both halves: a write still in flight when the caller
             // disposed the stream would be a use-after-dispose rather than a tidy-up detail.
-            await writeTask.ConfigureAwait(false);
+            await writeTask;
         }
     }
 
@@ -1378,7 +1368,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
         while (true)
         {
-            var read = await stream.ReadOutputAsync(buffer, offset: 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+            var read = await stream.ReadOutputAsync(buffer, offset: 0, buffer.Length, cancellationToken);
             if (read.EOF)
             {
                 break;
@@ -1393,7 +1383,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
 
     private static async Task SendAsync(MultiplexedStream stream, byte[] payload, CancellationToken cancellationToken)
     {
-        await stream.WriteAsync(payload, offset: 0, payload.Length, cancellationToken).ConfigureAwait(false);
+        await stream.WriteAsync(payload, offset: 0, payload.Length, cancellationToken);
         stream.CloseWrite();
     }
 

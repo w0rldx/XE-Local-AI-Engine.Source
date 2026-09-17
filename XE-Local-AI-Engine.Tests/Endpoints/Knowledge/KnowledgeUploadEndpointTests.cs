@@ -28,7 +28,7 @@ public sealed class KnowledgeUploadEndpointTests
         await using var factory = CreateFactory(dispatcher, wasInserted: false, status: KnowledgeDocumentStatus.Pending, documentId);
         using var client = factory.CreateClient();
 
-        using var response = await PostFileAsync(factory, client).ConfigureAwait(false);
+        using var response = await PostFileAsync(factory, client);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         // A stranded (never-ingested) dedupe hit must be re-admitted, not silently skipped.
@@ -44,7 +44,7 @@ public sealed class KnowledgeUploadEndpointTests
         await using var factory = CreateFactory(dispatcher, wasInserted: false, status: KnowledgeDocumentStatus.Indexed, documentId);
         using var client = factory.CreateClient();
 
-        using var response = await PostFileAsync(factory, client).ConfigureAwait(false);
+        using var response = await PostFileAsync(factory, client);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         // An already-indexed dedupe hit is done: re-running the pipeline would be wasted work.
@@ -60,7 +60,7 @@ public sealed class KnowledgeUploadEndpointTests
         await using var factory = CreateFactory(dispatcher, wasInserted: true, status: KnowledgeDocumentStatus.Pending, documentId);
         using var client = factory.CreateClient();
 
-        using var response = await PostFileAsync(factory, client).ConfigureAwait(false);
+        using var response = await PostFileAsync(factory, client);
 
         AssertEx.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         AssertEx.NotNull(response.Headers.RetryAfter, "A queue-full upload must advertise Retry-After so the client retries.");
@@ -112,7 +112,7 @@ public sealed class KnowledgeUploadEndpointTests
         };
         factory.AddNodeBearerToken(request);
 
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     // Hand-written fake for the ValueTask-returning dispatcher: records enqueued ids and returns a fixed admission result,

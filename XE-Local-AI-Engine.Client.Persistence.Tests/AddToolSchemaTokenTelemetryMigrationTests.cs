@@ -38,21 +38,21 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("tool-schema-tokens-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var logColumns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var logColumns = await GetColumnNamesAsync(connection, "agent_execution_logs");
         foreach (var column in TelemetryColumns)
         {
             AssertEx.True(logColumns.Contains(column), $"agent_execution_logs should expose the {column} column after the migration.");
         }
 
-        var definitionColumns = await GetColumnNamesAsync(connection, "agent_definitions").ConfigureAwait(false);
+        var definitionColumns = await GetColumnNamesAsync(connection, "agent_definitions");
         AssertEx.True(definitionColumns.Contains("disable_tool_relevance_filter"),
             "agent_definitions should expose the per-agent tool-relevance opt-out after the migration.");
     }
@@ -62,16 +62,16 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("tool-schema-tokens-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var logColumns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var logColumns = await GetColumnNamesAsync(connection, "agent_execution_logs");
         foreach (var column in TelemetryColumns)
         {
             AssertEx.True(logColumns.Contains(column), $"A fresh migrate-to-head should expose the {column} column.");
         }
 
-        var definitionColumns = await GetColumnNamesAsync(connection, "agent_definitions").ConfigureAwait(false);
+        var definitionColumns = await GetColumnNamesAsync(connection, "agent_definitions");
         AssertEx.True(definitionColumns.Contains("disable_tool_relevance_filter"),
             "A fresh migrate-to-head should expose the per-agent tool-relevance opt-out.");
     }
@@ -85,9 +85,9 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
         var databasePath = GetDatabasePath("tool-schema-tokens-existing-row.sqlite");
         var rowId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId);
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             await using var insert = connection.CreateCommand();
             insert.CommandText = """
@@ -96,23 +96,23 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
                                  """;
             insert.Parameters.AddWithValue("$id", rowId.ToString());
             insert.Parameters.AddWithValue("$agent", Guid.NewGuid().ToString());
-            _ = await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await insert.ExecuteNonQueryAsync();
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var readConnection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var readConnection = await OpenConnectionAsync(databasePath);
         await using var select = readConnection.CreateCommand();
         select.CommandText = "SELECT tool_schema_tokens, max_tool_schema_tokens FROM agent_execution_logs WHERE id = $id;";
         select.Parameters.AddWithValue("$id", rowId.ToString());
-        await using var reader = await select.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await select.ExecuteReaderAsync();
 
-        AssertEx.True(await reader.ReadAsync().ConfigureAwait(false), "The pre-migration row must survive the migration.");
-        AssertEx.True(await reader.IsDBNullAsync(0).ConfigureAwait(false), "An existing row reads back null for the cumulative estimate.");
-        AssertEx.True(await reader.IsDBNullAsync(1).ConfigureAwait(false), "An existing row reads back null for the per-round maximum.");
+        AssertEx.True(await reader.ReadAsync(), "The pre-migration row must survive the migration.");
+        AssertEx.True(await reader.IsDBNullAsync(0), "An existing row reads back null for the cumulative estimate.");
+        AssertEx.True(await reader.IsDBNullAsync(1), "An existing row reads back null for the per-round maximum.");
     }
 
     [Test]
@@ -120,21 +120,21 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("tool-schema-tokens-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var logColumns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var logColumns = await GetColumnNamesAsync(connection, "agent_execution_logs");
         foreach (var column in TelemetryColumns)
         {
             AssertEx.False(logColumns.Contains(column), $"Rolling back one migration should drop the {column} column.");
         }
 
-        var definitionColumns = await GetColumnNamesAsync(connection, "agent_definitions").ConfigureAwait(false);
+        var definitionColumns = await GetColumnNamesAsync(connection, "agent_definitions");
         AssertEx.False(definitionColumns.Contains("disable_tool_relevance_filter"),
             "Rolling back one migration should drop the per-agent tool-relevance opt-out.");
     }
@@ -152,7 +152,7 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -164,8 +164,8 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
         command.Parameters.AddWithValue("$table", tableName);
 
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             columns.Add(reader.GetString(0));
         }

@@ -169,7 +169,7 @@ public sealed class StructuredAgentRunnerTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 
@@ -195,7 +195,7 @@ public sealed class StructuredAgentRunnerTests
         {
             try
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -211,7 +211,7 @@ public sealed class StructuredAgentRunnerTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             yield break;
         }
 
@@ -238,7 +238,7 @@ public sealed class StructuredAgentRunnerTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 

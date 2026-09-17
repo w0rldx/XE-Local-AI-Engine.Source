@@ -80,32 +80,32 @@ public sealed class InstalledModelSnapshotCoordinator(
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            var candidate = await _snapshotStore.DiscoverCandidateAsync(modelName, cancellationToken).ConfigureAwait(false)
+            var candidate = await _snapshotStore.DiscoverCandidateAsync(modelName, cancellationToken)
                             ?? throw new KeyNotFoundException("The installed model was not found.");
             var keys = BuildExistingKeys(candidate);
-            var inner = await _lockDomain.AcquireReadAsync(keys, cancellationToken).ConfigureAwait(false);
+            var inner = await _lockDomain.AcquireReadAsync(keys, cancellationToken);
             try
             {
-                var verified = await _snapshotStore.LoadVerifiedAsync(modelName, candidate, cancellationToken).ConfigureAwait(false);
+                var verified = await _snapshotStore.LoadVerifiedAsync(modelName, candidate, cancellationToken);
                 if (KeysMatch(keys, BuildExistingKeys(verified)))
                 {
-                    var mapping = await ReadMappingAsync(inner, isMutation: false, verified.ModelName, cancellationToken).ConfigureAwait(false);
+                    var mapping = await ReadMappingAsync(inner, isMutation: false, verified.ModelName, cancellationToken);
                     var snapshot = FreezeSnapshot(verified, mapping);
                     return new InstalledModelReadLease(snapshot, inner);
                 }
             }
             catch (InstalledGgufSnapshotException exception) when (IsOptimisticConflict(exception))
             {
-                await inner.DisposeAsync().ConfigureAwait(false);
+                await inner.DisposeAsync();
                 continue;
             }
             catch
             {
-                await inner.DisposeAsync().ConfigureAwait(false);
+                await inner.DisposeAsync();
                 throw;
             }
 
-            await inner.DisposeAsync().ConfigureAwait(false);
+            await inner.DisposeAsync();
         }
 
         throw new InvalidOperationException("InstalledModelSnapshotUnstable");
@@ -117,44 +117,43 @@ public sealed class InstalledModelSnapshotCoordinator(
         ArgumentNullException.ThrowIfNull(request);
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            var candidate = await _snapshotStore.DiscoverCandidateAsync(request.ModelName, cancellationToken).ConfigureAwait(false);
+            var candidate = await _snapshotStore.DiscoverCandidateAsync(request.ModelName, cancellationToken);
             var keys = candidate is null ? BuildAcquisitionKeys(request) : BuildExistingKeys(candidate, request.IntendedMembers);
-            var inner = await _lockDomain.AcquireMutationAsync(keys, cancellationToken).ConfigureAwait(false);
+            var inner = await _lockDomain.AcquireMutationAsync(keys, cancellationToken);
             try
             {
                 var verified = candidate is null
                     ? null
-                    : await _snapshotStore.LoadVerifiedAsync(request.ModelName, candidate, cancellationToken).ConfigureAwait(false);
+                    : await _snapshotStore.LoadVerifiedAsync(request.ModelName, candidate, cancellationToken);
                 var currentCandidate = candidate is null
-                    ? await _snapshotStore.DiscoverCandidateAsync(request.ModelName, cancellationToken).ConfigureAwait(false)
+                    ? await _snapshotStore.DiscoverCandidateAsync(request.ModelName, cancellationToken)
                     : candidate;
                 if (candidate is null && currentCandidate is not null)
                 {
-                    await inner.DisposeAsync().ConfigureAwait(false);
+                    await inner.DisposeAsync();
                     continue;
                 }
 
                 var verifiedKeys = verified is null ? BuildAcquisitionKeys(request) : BuildExistingKeys(verified, request.IntendedMembers);
                 if (KeysMatch(keys, verifiedKeys))
                 {
-                    var mapping = await ReadMappingAsync(inner, isMutation: true, verified?.ModelName ?? request.ModelName, cancellationToken)
-                        .ConfigureAwait(false);
+                    var mapping = await ReadMappingAsync(inner, isMutation: true, verified?.ModelName ?? request.ModelName, cancellationToken);
                     var snapshot = verified is null ? null : FreezeSnapshot(verified, mapping);
                     return new InstalledModelMutationLease(request, snapshot, mapping, inner);
                 }
             }
             catch (InstalledGgufSnapshotException exception) when (IsOptimisticConflict(exception))
             {
-                await inner.DisposeAsync().ConfigureAwait(false);
+                await inner.DisposeAsync();
                 continue;
             }
             catch
             {
-                await inner.DisposeAsync().ConfigureAwait(false);
+                await inner.DisposeAsync();
                 throw;
             }
 
-            await inner.DisposeAsync().ConfigureAwait(false);
+            await inner.DisposeAsync();
         }
 
         throw new InvalidOperationException("InstalledModelSnapshotUnstable");
@@ -166,7 +165,7 @@ public sealed class InstalledModelSnapshotCoordinator(
         // Discovery reads the registry (and its sidecars) only; nothing here opens a weight file, which is the whole
         // point — a listing must not pay the verification cost that belongs to a run freeze. No re-read/retry loop
         // either: there is no verification to race, and a listing that observed a model mid-delete is simply stale.
-        var candidate = await _snapshotStore.DiscoverCandidateAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var candidate = await _snapshotStore.DiscoverCandidateAsync(modelName, cancellationToken);
         if (candidate is null)
         {
             return null;
@@ -179,8 +178,8 @@ public sealed class InstalledModelSnapshotCoordinator(
             return null;
         }
 
-        await using var inner = await _lockDomain.AcquireReadAsync(BuildExistingKeys(candidate), cancellationToken).ConfigureAwait(false);
-        var mapping = await ReadMappingAsync(inner, isMutation: false, candidate.ModelName, cancellationToken).ConfigureAwait(false);
+        await using var inner = await _lockDomain.AcquireReadAsync(BuildExistingKeys(candidate), cancellationToken);
+        var mapping = await ReadMappingAsync(inner, isMutation: false, candidate.ModelName, cancellationToken);
         return new InstalledModelFacts(candidate.ModelName,
             ResolveProviderName(mapping),
             alias.RegistryValue.Role,
@@ -251,7 +250,7 @@ public sealed class InstalledModelSnapshotCoordinator(
         CancellationToken cancellationToken)
     {
         await using var view = new InstalledModelMapLeaseView(inner, isMutation);
-        return await _providerMapStore.ReadWithRevisionAsync(view, modelName, cancellationToken).ConfigureAwait(false);
+        return await _providerMapStore.ReadWithRevisionAsync(view, modelName, cancellationToken);
     }
 
     private static InstalledModelSnapshot FreezeSnapshot(InstalledGgufSnapshot snapshot, ModelProviderMapRecord? mapping)
@@ -345,7 +344,7 @@ public class InstalledModelReadLease : IModelProviderMapReadLease
         var inner = Interlocked.Exchange(ref _inner, null);
         if (inner is not null)
         {
-            await inner.DisposeAsync().ConfigureAwait(false);
+            await inner.DisposeAsync();
         }
     }
 }
@@ -386,7 +385,7 @@ public sealed class InstalledModelMutationLease : IModelProviderMapMutationLease
         var inner = Interlocked.Exchange(ref _inner, null);
         if (inner is not null)
         {
-            await inner.DisposeAsync().ConfigureAwait(false);
+            await inner.DisposeAsync();
         }
     }
 }

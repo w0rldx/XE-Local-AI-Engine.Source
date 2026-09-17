@@ -38,17 +38,17 @@ public sealed class GpuLoadAdmissionCrossSupervisorTests
 
         var llmRun = llm.EnsureRunningAsync("llm-model", ModelRole.Chat, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => llmProbe.Waiting == 1, TimeSpan.FromSeconds(5),
-            "the LLM load should launch and hold the shared gate").ConfigureAwait(false);
+            "the LLM load should launch and hold the shared gate");
 
         // The image load competes for the SAME gate — it must not launch while the LLM holds it.
         var imageRun = image.EnsureRunningAsync("image-model", CancellationToken.None);
-        await AssertEx.StaysIncompleteAsync(imageRun, "The image load must stay queued while the LLM holds the shared gate.").ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(imageRun, "The image load must stay queued while the LLM holds the shared gate.");
         AssertEx.Equal(0, imageLauncher.LaunchCount);
 
         // Release the LLM's readiness → it releases the gate → the image load is admitted and launches.
         llmProbe.Release();
-        await llmRun.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        await imageRun.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await llmRun.WaitAsync(TimeSpan.FromSeconds(5));
+        await imageRun.WaitAsync(TimeSpan.FromSeconds(5));
         AssertEx.Equal(1, imageLauncher.LaunchCount);
         AssertEx.Equal(1, llmLauncher.LaunchCount);
     }

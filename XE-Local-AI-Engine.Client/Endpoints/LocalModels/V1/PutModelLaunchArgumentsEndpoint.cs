@@ -42,7 +42,7 @@ public sealed class PutModelLaunchArgumentsEndpoint(
         if (validationError is not null)
         {
             AddError(validationError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -51,20 +51,20 @@ public sealed class PutModelLaunchArgumentsEndpoint(
         if (raw.Length > MaxRawArgumentsLength)
         {
             AddError($"Launch arguments are too long (max {MaxRawArgumentsLength} characters).");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         // A blank override is a clear-to-default, not a stored empty row.
         if (raw.Length == 0)
         {
-            await _launchArguments.ClearAsync(decodedModelName!, ct).ConfigureAwait(false);
+            await _launchArguments.ClearAsync(decodedModelName!, ct);
             await Send.OkAsync(new ModelLaunchArgumentsResponse
                 {
                     ModelName = decodedModelName!,
                     RawArguments = string.Empty
                 },
-                ct).ConfigureAwait(false);
+                ct);
             return;
         }
 
@@ -75,16 +75,16 @@ public sealed class PutModelLaunchArgumentsEndpoint(
         if (LlamaLaunchArgumentParser.FindReservedFlag(raw) is { } reserved)
         {
             AddError($"The '{reserved}' argument is managed by the app and cannot be overridden here. Remove it and try again.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var result = await _launchArguments.SaveAsync(decodedModelName!, raw, ct).ConfigureAwait(false);
+        var result = await _launchArguments.SaveAsync(decodedModelName!, raw, ct);
         await Send.OkAsync(new ModelLaunchArgumentsResponse
             {
                 ModelName = result.ModelName,
                 RawArguments = result.RawArguments
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

@@ -108,7 +108,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();
-        var result = await searchService.SearchAsync(searchRequest, cancellationToken).ConfigureAwait(false);
+        var result = await searchService.SearchAsync(searchRequest, cancellationToken);
 
         if (result.Results.Count == 0)
         {

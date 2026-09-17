@@ -29,25 +29,25 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("generation-metadata-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreGenerationMetadataMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreGenerationMetadataMigrationId);
 
         // A definition and a skill written before AI drafting existed, so the additive column is exercised on real rows
         // rather than on empty tables.
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            await InsertLegacyRowsAsync(connection).ConfigureAwait(false);
+            await InsertLegacyRowsAsync(connection);
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using (var verifyConnection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var verifyConnection = await OpenConnectionAsync(databasePath))
         {
-            AssertEx.True((await GetColumnsAsync(verifyConnection, "agent_definitions").ConfigureAwait(false)).Contains("generation_metadata_json"),
+            AssertEx.True((await GetColumnsAsync(verifyConnection, "agent_definitions")).Contains("generation_metadata_json"),
                 "Migration should add generation_metadata_json to agent_definitions.");
-            AssertEx.True((await GetColumnsAsync(verifyConnection, "agent_skills").ConfigureAwait(false)).Contains("generation_metadata_json"),
+            AssertEx.True((await GetColumnsAsync(verifyConnection, "agent_skills")).Contains("generation_metadata_json"),
                 "Migration should add generation_metadata_json to agent_skills.");
         }
 
@@ -55,9 +55,9 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
         // "drafted, details unknown". This context has no materialization interceptor, so the legacy placeholder blobs
         // in the other encrypted columns are read verbatim rather than failing authenticated decryption.
         await using var readContext = CreateContext(databasePath);
-        AssertEx.Null((await readContext.AgentDefinitions.SingleAsync().ConfigureAwait(false)).GenerationMetadataJson,
+        AssertEx.Null((await readContext.AgentDefinitions.SingleAsync()).GenerationMetadataJson,
             "A pre-existing definition should load with no generation metadata.");
-        AssertEx.Null((await readContext.AgentSkills.SingleAsync().ConfigureAwait(false)).GenerationMetadataJson,
+        AssertEx.Null((await readContext.AgentSkills.SingleAsync()).GenerationMetadataJson,
             "A pre-existing skill should load with no generation metadata.");
     }
 
@@ -66,18 +66,18 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("generation-metadata-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreGenerationMetadataMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreGenerationMetadataMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False((await GetColumnsAsync(connection, "agent_definitions").ConfigureAwait(false)).Contains("generation_metadata_json"),
+        AssertEx.False((await GetColumnsAsync(connection, "agent_definitions")).Contains("generation_metadata_json"),
             "Rollback should drop generation_metadata_json from agent_definitions.");
-        AssertEx.False((await GetColumnsAsync(connection, "agent_skills").ConfigureAwait(false)).Contains("generation_metadata_json"),
+        AssertEx.False((await GetColumnsAsync(connection, "agent_skills")).Contains("generation_metadata_json"),
             "Rollback should drop generation_metadata_json from agent_skills.");
     }
 
@@ -89,7 +89,7 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -105,7 +105,7 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
                               """;
         command.Parameters.AddWithValue("$definitionId", Guid.NewGuid().ToString());
         command.Parameters.AddWithValue("$skillId", Guid.NewGuid().ToString());
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<IReadOnlySet<string>> GetColumnsAsync(SqliteConnection connection, string tableName)
@@ -117,8 +117,8 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
         command.Parameters.AddWithValue("$table", tableName);
 
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             _ = columns.Add(reader.GetString(ordinal: 0));
         }

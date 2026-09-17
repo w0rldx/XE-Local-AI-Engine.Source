@@ -18,7 +18,7 @@ public sealed class GetTrainingRuntimePrerequisitesEndpoint(TrainingRuntimeOrche
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var report = await runtime.ProbeAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(report.ToResponse(), ct).ConfigureAwait(false);
+        var report = await runtime.ProbeAsync(ct);
+        await Send.OkAsync(report.ToResponse(), ct);
     }
 }

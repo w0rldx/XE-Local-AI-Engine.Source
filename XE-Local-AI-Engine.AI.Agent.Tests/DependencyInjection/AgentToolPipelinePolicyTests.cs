@@ -506,7 +506,7 @@ public sealed class AgentToolPipelinePolicyTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken)
         {
-            var chatResponse = await responseTask.ConfigureAwait(false);
+            var chatResponse = await responseTask;
             foreach (var message in chatResponse.Messages)
             {
                 cancellationToken.ThrowIfCancellationRequested();

@@ -26,7 +26,7 @@ public sealed class NodeChatHubTests
         };
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -41,7 +41,7 @@ public sealed class NodeChatHubTests
         request.Headers.Remove("Origin");
         request.Headers.Add("Origin", "https://evil.example");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -70,11 +70,11 @@ public sealed class NodeChatHubTests
                                      })
                                      .Build();
 
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in connection.StreamAsync<ChatStreamEvent>("SendMessage",
-                           new NodeChatStreamRequest(conversationId, "hello", MessageId: messageId, RequestId: requestId)).ConfigureAwait(false))
+                           new NodeChatStreamRequest(conversationId, "hello", MessageId: messageId, RequestId: requestId)))
         {
             events.Add(streamEvent);
         }
@@ -105,7 +105,7 @@ public sealed class NodeChatHubTests
             }
         };
         await using var connection = CreateHubConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         // One byte past the shipped 256 KB default, and still well under the 512 KB transport ceiling.
         var oversized = new string(c: 'a', count: (256 * 1024) + 1);
@@ -113,11 +113,11 @@ public sealed class NodeChatHubTests
         var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
         {
             await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
-                               new NodeChatStreamRequest(Guid.NewGuid(), oversized)).ConfigureAwait(false))
+                               new NodeChatStreamRequest(Guid.NewGuid(), oversized)))
             {
                 // The stream must fault before it yields anything.
             }
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Contains(exception.Message, "Your message is too large");
         AssertEx.Contains(exception.Message, "257 KB");
@@ -146,10 +146,10 @@ public sealed class NodeChatHubTests
             }
         };
         await using var connection = CreateHubConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
-                           new NodeChatStreamRequest(Guid.NewGuid(), "hello", RefuseUndeclaredWrites: true)).ConfigureAwait(false))
+                           new NodeChatStreamRequest(Guid.NewGuid(), "hello", RefuseUndeclaredWrites: true)))
         {
             // The scrub is what this pins; the stream itself is the recorder's fixed single event.
         }
@@ -173,16 +173,16 @@ public sealed class NodeChatHubTests
             }
         };
         await using var connection = CreateHubConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
         {
             await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
-                               new NodeChatStreamRequest(Guid.NewGuid(), new string(c: 'a', count: 1025))).ConfigureAwait(false))
+                               new NodeChatStreamRequest(Guid.NewGuid(), new string(c: 'a', count: 1025))))
             {
                 // The stream must fault before it yields anything.
             }
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Contains(exception.Message, "limit 1 KB");
         AssertEx.False(recorder.Invoked);
@@ -202,10 +202,10 @@ public sealed class NodeChatHubTests
             }
         };
         await using var connection = CreateHubConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
-                           new NodeChatStreamRequest(Guid.NewGuid(), new string(c: 'a', count: 1024))).ConfigureAwait(false))
+                           new NodeChatStreamRequest(Guid.NewGuid(), new string(c: 'a', count: 1024))))
         {
             // Drained; the assertion below is that the send reached the service at all.
         }

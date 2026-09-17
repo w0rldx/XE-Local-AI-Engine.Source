@@ -45,14 +45,14 @@ public sealed class DomainValidationExceptionHandlerTests
         {
             scheduledJobId = Guid.NewGuid(),
             useCase = "definitely-not-a-supported-use-case"
-        }).ConfigureAwait(false);
+        });
 
         // The global handler's body: a random job id resolves to no definition, so the trigger throws
         // ScheduledJobValidationException out of HandleAsync (the endpoint no longer catches it).
         var global = await PostAsync(new
         {
             scheduledJobId = Guid.NewGuid()
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, local.StatusCode);
         AssertEx.Equal(HttpStatusCode.BadRequest, global.StatusCode);
@@ -123,13 +123,13 @@ public sealed class DomainValidationExceptionHandlerTests
             };
             var handler = new DomainValidationExceptionHandler(NullLogger<DomainValidationExceptionHandler>.Instance);
 
-            AssertEx.True(await handler.TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false),
+            AssertEx.True(await handler.TryHandleAsync(context, exception, CancellationToken.None),
                 $"{typeName} must be answered by the global validation handler, not left to a per-endpoint catch.");
             AssertEx.Equal(expected: 400, context.Response.StatusCode, typeName);
             AssertEx.Contains(context.Response.ContentType, "problem+json", StringComparison.OrdinalIgnoreCase, typeName);
 
             context.Response.Body.Position = 0;
-            using var document = await JsonDocument.ParseAsync(context.Response.Body).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(context.Response.Body);
             var root = document.RootElement;
             var firstError = root.GetProperty("errors")[0];
 
@@ -174,7 +174,7 @@ public sealed class DomainValidationExceptionHandlerTests
             };
             var handler = new DomainValidationExceptionHandler(NullLogger<DomainValidationExceptionHandler>.Instance);
 
-            AssertEx.False(await handler.TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false),
+            AssertEx.False(await handler.TryHandleAsync(context, exception, CancellationToken.None),
                 $"{exception.GetType().Name} answers more than one status across the endpoints that raise it, so the global 400 must not claim it.");
         }
     }
@@ -197,8 +197,8 @@ public sealed class DomainValidationExceptionHandlerTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
         var errors = root.GetProperty("errors");

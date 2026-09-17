@@ -23,13 +23,13 @@ public sealed class CreateNodeChatConversationEndpoint(
     {
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var conversation = await _chatPersistence.CreateConversationAsync(new NodeChatCreateConversationRequest(req.Title, req.UserId, createdAtUtc, AgentDefinitionId: req.AgentDefinitionId),
-            ct).ConfigureAwait(false);
+            ct);
 
         await Send.CreatedAtAsync<GetNodeChatConversationEndpoint>(new
             {
                 conversationId = conversation.ConversationId
             },
             conversation.ToResponse(),
-            cancellation: ct).ConfigureAwait(false);
+            cancellation: ct);
     }
 }

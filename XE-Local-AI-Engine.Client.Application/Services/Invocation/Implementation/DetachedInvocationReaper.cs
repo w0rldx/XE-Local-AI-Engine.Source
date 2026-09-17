@@ -51,11 +51,11 @@ public sealed class DetachedInvocationReaper : BackgroundService
     {
         using var timer = new PeriodicTimer(TickInterval, _timeProvider);
 
-        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(continueOnCapturedContext: false))
+        while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
-                await ReapAsync(stoppingToken).ConfigureAwait(continueOnCapturedContext: false);
+                await ReapAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -80,7 +80,7 @@ public sealed class DetachedInvocationReaper : BackgroundService
     /// </summary>
     internal async Task ReapAsync(CancellationToken cancellationToken)
     {
-        var graceSeconds = await _runtimeSettings.GetDetachedGraceSecondsAsync(cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
+        var graceSeconds = await _runtimeSettings.GetDetachedGraceSecondsAsync(cancellationToken);
 
         // 0 disables reaping entirely (today's behavior: a detached run is bounded only by the whole-invocation
         // watchdog). Checked per tick, so flipping it back to a positive value takes effect on the next tick too.

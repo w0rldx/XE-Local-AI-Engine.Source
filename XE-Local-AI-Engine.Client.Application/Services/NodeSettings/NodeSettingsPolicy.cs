@@ -75,7 +75,7 @@ public static class NodeSettingsPolicy
         if (!string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName))
         {
             var maxLoadedProcessesForSwap = settings.LlamaMaxLoadedProcesses
-                                            ?? await runtimeSettings.GetLlamaMaxLoadedProcessesAsync(cancellationToken).ConfigureAwait(false);
+                                            ?? await runtimeSettings.GetLlamaMaxLoadedProcessesAsync(cancellationToken);
             if (maxLoadedProcessesForSwap < 2)
             {
                 return
@@ -92,7 +92,7 @@ public static class NodeSettingsPolicy
         }
 
         var effectiveMaxLoadedProcesses = settings.LlamaMaxLoadedProcesses
-                                          ?? await runtimeSettings.GetLlamaMaxLoadedProcessesAsync(cancellationToken).ConfigureAwait(false);
+                                          ?? await runtimeSettings.GetLlamaMaxLoadedProcessesAsync(cancellationToken);
         if (effectiveMaxLoadedProcesses < 2)
         {
             return
@@ -104,10 +104,10 @@ public static class NodeSettingsPolicy
 
         var effectiveKeepWarmInterval = settings.KeepModelWarmIntervalSeconds is { } intervalSeconds
             ? TimeSpan.FromSeconds(intervalSeconds)
-            : await runtimeSettings.GetKeepModelWarmIntervalAsync(cancellationToken).ConfigureAwait(false);
+            : await runtimeSettings.GetKeepModelWarmIntervalAsync(cancellationToken);
         var effectiveIdleTimeToLive = settings.LlamaIdleTimeToLiveSeconds is { } idleTimeToLiveSeconds
             ? TimeSpan.FromSeconds(idleTimeToLiveSeconds)
-            : await runtimeSettings.GetLlamaIdleTimeToLiveAsync(cancellationToken).ConfigureAwait(false);
+            : await runtimeSettings.GetLlamaIdleTimeToLiveAsync(cancellationToken);
         if (effectiveKeepWarmInterval >= effectiveIdleTimeToLive)
         {
             return

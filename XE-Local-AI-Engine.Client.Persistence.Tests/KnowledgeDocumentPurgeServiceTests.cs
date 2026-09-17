@@ -41,22 +41,22 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         var databasePath = GetDatabasePath("purge-rows.sqlite");
         var documentId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentGraphAsync(databasePath, documentId).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentGraphAsync(databasePath, documentId);
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>());
-            var purged = await purge.PurgeAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+            var purged = await purge.PurgeAsync(documentId, CancellationToken.None);
             AssertEx.True(purged, "Purge should report success for an existing document.");
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_chunk_vectors;").ConfigureAwait(false));
-        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_document_chunks;").ConfigureAwait(false));
-        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_document_sections;").ConfigureAwait(false));
-        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_documents;").ConfigureAwait(false));
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_chunk_vectors;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_document_chunks;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_document_sections;"));
+        AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM knowledge_documents;"));
     }
 
     [Test]
@@ -65,38 +65,38 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         var databasePath = GetDatabasePath("purge-fts.sqlite");
         var documentId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentGraphAsync(databasePath, documentId).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentGraphAsync(databasePath, documentId);
 
-        await using (var before = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var before = await OpenConnectionAsync(databasePath))
         {
-            AssertEx.True(await CountAsync(before, $"SELECT COUNT(*) FROM chunk_fts WHERE chunk_fts MATCH '{SearchableToken}';").ConfigureAwait(false) > 0,
+            AssertEx.True(await CountAsync(before, $"SELECT COUNT(*) FROM chunk_fts WHERE chunk_fts MATCH '{SearchableToken}';") > 0,
                 "The seeded chunk content should be searchable before purge (the FTS insert trigger fired).");
         }
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>());
-            _ = await purge.PurgeAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+            _ = await purge.PurgeAsync(documentId, CancellationToken.None);
         }
 
-        await using var after = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var after = await OpenConnectionAsync(databasePath);
         AssertEx.Equal(expected: 0L,
-            await CountAsync(after, $"SELECT COUNT(*) FROM chunk_fts WHERE chunk_fts MATCH '{SearchableToken}';").ConfigureAwait(false));
+            await CountAsync(after, $"SELECT COUNT(*) FROM chunk_fts WHERE chunk_fts MATCH '{SearchableToken}';"));
     }
 
     [Test]
     public async Task PurgeAsync_WhenDocumentDoesNotExist_ReturnsFalse()
     {
         var databasePath = GetDatabasePath("purge-missing.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+        await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
         var purge = new KnowledgeDocumentPurgeService(context, Substitute.For<IKnowledgeDocumentBlobStore>());
 
-        var purged = await purge.PurgeAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+        var purged = await purge.PurgeAsync(Guid.NewGuid(), CancellationToken.None);
 
         AssertEx.False(purged, "Purging a non-existent document should return false so the endpoint maps it to a 404.");
     }
@@ -105,7 +105,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private static async Task SeedDocumentGraphAsync(string databasePath, Guid documentId)
@@ -114,7 +114,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
         var firstChunkId = Guid.NewGuid();
         var secondChunkId = Guid.NewGuid();
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
         await ExecuteAsync(connection,
             """
@@ -129,12 +129,12 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
                 3
             }),
             ("$hash", "hash-" + documentId.ToString("N")),
-            ("$path", documentId.ToString("D") + ".txt")).ConfigureAwait(false);
+            ("$path", documentId.ToString("D") + ".txt"));
 
         await ExecuteAsync(connection,
             "INSERT INTO knowledge_document_sections (section_id, document_id, ordinal) VALUES ($sid, $did, 0);",
             ("$sid", sectionId),
-            ("$did", documentId)).ConfigureAwait(false);
+            ("$did", documentId));
 
         // Inserting chunks fires the FTS insert trigger (knowledge_document_chunks_ai) so chunk_fts is populated.
         await ExecuteAsync(connection,
@@ -142,17 +142,17 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
             ("$cid", firstChunkId),
             ("$did", documentId),
             ("$sid", sectionId),
-            ("$content", $"the {SearchableToken} runs fast")).ConfigureAwait(false);
+            ("$content", $"the {SearchableToken} runs fast"));
 
         await ExecuteAsync(connection,
             "INSERT INTO knowledge_document_chunks (chunk_id, document_id, section_id, chunk_index, content, token_count) VALUES ($cid, $did, $sid, 1, $content, 2);",
             ("$cid", secondChunkId),
             ("$did", documentId),
             ("$sid", sectionId),
-            ("$content", $"another {SearchableToken}")).ConfigureAwait(false);
+            ("$content", $"another {SearchableToken}"));
 
-        await InsertVectorAsync(connection, firstChunkId, documentId).ConfigureAwait(false);
-        await InsertVectorAsync(connection, secondChunkId, documentId).ConfigureAwait(false);
+        await InsertVectorAsync(connection, firstChunkId, documentId);
+        await InsertVectorAsync(connection, secondChunkId, documentId);
     }
 
     private static async Task InsertVectorAsync(SqliteConnection connection, Guid chunkId, Guid documentId)
@@ -161,7 +161,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
             "INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model) VALUES ($cid, $did, 4, $blob, 'nomic-embed-text');",
             ("$cid", chunkId),
             ("$did", documentId),
-            ("$blob", new byte[16])).ConfigureAwait(false);
+            ("$blob", new byte[16]));
     }
 
     private static async Task ExecuteAsync(SqliteConnection connection, string sql, params (string Name, object Value)[] parameters)
@@ -175,7 +175,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
             command.Parameters.AddWithValue(name, value);
         }
 
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<long> CountAsync(SqliteConnection connection, string sql)
@@ -184,14 +184,14 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
 #pragma warning disable CA2100 // SQL text is a fixed internal test literal, never user input.
         command.CommandText = sql;
 #pragma warning restore CA2100
-        return (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+        return (long)(await command.ExecuteScalarAsync())!;
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await connection.OpenAsync();
+        await EnsureForeignKeysOffAsync(connection);
         return connection;
     }
 
@@ -202,12 +202,12 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
     {
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

@@ -26,18 +26,18 @@ public sealed class RenameNodeChatConversationEndpoint(
 
     public override async Task HandleAsync(RenameNodeChatConversationRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.RenameConversationAsync(new NodeChatRenameConversationRequest(req.ConversationId, req.Title, updatedAtUtc), ct).ConfigureAwait(false);
+        var updated = await _chatPersistence.RenameConversationAsync(new NodeChatRenameConversationRequest(req.ConversationId, req.Title, updatedAtUtc), ct);
 
         if (updated is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(updated.ToResponse(), ct);
     }
 }
 
@@ -59,18 +59,18 @@ public sealed class PinNodeChatConversationEndpoint(
 
     public override async Task HandleAsync(PinNodeChatConversationRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(req.ConversationId, req.IsPinned, updatedAtUtc), ct).ConfigureAwait(false);
+        var updated = await _chatPersistence.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(req.ConversationId, req.IsPinned, updatedAtUtc), ct);
 
         if (updated is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(updated.ToResponse(), ct);
     }
 }
 
@@ -92,18 +92,18 @@ public sealed class ArchiveNodeChatConversationEndpoint(
 
     public override async Task HandleAsync(ArchiveNodeChatConversationRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest(req.ConversationId, req.Archived, updatedAtUtc), ct).ConfigureAwait(false);
+        var updated = await _chatPersistence.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest(req.ConversationId, req.Archived, updatedAtUtc), ct);
 
         if (updated is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(updated.ToResponse(), ct);
     }
 }
 
@@ -130,18 +130,17 @@ public sealed class SetNodeChatConversationMemoryExcludedEndpoint(
 
     public override async Task HandleAsync(SetNodeChatConversationMemoryExcludedRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest(req.ConversationId, req.MemoryExcluded, updatedAtUtc), ct)
-                                            .ConfigureAwait(false);
+        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest(req.ConversationId, req.MemoryExcluded, updatedAtUtc), ct);
 
         if (updated is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(updated.ToResponse(), ct);
     }
 }

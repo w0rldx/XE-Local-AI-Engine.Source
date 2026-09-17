@@ -45,10 +45,10 @@ public sealed class DefaultMemoryExtractionAgentTests
             }),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
-        var proposals = await agent.ProposeAsync(Run()).ConfigureAwait(false);
+        var proposals = await agent.ProposeAsync(Run());
 
         // Routed through the node-local resolver, and the model ran on the node-local provider's client.
-        await resolver.Received(1).ResolveProviderForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received(1).ResolveProviderForModelAsync("qwen3:8b", Arg.Any<CancellationToken>());
         provider.Received(1).CreateChatClient(Arg.Is<LocalModelSelection>(selection =>
             selection.ModelName == "qwen3:8b" && selection.ProviderName == "llamacpp"));
         AssertEx.True(nodeLocalClient.WasCalled, "The extraction model must run on the node-local provider's client.");
@@ -68,11 +68,11 @@ public sealed class DefaultMemoryExtractionAgentTests
             }),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
-        var proposals = await agent.ProposeAsync(Run()).ConfigureAwait(false);
+        var proposals = await agent.ProposeAsync(Run());
 
         AssertEx.Empty(proposals);
         // The disabled gate must short-circuit before any provider resolution (no node-local client constructed at all).
-        await resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -97,7 +97,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             }),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
-        var proposals = await agent.ProposeAsync(Run(failed: false)).ConfigureAwait(false);
+        var proposals = await agent.ProposeAsync(Run(failed: false));
 
         AssertEx.Empty(proposals);
     }
@@ -138,7 +138,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             CancellationToken cancellationToken = default)
         {
             // Not exercised by these tests (the agent uses the non-streaming GetResponseAsync); an empty stream suffices.
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 

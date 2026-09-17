@@ -39,7 +39,7 @@ public sealed class GraphWorkflowRunHubTests
         var store = Store();
         using var fixture = CreateHub(store);
 
-        _ = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        _ = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
 
         // The other order leaves a window in which a change published between the read and the join reaches nobody.
         Received.InOrder(() =>
@@ -54,7 +54,7 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store([Event(8), Event(9)]));
 
-        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 7).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 7);
 
         AssertEx.Equal(RunId, snapshot.RunId);
         AssertEx.Equal("Running", snapshot.Status);
@@ -76,7 +76,7 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store([Event(10), Event(12)]));
 
-        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
 
         AssertEx.Equal(expected: 12L, snapshot.LastSeq, "the run row read 9; the page delivered 12, and that is what the client has seen.");
     }
@@ -87,7 +87,7 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store());
 
-        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 4).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 4);
 
         AssertEx.Empty(snapshot.Events);
         AssertEx.Equal(expected: 4L, snapshot.LastSeq, "the run row read 9, but nothing between 4 and 9 was delivered for the client to skip past.");
@@ -98,7 +98,7 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayLimit).Select(sequence => Event(sequence))]));
 
-        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
 
         AssertEx.Equal(ReplayLimit, snapshot.Events.Count);
         AssertEx.False(snapshot.ReplayTruncated);
@@ -109,7 +109,7 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayLimit + 1).Select(sequence => Event(sequence))]));
 
-        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
 
         AssertEx.Equal(ReplayLimit, snapshot.Events.Count);
         AssertEx.True(snapshot.ReplayTruncated, "the cap is observed one row over it, never inferred from a full page.");
@@ -128,18 +128,18 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(PagingStore([.. Enumerable.Range(1, 7).Select(sequence => Event(sequence))]));
 
-        var first = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
+        var first = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
         AssertEx.True(first.ReplayTruncated);
         AssertEx.Equal(expected: 5L, first.LastSeq);
 
-        var second = await fixture.Hub.SubscribeRun(RunId, first.LastSeq).ConfigureAwait(false);
+        var second = await fixture.Hub.SubscribeRun(RunId, first.LastSeq);
         AssertEx.False(second.ReplayTruncated, "two rows are left and the cap is five.");
         AssertEx.Equal(expected: 2, second.Events.Count, "exactly the rest, with nothing repeated.");
         AssertEx.Equal(expected: 6L, second.Events[0].Seq, "and in order, starting one past the cursor.");
         AssertEx.Equal(expected: 7L, second.Events[1].Seq);
         AssertEx.Equal(expected: 7L, second.LastSeq);
 
-        var third = await fixture.Hub.SubscribeRun(RunId, second.LastSeq).ConfigureAwait(false);
+        var third = await fixture.Hub.SubscribeRun(RunId, second.LastSeq);
         AssertEx.Empty(third.Events);
         AssertEx.Equal(second.LastSeq, third.LastSeq, "a caught-up subscriber keeps the watermark it came with.");
     }
@@ -151,7 +151,7 @@ public sealed class GraphWorkflowRunHubTests
         store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new GraphWorkflowNotFoundException("gone"));
         using var fixture = CreateHub(store);
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -161,7 +161,7 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store());
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(Guid.Empty, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(Guid.Empty, afterSeq: 0));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -171,7 +171,7 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store());
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: -1)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: -1));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -182,7 +182,7 @@ public sealed class GraphWorkflowRunHubTests
         var store = Store();
         using var fixture = CreateHub(store, enabled: false);
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0));
 
         AssertEx.Empty(store.ReceivedCalls());
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
@@ -193,7 +193,7 @@ public sealed class GraphWorkflowRunHubTests
     {
         using var fixture = CreateHub(Store());
 
-        await fixture.Hub.UnsubscribeRun(RunId).ConfigureAwait(false);
+        await fixture.Hub.UnsubscribeRun(RunId);
 
         await fixture.Groups.Received(1).RemoveFromGroupAsync("connection", $"graph-workflow-run-{RunId:N}", Arg.Any<CancellationToken>());
     }

@@ -56,7 +56,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using (ExecutionContext.SuppressFlow())
         {
             invoke = Task.Run(async () =>
-                await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "sentinel prompt")], options).ConfigureAwait(false));
+                await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "sentinel prompt")], options));
         }
 
         await AssertEx.ThrowsAsync<CloudEgressAuthorizationException>(() => invoke);

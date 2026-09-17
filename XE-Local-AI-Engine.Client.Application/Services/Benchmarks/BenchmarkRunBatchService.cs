@@ -56,8 +56,7 @@ public sealed class BenchmarkRunBatchService(IBenchmarkRunFreezeService runs, Ti
                                              request.RepeatCount,
                                              request.Warmup,
                                              request.RepeatMode,
-                                             request.AnswerVarianceTemperature), scope, cancellationToken)
-                                         .ConfigureAwait(false);
+                                             request.AnswerVarianceTemperature), scope, cancellationToken);
                 expectedVersion += created.Count;
                 started.Add(new BenchmarkRunBatchStartedItem(item.ModelName,
                     kvCacheType,

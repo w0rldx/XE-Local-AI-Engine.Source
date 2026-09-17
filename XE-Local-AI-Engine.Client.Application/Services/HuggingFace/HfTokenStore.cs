@@ -43,7 +43,7 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
     /// <inheritdoc />
     public async Task<string?> GetTokenAsync(CancellationToken ct)
     {
-        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        await _lock.WaitAsync(ct);
         try
         {
             if (!File.Exists(_tokenPath))
@@ -53,7 +53,7 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
 
             try
             {
-                var protectedPayload = await File.ReadAllBytesAsync(_tokenPath, ct).ConfigureAwait(false);
+                var protectedPayload = await File.ReadAllBytesAsync(_tokenPath, ct);
                 var payload = _protector.Unprotect(protectedPayload);
                 var token = Encoding.UTF8.GetString(payload);
                 return string.IsNullOrWhiteSpace(token) ? null : token;
@@ -84,10 +84,10 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
 
         var protectedPayload = _protector.Protect(Encoding.UTF8.GetBytes(token));
 
-        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        await _lock.WaitAsync(ct);
         try
         {
-            await File.WriteAllBytesAsync(_tokenPath, protectedPayload, ct).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(_tokenPath, protectedPayload, ct);
             SecureFilePermissions.Apply(_tokenPath);
         }
         finally
@@ -99,7 +99,7 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
     /// <inheritdoc />
     public async Task ClearTokenAsync(CancellationToken ct)
     {
-        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        await _lock.WaitAsync(ct);
         try
         {
             if (File.Exists(_tokenPath))
@@ -116,7 +116,7 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
     /// <inheritdoc />
     public async Task<bool> HasTokenAsync(CancellationToken ct)
     {
-        var token = await GetTokenAsync(ct).ConfigureAwait(false);
+        var token = await GetTokenAsync(ct);
         return token is not null;
     }
 

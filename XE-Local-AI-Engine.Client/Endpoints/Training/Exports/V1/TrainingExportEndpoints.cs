@@ -34,7 +34,7 @@ public sealed class StartTrainingExportEndpoint(ITrainingExportService exports)
         var quantization = kind == TrainingArtifactKind.MergedGguf
             ? TrainingExportQuantizations.TryNormalize(req.QuantType) ?? req.QuantType ?? string.Empty
             : TrainingExportQuantizations.Float16;
-        var start = await _exports.StartExportAsync(req.RunId, new TrainingExportRequest(kind, req.QuantType), ct).ConfigureAwait(false);
+        var start = await _exports.StartExportAsync(req.RunId, new TrainingExportRequest(kind, req.QuantType), ct);
         if (start.Outcome == TrainingExportStartOutcome.Accepted)
         {
             await Send.ResultAsync(TypedResults.Accepted((string?)null,
@@ -43,8 +43,7 @@ public sealed class StartTrainingExportEndpoint(ITrainingExportService exports)
                               RunId = req.RunId,
                               Kind = kind.ToString(),
                               QuantType = quantization
-                          }))
-                      .ConfigureAwait(false);
+                          }));
             return;
         }
 
@@ -56,13 +55,12 @@ public sealed class StartTrainingExportEndpoint(ITrainingExportService exports)
                       {
                           Reason = start.Outcome.ToString(),
                           Message = start.Reason ?? "The export cannot start right now."
-                      }))
-                      .ConfigureAwait(false);
+                      }));
             return;
         }
 
         AddError(start.Reason ?? "The export request is not valid.");
-        await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        await Send.ErrorsAsync(cancellation: ct);
     }
 }
 
@@ -79,11 +77,11 @@ public sealed class ListTrainingArtifactsEndpoint(ITrainingExportService exports
 
     public override async Task HandleAsync(TrainingRunArtifactsRequest req, CancellationToken ct)
     {
-        var artifacts = await _exports.ListArtifactsAsync(req.RunId, ct).ConfigureAwait(false);
+        var artifacts = await _exports.ListArtifactsAsync(req.RunId, ct);
         await Send.OkAsync(new ListTrainingArtifactsResponse
         {
             Items = artifacts.Select(item => item.ToResponse()).ToArray()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -100,14 +98,14 @@ public sealed class GetTrainingArtifactEndpoint(ITrainingExportService exports)
 
     public override async Task HandleAsync(TrainingArtifactByIdRequest req, CancellationToken ct)
     {
-        var artifact = await _exports.GetArtifactAsync(req.ArtifactId, ct).ConfigureAwait(false);
+        var artifact = await _exports.GetArtifactAsync(req.ArtifactId, ct);
         if (artifact is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(artifact.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(artifact.ToResponse(), ct);
     }
 }
 
@@ -129,8 +127,8 @@ public sealed class DeleteTrainingArtifactEndpoint(ITrainingExportService export
 
     public override async Task HandleAsync(DeleteTrainingArtifactRequest req, CancellationToken ct)
     {
-        await _exports.DeleteArtifactAsync(req.ArtifactId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _exports.DeleteArtifactAsync(req.ArtifactId, req.ExpectedVersion, ct);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -154,12 +152,12 @@ public sealed class RunTrainingArtifactSmokeEndpoint(ITrainingExportService expo
 
     public override async Task HandleAsync(TrainingArtifactByIdRequest req, CancellationToken ct)
     {
-        var result = await _exports.RunSmokeAsync(req.ArtifactId, ct).ConfigureAwait(false);
+        var result = await _exports.RunSmokeAsync(req.ArtifactId, ct);
         await Send.OkAsync(new TrainingArtifactSmokeResponse
         {
             SmokeState = result.State.ToString(),
             SmokeReason = result.Reason
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -180,11 +178,11 @@ public sealed class PromoteTrainingArtifactEndpoint(IArtifactPromotionService pr
 
     public override async Task HandleAsync(PromoteTrainingArtifactRequest req, CancellationToken ct)
     {
-        var modelName = await _promotion.PromoteAsync(req.ArtifactId, req.ModelName, ct).ConfigureAwait(false);
+        var modelName = await _promotion.PromoteAsync(req.ArtifactId, req.ModelName, ct);
         await Send.OkAsync(new PromoteTrainingArtifactResponse
         {
             ModelName = modelName
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -205,9 +203,8 @@ public sealed class DecideTrainingArtifactQualityEndpoint(IArtifactQualityServic
 
     public override async Task HandleAsync(DecideArtifactQualityRequest req, CancellationToken ct)
     {
-        var artifact = await _quality.DecideAsync(req.ArtifactId, req.ComparisonId, req.ExpectedVersion.GetValueOrDefault(), ct)
-                                     .ConfigureAwait(false);
-        await Send.OkAsync(ToQualityResponse(artifact), ct).ConfigureAwait(false);
+        var artifact = await _quality.DecideAsync(req.ArtifactId, req.ComparisonId, req.ExpectedVersion.GetValueOrDefault(), ct);
+        await Send.OkAsync(ToQualityResponse(artifact), ct);
     }
 
     internal static ArtifactQualityResponse ToQualityResponse(TrainingArtifactRecord artifact)
@@ -247,9 +244,8 @@ public sealed class OverrideTrainingArtifactQualityEndpoint(IArtifactQualityServ
 
     public override async Task HandleAsync(OverrideArtifactQualityRequest req, CancellationToken ct)
     {
-        var artifact = await _quality.OverrideAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), req.Reason, ct)
-                                     .ConfigureAwait(false);
-        await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct).ConfigureAwait(false);
+        var artifact = await _quality.OverrideAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), req.Reason, ct);
+        await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct);
     }
 }
 
@@ -270,9 +266,8 @@ public sealed class BeginTrainingArtifactQualityRevalidationEndpoint(IArtifactQu
 
     public override async Task HandleAsync(BeginArtifactQualityRevalidationRequest req, CancellationToken ct)
     {
-        var artifact = await _quality.BeginRevalidationAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), ct)
-                                     .ConfigureAwait(false);
-        await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct).ConfigureAwait(false);
+        var artifact = await _quality.BeginRevalidationAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), ct);
+        await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct);
     }
 }
 
@@ -293,8 +288,7 @@ public sealed class DiscardTrainingArtifactQualityEndpoint(ITrainingExportServic
 
     public override async Task HandleAsync(DiscardArtifactQualityRequest req, CancellationToken ct)
     {
-        var artifact = await _exports.DiscardArtifactQualityAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), req.Reason, ct)
-                                     .ConfigureAwait(false);
-        await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct).ConfigureAwait(false);
+        var artifact = await _exports.DiscardArtifactQualityAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), req.Reason, ct);
+        await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct);
     }
 }

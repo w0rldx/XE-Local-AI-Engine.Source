@@ -88,10 +88,10 @@ public sealed class ContainerBridgeListenerProbeTests
 
         // A served connection, so the closing side leaves a real TIME_WAIT entry on the bridge's own port. A
         // listener that never accepted anything leaves none, and would prove nothing about a bridge that worked.
-        await ServeOneConnectionThenStopAsync(port).ConfigureAwait(false);
+        await ServeOneConnectionThenStopAsync(port);
 
         var probeSaysAvailable = ContainerBridgeListenerProbe.IsPortAvailable(IPAddress.Loopback, port);
-        var kestrelRebound = await TryStartKestrelAsync(port).ConfigureAwait(false);
+        var kestrelRebound = await TryStartKestrelAsync(port);
 
         AssertEx.True(kestrelRebound,
             $"A node restarting onto its own bridge port {port} must be able to rebind it; otherwise every node after the first has no bridge.");
@@ -136,9 +136,9 @@ public sealed class ContainerBridgeListenerProbeTests
 
         using var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         var connecting = client.ConnectAsync(new IPEndPoint(IPAddress.Loopback, port));
-        using (var accepted = await listener.AcceptAsync().ConfigureAwait(false))
+        using (var accepted = await listener.AcceptAsync())
         {
-            await connecting.ConfigureAwait(false);
+            await connecting;
 
             // The listening side closes first, which is what puts ITS local port — the bridge's port — into
             // TIME_WAIT rather than the client's ephemeral one.
@@ -159,7 +159,7 @@ public sealed class ContainerBridgeListenerProbeTests
         await using var app = builder.Build();
         try
         {
-            await app.StartAsync().ConfigureAwait(false);
+            await app.StartAsync();
         }
         catch (IOException)
         {
@@ -167,7 +167,7 @@ public sealed class ContainerBridgeListenerProbeTests
             return false;
         }
 
-        await app.StopAsync().ConfigureAwait(false);
+        await app.StopAsync();
         return true;
     }
 

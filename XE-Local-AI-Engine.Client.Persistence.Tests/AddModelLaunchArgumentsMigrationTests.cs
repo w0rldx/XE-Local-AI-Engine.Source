@@ -29,14 +29,14 @@ public sealed class AddModelLaunchArgumentsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-launch-arguments-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "model_launch_arguments").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "model_launch_arguments"),
             "Migration should create the model_launch_arguments table.");
 
-        var columns = await GetColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetColumnsAsync(connection);
         AssertEx.True(columns.SetEquals(new[]
         {
             "model_name",
@@ -44,14 +44,14 @@ public sealed class AddModelLaunchArgumentsMigrationTests : IDisposable
             "updated_at_utc"
         }), "model_launch_arguments should expose the mapped columns.");
 
-        AssertEx.True(await ModelNameUsesNoCaseCollationAsync(connection).ConfigureAwait(false),
+        AssertEx.True(await ModelNameUsesNoCaseCollationAsync(connection),
             "model_launch_arguments.model_name should use NOCASE collation.");
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -60,14 +60,14 @@ public sealed class AddModelLaunchArgumentsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlySet<string>> GetColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM model_launch_arguments LIMIT 0;";
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -79,7 +79,7 @@ public sealed class AddModelLaunchArgumentsMigrationTests : IDisposable
         // COLLATE NOCASE. The table name is a fixed literal, so this stays free of caller-supplied SQL.
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'model_launch_arguments';";
-        var sql = await command.ExecuteScalarAsync().ConfigureAwait(false) as string;
+        var sql = await command.ExecuteScalarAsync() as string;
         return sql is not null
                && sql.Contains("model_name", StringComparison.Ordinal)
                && sql.Contains("NOCASE", StringComparison.OrdinalIgnoreCase);

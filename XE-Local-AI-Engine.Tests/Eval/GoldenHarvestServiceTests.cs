@@ -31,7 +31,7 @@ public sealed class GoldenHarvestServiceTests
         harness.AgentStore.GetByIdAsync(AgentId, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<AgentDefinitionRecord?>(null));
 
-        var outcome = await harness.Service.HarvestAsync(AgentId).ConfigureAwait(false);
+        var outcome = await harness.Service.HarvestAsync(AgentId);
 
         AssertEx.False(outcome.AgentExists, "An unknown agent should report AgentExists=false.");
         AssertEx.Equal(expected: 0, outcome.ThumbsUpScanned);
@@ -39,8 +39,7 @@ public sealed class GoldenHarvestServiceTests
         AssertEx.Equal(expected: 0, outcome.DuplicateCount);
         AssertEx.Equal(expected: 0, outcome.SkippedCount);
         await harness.ConversationService.DidNotReceive()
-                     .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -58,7 +57,7 @@ public sealed class GoldenHarvestServiceTests
 
         var captured = harness.CaptureCreateHarvested();
 
-        var outcome = await harness.Service.HarvestAsync(AgentId).ConfigureAwait(false);
+        var outcome = await harness.Service.HarvestAsync(AgentId);
 
         AssertEx.True(outcome.AgentExists);
         AssertEx.Equal(expected: 1, outcome.ThumbsUpScanned);
@@ -104,13 +103,12 @@ public sealed class GoldenHarvestServiceTests
         harness.GoldenStore.ListSourceMessageIdsByAgentAsync(AgentId, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<IReadOnlyList<Guid>>([sourceMessageId]));
 
-        var outcome = await harness.Service.HarvestAsync(AgentId).ConfigureAwait(false);
+        var outcome = await harness.Service.HarvestAsync(AgentId);
 
         AssertEx.Equal(expected: 1, outcome.DuplicateCount);
         AssertEx.Equal(expected: 0, outcome.CreatedCount);
         await harness.ConversationService.DidNotReceive()
-                     .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -125,13 +123,12 @@ public sealed class GoldenHarvestServiceTests
             "a");
         harness.WithSources(source);
 
-        var outcome = await harness.Service.HarvestAsync(AgentId).ConfigureAwait(false);
+        var outcome = await harness.Service.HarvestAsync(AgentId);
 
         AssertEx.Equal(expected: 1, outcome.SkippedCount);
         AssertEx.Equal(expected: 0, outcome.CreatedCount);
         await harness.ConversationService.DidNotReceive()
-                     .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -142,13 +139,12 @@ public sealed class GoldenHarvestServiceTests
             FreshSource("q2"),
             FreshSource("q3"));
 
-        var outcome = await harness.Service.HarvestAsync(AgentId).ConfigureAwait(false);
+        var outcome = await harness.Service.HarvestAsync(AgentId);
 
         AssertEx.Equal(expected: 3, outcome.ThumbsUpScanned);
         AssertEx.Equal(expected: 2, outcome.CreatedCount);
         await harness.ConversationService.Received(2)
-                     .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>())
-                     .ConfigureAwait(false);
+                     .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -167,7 +163,7 @@ public sealed class GoldenHarvestServiceTests
                .CreateHarvestedAsync(Arg.Is<GoldenConversationCreateInput>(input => input.SourceMessageId == accepted.MessageId), Arg.Any<CancellationToken>())
                .Returns(callInfo => Task.FromResult(StoredRecord(callInfo.Arg<GoldenConversationCreateInput>())));
 
-        var outcome = await harness.Service.HarvestAsync(AgentId).ConfigureAwait(false);
+        var outcome = await harness.Service.HarvestAsync(AgentId);
 
         AssertEx.Equal(expected: 1, outcome.CreatedCount);
         AssertEx.Equal(expected: 1, outcome.SkippedCount);

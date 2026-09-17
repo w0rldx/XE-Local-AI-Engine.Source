@@ -10,7 +10,7 @@ public sealed class LocalModelDeletionStartupReconciler(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<ILocalModelDeletionJournalReconciler>()
-                       .ReconcileAsync(cancellationToken).ConfigureAwait(false);
+                       .ReconcileAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

@@ -508,8 +508,8 @@ public sealed class CapabilityReporterTests
                 disposableChatClient.Dispose();
             }
 
-            await Server.DisposeAsync().ConfigureAwait(false);
-            await HubConnection.DisposeAsync().ConfigureAwait(false);
+            await Server.DisposeAsync();
+            await HubConnection.DisposeAsync();
         }
 
         public void SetModelsResponse(params string[] models)

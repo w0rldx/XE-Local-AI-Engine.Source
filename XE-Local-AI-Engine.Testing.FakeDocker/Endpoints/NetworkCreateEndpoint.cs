@@ -12,20 +12,18 @@ internal static class NetworkCreateEndpoint
 {
     public static async Task HandleAsync(HttpContext context, FakeDockerState state)
     {
-        var body = await FakeDockerEndpointMapper.ReadJsonObjectAsync(context).ConfigureAwait(false);
+        var body = await FakeDockerEndpointMapper.ReadJsonObjectAsync(context);
         var name = body?["Name"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(name))
         {
-            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status400BadRequest, "name is required")
-                                          .ConfigureAwait(false);
+            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status400BadRequest, "name is required");
             return;
         }
 
         if (state.Networks.ContainsKey(name))
         {
             await FakeDockerEndpointMapper
-                  .WriteErrorAsync(context, StatusCodes.Status409Conflict, $"network with name {name} already exists")
-                  .ConfigureAwait(false);
+                  .WriteErrorAsync(context, StatusCodes.Status409Conflict, $"network with name {name} already exists");
             return;
         }
 
@@ -53,7 +51,6 @@ internal static class NetworkCreateEndpoint
                                               ["Id"] = network.Id,
                                               ["Warning"] = string.Empty
                                           },
-                                          StatusCodes.Status201Created)
-                                      .ConfigureAwait(false);
+                                          StatusCodes.Status201Created);
     }
 }

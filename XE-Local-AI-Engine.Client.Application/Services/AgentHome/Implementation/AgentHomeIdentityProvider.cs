@@ -27,11 +27,11 @@ internal sealed class AgentHomeIdentityProvider : IAgentHomeIdentityProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false)
+        var clientNodeId = await _tokenStore.GetClientNodeIdAsync()
                            ?? LocalChatLoopbackDefaults.ClientNodeId;
         var nodeId = clientNodeId.ToString();
 
-        var accessToken = await _tokenStore.GetAccessTokenAsync().ConfigureAwait(false);
+        var accessToken = await _tokenStore.GetAccessTokenAsync();
         var ownerUserId = ResolveOwnerSubject(accessToken) ?? nodeId;
 
         return new AgentHomeOwnerIdentity(ownerUserId, nodeId);

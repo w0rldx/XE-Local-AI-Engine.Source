@@ -87,10 +87,9 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
                         authConfigs: null,
                         headers: null,
                         new Progress<JSONMessage>(),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
 
-        var inspected = await client.Images.InspectImageAsync(tag, cancellationToken).ConfigureAwait(false);
+        var inspected = await client.Images.InspectImageAsync(tag, cancellationToken);
 
         // RepoDigests first, the image ID second. A `name@sha256:` reference resolves THROUGH RepoDigests, and the
         // classic overlay2 graphdriver records none for an image that was neither pulled nor pushed. The bare
@@ -105,7 +104,7 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
 
         if (string.IsNullOrWhiteSpace(reference))
         {
-            await RemoveAsync(client, tag).ConfigureAwait(false);
+            await RemoveAsync(client, tag);
             throw new InvalidOperationException($"The daemon reported neither a RepoDigests entry nor an image ID for the image it has just built from '{tag}', "
                                                 + "so there is no reference to create a container from at all. That is an image store that did not record "
                                                 + "the build, not a host this assertion does not apply to.");
@@ -116,7 +115,7 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await RemoveAsync(_client, Tag).ConfigureAwait(false);
+        await RemoveAsync(_client, Tag);
         _client.Dispose();
     }
 
@@ -154,8 +153,7 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
                             new ImageDeleteParameters
                             {
                                 Force = true
-                            })
-                        .ConfigureAwait(false);
+                            });
         }
         catch (DockerApiException)
         {

@@ -31,7 +31,7 @@ public sealed class UpdateExternalAppVariablesEndpoint(IExternalAppService apps)
         ArgumentNullException.ThrowIfNull(req);
 
         // The validator's NotNull rule ran first, so the value is present here and only here.
-        var detail = await _apps.ConfigureAsync(req.InstanceId, req.ExpectedVersion!.Value, req.Variables, ct).ConfigureAwait(false);
-        await Send.OkAsync(ExternalAppMapper.ToView(detail), ct).ConfigureAwait(false);
+        var detail = await _apps.ConfigureAsync(req.InstanceId, req.ExpectedVersion!.Value, req.Variables, ct);
+        await Send.OkAsync(ExternalAppMapper.ToView(detail), ct);
     }
 }

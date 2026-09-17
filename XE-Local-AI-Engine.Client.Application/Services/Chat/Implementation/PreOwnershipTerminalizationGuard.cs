@@ -58,7 +58,7 @@ internal sealed class PreOwnershipTerminalizationGuard(
                     timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                     Error: PreOwnershipInterruptedError,
                     Envelope: new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId())),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
         }
         catch (Exception exception)
         {

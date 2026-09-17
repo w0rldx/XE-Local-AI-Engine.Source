@@ -102,14 +102,13 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
 
         var result = await git.RunAsync(workspacePath,
                                   AgentHomeGit.Arguments("ls-files", "--eol", "--", "."),
-                                  cancellationToken)
-                              .ConfigureAwait(false);
+                                  cancellationToken);
         if (result.ExitCode != 0)
         {
             return;
         }
 
-        await WriteAsync(gitDirectory, Render(result.StandardOutput), cancellationToken).ConfigureAwait(false);
+        await WriteAsync(gitDirectory, Render(result.StandardOutput), cancellationToken);
     }
 
     /// <summary>
@@ -235,6 +234,6 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
         }
 
         _ = Directory.CreateDirectory(infoDirectory);
-        await File.WriteAllTextAsync(attributesPath, body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(attributesPath, body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
     }
 }

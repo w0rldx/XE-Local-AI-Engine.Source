@@ -46,17 +46,17 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         var databasePath = GetDatabasePath("ingestion-failure.sqlite");
         var documentId = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedPendingDocumentAsync(databasePath, documentId).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId);
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var service = CreateService(context);
-            await service.RunAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+            await service.RunAsync(documentId, CancellationToken.None);
         }
 
-        var (status, failureReason) = await ReadStatusAsync(databasePath, documentId).ConfigureAwait(false);
+        var (status, failureReason) = await ReadStatusAsync(databasePath, documentId);
         AssertEx.Equal(KnowledgeDocumentStatus.Failed.ToString(), status);
         var reason = AssertEx.NotNull(failureReason, "A failed ingestion should persist a failure reason.");
         AssertEx.True(reason.Contains("embedding model", StringComparison.OrdinalIgnoreCase),
@@ -119,14 +119,14 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private static async Task SeedPendingDocumentAsync(string databasePath, Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await connection.OpenAsync();
+        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -142,20 +142,20 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         });
         command.Parameters.AddWithValue("$hash", "hash-" + documentId.ToString("N"));
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<(string Status, string? FailureReason)> ReadStatusAsync(string databasePath, Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await connection.OpenAsync();
+        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT status, failure_reason FROM knowledge_documents WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        _ = await reader.ReadAsync().ConfigureAwait(false);
-        var failureReason = await reader.IsDBNullAsync(1).ConfigureAwait(false) ? null : reader.GetString(1);
+        await using var reader = await command.ExecuteReaderAsync();
+        _ = await reader.ReadAsync();
+        var failureReason = await reader.IsDBNullAsync(1) ? null : reader.GetString(1);
         return (reader.GetString(0), failureReason);
     }
 
@@ -165,12 +165,12 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
     {
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

@@ -39,11 +39,11 @@ public sealed class DevWorkflowSliceATests
     {
         await using var factory = NewFactory();
 
-        await SeedTemplatesAsync(factory).ConfigureAwait(false);
-        await SeedTemplatesAsync(factory).ConfigureAwait(false);
+        await SeedTemplatesAsync(factory);
+        await SeedTemplatesAsync(factory);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var definitions = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListDefinitionsAsync(includeArchived: true).ConfigureAwait(false);
+        var definitions = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListDefinitionsAsync(includeArchived: true);
         var seeded = AssertEx.NotNull(definitions.SingleOrDefault(static definition => definition.SeedSlug == "research-plan-approval"),
             "the template is seeded exactly once, however often the node starts.");
 
@@ -51,7 +51,7 @@ public sealed class DevWorkflowSliceATests
         AssertEx.Equal(expected: 3, seeded.NodeCount);
         AssertEx.False(seeded.Archived);
 
-        var snapshot = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().GetDefinitionAsync(seeded.Id).ConfigureAwait(false);
+        var snapshot = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().GetDefinitionAsync(seeded.Id);
         var graph = DevWorkflowGraph.Parse(snapshot.GraphJson);
         AssertEx.Equal("research", graph.EntryNodeKeys.Single(), "one entry node, and it is the one the run starts on.");
         AssertEx.Equal(DevWorkflowNodeType.HumanGate, graph.Nodes["approve"].NodeType, "the template ends on the approval that is the point of it.");
@@ -75,7 +75,7 @@ public sealed class DevWorkflowSliceATests
             provider => stream = new FakeNodeChatStreamService(provider.GetRequiredService<INodeChatStreamCancellationRegistry>(), provider, Guid.Empty),
             publisher)(services));
 
-        await SeedTemplatesAsync(factory).ConfigureAwait(false);
+        await SeedTemplatesAsync(factory);
 
         // Two turns per agent node, in the order the node's one invocation slot forces: the first does work and stops on
         // the one-step budget, and the second finishes. That parking is the ordinary shape of a workflow agent node —
@@ -87,15 +87,14 @@ public sealed class DevWorkflowSliceATests
             fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (services, _) => FinishTheWorkflowSessionAsync(services)));
         }
 
-        var definitionId = await FindSeededDefinitionAsync(factory).ConfigureAwait(false);
-        var workItemId = await CreateWorkItemAsync(factory, "Explain how the inference path works.").ConfigureAwait(false);
+        var definitionId = await FindSeededDefinitionAsync(factory);
+        var workItemId = await CreateWorkItemAsync(factory, "Explain how the inference path works.");
 
         Guid runId;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var started = await scope.ServiceProvider.GetRequiredService<IDevWorkflowRunService>()
-                                     .StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())
-                                     .ConfigureAwait(false);
+                                     .StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid());
             runId = started.Run.Id;
             AssertEx.Equal(expected: 3, started.NodeRuns.Count, "every node of the pinned graph has a row from the start.");
         }
@@ -107,41 +106,39 @@ public sealed class DevWorkflowSliceATests
                 dispatcher,
                 runId,
                 _ => ReadNodeRun(factory, runId, "research") is { Status: DevWorkflowNodeRunStatus.Running, WorkSessionId: { } parked }
-                     && ReadSession(factory, parked).Status == AgentWorkSessionStatus.Paused)
-            .ConfigureAwait(false);
+                     && ReadSession(factory, parked).Status == AgentWorkSessionStatus.Paused);
 
         var beforeRestart = ReadNodeRun(factory, runId, "research");
         var sessionId = beforeRestart.WorkSessionId;
-        await using var restarted = await RestartAsync(factory, dispatcher).ConfigureAwait(false);
+        await using var restarted = await RestartAsync(factory, dispatcher);
 
         var afterRestart = ReadNodeRun(factory, runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, afterRestart.Status, "a restart makes an in-flight node run dispatchable again, not failed.");
         AssertEx.Equal(beforeRestart.Attempt, afterRestart.Attempt, "the restart cost no attempt: the session resumes from a checkpoint it wrote itself.");
         AssertEx.Equal(sessionId, afterRestart.WorkSessionId, "and it resumes THAT session rather than starting the work over.");
 
-        await DriveUntilAsync(factory, restarted, runId, static run => run.Status == DevWorkflowRunStatus.WaitingForApproval).ConfigureAwait(false);
+        await DriveUntilAsync(factory, restarted, runId, static run => run.Status == DevWorkflowRunStatus.WaitingForApproval);
 
         var gate = ReadNodeRun(factory, runId, "approve");
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, gate.Status);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, ReadNodeRun(factory, runId, "research").Status);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, ReadNodeRun(factory, runId, "plan").Status);
-        AssertEx.NotEmpty(await ReadConsumedArtifactIdsAsync(factory, gate.Id).ConfigureAwait(false),
+        AssertEx.NotEmpty(await ReadConsumedArtifactIdsAsync(factory, gate.Id),
             "the gate renders the evidence it was handed, so it has to have recorded consuming it.");
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowRunService>()
-                           .DecideAsync(runId, gate.Id, Guid.NewGuid(), DevWorkflowDecisionKind.Approve, "Ship it.", payloadJson: null, "operator@localhost.test")
-                           .ConfigureAwait(false);
+                           .DecideAsync(runId, gate.Id, Guid.NewGuid(), DevWorkflowDecisionKind.Approve, "Ship it.", payloadJson: null, "operator@localhost.test");
         }
 
-        await DriveUntilAsync(factory, restarted, runId, static run => run.Status == DevWorkflowRunStatus.Completed).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowWorkItemStatus.Completed, await ReadWorkItemStatusAsync(factory, workItemId).ConfigureAwait(false));
+        await DriveUntilAsync(factory, restarted, runId, static run => run.Status == DevWorkflowRunStatus.Completed);
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Completed, await ReadWorkItemStatusAsync(factory, workItemId));
 
         // Two work sessions, one per agent node, each owned by the node run that created it and driven only by the run.
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var sessions = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListAsync().ConfigureAwait(false);
+            var sessions = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListAsync();
             AssertEx.Equal(expected: 2, sessions.Count(static session => session.Kind == AgentWorkSessionKind.Workflow));
             AssertEx.Empty(sessions.Where(static session => session is { Kind: AgentWorkSessionKind.Workflow, Status: not AgentWorkSessionStatus.Completed }));
         }
@@ -149,7 +146,7 @@ public sealed class DevWorkflowSliceATests
         // Replayable from any watermark: strictly increasing, no repeats. NOT contiguous, deliberately — one counter
         // per run serves the events, the node runs and the artifacts, so the event feed steps over the numbers the rows
         // it describes took.
-        var events = await ReadEventsAsync(factory, runId).ConfigureAwait(false);
+        var events = await ReadEventsAsync(factory, runId);
         var sequences = events.Select(static entry => entry.Sequence).ToList();
         AssertEx.NotEmpty(sequences);
         AssertEx.True(sequences.Zip(sequences.Skip(1)).All(static pair => pair.First < pair.Second),
@@ -167,31 +164,27 @@ public sealed class DevWorkflowSliceATests
     private static async Task SeedTemplatesAsync(TestServerWebAppFactory factory)
     {
         var scopes = factory.Services.GetRequiredService<IServiceScopeFactory>();
-        await new WorkSessionAgentSeeder(scopes, factory.Services.GetRequiredService<ILogger<WorkSessionAgentSeeder>>()).StartAsync(CancellationToken.None)
-                                                                                                                        .ConfigureAwait(false);
+        await new WorkSessionAgentSeeder(scopes, factory.Services.GetRequiredService<ILogger<WorkSessionAgentSeeder>>()).StartAsync(CancellationToken.None);
         await new DevWorkflowDefinitionSeeder(scopes,
                   factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
                   factory.Services.GetRequiredService<ILogger<DevWorkflowDefinitionSeeder>>())
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
     }
 
     /// <summary>A host restart: both reconcilers in registration order, then a dispatcher that remembers nothing.</summary>
     private static async Task<DevWorkflowDispatcher> RestartAsync(TestServerWebAppFactory factory, DevWorkflowDispatcher dispatcher)
     {
-        await dispatcher.DisposeAsync().ConfigureAwait(false);
+        await dispatcher.DisposeAsync();
 
         var scopes = factory.Services.GetRequiredService<IServiceScopeFactory>();
         await new WorkSessionStartupReconciler(scopes,
                   factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
                   factory.Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
         await new DevWorkflowStartupReconciler(scopes,
                   factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
                   factory.Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
 
         return new DevWorkflowDispatcher(scopes,
             new DevWorkflowGraphCache(),
@@ -219,11 +212,11 @@ public sealed class DevWorkflowSliceATests
     {
         for (var tick = 0; tick < maxTicks; tick++)
         {
-            _ = await dispatcher.AdvanceOnceAsync(runId, CancellationToken.None).ConfigureAwait(false);
+            _ = await dispatcher.AdvanceOnceAsync(runId, CancellationToken.None);
 
             // Waited BEFORE the condition is judged, so a test never reads a run in the middle of a turn the tick it
             // just started — which is the one state an assertion here could see and a real reader could not act on.
-            await WaitForSessionsToSettleAsync(factory).ConfigureAwait(false);
+            await WaitForSessionsToSettleAsync(factory);
             if (settled(ReadRun(factory, runId)))
             {
                 return;
@@ -239,14 +232,14 @@ public sealed class DevWorkflowSliceATests
         while (DateTimeOffset.UtcNow < deadline)
         {
             await using var scope = factory.Services.CreateAsyncScope();
-            var sessions = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListAsync().ConfigureAwait(false);
+            var sessions = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListAsync();
             if (!sessions.Any(static session => session is { Kind: AgentWorkSessionKind.Workflow, Status: AgentWorkSessionStatus.Running }))
             {
                 return;
             }
 
             // real-timer: polls the real store while a background service drains; no gate the test can hold.
-            await Task.Delay(25).ConfigureAwait(false);
+            await Task.Delay(25);
         }
 
         throw new AssertionException("A workflow work session was still running after the grace period.");
@@ -257,13 +250,12 @@ public sealed class DevWorkflowSliceATests
     {
         await using var scope = services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var session = (await store.ListAsync().ConfigureAwait(false))
+        var session = (await store.ListAsync())
             .Single(static candidate => candidate is { Kind: AgentWorkSessionKind.Workflow, Status: AgentWorkSessionStatus.Running });
 
         var artifactId = Guid.NewGuid();
         var written = await scope.ServiceProvider.GetRequiredService<IWorkSessionArtifactBlobStore>()
-                                 .WriteAsync(session.Id, artifactId, Encoding.UTF8.GetBytes("# What this step found"))
-                                 .ConfigureAwait(false);
+                                 .WriteAsync(session.Id, artifactId, Encoding.UTF8.GetBytes("# What this step found"));
         _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(session.Id,
                            artifactId,
                            WorkSessionVersions.Any,
@@ -273,8 +265,7 @@ public sealed class DevWorkflowSliceATests
                            "text/markdown",
                            written.ContentHash,
                            written.ByteCount,
-                           written.OpaqueReference))
-                       .ConfigureAwait(false);
+                           written.OpaqueReference));
 
         _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(session.Id,
                            WorkSessionVersions.Any,
@@ -284,8 +275,7 @@ public sealed class DevWorkflowSliceATests
                            JsonSerializer.Serialize(new
                            {
                                summary = "This step is done."
-                           })))
-                       .ConfigureAwait(false);
+                           })));
     }
 
     /// <summary>
@@ -309,7 +299,7 @@ public sealed class DevWorkflowSliceATests
     private static async Task<Guid> FindSeededDefinitionAsync(TestServerWebAppFactory factory)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        var definitions = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListDefinitionsAsync().ConfigureAwait(false);
+        var definitions = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListDefinitionsAsync();
         return definitions.Single(static definition => definition.SeedSlug == "research-plan-approval").Id;
     }
 
@@ -317,8 +307,7 @@ public sealed class DevWorkflowSliceATests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var workItem = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
-                                  .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Understand the inference path", request))
-                                  .ConfigureAwait(false);
+                                  .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Understand the inference path", request));
         return workItem.Id;
     }
 
@@ -344,18 +333,18 @@ public sealed class DevWorkflowSliceATests
     private static async Task<IReadOnlyList<Guid>> ReadConsumedArtifactIdsAsync(TestServerWebAppFactory factory, Guid nodeRunId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListConsumedArtifactIdsAsync(nodeRunId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListConsumedArtifactIdsAsync(nodeRunId);
     }
 
     private static async Task<DevWorkflowWorkItemStatus> ReadWorkItemStatusAsync(TestServerWebAppFactory factory, Guid workItemId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        return (await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().GetWorkItemAsync(workItemId).ConfigureAwait(false)).Status;
+        return (await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().GetWorkItemAsync(workItemId)).Status;
     }
 
     private static async Task<IReadOnlyList<DevWorkflowRunEventSnapshot>> ReadEventsAsync(TestServerWebAppFactory factory, Guid runId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListEventsAsync(runId, sinceSequence: 0, limit: 500).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListEventsAsync(runId, sinceSequence: 0, limit: 500);
     }
 }

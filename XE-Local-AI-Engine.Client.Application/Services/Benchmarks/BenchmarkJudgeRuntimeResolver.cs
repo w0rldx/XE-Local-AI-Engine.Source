@@ -82,7 +82,7 @@ public sealed class BenchmarkPhaseLaunchResolver(
     {
         try
         {
-            return await _launchCapabilities.InspectAsync(cancellationToken).ConfigureAwait(false);
+            return await _launchCapabilities.InspectAsync(cancellationToken);
         }
         catch (LlamaRuntimeException)
         {
@@ -91,7 +91,7 @@ public sealed class BenchmarkPhaseLaunchResolver(
     }
 
     public async Task<GpuVariant> SelectVariantAsync(LlamaServerLaunchCapabilities? capabilities, CancellationToken cancellationToken) =>
-        capabilities?.Variant ?? await _variantSelector.SelectVariantAsync(cancellationToken).ConfigureAwait(false);
+        capabilities?.Variant ?? await _variantSelector.SelectVariantAsync(cancellationToken);
 
     public async Task<BenchmarkFrozenLaunch> ResolveAsync(string modelName,
         int requiredContextTokens,
@@ -100,7 +100,7 @@ public sealed class BenchmarkPhaseLaunchResolver(
         GpuVariant variant,
         CancellationToken cancellationToken)
     {
-        var resolved = await _inferenceProfiles.ResolveAsync(modelName, ModelRole.Chat, variant, cancellationToken).ConfigureAwait(false);
+        var resolved = await _inferenceProfiles.ResolveAsync(modelName, ModelRole.Chat, variant, cancellationToken);
         if (resolved.ExploreMode)
         {
             resolved = ResolvedLaunchArguments.Replay(requiredContextTokens);
@@ -118,7 +118,7 @@ public sealed class BenchmarkPhaseLaunchResolver(
         // pre-slice meaning exactly: Auto avoids a config this host has proven cannot reach readiness.
         var optimizedDisabled = requestedKvCacheType is null
                                 && variant != GpuVariant.Cpu
-                                && await _launchFallbackStore.IsOptimizedConfigDisabledAsync(variant, _launchPolicyOptions.KvCacheType, cancellationToken).ConfigureAwait(false);
+                                && await _launchFallbackStore.IsOptimizedConfigDisabledAsync(variant, _launchPolicyOptions.KvCacheType, cancellationToken);
         var (effective, source, reason) = ResolveKvCacheType(requestedKvCacheType, variant, capabilities, optimizedDisabled);
         var applied = BenchmarkKvCacheType.Apply(resolved, effective);
 
@@ -250,7 +250,7 @@ public sealed class BenchmarkJudgeRuntimeResolver(
     public async Task<BenchmarkJudgeRuntimeResolution> ResolveAsync(BenchmarkJudgePolicyV1 policy, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(policy);
-        await using var lease = await _installedModels.AcquireAsync(policy.Model.ModelName, cancellationToken).ConfigureAwait(false);
+        await using var lease = await _installedModels.AcquireAsync(policy.Model.ModelName, cancellationToken);
         BenchmarkModelEligibility.ValidateJudge(lease.Snapshot);
         if (!string.Equals(lease.Snapshot.ModelContentFingerprint, policy.Model.ModelContentFingerprint, StringComparison.Ordinal))
         {
@@ -258,8 +258,8 @@ public sealed class BenchmarkJudgeRuntimeResolver(
         }
 
         var model = BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot);
-        var capabilities = await _launchResolver.InspectAsync(cancellationToken).ConfigureAwait(false);
-        var variant = await _launchResolver.SelectVariantAsync(capabilities, cancellationToken).ConfigureAwait(false);
+        var capabilities = await _launchResolver.InspectAsync(cancellationToken);
+        var variant = await _launchResolver.SelectVariantAsync(capabilities, cancellationToken);
 
         // The judge is scoring, not being measured: it never takes a run's KV pick, only Auto.
         var launch = await _launchResolver.ResolveAsync(model.ModelName,
@@ -267,8 +267,7 @@ public sealed class BenchmarkJudgeRuntimeResolver(
                                               requestedKvCacheType: null,
                                               capabilities,
                                               variant,
-                                              cancellationToken)
-                                          .ConfigureAwait(false);
+                                              cancellationToken);
         return new BenchmarkJudgeRuntimeResolution(new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
                 model,
                 policy.RequestedContextTokens,

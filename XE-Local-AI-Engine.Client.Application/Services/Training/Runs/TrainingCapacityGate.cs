@@ -37,9 +37,9 @@ public sealed class TrainingCapacityGate(IPendingFootprintLedger ledger, IRuntim
         ArgumentNullException.ThrowIfNull(estimate);
 
         // The decision gate serializes read-decide-reserve so two admissions cannot both pass on the same snapshot.
-        using (await _ledger.EnterDecisionAsync(cancellationToken).ConfigureAwait(false))
+        using (await _ledger.EnterDecisionAsync(cancellationToken))
         {
-            var profile = await _deviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, cancellationToken).ConfigureAwait(false);
+            var profile = await _deviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, cancellationToken);
             if (!profile.VramKnown)
             {
                 return new TrainingCapacityReservation(Granted: false, "No usable GPU was detected on this node.", Handle: null);

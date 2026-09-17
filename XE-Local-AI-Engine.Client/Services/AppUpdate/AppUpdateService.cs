@@ -48,7 +48,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
     private async Task<AppUpdateSnapshot> CheckForUpdatesSerializedAsync(TimeSpan? minInterval, CancellationToken ct)
     {
-        await _operationGate.WaitAsync(ct).ConfigureAwait(false);
+        await _operationGate.WaitAsync(ct);
         try
         {
             var current = _state.Current;
@@ -57,7 +57,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
                 return current;
             }
 
-            return await CheckForUpdatesCoreAsync(ct).ConfigureAwait(false);
+            return await CheckForUpdatesCoreAsync(ct);
         }
         finally
         {
@@ -83,7 +83,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         VelopackCheckResult result;
         try
         {
-            result = await manager.CheckForUpdateAsync(ct).ConfigureAwait(false);
+            result = await manager.CheckForUpdateAsync(ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -126,7 +126,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             return false;
         }
 
-        await _operationGate.WaitAsync(ct).ConfigureAwait(false);
+        await _operationGate.WaitAsync(ct);
         try
         {
             if (!_state.Current.UpdateAvailable)
@@ -135,7 +135,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             }
 
             var manager = TakeUpdateManager();
-            var applying = await manager.PrepareUpdateAndRestartAsync(_hostContext.RestartArgs, ct).ConfigureAwait(false);
+            var applying = await manager.PrepareUpdateAndRestartAsync(_hostContext.RestartArgs, ct);
             // Clear the advertised update for both outcomes. On false, the live feed no longer has an applicable update;
             // on true, this prevents a concurrent/retried request from scheduling a second updater before shutdown.
             StoreSnapshot(Snapshot(manager.CurrentVersion,

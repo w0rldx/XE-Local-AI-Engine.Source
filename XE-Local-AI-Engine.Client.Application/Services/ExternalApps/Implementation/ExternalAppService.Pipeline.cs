@@ -71,7 +71,7 @@ internal sealed partial class ExternalAppService
         Func<IReadOnlyList<ExternalAppPublishedPort>, CancellationToken, Task>? commitBeforeStart,
         CancellationToken cancellationToken)
     {
-        await PullImagesAsync(runtime, instanceId, manifest, cancellationToken).ConfigureAwait(false);
+        await PullImagesAsync(runtime, instanceId, manifest, cancellationToken);
 
         var identity = ExternalAppContainerIdentity.Resolve(daemonIsRootless, _options.ContainerIdentity);
 
@@ -81,11 +81,11 @@ internal sealed partial class ExternalAppService
         var attempt = 0;
         while (true)
         {
-            await CreateInstanceNetworkAsync(runtime, instanceId, cancellationToken).ConfigureAwait(false);
+            await CreateInstanceNetworkAsync(runtime, instanceId, cancellationToken);
 
             using var hold = HoldPorts(manifest);
             var plan = BuildPlan(manifest, instanceId, variables, identity, hold, bridgeGrant);
-            await PrepareStorageAsync(instanceId, manifest, cancellationToken).ConfigureAwait(false);
+            await PrepareStorageAsync(instanceId, manifest, cancellationToken);
 
             try
             {
@@ -96,8 +96,7 @@ internal sealed partial class ExternalAppService
                         plan,
                         hold,
                         commitBeforeStart,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
             }
             catch (ExternalAppPipelineException failure)
                 when (attempt == 0 && failure.Failure.Category == ExternalAppFailureCategory.PortUnavailable)
@@ -108,7 +107,7 @@ internal sealed partial class ExternalAppService
 
                 // Required rather than best-effort: the replan creates the same containers again, and a survivor of
                 // the first attempt would collide with them by name.
-                await RequireTeardownAsync(runtime, instanceId, CancellationToken.None).ConfigureAwait(false);
+                await RequireTeardownAsync(runtime, instanceId, CancellationToken.None);
             }
         }
     }
@@ -120,7 +119,7 @@ internal sealed partial class ExternalAppService
     {
         foreach (var service in manifest.Services.DistinctBy(static service => service.Image, StringComparer.Ordinal))
         {
-            await PullImageAsync(runtime, instanceId, service.Image, service.Name, cancellationToken).ConfigureAwait(false);
+            await PullImageAsync(runtime, instanceId, service.Image, service.Name, cancellationToken);
         }
     }
 
@@ -137,7 +136,7 @@ internal sealed partial class ExternalAppService
     {
         try
         {
-            if (await runtime.ImageExistsAsync(image, cancellationToken).ConfigureAwait(false))
+            if (await runtime.ImageExistsAsync(image, cancellationToken))
             {
                 // A digest that is already local is the same bytes by definition, so re-pulling it would buy
                 // nothing and cost the whole image on every start.
@@ -146,7 +145,7 @@ internal sealed partial class ExternalAppService
 
             // Fire-and-forget by contract: Progress<T> hands the report to a synchronous Action<T>.
             var progress = new Progress<ContainerPullProgress>(report => _ = PublishPullProgressAsync(instanceId, progressLabel, report));
-            await runtime.PullImageAsync(image, progress, cancellationToken).ConfigureAwait(false);
+            await runtime.PullImageAsync(image, progress, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException and not ExternalAppPipelineException)
         {
@@ -166,7 +165,7 @@ internal sealed partial class ExternalAppService
                     Labels = ExternalAppLabels.For(_installId, instanceId),
                     Internal = false
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -209,7 +208,7 @@ internal sealed partial class ExternalAppService
     {
         try
         {
-            _ = await _layout.PrepareAsync(instanceId, manifest, cancellationToken).ConfigureAwait(false);
+            _ = await _layout.PrepareAsync(instanceId, manifest, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -255,7 +254,7 @@ internal sealed partial class ExternalAppService
             string containerId;
             try
             {
-                containerId = await runtime.RunContainerAsync(service.Specification, cancellationToken).ConfigureAwait(false);
+                containerId = await runtime.RunContainerAsync(service.Specification, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -263,7 +262,7 @@ internal sealed partial class ExternalAppService
             }
 
             containerIds[service.ServiceName] = containerId;
-            var inspection = await InspectAsync(runtime, containerId, cancellationToken).ConfigureAwait(false);
+            var inspection = await InspectAsync(runtime, containerId, cancellationToken);
             Verify(service, inspection, daemonIsRootless, afterStart: false, instanceRoot);
         }
 
@@ -271,10 +270,10 @@ internal sealed partial class ExternalAppService
         {
             // The PLANNED ports, because nothing has started yet. The final write replaces them with what the daemon
             // actually bound; this one exists so the committed row is never half-written.
-            await commitBeforeStart(PlannedPortsOf(plan), cancellationToken).ConfigureAwait(false);
+            await commitBeforeStart(PlannedPortsOf(plan), cancellationToken);
         }
 
-        return await StartAllAsync(runtime, daemonIsRootless, instanceId, manifest, plan, containerIds, cancellationToken).ConfigureAwait(false);
+        return await StartAllAsync(runtime, daemonIsRootless, instanceId, manifest, plan, containerIds, cancellationToken);
     }
 
     /// <summary>
@@ -299,14 +298,14 @@ internal sealed partial class ExternalAppService
             var containerId = containerIds[service.ServiceName];
             try
             {
-                await runtime.StartContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+                await runtime.StartContainerAsync(containerId, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 throw Failed(ExternalAppFailurePhase.Start, exception, HostPortsOf(service));
             }
 
-            var inspection = await InspectAsync(runtime, containerId, cancellationToken).ConfigureAwait(false);
+            var inspection = await InspectAsync(runtime, containerId, cancellationToken);
             Verify(service, inspection, daemonIsRootless, afterStart: true, instanceRoot);
 
             // The post-start read-back IS the binding read-back: what the daemon actually bound is the same evidence
@@ -314,12 +313,11 @@ internal sealed partial class ExternalAppService
             published.AddRange(inspection.PublishedPorts.Select(port =>
                 new ExternalAppPublishedPort(service.ServiceName, port.ContainerPort, port.HostPort)));
 
-            await WaitUntilReadyAsync(runtime, service, containerId, plan, cancellationToken).ConfigureAwait(false);
+            await WaitUntilReadyAsync(runtime, service, containerId, plan, cancellationToken);
 
             if (!probed)
             {
-                probed = await ProbeStorageAsync(runtime, manifest, service.ServiceName, containerId, daemonIsRootless, cancellationToken)
-                    .ConfigureAwait(false);
+                probed = await ProbeStorageAsync(runtime, manifest, service.ServiceName, containerId, daemonIsRootless, cancellationToken);
             }
         }
 
@@ -332,7 +330,7 @@ internal sealed partial class ExternalAppService
     {
         try
         {
-            return await runtime.InspectAsync(containerId, cancellationToken).ConfigureAwait(false);
+            return await runtime.InspectAsync(containerId, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -384,7 +382,7 @@ internal sealed partial class ExternalAppService
             ContainerInspection inspection;
             try
             {
-                inspection = await runtime.InspectAsync(containerId, linked.Token).ConfigureAwait(false);
+                inspection = await runtime.InspectAsync(containerId, linked.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -427,7 +425,7 @@ internal sealed partial class ExternalAppService
 
             try
             {
-                await Task.Delay(ReadyPollInterval, _timeProvider, linked.Token).ConfigureAwait(false);
+                await Task.Delay(ReadyPollInterval, _timeProvider, linked.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -465,7 +463,7 @@ internal sealed partial class ExternalAppService
         bool writable;
         try
         {
-            writable = await runtime.ProbeWritablePathAsync(containerId, storage.ContainerPath, cancellationToken).ConfigureAwait(false);
+            writable = await runtime.ProbeWritablePathAsync(containerId, storage.ContainerPath, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -542,19 +540,19 @@ internal sealed partial class ExternalAppService
 
         try
         {
-            foreach (var containerId in await runtime.ListContainersAsync(labels, cancellationToken).ConfigureAwait(false))
+            foreach (var containerId in await runtime.ListContainersAsync(labels, cancellationToken))
             {
-                await runtime.RemoveContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+                await runtime.RemoveContainerAsync(containerId, cancellationToken);
             }
 
-            foreach (var networkId in await runtime.ListNetworksAsync(labels, cancellationToken).ConfigureAwait(false))
+            foreach (var networkId in await runtime.ListNetworksAsync(labels, cancellationToken))
             {
-                await runtime.RemoveNetworkAsync(networkId, cancellationToken).ConfigureAwait(false);
+                await runtime.RemoveNetworkAsync(networkId, cancellationToken);
             }
 
             // The daemon's own answer, not the absence of an exception: a removal that was accepted and then failed,
             // or a container created under this instance's labels while the teardown ran, is visible only here.
-            var left = await runtime.ListContainersDetailedAsync(labels, cancellationToken).ConfigureAwait(false);
+            var left = await runtime.ListContainersDetailedAsync(labels, cancellationToken);
             if (left.Count == 0)
             {
                 return true;
@@ -585,7 +583,7 @@ internal sealed partial class ExternalAppService
     /// </summary>
     private async Task RequireTeardownAsync(IContainerRuntime runtime, Guid instanceId, CancellationToken cancellationToken)
     {
-        if (await RemoveInstanceContainersAsync(runtime, instanceId, cancellationToken).ConfigureAwait(false))
+        if (await RemoveInstanceContainersAsync(runtime, instanceId, cancellationToken))
         {
             return;
         }
@@ -629,13 +627,12 @@ internal sealed partial class ExternalAppService
             return;
         }
 
-        await PullImageAsync(runtime, instanceId, _options.StorageHelperImage, ExternalAppLabels.StorageWipeValue, cancellationToken)
-            .ConfigureAwait(false);
+        await PullImageAsync(runtime, instanceId, _options.StorageHelperImage, ExternalAppLabels.StorageWipeValue, cancellationToken);
 
         string containerId;
         try
         {
-            containerId = await runtime.RunContainerAsync(BuildStorageHelper(instanceId, volumesRoot), cancellationToken).ConfigureAwait(false);
+            containerId = await runtime.RunContainerAsync(BuildStorageHelper(instanceId, volumesRoot), cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException and not ExternalAppPipelineException)
         {
@@ -644,8 +641,8 @@ internal sealed partial class ExternalAppService
 
         try
         {
-            VerifyHelperMount(await InspectAsync(runtime, containerId, cancellationToken).ConfigureAwait(false), volumesRoot);
-            await RunHelperToCompletionAsync(runtime, containerId, cancellationToken).ConfigureAwait(false);
+            VerifyHelperMount(await InspectAsync(runtime, containerId, cancellationToken), volumesRoot);
+            await RunHelperToCompletionAsync(runtime, containerId, cancellationToken);
 
             if (FindVolumeContents(instanceId) is not null)
             {
@@ -657,7 +654,7 @@ internal sealed partial class ExternalAppService
         }
         finally
         {
-            await RemoveHelperAsync(runtime, containerId, instanceId).ConfigureAwait(false);
+            await RemoveHelperAsync(runtime, containerId, instanceId);
         }
     }
 
@@ -760,7 +757,7 @@ internal sealed partial class ExternalAppService
     {
         try
         {
-            await runtime.StartContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+            await runtime.StartContainerAsync(containerId, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -775,7 +772,7 @@ internal sealed partial class ExternalAppService
             ContainerInspection inspection;
             try
             {
-                inspection = await runtime.InspectAsync(containerId, linked.Token).ConfigureAwait(false);
+                inspection = await runtime.InspectAsync(containerId, linked.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -798,7 +795,7 @@ internal sealed partial class ExternalAppService
 
             try
             {
-                await Task.Delay(ReadyPollInterval, _timeProvider, linked.Token).ConfigureAwait(false);
+                await Task.Delay(ReadyPollInterval, _timeProvider, linked.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -823,7 +820,7 @@ internal sealed partial class ExternalAppService
     {
         try
         {
-            await runtime.RemoveContainerAsync(containerId, CancellationToken.None).ConfigureAwait(false);
+            await runtime.RemoveContainerAsync(containerId, CancellationToken.None);
         }
 #pragma warning disable CA1031 // As above: a cleanup failure must not replace the failure that caused it.
         catch (Exception exception)
@@ -881,7 +878,7 @@ internal sealed partial class ExternalAppService
         ExternalAppStatusUpdate update,
         CancellationToken cancellationToken)
     {
-        var result = await store.UpdateStatusAsync(update, cancellationToken).ConfigureAwait(false);
+        var result = await store.UpdateStatusAsync(update, cancellationToken);
         if (!result.Applied)
         {
             _logger.LogWarning("A {Status} transition for external application instance {InstanceId} lost its compare-and-swap; another writer moved the row.",
@@ -893,7 +890,7 @@ internal sealed partial class ExternalAppService
         cursor.Version = result.Version;
         cursor.Status = update.NewStatus;
         cursor.Sequence = result.Sequence;
-        await PublishAsync(cursor.InstanceId, result.Sequence, update.EventKind, update.NewStatus).ConfigureAwait(false);
+        await PublishAsync(cursor.InstanceId, result.Sequence, update.EventKind, update.NewStatus);
         return true;
     }
 
@@ -914,7 +911,7 @@ internal sealed partial class ExternalAppService
         {
             // Best-effort here and nowhere else in this file: this settles a row that is already failing, and nothing
             // downstream of it destroys state or creates a replacement.
-            _ = await RemoveInstanceContainersAsync(runtime, cursor.InstanceId, CancellationToken.None).ConfigureAwait(false);
+            _ = await RemoveInstanceContainersAsync(runtime, cursor.InstanceId, CancellationToken.None);
         }
 
         var summary = failure.Summary.Length > MaxFailureSummaryLength
@@ -930,7 +927,7 @@ internal sealed partial class ExternalAppService
 
         // CancellationToken.None: this runs BECAUSE the operation was cancelled or failed, and a settling write that
         // honoured the dead token would leave the row transient forever.
-        if (await ApplyAsync(store, cursor, FailureTransition(cursor, failure.Category, summary), CancellationToken.None).ConfigureAwait(false))
+        if (await ApplyAsync(store, cursor, FailureTransition(cursor, failure.Category, summary), CancellationToken.None))
         {
             return;
         }
@@ -938,7 +935,7 @@ internal sealed partial class ExternalAppService
         // The swap lost, which usually means another writer already settled the row — but it can also mean a writer
         // moved it WITHOUT settling it, and then nobody has written the failure. A pipeline owes its row a terminal
         // status, so re-read once and try again while the row is still in a transient this operation owns.
-        var current = await store.GetAsync(cursor.InstanceId, CancellationToken.None).ConfigureAwait(false);
+        var current = await store.GetAsync(cursor.InstanceId, CancellationToken.None);
         if (current is null || Array.IndexOf(Transient, current.Status) < 0)
         {
             return;
@@ -946,7 +943,7 @@ internal sealed partial class ExternalAppService
 
         cursor.Version = current.Version;
         cursor.Status = current.Status;
-        _ = await ApplyAsync(store, cursor, FailureTransition(cursor, failure.Category, summary), CancellationToken.None).ConfigureAwait(false);
+        _ = await ApplyAsync(store, cursor, FailureTransition(cursor, failure.Category, summary), CancellationToken.None);
     }
 
     private ExternalAppStatusUpdate FailureTransition(InstanceCursor cursor, ExternalAppFailureCategory category, string summary)
@@ -976,7 +973,7 @@ internal sealed partial class ExternalAppService
     {
         try
         {
-            await _publisher.PublishAsync(instanceId, sequence, kind, status, CancellationToken.None).ConfigureAwait(false);
+            await _publisher.PublishAsync(instanceId, sequence, kind, status, CancellationToken.None);
         }
 #pragma warning disable CA1031 // A subscriber that cannot be reached must not fail the operation whose result it describes.
         catch (Exception exception)
@@ -995,8 +992,7 @@ internal sealed partial class ExternalAppService
                                 report.LayerCount,
                                 report.CompletedLayers,
                                 report.CurrentBytes,
-                                CancellationToken.None)
-                            .ConfigureAwait(false);
+                                CancellationToken.None);
         }
 #pragma warning disable CA1031 // Progress is worthless after the fact; a dropped report degrades to a stale bar.
         catch (Exception exception)

@@ -24,13 +24,13 @@ public sealed class WorkSessionCheckpointTests
         var compaction = new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "Three documents read, two open questions."));
         await using var factory = NewFactory(compaction);
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        var (activeTaskId, decisionId) = await SeedContentAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var (activeTaskId, decisionId) = await SeedContentAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var result = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId).ConfigureAwait(false);
+        var result = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId);
 
-        var checkpoint = (await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId).ConfigureAwait(false)).Single();
+        var checkpoint = (await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId)).Single();
         // The mutation result carries the EVENT's watermark, and the store allocates the checkpoint row's first, so the
         // event always sits one above it. That is what a hub subscriber is told about; it re-reads each feed from that
         // feed's own watermark.
@@ -44,7 +44,7 @@ public sealed class WorkSessionCheckpointTests
         AssertEx.Equal(decisionId, state.KeyFindingIds[0], "Decisions and open questions come first: they are what a resumed session must not re-litigate.");
 
         AssertEx.Equal(checkpoint.Id,
-            (await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId).ConfigureAwait(false)).LastCheckpointId,
+            (await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId)).LastCheckpointId,
             "The session points at its latest checkpoint.");
     }
 
@@ -63,15 +63,15 @@ public sealed class WorkSessionCheckpointTests
 
         await using var factory = NewFactory(compaction);
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
-        await ComposeAsync(factory, sessionId).ConfigureAwait(false);
+        await ComposeAsync(factory, sessionId);
 
         AssertEx.Equal<int?>(ConversationStepContextBound.SessionKeepVerbatim,
             compaction.LastKeepVerbatim,
             "The checkpoint folds with the session window, not the configured chat default.");
         AssertEx.Equal("Two steps in, one document read.",
-            (await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId).ConfigureAwait(false)).Single().Summary);
+            (await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId)).Single().Summary);
     }
 
     [Test]
@@ -83,14 +83,14 @@ public sealed class WorkSessionCheckpointTests
         var compaction = new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "First pass."));
         await using var factory = NewFactory(compaction);
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
-        await ComposeAsync(factory, sessionId).ConfigureAwait(false);
+        await ComposeAsync(factory, sessionId);
 
         compaction.Result = new ConversationCompactionResult(outcome);
-        await ComposeAsync(factory, sessionId).ConfigureAwait(false);
+        await ComposeAsync(factory, sessionId);
 
-        var checkpoints = await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var checkpoints = await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId);
         AssertEx.Equal(expected: 2, checkpoints.Count, $"A {outcome} compaction must not stop the structured checkpoint.");
         AssertEx.Equal("First pass.", checkpoints[^1].Summary, "The prior synopsis is kept rather than replaced with a placeholder.");
     }
@@ -102,12 +102,12 @@ public sealed class WorkSessionCheckpointTests
         // lie the resumed session would then read as fact.
         await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.NoLocalModel)));
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        _ = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId);
 
-        AssertEx.Null((await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId).ConfigureAwait(false)).Single().Summary);
+        AssertEx.Null((await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId)).Single().Summary);
     }
 
     [Test]
@@ -115,17 +115,17 @@ public sealed class WorkSessionCheckpointTests
     {
         await using var factory = NewFactory(new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "Where the work stands.")));
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        _ = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId);
 
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var state = new WorkSessionState(await store.GetAsync(sessionId).ConfigureAwait(false),
-            await store.ListTasksAsync(sessionId).ConfigureAwait(false),
-            await store.ListFindingsAsync(sessionId).ConfigureAwait(false),
-            await store.ListArtifactsAsync(sessionId).ConfigureAwait(false),
-            await store.GetLatestCheckpointAsync(sessionId).ConfigureAwait(false));
+        var state = new WorkSessionState(await store.GetAsync(sessionId),
+            await store.ListTasksAsync(sessionId),
+            await store.ListFindingsAsync(sessionId),
+            await store.ListArtifactsAsync(sessionId),
+            await store.GetLatestCheckpointAsync(sessionId));
 
         AssertEx.Contains(WorkSessionStateBlockComposer.Compose(state, step: 6, maxStepsPerRun: 25), "Where the work stands.");
     }
@@ -135,7 +135,7 @@ public sealed class WorkSessionCheckpointTests
         // A fresh scope per checkpoint, mirroring the supervisor: a DbContext reused across two writes would carry a
         // stale row version into the second one.
         await using var scope = factory.Services.CreateAsyncScope();
-        _ = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<WorkSessionCheckpointComposer>().ComposeAsync(sessionId);
     }
 
     private static TestServerWebAppFactory NewFactory(IConversationCompactionService compaction) =>
@@ -163,16 +163,14 @@ public sealed class WorkSessionCheckpointTests
                            [
                                new WorkPlanTaskChange(activeTaskId, WorkPlanTaskOperation.Add, Title: "Read the ADR", Status: AgentWorkSessionTaskStatus.Active),
                                new WorkPlanTaskChange(doneTaskId, WorkPlanTaskOperation.Add, Title: "Already finished", Status: AgentWorkSessionTaskStatus.Done)
-                           ]))
-                       .ConfigureAwait(false);
+                           ]));
 
         _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
                            Guid.NewGuid(),
                            WorkSessionVersions.Any,
                            Guid.NewGuid(),
                            AgentWorkSessionFindingKind.Finding,
-                           "A plain fact."))
-                       .ConfigureAwait(false);
+                           "A plain fact."));
 
         var decisionId = Guid.NewGuid();
         _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
@@ -180,8 +178,7 @@ public sealed class WorkSessionCheckpointTests
                            WorkSessionVersions.Any,
                            Guid.NewGuid(),
                            AgentWorkSessionFindingKind.Decision,
-                           "Chose the process sandbox."))
-                       .ConfigureAwait(false);
+                           "Chose the process sandbox."));
 
         return (activeTaskId, decisionId);
     }

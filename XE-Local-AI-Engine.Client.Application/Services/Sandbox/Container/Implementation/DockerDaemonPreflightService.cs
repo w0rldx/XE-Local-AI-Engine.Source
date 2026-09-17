@@ -43,13 +43,13 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
 
     public async Task<DockerDaemonPreflight> InspectAsync(CancellationToken cancellationToken = default)
     {
-        return await EvaluateAsync(confirmingDaemonId: null, cancellationToken).ConfigureAwait(false);
+        return await EvaluateAsync(confirmingDaemonId: null, cancellationToken);
     }
 
     public async Task<DockerDaemonPreflight> ConfirmAsync(string expectedDaemonId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedDaemonId);
-        return await EvaluateAsync(expectedDaemonId, cancellationToken).ConfigureAwait(false);
+        return await EvaluateAsync(expectedDaemonId, cancellationToken);
     }
 
     private async Task<DockerDaemonPreflight> EvaluateAsync(string? confirmingDaemonId, CancellationToken cancellationToken)
@@ -127,7 +127,7 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
             _attestationStore,
             _timeProvider,
             _logger,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         // Switched on the reason rather than on the status: two refusals share ProbeFailed and have different prose,
         // so a mapping keyed on status alone would have to guess between them. Every named reason has its own arm and

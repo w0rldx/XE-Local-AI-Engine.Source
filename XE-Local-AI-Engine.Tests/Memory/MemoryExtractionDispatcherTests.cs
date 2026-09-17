@@ -39,8 +39,8 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         var agentId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
-        await using var provider = await BuildProviderAsync("exec-log.sqlite").ConfigureAwait(false);
-        await using var pipeline = await Pipeline.StartAsync(provider).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log.sqlite");
+        await using var pipeline = await Pipeline.StartAsync(provider);
 
         var telemetry = new MemoryExtractionDispatchContext(agentId,
             conversationId,
@@ -55,7 +55,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
 
         pipeline.Dispatcher.Dispatch(telemetry, Run(agentId, conversationId, messageId));
 
-        var row = await PollForLogAsync(provider, agentId).ConfigureAwait(false);
+        var row = await PollForLogAsync(provider, agentId);
         AssertEx.Equal(conversationId, row.ConversationId);
         AssertEx.Equal(messageId, row.MessageId);
         AssertEx.Equal("qwen3:8b", row.ModelName);
@@ -71,8 +71,8 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
     public async Task Dispatch_WhenTokensAbsent_DegradesToNullGracefully()
     {
         var agentId = Guid.NewGuid();
-        await using var provider = await BuildProviderAsync("exec-log-null-tokens.sqlite").ConfigureAwait(false);
-        await using var pipeline = await Pipeline.StartAsync(provider).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-null-tokens.sqlite");
+        await using var pipeline = await Pipeline.StartAsync(provider);
 
         // A GGUF model may report no usage — PromptTokens/CompletionTokens null must persist cleanly (nullable columns).
         var telemetry = new MemoryExtractionDispatchContext(agentId,
@@ -88,7 +88,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
 
         pipeline.Dispatcher.Dispatch(telemetry, Run(agentId, telemetry.ConversationId, telemetry.MessageId, failed: true));
 
-        var row = await PollForLogAsync(provider, agentId).ConfigureAwait(false);
+        var row = await PollForLogAsync(provider, agentId);
         AssertEx.Null(row.PromptTokens);
         AssertEx.Null(row.CompletionTokens);
         AssertEx.False(row.Success);
@@ -112,8 +112,8 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                       extractionEntered.TrySetResult();
                       throw new InvalidOperationException("extraction blew up");
                   });
-        await using var provider = await BuildProviderAsync("exec-log-throw.sqlite", extraction).ConfigureAwait(false);
-        await using var pipeline = await Pipeline.StartAsync(provider).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-throw.sqlite", extraction);
+        await using var pipeline = await Pipeline.StartAsync(provider);
 
         var telemetry = Telemetry(agentId);
 
@@ -122,10 +122,9 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
 
         // Wait for ExtractAsync to actually be entered, THEN assert. The row is also written (before the call), and the
         // throw was contained — the test process did not fault on an unobserved exception.
-        await extractionEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        _ = await PollForLogAsync(provider, agentId).ConfigureAwait(false);
-        await extraction.Received(1).ExtractAsync(Arg.Any<MemoryExtractionRunInput>(), Arg.Any<CancellationToken>())
-                        .ConfigureAwait(false);
+        await extractionEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _ = await PollForLogAsync(provider, agentId);
+        await extraction.Received(1).ExtractAsync(Arg.Any<MemoryExtractionRunInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -141,8 +140,8 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                       capturedToken = call.Arg<CancellationToken>();
                       captured = true;
                   });
-        await using var provider = await BuildProviderAsync("exec-log-fresh-token.sqlite", extraction).ConfigureAwait(false);
-        await using var pipeline = await Pipeline.StartAsync(provider).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-fresh-token.sqlite", extraction);
+        await using var pipeline = await Pipeline.StartAsync(provider);
 
         var telemetry = Telemetry(agentId);
 
@@ -152,7 +151,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
 
         await AssertEx.EventuallyAsync(() => captured,
             TimeSpan.FromSeconds(5),
-            "The background worker should have invoked extraction.").ConfigureAwait(false);
+            "The background worker should have invoked extraction.");
         AssertEx.False(capturedToken.IsCancellationRequested,
             "Extraction must run on the worker's uncancelled drain token, decoupled from any send cancellation.");
     }
@@ -161,7 +160,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
     public async Task Dispatch_WhenQueueIsFull_DropsExcessJobsWithoutBlocking()
     {
         var agentId = Guid.NewGuid();
-        await using var provider = await BuildProviderAsync("exec-log-full-queue.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-full-queue.sqlite");
 
         // Enqueue past the bounded capacity BEFORE the worker starts draining: exactly QueueCapacity jobs are accepted
         // and the rest are dropped (never blocking the caller). Starting the worker afterwards drains only the accepted
@@ -182,19 +181,19 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             dispatcher,
             optionsAccessor,
             NullLogger<MemoryExtractionWorker>.Instance);
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
         try
         {
             await AssertEx.EventuallyAsync(() => CountRows(provider, agentId) >= 2,
                 TimeSpan.FromSeconds(5),
-                "The worker should have drained the two accepted jobs.").ConfigureAwait(false);
+                "The worker should have drained the two accepted jobs.");
 
             // No third job was ever accepted, so the count cannot climb past the capacity.
             AssertEx.Equal(expected: 2, CountRows(provider, agentId));
         }
         finally
         {
-            await worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            await worker.StopAsync(CancellationToken.None);
         }
     }
 
@@ -216,13 +215,13 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                       if (Interlocked.Increment(ref calls) == 1)
                       {
                           firstEntered.TrySetResult();
-                          await release.Task.ConfigureAwait(false);
+                          await release.Task;
                       }
 
                       return MemoryExtractionOutcome.NoModelConfigured();
                   });
 
-        await using var provider = await BuildProviderAsync("exec-log-drain-queued.sqlite", extraction).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-drain-queued.sqlite", extraction);
         var optionsAccessor = Options.Create(new MemoryExtractionOptions
         {
             MaxConcurrentExtractions = 1,
@@ -233,7 +232,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             dispatcher,
             optionsAccessor,
             NullLogger<MemoryExtractionWorker>.Instance);
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
 
         // #1 parks in ExtractAsync (holding the one slot); #2 and #3 remain queued/unstarted.
         for (var i = 0; i < 3; i++)
@@ -241,13 +240,13 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
         }
 
-        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Stop while #2 and #3 are still queued. StopAsync must not return until they are drained; releasing #1 lets the
         // drain proceed and finish inside the (generous) window.
         var stop = worker.StopAsync(CancellationToken.None);
         release.TrySetResult();
-        await stop.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+        await stop.WaitAsync(TimeSpan.FromSeconds(20));
 
         // All three ran — none was silently dropped when the worker stopped (the pre-fix worker drained only #1).
         AssertEx.Equal(expected: 3, CountRows(provider, agentId));
@@ -257,15 +256,15 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
     public async Task Dispatch_AfterWorkerStopped_TakesTheDroppedPathAndEnqueuesNothing()
     {
         var agentId = Guid.NewGuid();
-        await using var provider = await BuildProviderAsync("exec-log-dispatch-after-stop.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-dispatch-after-stop.sqlite");
         var optionsAccessor = Options.Create(new MemoryExtractionOptions());
         var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
         using var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
             optionsAccessor,
             NullLogger<MemoryExtractionWorker>.Instance);
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
+        await worker.StopAsync(CancellationToken.None);
 
         // The worker completed the writer at shutdown, so a late Dispatch takes the dropped path: it must not throw, must
         // not enqueue anything, and no execution-log row can ever land for it.
@@ -290,11 +289,11 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                   .Returns(async callInfo =>
                   {
                       entered.TrySetResult();
-                      await Task.Delay(Timeout.Infinite, callInfo.Arg<CancellationToken>()).ConfigureAwait(false);
+                      await Task.Delay(Timeout.Infinite, callInfo.Arg<CancellationToken>());
                       return MemoryExtractionOutcome.NoModelConfigured();
                   });
 
-        await using var provider = await BuildProviderAsync("exec-log-deadline.sqlite", extraction).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-deadline.sqlite", extraction);
         var logger = new CapturingLogger<MemoryExtractionWorker>();
         var optionsAccessor = Options.Create(new MemoryExtractionOptions
         {
@@ -306,13 +305,13 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             dispatcher,
             optionsAccessor,
             logger);
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
 
         dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // StopAsync returns on its own once the 1s window elapses (well under this generous cap); Dispose must not throw.
-        await worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+        await worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15));
         worker.Dispose();
 
         var log = logger.AllText;
@@ -344,7 +343,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                       try
                       {
                           // Deliberately does NOT observe the passed cancellation token: only the explicit release ends it.
-                          await release.Task.ConfigureAwait(false);
+                          await release.Task;
                       }
                       finally
                       {
@@ -354,7 +353,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                       return MemoryExtractionOutcome.NoModelConfigured();
                   });
 
-        await using var provider = await BuildProviderAsync("exec-log-abandon.sqlite", extraction).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-abandon.sqlite", extraction);
         var logger = new CapturingLogger<MemoryExtractionWorker>();
         var optionsAccessor = Options.Create(new MemoryExtractionOptions
         {
@@ -366,14 +365,14 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             dispatcher,
             optionsAccessor,
             logger);
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
 
         dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Even though the job never observes cancellation, StopAsync completes within bounds (1s window + 2s grace + slack)
         // and Dispose does not throw despite the still-running straggler.
-        await worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+        await worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15));
         worker.Dispose();
 
         var log = logger.AllText;
@@ -386,7 +385,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         // semaphore (ObjectDisposedException, swallowed) and the catch-all contains any fault. Nothing may crash the
         // process — the job simply runs to completion and its self-removing continuation drops it from the set.
         release.TrySetResult();
-        await resumed.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await resumed.Task.WaitAsync(TimeSpan.FromSeconds(5));
         AssertEx.False(logger.AllText.Contains("ObjectDisposed", StringComparison.Ordinal),
             "Releasing the abandoned job after Dispose must be swallowed silently — no ObjectDisposedException may surface.");
     }
@@ -419,7 +418,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                           {
                               // Does NOT observe the passed token: only the explicit release ends it, so #1 stays in-flight
                               // (never freeing the slot) through the drain window and grace — it is the abandoned straggler.
-                              await release.Task.ConfigureAwait(false);
+                              await release.Task;
                           }
                           finally
                           {
@@ -430,7 +429,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                       return MemoryExtractionOutcome.NoModelConfigured();
                   });
 
-        await using var provider = await BuildProviderAsync("exec-log-pending-slot.sqlite", extraction).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("exec-log-pending-slot.sqlite", extraction);
         var logger = new CapturingLogger<MemoryExtractionWorker>();
         var optionsAccessor = Options.Create(new MemoryExtractionOptions
         {
@@ -442,17 +441,17 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             dispatcher,
             optionsAccessor,
             logger);
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
 
         // #1 takes the one slot and parks; only after it is confirmed running do we buffer #2, so #2 is guaranteed to be the
         // job left pending on the channel with the read loop blocked awaiting the slot when StopAsync fires.
         dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
-        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
 
         // The 1s window elapses with #2 still pending; StopAsync cancels the drain token, abandons the cancellation-ignoring
         // #1, and drains #2 as a dropped queued job — returning within bounds (1s window + 2s grace + slack).
-        await worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+        await worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15));
         worker.Dispose();
 
         // Both jobs are accounted, not silently lost: the content-free drain-exceeded warning reports #1 abandoned and #2
@@ -466,7 +465,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         // Release the abandoned job AFTER Dispose so it runs to completion cleanly (its finally hits the disposed-semaphore
         // swallow path) and the test process is not left with a parked background task.
         release.TrySetResult();
-        await resumed.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await resumed.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     private static MemoryExtractionDispatchContext Telemetry(Guid agentId)
@@ -519,7 +518,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                 return false;
             },
             TimeSpan.FromSeconds(5),
-            "The background worker should have written an execution-log row.").ConfigureAwait(false);
+            "The background worker should have written an execution-log row.");
 
         return AssertEx.NotNull(found, "An execution-log row should have been written.");
     }
@@ -542,8 +541,8 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }
@@ -569,13 +568,13 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                 dispatcher,
                 optionsAccessor,
                 NullLogger<MemoryExtractionWorker>.Instance);
-            await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            await worker.StartAsync(CancellationToken.None);
             return new Pipeline(dispatcher, worker);
         }
 
         public async ValueTask DisposeAsync()
         {
-            await _worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            await _worker.StopAsync(CancellationToken.None);
             _worker.Dispose();
         }
     }

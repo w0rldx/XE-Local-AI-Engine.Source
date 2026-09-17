@@ -330,7 +330,7 @@ public sealed class WhisperServerTranscriberTests
             LastRequestUri = request.RequestUri;
             LastRequestBody = request.Content is null
                 ? null
-                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                : await request.Content.ReadAsStringAsync(cancellationToken);
 
             return responder(request);
         }

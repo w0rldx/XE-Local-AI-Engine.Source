@@ -31,26 +31,26 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
     [Test]
     public async Task CreateConversation_WhenBoundAgentDefaultsTemporary_InheritsMemoryExcludedTrue()
     {
-        await using var provider = await BuildProviderAsync("inherit-temp.sqlite").ConfigureAwait(false);
-        var agentId = await SeedAgentAsync(provider, defaultTemporaryChat: true).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("inherit-temp.sqlite");
+        var agentId = await SeedAgentAsync(provider, defaultTemporaryChat: true);
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Temp chat", "node", CreatedAtUtc: 10, AgentDefinitionId: agentId)).ConfigureAwait(false);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Temp chat", "node", CreatedAtUtc: 10, AgentDefinitionId: agentId));
 
         AssertEx.True(created.MemoryExcluded, "A new conversation bound to a default-temporary agent should inherit MemoryExcluded=true.");
 
-        var loaded = AssertEx.NotNull(await service.GetConversationAsync(created.ConversationId).ConfigureAwait(false), "Conversation should be readable.");
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(created.ConversationId), "Conversation should be readable.");
         AssertEx.True(loaded.MemoryExcluded, "The inherited flag should round-trip through the read path.");
     }
 
     [Test]
     public async Task CreateConversation_WhenBoundAgentNotTemporary_InheritsMemoryExcludedFalse()
     {
-        await using var provider = await BuildProviderAsync("inherit-non-temp.sqlite").ConfigureAwait(false);
-        var agentId = await SeedAgentAsync(provider, defaultTemporaryChat: false).ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("inherit-non-temp.sqlite");
+        var agentId = await SeedAgentAsync(provider, defaultTemporaryChat: false);
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Normal chat", "node", CreatedAtUtc: 10, AgentDefinitionId: agentId)).ConfigureAwait(false);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Normal chat", "node", CreatedAtUtc: 10, AgentDefinitionId: agentId));
 
         AssertEx.False(created.MemoryExcluded, "A new conversation bound to a non-temporary agent should default to MemoryExcluded=false.");
     }
@@ -58,10 +58,10 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
     [Test]
     public async Task CreateConversation_WhenUnbound_DefaultsMemoryExcludedFalse()
     {
-        await using var provider = await BuildProviderAsync("unbound-default.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("unbound-default.sqlite");
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Unbound chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Unbound chat", "node", CreatedAtUtc: 10));
 
         AssertEx.False(created.MemoryExcluded, "An unbound conversation defaults to MemoryExcluded=false.");
     }
@@ -69,17 +69,17 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
     [Test]
     public async Task ConversationMemoryExcluded_Toggle_RoundTrips()
     {
-        await using var provider = await BuildProviderAsync("toggle-roundtrip.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("toggle-roundtrip.sqlite");
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle chat", "node", CreatedAtUtc: 10));
         AssertEx.False(created.MemoryExcluded, "A fresh unbound conversation starts non-temporary.");
 
         // No per-conversation override PATCH endpoint is exposed. This test writes the column directly to prove the read
         // path carries the flag consumed by extraction services.
-        await SetMemoryExcludedAsync(provider, created.ConversationId, excluded: true).ConfigureAwait(false);
+        await SetMemoryExcludedAsync(provider, created.ConversationId, excluded: true);
 
-        var loaded = AssertEx.NotNull(await service.GetConversationAsync(created.ConversationId).ConfigureAwait(false), "Conversation should be readable.");
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(created.ConversationId), "Conversation should be readable.");
         AssertEx.True(loaded.MemoryExcluded, "Toggling memory_excluded to true should round-trip through the read path.");
     }
 
@@ -99,8 +99,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
                                    [],
                                    new Dictionary<string, bool>(),
                                    OrchestrationTopologyJson: null,
-                                   DefaultTemporaryChat: defaultTemporaryChat))
-                               .ConfigureAwait(false);
+                                   DefaultTemporaryChat: defaultTemporaryChat));
         return agent.Id;
     }
 
@@ -110,7 +109,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET memory_excluded = {0} WHERE conversation_id = {1};",
             excluded ? 1 : 0,
-            conversationId).ConfigureAwait(false);
+            conversationId);
     }
 
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
@@ -124,8 +123,8 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }

@@ -19,8 +19,8 @@ public sealed class ListWorkSessionsEndpoint(IWorkSessionService service) : Endp
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var sessions = await _service.ListAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListWorkSessionsResponse([.. sessions.Select(WorkSessionContractMapper.ToResponse)]), ct).ConfigureAwait(false);
+        var sessions = await _service.ListAsync(ct);
+        await Send.OkAsync(new ListWorkSessionsResponse([.. sessions.Select(WorkSessionContractMapper.ToResponse)]), ct);
     }
 }
 
@@ -42,14 +42,13 @@ public sealed class CreateWorkSessionEndpoint(IWorkSessionService service) : End
         // Safe to parse rather than TryParse: the validator has already refused anything that is not General or
         // Research, and it runs before the handler.
         var kind = Enum.Parse<AgentWorkSessionKind>(req.Kind, ignoreCase: true);
-        var created = await _service.CreateAsync(new CreateWorkSessionRequestModel(req.Title, req.Objective, kind, req.AgentDefinitionId), ct)
-                                    .ConfigureAwait(false);
+        var created = await _service.CreateAsync(new CreateWorkSessionRequestModel(req.Title, req.Objective, kind, req.AgentDefinitionId), ct);
         await Send.CreatedAtAsync<GetWorkSessionEndpoint>(new
             {
                 sessionId = created.Id
             },
             created.ToResponse(),
-            cancellation: ct).ConfigureAwait(false);
+            cancellation: ct);
     }
 }
 
@@ -68,8 +67,8 @@ public sealed class GetWorkSessionEndpoint(IWorkSessionService service) : Endpoi
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var session = await _service.GetAsync(req.SessionId, ct).ConfigureAwait(false);
-        await Send.OkAsync(session.ToResponse(), ct).ConfigureAwait(false);
+        var session = await _service.GetAsync(req.SessionId, ct);
+        await Send.OkAsync(session.ToResponse(), ct);
     }
 }
 
@@ -94,9 +93,8 @@ public sealed class UpdateWorkSessionEndpoint(IWorkSessionService service) : End
         // renames must not blank the objective it never mentioned.
         var updated = await _service.UpdateAsync(req.SessionId,
                                         new UpdateWorkSessionRequestModel(req.Title, req.Objective, req.AgentDefinitionId),
-                                        ct)
-                                    .ConfigureAwait(false);
-        await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+                                        ct);
+        await Send.OkAsync(updated.ToResponse(), ct);
     }
 }
 
@@ -117,7 +115,7 @@ public sealed class DeleteWorkSessionEndpoint(IWorkSessionService service) : End
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await _service.DeleteAsync(req.SessionId, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _service.DeleteAsync(req.SessionId, ct);
+        await Send.NoContentAsync(ct);
     }
 }

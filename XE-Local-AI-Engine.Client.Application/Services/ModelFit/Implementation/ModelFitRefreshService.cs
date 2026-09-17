@@ -145,22 +145,21 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 ModelName: null,
                 ModelFitRunStatus.Running,
                 startedAtUtc),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         var snapshotId = snapshot.Id;
 
         if (reportProgress is not null)
         {
-            await reportProgress("Profiling hardware and discovering GGUF models…", arg2: null, cancellationToken).ConfigureAwait(false);
+            await reportProgress("Profiling hardware and discovering GGUF models…", arg2: null, cancellationToken);
         }
 
         try
         {
             // Size against the EFFECTIVE profile — degraded to CPU-mode when the device audit reports a silent
             // CPU fallback — so the advisor never recommends models that only fit in VRAM the runtime cannot actually use.
-            var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken).ConfigureAwait(false);
-            var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, profile, cancellationToken)
-                .ConfigureAwait(false);
+            var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken);
+            var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, profile, cancellationToken);
 
             var completedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
@@ -178,7 +177,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     stderrExcerpt: null,
                     "advisor recommendation JSON parse failed",
                     completedAtUtc,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
 
                 _logger.LogWarning("Advisor emitted unparseable recommendation JSON for snapshot {SnapshotId}.", snapshotId);
                 return Failed(snapshotId, "Advisor recommendation could not be assembled.");
@@ -192,10 +191,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 stderrExcerpt: null,
                 parse.SystemDiagnosticsJson,
                 completedAtUtc,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
-            var inserted = await _recommendationStore.ReplaceForSnapshotAsync(snapshotId, parse.Recommendations, cancellationToken)
-                                                     .ConfigureAwait(false);
+            var inserted = await _recommendationStore.ReplaceForSnapshotAsync(snapshotId, parse.Recommendations, cancellationToken);
 
             _logger.LogInformation("Advisor refresh succeeded for snapshot {SnapshotId} (use-case {UseCase}, {Count} recommendations, {Mode}).",
                 snapshotId,
@@ -219,7 +217,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 stderrExcerpt: null,
                 diagnosticsJson: null,
                 cancelledAtUtc,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             _logger.LogInformation("Advisor refresh cancelled for snapshot {SnapshotId}.", snapshotId);
             throw;
@@ -237,7 +235,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 stderrExcerpt: null,
                 "GGUF discovery failed",
                 failedAtUtc,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
             _logger.LogWarning(exception, "Advisor refresh failed during GGUF discovery for snapshot {SnapshotId}.", snapshotId);
             return Failed(snapshotId, "GGUF discovery failed.");
@@ -280,12 +278,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         CancellationToken cancellationToken)
     {
         // Which models are already downloaded (best-effort: a registry failure just marks all as not-installed).
-        var installedKeys = await ListInstalledKeysAsync(cancellationToken).ConfigureAwait(false);
+        var installedKeys = await ListInstalledKeysAsync(cancellationToken);
 
-        var catalogRecommendations = await BuildCatalogRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken)
-            .ConfigureAwait(false);
-        var exploreRecommendations = await BuildExploreRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken)
-            .ConfigureAwait(false);
+        var catalogRecommendations = await BuildCatalogRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken);
+        var exploreRecommendations = await BuildExploreRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken);
 
         return [.. catalogRecommendations, .. exploreRecommendations];
     }
@@ -307,8 +303,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         try
         {
             var result = await _catalogRecommendationService
-                               .BuildRecommendationsAsync(request.UseCase, quant, ctxTarget, profile, installedKeys, cancellationToken)
-                               .ConfigureAwait(false);
+                               .BuildRecommendationsAsync(request.UseCase, quant, ctxTarget, profile, installedKeys, cancellationToken);
 
             var recommended = result.Recommended.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "recommended"));
             var canRun = result.CanRun.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "canRun"));
@@ -367,7 +362,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     {
         // Discover candidate repos by the use-case's mapped search terms (see ModelFitUseCaseSearch — the literal
         // use-case word under-matches the Hub), merged + de-duped and capped to the inspection budget.
-        var repos = await SearchCandidateReposAsync(request.UseCase, cancellationToken).ConfigureAwait(false);
+        var repos = await SearchCandidateReposAsync(request.UseCase, cancellationToken);
 
         // Inspect the repos in parallel with bounded concurrency. Each inspection is independent; a stalled or failing
         // repo is skipped (null candidate) inside the body so it never reaches the caller's outer catch and never fails
@@ -380,7 +375,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             var evaluations = repos
                               .Select(repo => EvaluateRepoWithGuardAsync(repo, quant, ctxTarget, profile, installedKeys, inspectionGate, cancellationToken))
                               .ToList();
-            candidates = await Task.WhenAll(evaluations).ConfigureAwait(false);
+            candidates = await Task.WhenAll(evaluations);
         }
         finally
         {
@@ -429,7 +424,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                        })
                        .ToList();
 
-        var results = await Task.WhenAll(searches).ConfigureAwait(false);
+        var results = await Task.WhenAll(searches);
 
         if (results.All(static result => result is null))
         {
@@ -464,7 +459,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         searchCts.CancelAfter(PerHuggingFaceCallTimeout);
         try
         {
-            return await _discovery.SearchAsync(query, searchCts.Token).ConfigureAwait(false);
+            return await _discovery.SearchAsync(query, searchCts.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -530,14 +525,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         SemaphoreSlim inspectionGate,
         CancellationToken cancellationToken)
     {
-        await inspectionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await inspectionGate.WaitAsync(cancellationToken);
         try
         {
             using var repoCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             repoCts.CancelAfter(PerHuggingFaceCallTimeout);
 
-            return await EvaluateRepoAsync(summary, quant, ctxTarget, profile, installedKeys, repoCts.Token)
-                .ConfigureAwait(false);
+            return await EvaluateRepoAsync(summary, quant, ctxTarget, profile, installedKeys, repoCts.Token);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -574,7 +568,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         CancellationToken cancellationToken)
     {
         var repoId = summary.RepoId;
-        var detail = await _discovery.InspectRepoAsync(repoId, cancellationToken).ConfigureAwait(false);
+        var detail = await _discovery.InspectRepoAsync(repoId, cancellationToken);
 
         var selected = GgufFileSelector.SelectBestFit(_estimator, detail.Files, quant, ctxTarget, profile);
         if (selected is null)
@@ -600,7 +594,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     {
         try
         {
-            var installed = await _modelRegistry.ListAsync(cancellationToken).ConfigureAwait(false);
+            var installed = await _modelRegistry.ListAsync(cancellationToken);
             return installed.Select(entry => entry.ModelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

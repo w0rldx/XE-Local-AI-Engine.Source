@@ -74,7 +74,7 @@ internal static class AssertEx
     {
         try
         {
-            await action().ConfigureAwait(false);
+            await action();
         }
         catch (TException exception)
         {

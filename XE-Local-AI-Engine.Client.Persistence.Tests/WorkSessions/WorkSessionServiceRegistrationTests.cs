@@ -49,25 +49,24 @@ public sealed class WorkSessionServiceRegistrationTests
     public async Task Reconciler_CollapsesInFlightSessionsOnlyWhenEnabled()
     {
         using var disabledFixture = new WorkSessionTestFixture();
-        await using var disabledContext = await disabledFixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var disabledContext = await disabledFixture.CreateSchemaAsync();
         var disabledStore = WorkSessionTestFixture.StoreFor(disabledContext);
-        var disabledSessionId = await ArrangeRunningAsync(disabledStore).ConfigureAwait(false);
-        await RunReconcilerAsync(disabledStore, new WorkSessionOptions()).ConfigureAwait(false);
+        var disabledSessionId = await ArrangeRunningAsync(disabledStore);
+        await RunReconcilerAsync(disabledStore, new WorkSessionOptions());
         AssertEx.Equal(AgentWorkSessionStatus.Running,
-            (await disabledStore.GetAsync(disabledSessionId).ConfigureAwait(false)).Status,
+            (await disabledStore.GetAsync(disabledSessionId)).Status,
             "A disabled node must leave its session rows exactly as it found them.");
 
         using var enabledFixture = new WorkSessionTestFixture();
-        await using var enabledContext = await enabledFixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var enabledContext = await enabledFixture.CreateSchemaAsync();
         var enabledStore = WorkSessionTestFixture.StoreFor(enabledContext);
-        var enabledSessionId = await ArrangeRunningAsync(enabledStore).ConfigureAwait(false);
+        var enabledSessionId = await ArrangeRunningAsync(enabledStore);
         await RunReconcilerAsync(enabledStore,
                 new WorkSessionOptions
                 {
                     Enabled = true
-                })
-            .ConfigureAwait(false);
-        AssertEx.Equal(AgentWorkSessionStatus.Interrupted, (await enabledStore.GetAsync(enabledSessionId).ConfigureAwait(false)).Status);
+                });
+        AssertEx.Equal(AgentWorkSessionStatus.Interrupted, (await enabledStore.GetAsync(enabledSessionId)).Status);
     }
 
     [Test]
@@ -87,8 +86,8 @@ public sealed class WorkSessionServiceRegistrationTests
     private static async Task<Guid> ArrangeRunningAsync(IAgentWorkSessionStore store)
     {
         var sessionId = Guid.NewGuid();
-        var created = await store.CreateAsync(WorkSessionTestFixture.CreateSeed(sessionId)).ConfigureAwait(false);
-        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, created.Version, AgentWorkSessionStatus.Running)).ConfigureAwait(false);
+        var created = await store.CreateAsync(WorkSessionTestFixture.CreateSeed(sessionId));
+        _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, created.Version, AgentWorkSessionStatus.Running));
         return sessionId;
     }
 
@@ -101,8 +100,8 @@ public sealed class WorkSessionServiceRegistrationTests
             Options.Create(options),
             NullLogger<WorkSessionStartupReconciler>.Instance);
 
-        await reconciler.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await reconciler.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await reconciler.StartAsync(CancellationToken.None);
+        await reconciler.StopAsync(CancellationToken.None);
     }
 
     private static string CompositionRootPath()

@@ -25,31 +25,31 @@ public sealed class McpAgentRunStoreTests : IDisposable
     public async Task AdmitAsync_SameFingerprintIsIdempotent_DifferentFingerprintConflicts()
     {
         var databasePath = GetDatabasePath("idempotency.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var requestId = Guid.NewGuid();
         var request = CreateAdmission(fixture.Protector, requestId, "inspect the scheduler");
 
-        var accepted = await fixture.Store.AdmitAsync(request).ConfigureAwait(false);
-        var existing = await fixture.Store.AdmitAsync(request).ConfigureAwait(false);
+        var accepted = await fixture.Store.AdmitAsync(request);
+        var existing = await fixture.Store.AdmitAsync(request);
         var conflict = await fixture.Store.AdmitAsync(request with
         {
             CanonicalRequest = fixture.Protector.ComputeRequestFingerprint(Encoding.UTF8.GetBytes("different canonical request"))
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(McpAgentRunAdmissionKind.Accepted, accepted.Kind);
         AssertEx.Equal(McpAgentRunAdmissionKind.Existing, existing.Kind);
         AssertEx.Equal(McpAgentRunAdmissionKind.RequestIdConflict, conflict.Kind);
         AssertEx.True(accepted.Run!.RequestFingerprint.Span.SequenceEqual(existing.Run!.RequestFingerprint.Span),
             "Idempotent lookup must return the permanent keyed fingerprint.");
-        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.IdentityCount);
+        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync()).Persisted.IdentityCount);
     }
 
     [Test]
     public async Task AdmitAsync_EnforcesBoundedAsciiAgenticPrefixAlphabet()
     {
         var databasePath = GetDatabasePath("invalid-agentic-prefix.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
 
         foreach (var prefix in new[]
@@ -64,24 +64,24 @@ public sealed class McpAgentRunStoreTests : IDisposable
                 RequestingKeyPrefix = prefix
             };
 
-            _ = await AssertEx.ThrowsAsync<ArgumentException>(() => fixture.Store.AdmitAsync(request)).ConfigureAwait(false);
+            _ = await AssertEx.ThrowsAsync<ArgumentException>(() => fixture.Store.AdmitAsync(request));
         }
 
         var valid = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "inspect valid") with
         {
             IsAgenticAutoApprove = true,
             RequestingKeyPrefix = "xemcp_Abc-123"
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.Equal(McpAgentRunAdmissionKind.Accepted, valid.Kind);
-        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.IdentityCount);
+        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync()).Persisted.IdentityCount);
     }
 
     [Test]
     public async Task AdmitAsync_ConcurrentDuplicate_HasOneIdentityAndNoDoubleReservation()
     {
         var databasePath = GetDatabasePath("concurrent-duplicate.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         var requestId = Guid.NewGuid();
         byte[] fingerprint;
         await using (var seed = CreateFixture(databasePath))
@@ -95,15 +95,15 @@ public sealed class McpAgentRunStoreTests : IDisposable
             return await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "same task") with
             {
                 CanonicalRequest = fingerprint
-            }).ConfigureAwait(false);
+            });
         });
 
-        var results = await Task.WhenAll(starts).ConfigureAwait(false);
+        var results = await Task.WhenAll(starts);
         AssertEx.Equal(expected: 1, results.Count(result => result.Kind == McpAgentRunAdmissionKind.Accepted));
         AssertEx.Equal(expected: 7, results.Count(result => result.Kind == McpAgentRunAdmissionKind.Existing));
 
         await using var verify = CreateFixture(databasePath);
-        var ledger = await verify.Store.VerifyLedgerAsync().ConfigureAwait(false);
+        var ledger = await verify.Store.VerifyLedgerAsync();
         AssertEx.True(ledger.IsConsistent, "Concurrent admission must leave the singleton counters consistent.");
         AssertEx.Equal(expected: 1L, ledger.Persisted.IdentityCount);
         AssertEx.Equal(expected: 1L, ledger.Persisted.NonterminalRunCount);
@@ -113,17 +113,17 @@ public sealed class McpAgentRunStoreTests : IDisposable
     public async Task AdmitAsync_AtNonterminalLimit_RejectsWithoutChargingIdentityOrPayload()
     {
         var databasePath = GetDatabasePath("nonterminal-capacity.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         for (var index = 0; index < McpAgentRunStore.MaxNonterminalRuns; index++)
         {
-            var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), $"task-{index}")).ConfigureAwait(false);
+            var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), $"task-{index}"));
             AssertEx.Equal(McpAgentRunAdmissionKind.Accepted, admitted.Kind);
         }
 
-        var before = (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted;
-        var rejected = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "over capacity")).ConfigureAwait(false);
-        var after = (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted;
+        var before = (await fixture.Store.VerifyLedgerAsync()).Persisted;
+        var rejected = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "over capacity"));
+        var after = (await fixture.Store.VerifyLedgerAsync()).Persisted;
 
         AssertEx.Equal(McpAgentRunAdmissionKind.CapacityExceeded, rejected.Kind);
         AssertEx.Equal(McpAgentRunCapacityKind.NonterminalRuns, rejected.CapacityKind);
@@ -135,27 +135,27 @@ public sealed class McpAgentRunStoreTests : IDisposable
     public async Task AdmitAsync_WhenSingletonCountersDrift_UsesSerializedCountersUntilStartupRepair()
     {
         var databasePath = GetDatabasePath("counter-drift.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "first")).ConfigureAwait(false);
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "first"));
 
         await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = "UPDATE mcp_agent_run_ledger SET identity_count = identity_count + 1 WHERE id = 1;";
-            _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await command.ExecuteNonQueryAsync();
         }
 
-        var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "second")).ConfigureAwait(false);
+        var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "second"));
 
         AssertEx.Equal(McpAgentRunAdmissionKind.Accepted, admitted.Kind);
-        AssertEx.False((await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).IsConsistent,
+        AssertEx.False((await fixture.Store.VerifyLedgerAsync()).IsConsistent,
             "Steady-state mutation must not reconstruct the full retained-run table under its write transaction.");
 
-        var rebuilt = await fixture.Store.RebuildLedgerAsync(updatedAtUtc: 10).ConfigureAwait(false);
+        var rebuilt = await fixture.Store.RebuildLedgerAsync(updatedAtUtc: 10);
         AssertEx.Equal(expected: 2L, rebuilt.IdentityCount);
-        AssertEx.True((await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).IsConsistent,
+        AssertEx.True((await fixture.Store.VerifyLedgerAsync()).IsConsistent,
             "The explicit startup repair API must reconstruct counters from authoritative rows.");
     }
 
@@ -163,11 +163,11 @@ public sealed class McpAgentRunStoreTests : IDisposable
     public async Task ListAsync_UsesMetadataOnlyProjectionAndDoesNotReturnPayloads()
     {
         var databasePath = GetDatabasePath("metadata-list.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "private task")).ConfigureAwait(false);
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "private task"));
 
-        var runs = await fixture.Store.ListAsync(limit: 10).ConfigureAwait(false);
+        var runs = await fixture.Store.ListAsync(limit: 10);
 
         AssertEx.Equal(expected: 1, runs.Count);
         AssertEx.Null(runs[0].Task);
@@ -188,20 +188,20 @@ public sealed class McpAgentRunStoreTests : IDisposable
     public async Task Payloads_AreEncryptedWithFieldBinding_AndTamperFailsClosed()
     {
         var databasePath = GetDatabasePath("payload-protection.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var requestId = Guid.NewGuid();
         const string secret = "private-task-material-93d2828b-84c8-440b-a187-a972095577e4";
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, secret)).ConfigureAwait(false);
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, secret));
 
         byte[] envelope;
         await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = "SELECT task_payload FROM mcp_agent_runs WHERE request_id = $requestId;";
             command.Parameters.AddWithValue("$requestId", requestId.ToString("D"));
-            envelope = (byte[])(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+            envelope = (byte[])(await command.ExecuteScalarAsync())!;
         }
 
         AssertEx.False(envelope.AsSpan().IndexOf(Encoding.UTF8.GetBytes(secret)) >= 0,
@@ -211,28 +211,28 @@ public sealed class McpAgentRunStoreTests : IDisposable
         {
             _ = fixture.Protector.Unprotect(requestId, "result", envelope);
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
         envelope[^1] ^= 0x01;
         _ = await AssertEx.ThrowsAsync<AuthenticationTagMismatchException>(() =>
         {
             _ = fixture.Protector.Unprotect(requestId, "task", envelope);
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
     }
 
     [Test]
     public async Task ClaimStopFinalizeAndCompaction_EnforceVersionedLifecycleAndPermanentIdentity()
     {
         var databasePath = GetDatabasePath("lifecycle.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var requestId = Guid.NewGuid();
-        var accepted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "long-running review")).ConfigureAwait(false);
-        var claimed = await fixture.Store.TryClaimAsync(requestId, accepted.Run!.Version, claimedAtUtc: 20).ConfigureAwait(false);
+        var accepted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "long-running review"));
+        var claimed = await fixture.Store.TryClaimAsync(requestId, accepted.Run!.Version, claimedAtUtc: 20);
         var stopped = await fixture.Store.RequestStopAsync(requestId,
             claimed.Run!.Version,
             McpAgentRunStopReason.WatchdogExpired,
-            requestedAtUtc: 30).ConfigureAwait(false);
+            requestedAtUtc: 30);
 
         AssertEx.Equal(McpAgentRunClaimKind.Claimed, claimed.Kind);
         AssertEx.Equal(McpAgentRunStopKind.Requested, stopped.Kind);
@@ -244,7 +244,7 @@ public sealed class McpAgentRunStoreTests : IDisposable
                 FailureCode: null,
                 Result: "late success",
                 DisplayMessage: null,
-                CompletedAtUtc: 31)).ConfigureAwait(false),
+                CompletedAtUtc: 31)),
             "A stale normal completion must lose after the stop marker bumps the version.");
 
         AssertEx.True(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
@@ -255,24 +255,24 @@ public sealed class McpAgentRunStoreTests : IDisposable
                 "watchdog_expired",
                 Result: null,
                 DisplayMessage: "Run exceeded its time limit.",
-                CompletedAtUtc: 32)).ConfigureAwait(false),
+                CompletedAtUtc: 32)),
             "The marker-matched worker finalization should commit exactly once.");
 
-        var beforeCompact = AssertEx.NotNull(await fixture.Store.GetAsync(requestId).ConfigureAwait(false));
+        var beforeCompact = AssertEx.NotNull(await fixture.Store.GetAsync(requestId));
         AssertEx.Equal(McpAgentRunStatus.Failed, beforeCompact.Status);
         AssertEx.Equal("watchdog_expired", beforeCompact.FailureCode);
-        AssertEx.Equal(expected: 1, await fixture.Store.CompactExpiredPayloadsAsync(expiresBeforeUtc: 200_000_000).ConfigureAwait(false));
-        var expired = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "long-running review")).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, await fixture.Store.CompactExpiredPayloadsAsync(expiresBeforeUtc: 200_000_000));
+        var expired = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "long-running review"));
         AssertEx.Equal(McpAgentRunAdmissionKind.ResultExpired, expired.Kind);
         AssertEx.True(expired.Run!.PayloadExpired, "Compaction should retain identity while removing encrypted payloads.");
-        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.IdentityCount);
+        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync()).Persisted.IdentityCount);
     }
 
     [Test]
     public async Task ReconcileInterruptedRuns_MapsPersistedStopMarkersWithoutReplayingRunningRows()
     {
         var databasePath = GetDatabasePath("recovery.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         var ids = new[]
         {
             Guid.NewGuid(),
@@ -283,33 +283,33 @@ public sealed class McpAgentRunStoreTests : IDisposable
 
         for (var index = 0; index < ids.Length; index++)
         {
-            var accepted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, ids[index], $"task-{index}")).ConfigureAwait(false);
-            var claimed = await fixture.Store.TryClaimAsync(ids[index], accepted.Run!.Version, claimedAtUtc: 20 + index).ConfigureAwait(false);
+            var accepted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, ids[index], $"task-{index}"));
+            var claimed = await fixture.Store.TryClaimAsync(ids[index], accepted.Run!.Version, claimedAtUtc: 20 + index);
             if (index == 0)
             {
-                _ = await fixture.Store.RequestStopAsync(ids[index], claimed.Run!.Version, McpAgentRunStopReason.UserCancellation, requestedAtUtc: 30).ConfigureAwait(false);
+                _ = await fixture.Store.RequestStopAsync(ids[index], claimed.Run!.Version, McpAgentRunStopReason.UserCancellation, requestedAtUtc: 30);
             }
             else if (index == 1)
             {
-                _ = await fixture.Store.RequestStopAsync(ids[index], claimed.Run!.Version, McpAgentRunStopReason.WatchdogExpired, requestedAtUtc: 31).ConfigureAwait(false);
+                _ = await fixture.Store.RequestStopAsync(ids[index], claimed.Run!.Version, McpAgentRunStopReason.WatchdogExpired, requestedAtUtc: 31);
             }
         }
 
-        AssertEx.Equal(expected: 3, await fixture.Store.ReconcileInterruptedRunsAsync(completedAtUtc: 40).ConfigureAwait(false));
-        AssertEx.Equal(McpAgentRunStatus.Cancelled, (await fixture.Store.GetAsync(ids[0]).ConfigureAwait(false))!.Status);
-        var watchdog = AssertEx.NotNull(await fixture.Store.GetAsync(ids[1]).ConfigureAwait(false));
+        AssertEx.Equal(expected: 3, await fixture.Store.ReconcileInterruptedRunsAsync(completedAtUtc: 40));
+        AssertEx.Equal(McpAgentRunStatus.Cancelled, (await fixture.Store.GetAsync(ids[0]))!.Status);
+        var watchdog = AssertEx.NotNull(await fixture.Store.GetAsync(ids[1]));
         AssertEx.Equal(McpAgentRunStatus.Failed, watchdog.Status);
         AssertEx.Equal("watchdog_expired", watchdog.FailureCode);
-        AssertEx.Equal(McpAgentRunStatus.Interrupted, (await fixture.Store.GetAsync(ids[2]).ConfigureAwait(false))!.Status);
-        AssertEx.Equal(expected: 0L, (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.NonterminalRunCount);
+        AssertEx.Equal(McpAgentRunStatus.Interrupted, (await fixture.Store.GetAsync(ids[2]))!.Status);
+        AssertEx.Equal(expected: 0L, (await fixture.Store.VerifyLedgerAsync()).Persisted.NonterminalRunCount);
     }
 
     private static async Task InitializeDatabaseAsync(string databasePath)
     {
         using var keyHolder = new FixedNodeSqliteKeyHolder();
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
-        await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
     }
 
     private static StoreFixture CreateFixture(string databasePath) =>
@@ -354,7 +354,7 @@ public sealed class McpAgentRunStoreTests : IDisposable
         public async ValueTask DisposeAsync()
         {
             Protector.Dispose();
-            await _context.DisposeAsync().ConfigureAwait(false);
+            await _context.DisposeAsync();
             _keyHolder.Dispose();
         }
     }

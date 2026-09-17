@@ -142,7 +142,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         foreach (var state in _sandboxes.Values)
         {
-            await TerminateAsync(state, CancellationToken.None).ConfigureAwait(false);
+            await TerminateAsync(state, CancellationToken.None);
         }
 
         _sandboxes.Clear();
@@ -157,7 +157,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         var options = _options.CurrentValue;
         RejectUnservableRequest(request, options);
 
-        await _sync.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _sync.WaitAsync(cancellationToken);
         try
         {
             var sandboxId = BuildSandboxId(request.AttachKey);
@@ -168,8 +168,8 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 return existing.Handle;
             }
 
-            await EvictOwnerConflictsAsync(request.AttachKey, cancellationToken).ConfigureAwait(false);
-            return await CreateVerifiedAsync(request, options, sandboxId, cancellationToken).ConfigureAwait(false);
+            await EvictOwnerConflictsAsync(request.AttachKey, cancellationToken);
+            return await CreateVerifiedAsync(request, options, sandboxId, cancellationToken);
         }
         finally
         {
@@ -231,8 +231,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                                              StandardInput = request.StandardInput,
                                              MaxCapturedBytes = DefaultMaxCapturedOutputBytes
                                          },
-                                         execution.Token)
-                                     .ConfigureAwait(false);
+                                         execution.Token);
 
             return new SandboxCommandResult
             {
@@ -284,14 +283,13 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
-        var content = await File.ReadAllBytesAsync(request.SourcePath, cancellationToken).ConfigureAwait(false);
+        var content = await File.ReadAllBytesAsync(request.SourcePath, cancellationToken);
 
         await DockerWorkspaceHostFiles.WriteAsync(state.WorkspaceRoot,
                                           state.WorkspaceMountTarget,
                                           request.DestinationPath,
                                           content,
-                                          cancellationToken)
-                                      .ConfigureAwait(false);
+                                          cancellationToken);
     }
 
     public async Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -299,7 +297,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
 
-        return await ReadFileAsync(handle, sandboxPath, DefaultMaxCapturedOutputBytes, cancellationToken).ConfigureAwait(false);
+        return await ReadFileAsync(handle, sandboxPath, DefaultMaxCapturedOutputBytes, cancellationToken);
     }
 
     public async Task<string> ReadFileAsync(SandboxHandle handle,
@@ -322,8 +320,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                                          // returned while one over it is detected rather than silently trimmed.
                                          MaxCapturedBytes = maxBytes + 1
                                      },
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+                                     cancellationToken);
 
         if (outcome.ExitCode != 0)
         {
@@ -346,8 +343,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         // Implemented as a bounded in-container read plus a host write rather than through the Docker archive API.
         // Measured reason: on a rootless daemon the archive endpoint fails with `remount-ro … operation not
         // permitted` for any path under a bind mount — which is where every interesting artifact lives.
-        var content = await ReadFileAsync(handle, request.SourcePath, DefaultMaxCapturedOutputBytes, cancellationToken)
-            .ConfigureAwait(false);
+        var content = await ReadFileAsync(handle, request.SourcePath, DefaultMaxCapturedOutputBytes, cancellationToken);
 
         var directory = Path.GetDirectoryName(request.DestinationPath);
         if (!string.IsNullOrEmpty(directory))
@@ -355,7 +351,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             Directory.CreateDirectory(directory);
         }
 
-        await File.WriteAllTextAsync(request.DestinationPath, content, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(request.DestinationPath, content, cancellationToken);
     }
 
     public async Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default)
@@ -367,7 +363,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         var state = GetAliveState(handle);
         if (state.InFlight.TryGetValue(executionId, out var execution))
         {
-            await execution.CancelAsync().ConfigureAwait(false);
+            await execution.CancelAsync();
         }
     }
 
@@ -377,7 +373,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
         if (_sandboxes.TryRemove(handle.SandboxId, out var state))
         {
-            await TerminateAsync(state, cancellationToken).ConfigureAwait(false);
+            await TerminateAsync(state, cancellationToken);
         }
     }
 
@@ -652,7 +648,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         {
             // Probed BEFORE the identity is resolved, because the identity depends on it: which in-container UID maps
             // to this engine's host UID is a property of the daemon, not of the configuration.
-            var daemon = await client.ProbeAsync(cancellationToken).ConfigureAwait(false);
+            var daemon = await client.ProbeAsync(cancellationToken);
             var identity = ResolveIdentity(options, daemon.IsRootless);
 
             var bindMounts = BuildBindMounts(request, options, workspaceRoot);
@@ -668,10 +664,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 request.ResourceLimits,
                 request.NetworkPolicy);
 
-            containerId = await client.CreateContainerAsync(specification, cancellationToken).ConfigureAwait(false);
-            await client.StartContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+            containerId = await client.CreateContainerAsync(specification, cancellationToken);
+            await client.StartContainerAsync(containerId, cancellationToken);
 
-            var observed = await client.InspectContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+            var observed = await client.InspectContainerAsync(containerId, cancellationToken);
             var violations = DockerSandboxHardening.FindViolations(specification, observed, daemon.IsRootless);
             if (violations.Count > 0)
             {
@@ -686,8 +682,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                                                                  + string.Join(" ", violations));
             }
 
-            await VerifyWorkspaceMappingAsync(client, containerId, workspaceRoot, options.WorkspaceMountTarget, identity, cancellationToken)
-                .ConfigureAwait(false);
+            await VerifyWorkspaceMappingAsync(client, containerId, workspaceRoot, options.WorkspaceMountTarget, identity, cancellationToken);
 
             var handle = new SandboxHandle
             {
@@ -712,10 +707,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         {
             if (containerId is not null)
             {
-                await SafeRemoveAsync(client, containerId).ConfigureAwait(false);
+                await SafeRemoveAsync(client, containerId);
             }
 
-            await client.DisposeAsync().ConfigureAwait(false);
+            await client.DisposeAsync();
             throw;
         }
     }
@@ -829,8 +824,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                                               Arguments = [DockerSandboxPaths.ResolveContainerPath(workspaceMountTarget, probeName)],
                                               MaxCapturedBytes = ProbeCapturedOutputBytes
                                           },
-                                          cancellationToken)
-                                      .ConfigureAwait(false);
+                                          cancellationToken);
 
             var engineUserId = OperatingSystem.IsLinux() ? GetEffectiveUserId() : (uint?)null;
             var failure = DescribeWorkspaceMappingFailure(outcome.ExitCode == 0,
@@ -873,7 +867,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     {
         try
         {
-            await client.RemoveContainerAsync(containerId, CancellationToken.None).ConfigureAwait(false);
+            await client.RemoveContainerAsync(containerId, CancellationToken.None);
         }
         catch (DockerRuntimeException exception)
         {
@@ -928,7 +922,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         {
             if (_sandboxes.TryRemove(conflicting, out var state))
             {
-                await TerminateAsync(state, cancellationToken).ConfigureAwait(false);
+                await TerminateAsync(state, cancellationToken);
             }
         }
     }
@@ -944,14 +938,14 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     {
         foreach (var execution in state.InFlight.Values)
         {
-            await execution.CancelAsync().ConfigureAwait(false);
+            await execution.CancelAsync();
         }
 
         state.InFlight.Clear();
 
         try
         {
-            await state.Client.RemoveContainerAsync(state.ContainerId, cancellationToken).ConfigureAwait(false);
+            await state.Client.RemoveContainerAsync(state.ContainerId, cancellationToken);
         }
         catch (DockerRuntimeException exception)
         {
@@ -959,7 +953,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         }
         finally
         {
-            await state.Client.DisposeAsync().ConfigureAwait(false);
+            await state.Client.DisposeAsync();
         }
     }
 
@@ -994,7 +988,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         try
         {
             var live = _sandboxes.Values.Select(static state => state.ContainerId).ToHashSet(StringComparer.Ordinal);
-            var owned = await client.ListContainersAsync(BuildOwnershipFilter(), cancellationToken).ConfigureAwait(false);
+            var owned = await client.ListContainersAsync(BuildOwnershipFilter(), cancellationToken);
             var removed = 0;
 
             foreach (var containerId in owned)
@@ -1008,7 +1002,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
                 try
                 {
-                    await client.RemoveContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+                    await client.RemoveContainerAsync(containerId, cancellationToken);
                     removed++;
                     _logger.LogInformation("Removed orphaned Development Mode container {ContainerId} left by a previous run.", containerId);
                 }
@@ -1024,7 +1018,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         }
         finally
         {
-            await client.DisposeAsync().ConfigureAwait(false);
+            await client.DisposeAsync();
         }
     }
 

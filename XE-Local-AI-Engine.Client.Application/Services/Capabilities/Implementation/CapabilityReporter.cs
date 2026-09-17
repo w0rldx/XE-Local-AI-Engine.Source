@@ -73,9 +73,9 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var hardware = await _composer.DetectHardwareAsync(cancellationToken).ConfigureAwait(false);
-        var cloudConfig = await _cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
-        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var hardware = await _composer.DetectHardwareAsync(cancellationToken);
+        var cloudConfig = await _cloudCredentialStore.LoadConfigAsync(cancellationToken);
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
         var detectedAt = _timeProvider.GetUtcNow();
 
         // An Azure connection (API-key or managed-identity, single- or multi-model) reports as a configured cloud node.
@@ -86,10 +86,10 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             return CapabilityReportComposer.ComposeCloud(connection, nodeSettings, hardware, detectedAt);
         }
 
-        var ollamaStatus = await _prober.DetectOllamaRuntimeAsync(cancellationToken).ConfigureAwait(false);
-        var installedModelInventory = await _prober.GetInstalledModelInventoryAsync(cancellationToken).ConfigureAwait(false);
-        var installedModelMetadata = await _prober.GetInstalledModelMetadataAsync(installedModelInventory.Models, cancellationToken).ConfigureAwait(false);
-        var activeModel = await _prober.DetectActiveModelAsync(cancellationToken).ConfigureAwait(false);
+        var ollamaStatus = await _prober.DetectOllamaRuntimeAsync(cancellationToken);
+        var installedModelInventory = await _prober.GetInstalledModelInventoryAsync(cancellationToken);
+        var installedModelMetadata = await _prober.GetInstalledModelMetadataAsync(installedModelInventory.Models, cancellationToken);
+        var activeModel = await _prober.DetectActiveModelAsync(cancellationToken);
 
         return _composer.ComposeLocal(hardware, ollamaStatus, installedModelInventory, installedModelMetadata, activeModel, nodeSettings, detectedAt);
     }
@@ -107,7 +107,7 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             return;
         }
 
-        if (!await _reportSync.WaitAsync(millisecondsTimeout: 0, cancellationToken).ConfigureAwait(false))
+        if (!await _reportSync.WaitAsync(millisecondsTimeout: 0, cancellationToken))
         {
             _logger.LogDebug("Skipping capability report because another report is already in progress.");
             return;
@@ -123,8 +123,8 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             }
 
             _lastReportStartedAt = now;
-            var capabilities = await DetectCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-            await _hubConnection.SendCapabilitiesAsync(capabilities, cancellationToken).ConfigureAwait(false);
+            var capabilities = await DetectCapabilitiesAsync(cancellationToken);
+            await _hubConnection.SendCapabilitiesAsync(capabilities, cancellationToken);
             _logger.LogInformation("Reported worker capabilities to API with {ModelCount} installed model(s).",
                 capabilities.InstalledModels.Count);
         }
@@ -140,7 +140,7 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 
         try
         {
-            if (!await _prober.IsRuntimeReachableAsync(cancellationToken).ConfigureAwait(false))
+            if (!await _prober.IsRuntimeReachableAsync(cancellationToken))
             {
                 _logger.LogWarning("Ollama is not reachable during capability preflight.");
                 return false;
@@ -152,14 +152,14 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             return false;
         }
 
-        var installedModels = await _prober.GetInstalledModelNamesAsync(cancellationToken).ConfigureAwait(false);
+        var installedModels = await _prober.GetInstalledModelNamesAsync(cancellationToken);
         if (installedModels.Count == 0)
         {
             _logger.LogWarning("Ollama is reachable but no local models are installed.");
             return false;
         }
 
-        var defaultModel = await ResolveDefaultModelAsync(cancellationToken).ConfigureAwait(false);
+        var defaultModel = await ResolveDefaultModelAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(modelName))
         {

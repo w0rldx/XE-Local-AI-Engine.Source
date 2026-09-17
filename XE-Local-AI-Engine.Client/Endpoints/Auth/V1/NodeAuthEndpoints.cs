@@ -16,12 +16,12 @@ public sealed class NodeAuthStatusEndpoint(INodeAuthService authService) : Endpo
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var status = await authService.GetStatusAsync(User, ct).ConfigureAwait(false);
+        var status = await authService.GetStatusAsync(User, ct);
         await Send.OkAsync(new NodeAuthStatusResponse
         {
             SetupRequired = status.SetupRequired,
             Authenticated = status.Authenticated
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -37,10 +37,10 @@ public sealed class NodeSetupEndpoint(INodeAuthService authService) : Endpoint<N
 
     public override async Task HandleAsync(NodeSetupRequest req, CancellationToken ct)
     {
-        var result = await authService.SetupAsync(req.Email, req.Password, ct).ConfigureAwait(false);
+        var result = await authService.SetupAsync(req.Email, req.Password, ct);
         if (result.Succeeded)
         {
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
+            await Send.NoContentAsync(ct);
             return;
         }
 
@@ -49,7 +49,7 @@ public sealed class NodeSetupEndpoint(INodeAuthService authService) : Endpoint<N
             await Send.ResultAsync(Results.Conflict(new NodeAuthErrorResponse
             {
                 Message = "Node auth is already configured."
-            })).ConfigureAwait(false);
+            }));
             return;
         }
 
@@ -57,7 +57,7 @@ public sealed class NodeSetupEndpoint(INodeAuthService authService) : Endpoint<N
         {
             Message = "Node auth setup failed.",
             Errors = result.Errors
-        })).ConfigureAwait(false);
+        }));
     }
 }
 
@@ -77,8 +77,8 @@ public sealed class NodeLoginEndpoint(INodeAuthService authService) : Endpoint<N
 
     public override async Task HandleAsync(NodeLoginRequest req, CancellationToken ct)
     {
-        var result = await authService.LoginAsync(req.Email, req.Password, ct).ConfigureAwait(false);
-        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct).ConfigureAwait(false);
+        var result = await authService.LoginAsync(req.Email, req.Password, ct);
+        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct);
     }
 }
 
@@ -95,8 +95,8 @@ public sealed class NodeRefreshEndpoint(INodeAuthService authService) : Endpoint
     public override async Task HandleAsync(CancellationToken ct)
     {
         var refreshToken = HttpContext.Request.Cookies[NodeAuthCookie.RefreshCookieName];
-        var result = await authService.RefreshAsync(refreshToken, ct).ConfigureAwait(false);
-        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct).ConfigureAwait(false);
+        var result = await authService.RefreshAsync(refreshToken, ct);
+        await NodeAuthEndpointSupport.SendTokenResultAsync(Send, result, ct);
     }
 }
 
@@ -111,9 +111,9 @@ public sealed class NodeLogoutEndpoint(INodeAuthService authService) : EndpointW
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await authService.RevokeRefreshTokensAsync(User, ct).ConfigureAwait(false);
+        await authService.RevokeRefreshTokensAsync(User, ct);
         NodeAuthCookie.ClearRefreshToken(HttpContext.Response);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -128,19 +128,19 @@ public sealed class NodeChangePasswordEndpoint(INodeAuthService authService) : E
 
     public override async Task HandleAsync(NodeChangePasswordRequest req, CancellationToken ct)
     {
-        var result = await authService.ChangePasswordAsync(User, req.CurrentPassword, req.NewPassword, ct).ConfigureAwait(false);
+        var result = await authService.ChangePasswordAsync(User, req.CurrentPassword, req.NewPassword, ct);
         if (!result.Succeeded)
         {
             await Send.ResultAsync(Results.BadRequest(new NodeAuthErrorResponse
             {
                 Message = "Password change failed.",
                 Errors = result.Errors
-            })).ConfigureAwait(false);
+            }));
             return;
         }
 
         NodeAuthCookie.ClearRefreshToken(HttpContext.Response);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -155,10 +155,10 @@ public sealed class NodeMeEndpoint(INodeAuthService authService) : EndpointWitho
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var currentUser = await authService.GetCurrentUserAsync(User, ct).ConfigureAwait(false);
+        var currentUser = await authService.GetCurrentUserAsync(User, ct);
         if (currentUser is null)
         {
-            await Send.UnauthorizedAsync(ct).ConfigureAwait(false);
+            await Send.UnauthorizedAsync(ct);
             return;
         }
 
@@ -166,6 +166,6 @@ public sealed class NodeMeEndpoint(INodeAuthService authService) : EndpointWitho
         {
             UserName = currentUser.UserName,
             Roles = currentUser.Roles
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

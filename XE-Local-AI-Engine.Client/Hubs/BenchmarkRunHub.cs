@@ -40,9 +40,9 @@ public sealed class BenchmarkRunHub(BenchmarkRecordService records, IBenchmarkEv
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var run = await _records.GetRunAsync(runId, cancellationToken).ConfigureAwait(false)
+        var run = await _records.GetRunAsync(runId, cancellationToken)
                   ?? throw new HubException("Benchmark run was not found.");
-        await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken);
 
         var replay = _events.Replay(runId, afterSeq, run.Version);
         var latestSequence = Math.Max(replay.LatestSequence, run.LastStreamSequence);
@@ -50,14 +50,13 @@ public sealed class BenchmarkRunHub(BenchmarkRecordService records, IBenchmarkEv
         {
             await Clients.Caller.SendAsync(BenchmarkRunHubEvents.ReplayReset,
                              new BenchmarkRunReplayReset(runId, latestSequence, run.Version),
-                             cancellationToken)
-                         .ConfigureAwait(false);
+                             cancellationToken);
             return;
         }
 
         foreach (var streamEvent in replay.Events)
         {
-            await Clients.Caller.SendAsync(BenchmarkRunHubEvents.Event, streamEvent, cancellationToken).ConfigureAwait(false);
+            await Clients.Caller.SendAsync(BenchmarkRunHubEvents.Event, streamEvent, cancellationToken);
         }
     }
 

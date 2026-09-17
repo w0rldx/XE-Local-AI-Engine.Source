@@ -31,7 +31,7 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
     public async Task<TrainingArtifactRecord> DecideAsync(Guid artifactId, Guid comparisonId, long expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+        var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken)
                        ?? throw new TrainingExportRejectedException("The artifact was not found.");
         if (artifact.Version != expectedVersion)
         {
@@ -49,18 +49,18 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
             throw new TrainingExportRejectedException("Begin quality revalidation before replacing a completed decision.");
         }
 
-        var run = await _runs.GetAsync(artifact.RunId, cancellationToken).ConfigureAwait(false)
+        var run = await _runs.GetAsync(artifact.RunId, cancellationToken)
                   ?? throw new TrainingExportRejectedException("The run behind this artifact was not found.");
         if (string.IsNullOrWhiteSpace(run.LinkedInstalledModelName) || string.IsNullOrWhiteSpace(run.LinkedModelContentFingerprint))
         {
             throw new TrainingExportRejectedException("This run has no installed base counterpart, so promotion quality cannot be compared.");
         }
 
-        var comparison = await _evaluations.GetComparisonAsync(comparisonId, cancellationToken).ConfigureAwait(false)
+        var comparison = await _evaluations.GetComparisonAsync(comparisonId, cancellationToken)
                          ?? throw new TrainingExportRejectedException("The comparison report was not found.");
-        var baseEvaluation = await _evaluations.GetAsync(comparison.BaseEvaluationRunId, cancellationToken).ConfigureAwait(false)
+        var baseEvaluation = await _evaluations.GetAsync(comparison.BaseEvaluationRunId, cancellationToken)
                              ?? throw new TrainingExportRejectedException("The base evaluation was not found.");
-        var tunedEvaluation = await _evaluations.GetAsync(comparison.TunedEvaluationRunId, cancellationToken).ConfigureAwait(false)
+        var tunedEvaluation = await _evaluations.GetAsync(comparison.TunedEvaluationRunId, cancellationToken)
                               ?? throw new TrainingExportRejectedException("The tuned evaluation was not found.");
         if (prior is { Outcome: ArtifactQualityOutcome.Pending, History.Count: > 0 })
         {
@@ -106,14 +106,13 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
             History = prior?.History ?? []
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, comparison.Id,
-                              JsonSerializer.SerializeToUtf8Bytes(decision, TrainingJson.Options), cancellationToken)
-                          .ConfigureAwait(false);
+                              JsonSerializer.SerializeToUtf8Bytes(decision, TrainingJson.Options), cancellationToken);
     }
 
     public async Task<TrainingArtifactRecord> BeginRevalidationAsync(Guid artifactId, long expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+        var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken)
                        ?? throw new TrainingExportRejectedException("The artifact was not found.");
         if (artifact.Version != expectedVersion)
         {
@@ -148,8 +147,7 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
             History = history
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, current.ComparisonId,
-                              JsonSerializer.SerializeToUtf8Bytes(pending, TrainingJson.Options), cancellationToken)
-                          .ConfigureAwait(false);
+                              JsonSerializer.SerializeToUtf8Bytes(pending, TrainingJson.Options), cancellationToken);
     }
 
     public async Task<TrainingArtifactRecord> OverrideAsync(Guid artifactId, long expectedVersion, string reason,
@@ -165,7 +163,7 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
             throw new TrainingExportRejectedException("An audited override reason cannot exceed 1024 characters.");
         }
 
-        var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+        var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken)
                        ?? throw new TrainingExportRejectedException("The artifact was not found.");
         if (artifact.Version != expectedVersion)
         {
@@ -197,8 +195,7 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
             OverriddenAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, comparisonId,
-                              JsonSerializer.SerializeToUtf8Bytes(overridden, TrainingJson.Options), cancellationToken)
-                          .ConfigureAwait(false);
+                              JsonSerializer.SerializeToUtf8Bytes(overridden, TrainingJson.Options), cancellationToken);
     }
 
     public static ArtifactQualityDecisionV1? ReadDecision(TrainingArtifactRecord artifact)

@@ -24,7 +24,7 @@ public sealed class AgentTemplateEndpointsTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -42,7 +42,7 @@ public sealed class AgentTemplateEndpointsTests
                 slugs = Array.Empty<string>()
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -57,11 +57,11 @@ public sealed class AgentTemplateEndpointsTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ListRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
@@ -96,11 +96,11 @@ public sealed class AgentTemplateEndpointsTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -113,9 +113,9 @@ public sealed class AgentTemplateEndpointsTests
         // After import the list endpoint must mark the slug already-imported.
         using var listRequest = new HttpRequestMessage(HttpMethod.Get, ListRoute);
         factory.AddNodeBearerToken(listRequest);
-        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
+        using var listResponse = await client.SendAsync(listRequest);
 
-        var listPayload = await listResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var listPayload = await listResponse.Content.ReadAsStringAsync();
         using var listDocument = JsonDocument.Parse(listPayload);
         var importedItem = listDocument.RootElement.GetProperty("items")
                                        .EnumerateArray()

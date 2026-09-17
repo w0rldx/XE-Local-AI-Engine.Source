@@ -139,7 +139,7 @@ internal sealed class DevelopmentManagementService(
     public async Task<DevelopmentProfileDetectionResult> DetectRepositoryProfileAsync(Guid selectedFolderId,
         CancellationToken cancellationToken = default)
     {
-        var repository = await _repositoryBindings.ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
+        var repository = await _repositoryBindings.ResolveFolderAsync(selectedFolderId, cancellationToken);
         var detected = _profileDetector.Detect(repository.RepositoryRoot);
         return new DevelopmentProfileDetectionResult(detected.ProfileId, detected.BuildTarget, detected.Candidates);
     }
@@ -167,14 +167,14 @@ internal sealed class DevelopmentManagementService(
             throw new DevelopmentWorkspaceSecurityException("Development execution requires explicit trusted-repository acknowledgement.");
         }
 
-        var repository = await _repositoryBindings.ResolveFolderAsync(input.SelectedFolderId, cancellationToken).ConfigureAwait(false);
+        var repository = await _repositoryBindings.ResolveFolderAsync(input.SelectedFolderId, cancellationToken);
 
         // The profile is snapshotted here, once, and is the only source of truth for the life of the project. It is
         // never re-read from the worktree during an attempt: the agent can write to the worktree, so a live read would
         // let it rewrite its own test command.
         // Template provenance is read from the materialization record rather than taken from the request: the client
         // must not be able to assert which template a repository came from.
-        var materialization = await _templateStore.FindMaterializationAsync(input.SelectedFolderId, cancellationToken).ConfigureAwait(false);
+        var materialization = await _templateStore.FindMaterializationAsync(input.SelectedFolderId, cancellationToken);
         var profile = ResolveCommandProfile(input, repository.RepositoryRoot, materialization?.TemplateId.ToString());
         var projectId = DerivedOperationId(input.OperationId, "project");
         var taskId = DerivedOperationId(input.OperationId, "task");
@@ -197,9 +197,8 @@ internal sealed class DevelopmentManagementService(
                                       MaxTokens: input.MaxTokens,
                                       MaxDurationSeconds: input.MaxDurationSeconds,
                                       CommandProfileJson: Encoding.UTF8.GetString(profile.ToCanonicalUtf8())),
-                                  cancellationToken)
-                              .ConfigureAwait(false);
-        return await GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+                                  cancellationToken);
+        return await GetProjectAsync(projectId, cancellationToken);
     }
 
     /// <summary>
@@ -237,43 +236,42 @@ internal sealed class DevelopmentManagementService(
 
     public async Task<DevelopmentProjectAggregate> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        var project = await _store.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var project = await _store.GetProjectAsync(projectId, cancellationToken);
 
         // Legacy projects predate the profile column. Filling it here, rather than only at startup, means a repository
         // that was offline at boot becomes usable as soon as it is back — no restart. A no-op once the profile exists.
-        project = await _profileBackfill.EnsureAsync(project, cancellationToken).ConfigureAwait(false);
-        var tasks = await _store.ListTasksAsync(projectId, cancellationToken).ConfigureAwait(false);
+        project = await _profileBackfill.EnsureAsync(project, cancellationToken);
+        var tasks = await _store.ListTasksAsync(projectId, cancellationToken);
 
         // ONE query for every task's workflow pointer, not one per task: this read always has the whole task list, so
         // asking the single-task question in a loop is a round trip per row on the page that renders most often.
-        var workflowRunIds = await _workflows.FindRunIdsForDevelopmentTasksAsync([.. tasks.Select(static task => task.Id)], cancellationToken)
-                                             .ConfigureAwait(false);
+        var workflowRunIds = await _workflows.FindRunIdsForDevelopmentTasksAsync([.. tasks.Select(static task => task.Id)], cancellationToken);
         var aggregates = new List<DevelopmentTaskAggregate>(tasks.Count);
         foreach (var task in tasks)
         {
             aggregates.Add(new DevelopmentTaskAggregate(task,
-                await _store.ListAttemptsAsync(task.Id, cancellationToken).ConfigureAwait(false),
-                await _store.ListArtifactsAsync(task.Id, cancellationToken).ConfigureAwait(false),
+                await _store.ListAttemptsAsync(task.Id, cancellationToken),
+                await _store.ListArtifactsAsync(task.Id, cancellationToken),
                 workflowRunIds.TryGetValue(task.Id, out var runId) ? runId : null));
         }
 
         return new DevelopmentProjectAggregate(project,
             aggregates,
-            await _store.ListEventsAsync(projectId, cancellationToken).ConfigureAwait(false));
+            await _store.ListEventsAsync(projectId, cancellationToken));
     }
 
     public async Task<DevelopmentTaskAggregate> GetTaskAsync(Guid projectId,
         Guid taskId,
         CancellationToken cancellationToken = default)
     {
-        var task = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
+        var task = await RequireTaskAsync(projectId, taskId, cancellationToken);
 
         // Read back through the pointer a DevTask node run stamps rather than stored on the task: the task row belongs
         // to Development Mode, and a workflow driving one is a fact about the workflow.
         return new DevelopmentTaskAggregate(task,
-            await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false),
-            await _store.ListArtifactsAsync(taskId, cancellationToken).ConfigureAwait(false),
-            await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken).ConfigureAwait(false));
+            await _store.ListAttemptsAsync(taskId, cancellationToken),
+            await _store.ListArtifactsAsync(taskId, cancellationToken),
+            await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken));
     }
 
     public async Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,
@@ -281,19 +279,19 @@ internal sealed class DevelopmentManagementService(
         Guid operationId,
         CancellationToken cancellationToken = default)
     {
-        var project = await _store.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var project = await _store.GetProjectAsync(projectId, cancellationToken);
         DevelopmentTrustPolicy.EnsureCurrent(project, _timeProvider);
-        _ = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        _ = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken);
 
         var existing = await _store.FindOperationAsync(projectId,
             operationId,
             DevelopmentOperationPhases.Completed,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (existing?.AttemptId is { } existingAttemptId)
         {
-            var existingAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
+            var existingAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken))
                 .Single(attempt => attempt.Id == existingAttemptId);
-            var existingTask = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
+            var existingTask = await RequireTaskAsync(projectId, taskId, cancellationToken);
             return new DevelopmentNextActionResult("Attempt",
                 projectId,
                 taskId,
@@ -302,7 +300,7 @@ internal sealed class DevelopmentManagementService(
                 existingAttempt.Role);
         }
 
-        var task = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
+        var task = await RequireTaskAsync(projectId, taskId, cancellationToken);
         if (task.Status == DevelopmentTaskStatus.Blocked
             && string.Equals(task.BlockedReason, ReviewRoundLimitReason, StringComparison.Ordinal))
         {
@@ -315,16 +313,15 @@ internal sealed class DevelopmentManagementService(
                                                   DerivedOperationId(operationId, "ready"),
                                                   DevelopmentTaskStatus.Ready,
                                                   task.Version),
-                                              cancellationToken)
-                                          .ConfigureAwait(false);
-            task = (await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false)) with
+                                              cancellationToken);
+            task = (await _store.GetTaskAsync(taskId, cancellationToken)) with
             {
                 Version = ready.Version
             };
             _logger.LogInformation("Development task status moved Planned to Ready for task {TaskId} in project {ProjectId}.", taskId, projectId);
         }
 
-        var attempts = await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var attempts = await _store.ListAttemptsAsync(taskId, cancellationToken);
         if (attempts.Any(attempt => attempt.Status is DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running))
         {
             throw new DevelopmentInvalidTransitionException("The Development task already has an active attempt.");
@@ -347,8 +344,7 @@ internal sealed class DevelopmentManagementService(
                                           DevelopmentTaskStatus.Blocked,
                                           task.Version,
                                           ReviewRoundLimitReason),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
             _logger.LogInformation("Development task status moved {From} to Blocked for task {TaskId} in project {ProjectId} after {Round} of {Max} rounds: {Reason}",
                 task.Status,
                 taskId,
@@ -386,7 +382,7 @@ internal sealed class DevelopmentManagementService(
         // a declared-cloud external model, and an UNRESOLVED one is refused with it because a deleted connection or an
         // unreadable store says nothing about where the prompt would go.
         if (ExternalModelId.HasExternalScheme(modelId)
-            && await _modelTrustResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
+            && await _modelTrustResolver.ResolveAsync(modelId, cancellationToken) != ModelTrustLocality.Local)
         {
             throw new DevelopmentWorkspaceSecurityException("Development execution cannot start with an external model that is not declared local to this node's trust boundary.");
         }
@@ -409,14 +405,13 @@ internal sealed class DevelopmentManagementService(
                                       provider,
                                       task.Version,
                                       predecessor),
-                                  cancellationToken)
-                              .ConfigureAwait(false);
+                                  cancellationToken);
         if (!_supervisor.StartAttempt(attemptId, role))
         {
             throw new DevelopmentConcurrencyException("The Development attempt is already scheduled.");
         }
 
-        var startedTask = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var startedTask = await _store.GetTaskAsync(taskId, cancellationToken);
         _logger.LogInformation("Development task status moved {From} to {To} for task {TaskId} in project {ProjectId}, starting a {Role} round.",
             task.Status,
             startedTask.Status,
@@ -431,8 +426,8 @@ internal sealed class DevelopmentManagementService(
         Guid attemptId,
         CancellationToken cancellationToken = default)
     {
-        _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
-        var attempt = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
+        _ = await RequireTaskAsync(projectId, taskId, cancellationToken);
+        var attempt = (await _store.ListAttemptsAsync(taskId, cancellationToken))
                       .SingleOrDefault(candidate => candidate.Id == attemptId)
                       ?? throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
         if (attempt.Status is not (DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running))
@@ -440,21 +435,21 @@ internal sealed class DevelopmentManagementService(
             return false;
         }
 
-        return await _supervisor.TryCancelAsync(attemptId).ConfigureAwait(false);
+        return await _supervisor.TryCancelAsync(attemptId);
     }
 
     public async Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        _ = await _store.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        return await _store.ListEventsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        _ = await _store.GetProjectAsync(projectId, cancellationToken);
+        return await _store.ListEventsAsync(projectId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsAsync(Guid projectId,
         Guid taskId,
         CancellationToken cancellationToken = default)
     {
-        _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
-        return await _store.ListArtifactsAsync(taskId, cancellationToken).ConfigureAwait(false);
+        _ = await RequireTaskAsync(projectId, taskId, cancellationToken);
+        return await _store.ListArtifactsAsync(taskId, cancellationToken);
     }
 
     public async Task<DevelopmentArtifactContent> ReadArtifactAsync(Guid projectId,
@@ -462,8 +457,8 @@ internal sealed class DevelopmentManagementService(
         Guid artifactId,
         CancellationToken cancellationToken = default)
     {
-        _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
-        var artifact = await _store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        _ = await RequireTaskAsync(projectId, taskId, cancellationToken);
+        var artifact = await _store.GetArtifactAsync(artifactId, cancellationToken);
         if (artifact.ProjectId != projectId || artifact.TaskId != taskId || artifact.ManagedReference is null)
         {
             throw new DevelopmentNotFoundException($"Development artifact '{artifactId}' was not found on the task.");
@@ -473,7 +468,7 @@ internal sealed class DevelopmentManagementService(
             artifact.Id,
             artifact.ContentHash,
             artifact.ByteCount,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (read.Status != DevelopmentArtifactReadStatus.Found)
         {
             throw new DevelopmentInvalidTransitionException("The Development artifact failed immutable blob verification.");
@@ -486,9 +481,9 @@ internal sealed class DevelopmentManagementService(
         Guid taskId,
         CancellationToken cancellationToken = default)
     {
-        _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
-        var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        var preview = await _applyService.PreviewAsync(taskId, repository, cancellationToken).ConfigureAwait(false);
+        _ = await RequireTaskAsync(projectId, taskId, cancellationToken);
+        var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken);
+        var preview = await _applyService.PreviewAsync(taskId, repository, cancellationToken);
         return new DevelopmentPatchPreviewResult(preview.Subject.SubjectHash,
             preview.Subject.PatchHash,
             preview.Subject.ManifestHash,
@@ -503,10 +498,10 @@ internal sealed class DevelopmentManagementService(
         Guid? onBehalfOfWorkflowRunId,
         CancellationToken cancellationToken = default)
     {
-        _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
-        await EnsureApplyAuthorityAsync(taskId, onBehalfOfWorkflowRunId, cancellationToken).ConfigureAwait(false);
-        var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        return await _applyService.ApplyAsync(taskId, operationId, repository, cancellationToken).ConfigureAwait(false);
+        _ = await RequireTaskAsync(projectId, taskId, cancellationToken);
+        await EnsureApplyAuthorityAsync(taskId, onBehalfOfWorkflowRunId, cancellationToken);
+        var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken);
+        return await _applyService.ApplyAsync(taskId, operationId, repository, cancellationToken);
     }
 
     /// <summary>
@@ -539,7 +534,7 @@ internal sealed class DevelopmentManagementService(
             return;
         }
 
-        if (await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken).ConfigureAwait(false) is not { } runId
+        if (await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken) is not { } runId
             || runId == onBehalfOfWorkflowRunId)
         {
             return;
@@ -548,7 +543,7 @@ internal sealed class DevelopmentManagementService(
         DevWorkflowRunSnapshot run;
         try
         {
-            run = await _workflows.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+            run = await _workflows.GetRunAsync(runId, cancellationToken);
         }
         catch (DevWorkflowNotFoundException)
         {
@@ -570,15 +565,15 @@ internal sealed class DevelopmentManagementService(
         long expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        _ = await _repositoryBindings.ReconnectAsync(projectId, selectedFolderId, expectedVersion, cancellationToken).ConfigureAwait(false);
-        return await GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        _ = await _repositoryBindings.ReconnectAsync(projectId, selectedFolderId, expectedVersion, cancellationToken);
+        return await GetProjectAsync(projectId, cancellationToken);
     }
 
     private async Task<DevelopmentTaskSnapshot> RequireTaskAsync(Guid projectId,
         Guid taskId,
         CancellationToken cancellationToken)
     {
-        var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var task = await _store.GetTaskAsync(taskId, cancellationToken);
         if (task.ProjectId != projectId)
         {
             throw new DevelopmentNotFoundException($"Development task '{taskId}' was not found on project '{projectId}'.");

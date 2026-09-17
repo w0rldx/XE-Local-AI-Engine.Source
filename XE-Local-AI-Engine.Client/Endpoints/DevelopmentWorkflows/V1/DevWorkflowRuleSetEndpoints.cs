@@ -20,8 +20,8 @@ public sealed class ListDevWorkflowRuleSetsEndpoint(DevWorkflowAuthoringService 
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var ruleSets = await _authoring.ListRuleSetsAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListDevWorkflowRuleSetsResponse([.. ruleSets.Select(DevWorkflowContractMapper.ToResponse)]), ct).ConfigureAwait(false);
+        var ruleSets = await _authoring.ListRuleSetsAsync(ct);
+        await Send.OkAsync(new ListDevWorkflowRuleSetsResponse([.. ruleSets.Select(DevWorkflowContractMapper.ToResponse)]), ct);
     }
 }
 
@@ -49,14 +49,13 @@ public sealed class CreateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService
                                           DevWorkflowContractMapper.ToScopeJson(req.Scope),
                                           req.Description,
                                           req.Enabled),
-                                      ct)
-                                  .ConfigureAwait(false);
+                                      ct);
         await Send.CreatedAtAsync<GetDevWorkflowRuleSetEndpoint>(new
             {
                 ruleSetId = created.Id
             },
             created.ToResponse(),
-            cancellation: ct).ConfigureAwait(false);
+            cancellation: ct);
     }
 }
 
@@ -75,8 +74,8 @@ public sealed class GetDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService au
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var ruleSet = await _authoring.GetRuleSetAsync(req.RuleSetId, ct).ConfigureAwait(false);
-        await Send.OkAsync(ruleSet.ToResponse(), ct).ConfigureAwait(false);
+        var ruleSet = await _authoring.GetRuleSetAsync(req.RuleSetId, ct);
+        await Send.OkAsync(ruleSet.ToResponse(), ct);
     }
 }
 
@@ -112,9 +111,8 @@ public sealed class UpdateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService
                                           DevWorkflowContractMapper.ToScopeJson(req.Scope),
                                           req.Description,
                                           req.Enabled),
-                                      ct)
-                                  .ConfigureAwait(false);
-        await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+                                      ct);
+        await Send.OkAsync(updated.ToResponse(), ct);
     }
 }
 
@@ -138,7 +136,7 @@ public sealed class DeleteDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await _authoring.DeleteRuleSetAsync(req.RuleSetId, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _authoring.DeleteRuleSetAsync(req.RuleSetId, ct);
+        await Send.NoContentAsync(ct);
     }
 }

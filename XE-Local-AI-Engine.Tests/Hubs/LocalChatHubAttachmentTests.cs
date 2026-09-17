@@ -48,7 +48,7 @@ public sealed class LocalChatHubAttachmentTests
             // A cancelled SignalR stream faults its consumer; that is the disconnect, not a test failure.
             try
             {
-                await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(Guid.NewGuid(), "hi"), clientGone.Token).ConfigureAwait(false))
+                await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(Guid.NewGuid(), "hi"), clientGone.Token))
                 {
                     firstDelivered.TrySetResult();
                 }
@@ -91,7 +91,7 @@ public sealed class LocalChatHubAttachmentTests
 
         using var hub = CreateHub(streamService, tracker);
         var delivered = 0;
-        await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(Guid.NewGuid(), "hi"), clientGone.Token).ConfigureAwait(false))
+        await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(Guid.NewGuid(), "hi"), clientGone.Token))
         {
             delivered++;
         }
@@ -132,11 +132,11 @@ public sealed class LocalChatHubAttachmentTests
         try
         {
             yield return NewEvent(invocationId);
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
         finally
         {
-            await runFinished.ConfigureAwait(false);
+            await runFinished;
         }
     }
 

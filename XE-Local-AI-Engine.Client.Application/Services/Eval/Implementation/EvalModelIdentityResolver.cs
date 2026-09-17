@@ -47,7 +47,7 @@ internal sealed class EvalModelIdentityResolver(
         // DownloadedAtUtc, so a same-name swap invalidates even without a hash).
         try
         {
-            var entry = await _ggufRegistry.FindAsync(modelName, cancellationToken).ConfigureAwait(false);
+            var entry = await _ggufRegistry.FindAsync(modelName, cancellationToken);
             if (entry is not null)
             {
                 var token = !string.IsNullOrEmpty(entry.Sha256)
@@ -70,7 +70,7 @@ internal sealed class EvalModelIdentityResolver(
         // Ollama manifest sha256) keyed by name, present only when the model was probed via /api/show.
         try
         {
-            var classification = await _classificationStore.GetByNameAsync(modelName, cancellationToken).ConfigureAwait(false);
+            var classification = await _classificationStore.GetByNameAsync(modelName, cancellationToken);
             if (classification is not null && !string.IsNullOrWhiteSpace(classification.Digest))
             {
                 return new EvalModelIdentity($"ollama-digest:{classification.Digest}", IsVerified: true);

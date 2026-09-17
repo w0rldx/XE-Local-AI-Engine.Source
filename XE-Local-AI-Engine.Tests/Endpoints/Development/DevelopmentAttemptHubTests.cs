@@ -61,7 +61,7 @@ public sealed class DevelopmentAttemptHubTests
         };
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -74,7 +74,7 @@ public sealed class DevelopmentAttemptHubTests
                .Returns<Task<DevelopmentTaskAggregate>>(_ => throw new KeyNotFoundException("task is not on project"));
         await using var factory = EnabledFactory(service);
         await using var connection = CreateConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
     }
@@ -87,7 +87,7 @@ public sealed class DevelopmentAttemptHubTests
                .Returns(DevelopmentEndpointTests.TaskAggregate(ProjectId, TaskId, [Attempt(Guid.NewGuid(), DevelopmentAttemptStatus.Running)]));
         await using var factory = EnabledFactory(service);
         await using var connection = CreateConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
 
@@ -100,7 +100,7 @@ public sealed class DevelopmentAttemptHubTests
         var service = ServiceReturning(Attempt(AttemptId, DevelopmentAttemptStatus.Succeeded));
         await using var factory = EnabledFactory(service);
         await using var connection = CreateConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
 
@@ -113,7 +113,7 @@ public sealed class DevelopmentAttemptHubTests
         var service = ServiceReturning(Attempt(AttemptId, DevelopmentAttemptStatus.Running));
         await using var factory = EnabledFactory(service);
         await using var connection = CreateConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
         var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
 
@@ -129,9 +129,9 @@ public sealed class DevelopmentAttemptHubTests
         AssertEx.True(broker.Register(AttemptId));
         AssertEx.True(broker.TryPublish(Update("snapshot")));
         await using var connection = CreateConnection(factory);
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
-        var snapshot = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId).ConfigureAwait(false);
+        var snapshot = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId);
 
         AssertEx.Equal(expected: 1L, snapshot.Watermark);
         AssertEx.Equal("snapshot", snapshot.Latest?.OutputDelta);
@@ -147,13 +147,13 @@ public sealed class DevelopmentAttemptHubTests
         await using var connection = CreateConnection(factory);
         var received = new TaskCompletionSource<DevelopmentAttemptLiveUpdate>(TaskCreationOptions.RunContinuationsAsynchronously);
         _ = connection.On<DevelopmentAttemptLiveUpdate>("developmentAttemptUpdate", update => received.TrySetResult(update));
-        await connection.StartAsync().ConfigureAwait(false);
-        _ = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId).ConfigureAwait(false);
+        await connection.StartAsync();
+        _ = await connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId);
 
         var expected = Update("delivered");
         var publisher = factory.Services.GetRequiredService<IDevelopmentAttemptLiveEventPublisher>();
-        await publisher.PublishAsync(expected).ConfigureAwait(false);
-        var actual = await received.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+        await publisher.PublishAsync(expected);
+        var actual = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal("delivered", actual.OutputDelta);
     }

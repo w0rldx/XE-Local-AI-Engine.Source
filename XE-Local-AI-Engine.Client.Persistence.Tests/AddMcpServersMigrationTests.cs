@@ -29,19 +29,19 @@ public sealed class AddMcpServersMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("mcp-servers-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreMcpServersMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreMcpServersMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "mcp_servers").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "mcp_servers"),
             "Migration should create the mcp_servers table.");
 
-        var columns = await GetMcpServerColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetMcpServerColumnsAsync(connection);
         AssertEx.True(columns.SetEquals(new[]
         {
             "id",
@@ -62,7 +62,7 @@ public sealed class AddMcpServersMigrationTests : IDisposable
             "updated_at_utc"
         }), "mcp_servers should expose the mapped columns.");
 
-        AssertEx.True(await UniqueIndexOnNameExistsAsync(connection).ConfigureAwait(false),
+        AssertEx.True(await UniqueIndexOnNameExistsAsync(connection),
             "Migration should create a unique index on mcp_servers.name.");
     }
 
@@ -71,16 +71,16 @@ public sealed class AddMcpServersMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("mcp-servers-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreMcpServersMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreMcpServersMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False(await TableExistsAsync(connection, "mcp_servers").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "mcp_servers"),
             "Rollback should drop the mcp_servers table.");
     }
 
@@ -92,7 +92,7 @@ public sealed class AddMcpServersMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -101,7 +101,7 @@ public sealed class AddMcpServersMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<bool> UniqueIndexOnNameExistsAsync(SqliteConnection connection)
@@ -111,12 +111,12 @@ public sealed class AddMcpServersMigrationTests : IDisposable
         // stays free of string interpolation.
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA index_list('mcp_servers');";
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
 
         var nameOrdinal = reader.GetOrdinal("name");
         var uniqueOrdinal = reader.GetOrdinal("unique");
 
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        while (await reader.ReadAsync())
         {
             var indexName = reader.GetString(nameOrdinal);
             var isUnique = reader.GetBoolean(uniqueOrdinal);
@@ -133,7 +133,7 @@ public sealed class AddMcpServersMigrationTests : IDisposable
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM mcp_servers LIMIT 0;";
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);

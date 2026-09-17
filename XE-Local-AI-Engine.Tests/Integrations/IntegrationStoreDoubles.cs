@@ -415,7 +415,7 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
 
         if (BlockOutputAppendUntil is { } gate)
         {
-            await gate.Task.ConfigureAwait(false);
+            await gate.Task;
         }
 
         lock (_gate)

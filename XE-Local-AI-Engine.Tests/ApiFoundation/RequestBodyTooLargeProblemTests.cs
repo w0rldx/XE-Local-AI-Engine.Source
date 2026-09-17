@@ -26,14 +26,13 @@ public sealed class RequestBodyTooLargeProblemTests
         };
 
         await RequestBodyTooLargeProblem.Result("The request body is larger than the 1 MB this node accepts for a graph.")
-                                        .ExecuteAsync(context)
-                                        .ConfigureAwait(false);
+                                        .ExecuteAsync(context);
 
         AssertEx.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
         AssertEx.Equal(RequestBodyTooLargeProblem.ContentType, context.Response.ContentType, "the endpoint path writes the header the host path writes.");
 
         context.Response.Body.Position = 0;
-        using var document = await JsonDocument.ParseAsync(context.Response.Body).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(context.Response.Body);
         var body = document.RootElement;
 
         AssertEx.Equal(expected: 413, body.GetProperty("status").GetInt32());

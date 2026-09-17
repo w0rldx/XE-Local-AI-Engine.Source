@@ -14,7 +14,7 @@ public sealed class InitialNodeIdentitySchemaMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesIdentityTablesAndRefreshTokens()
     {
-        await using var probe = await MigrationSchemaProbe.FromIdentityTemplateAsync("initial-node-identity.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromIdentityTemplateAsync("initial-node-identity.sqlite");
 
         foreach (var table in new[]
                  {
@@ -28,11 +28,11 @@ public sealed class InitialNodeIdentitySchemaMigrationTests
                      "node_refresh_tokens"
                  })
         {
-            AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist.");
+            AssertEx.True(await probe.TableExistsAsync(table), $"{table} must exist.");
         }
 
         // The node's own columns on the Identity user, mapped to snake_case; the rest are Identity's own.
-        AssertEx.True((await probe.ColumnsAsync("AspNetUsers").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("AspNetUsers")).IsSupersetOf(new[]
         {
             "Id",
             "setup_completed",
@@ -42,7 +42,7 @@ public sealed class InitialNodeIdentitySchemaMigrationTests
             "SecurityStamp"
         }), "AspNetUsers must carry the node's own columns alongside Identity's.");
 
-        AssertEx.True((await probe.ColumnsAsync("node_refresh_tokens").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("node_refresh_tokens")).IsSupersetOf(new[]
         {
             "id",
             "user_id",
@@ -52,17 +52,17 @@ public sealed class InitialNodeIdentitySchemaMigrationTests
             "revoked_at_utc"
         }), "node_refresh_tokens must expose the mapped columns.");
 
-        AssertEx.True(await probe.ForeignKeyExistsAsync("node_refresh_tokens", "user_id", "AspNetUsers").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("node_refresh_tokens", "user_id", "AspNetUsers"),
             "A refresh token must be foreign-keyed to its user.");
 
         // Only the HASH is indexed and unique: lookup is by digest, never by a stored plaintext token.
         AssertEx.True(await probe.IndexExistsAsync("node_refresh_tokens",
                 "IX_node_refresh_tokens_token_hash",
                 unique: true,
-                "token_hash").ConfigureAwait(false),
+                "token_hash"),
             "The refresh-token digest must be uniquely indexed.");
 
-        AssertEx.True(await probe.IndexExistsAsync("AspNetUsers", "UserNameIndex", unique: true, "NormalizedUserName").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("AspNetUsers", "UserNameIndex", unique: true, "NormalizedUserName"),
             "Identity's unique username index must survive the snake_case remapping.");
     }
 }

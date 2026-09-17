@@ -26,19 +26,19 @@ public sealed class ListRunEnvelopesEndpointTests
     public async Task ListRunEnvelopes_ReturnsTheToolSchemaTokenEstimate_AndNullWhenNotReported()
     {
         var conversationId = Guid.NewGuid();
-        var measured = await SeedEnvelopeAsync(conversationId, toolSchemaTokens: (long)int.MaxValue + 1, maxToolSchemaTokens: 4_096).ConfigureAwait(false);
-        var unmeasured = await SeedEnvelopeAsync(conversationId, toolSchemaTokens: null, maxToolSchemaTokens: null).ConfigureAwait(false);
+        var measured = await SeedEnvelopeAsync(conversationId, toolSchemaTokens: (long)int.MaxValue + 1, maxToolSchemaTokens: 4_096);
+        var unmeasured = await SeedEnvelopeAsync(conversationId, toolSchemaTokens: null, maxToolSchemaTokens: null);
 
         using var client = Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/agents/run-envelopes?conversationId={conversationId}");
         Factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        var payload = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ListRunEnvelopesResponse>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        var payload = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ListRunEnvelopesResponse>(stream, JsonOptions));
 
         var measuredRow = payload.Items.Single(row => row.Id == measured);
         AssertEx.Equal((long)int.MaxValue + 1, measuredRow.ToolSchemaTokens);
@@ -53,19 +53,19 @@ public sealed class ListRunEnvelopesEndpointTests
     public async Task ListRunEnvelopes_ReturnsTheDispatchLabels_AndNullWhenTheTurnWasNotAuto()
     {
         var conversationId = Guid.NewGuid();
-        var dispatched = await SeedDispatchEnvelopeAsync(conversationId, dispatchedTier: "fast", authoredEffort: "auto").ConfigureAwait(false);
-        var ordinary = await SeedDispatchEnvelopeAsync(conversationId, dispatchedTier: null, authoredEffort: null).ConfigureAwait(false);
+        var dispatched = await SeedDispatchEnvelopeAsync(conversationId, dispatchedTier: "fast", authoredEffort: "auto");
+        var ordinary = await SeedDispatchEnvelopeAsync(conversationId, dispatchedTier: null, authoredEffort: null);
 
         using var client = Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/agents/run-envelopes?conversationId={conversationId}");
         Factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        var payload = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ListRunEnvelopesResponse>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        var payload = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ListRunEnvelopesResponse>(stream, JsonOptions));
 
         var dispatchedRow = payload.Items.Single(row => row.Id == dispatched);
         AssertEx.Equal("fast", dispatchedRow.DispatchedTier);
@@ -82,19 +82,19 @@ public sealed class ListRunEnvelopesEndpointTests
         // Without this on the wire, a reader cannot separate the inference-server launch and model load from the turn
         // itself, and a cold arm reads as 7x slower than a warm one for reasons that have nothing to do with the agent.
         var conversationId = Guid.NewGuid();
-        var cold = await SeedReadinessEnvelopeAsync(conversationId, modelReadinessMs: 178_576L).ConfigureAwait(false);
-        var warm = await SeedReadinessEnvelopeAsync(conversationId, modelReadinessMs: null).ConfigureAwait(false);
+        var cold = await SeedReadinessEnvelopeAsync(conversationId, modelReadinessMs: 178_576L);
+        var warm = await SeedReadinessEnvelopeAsync(conversationId, modelReadinessMs: null);
 
         using var client = Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/agents/run-envelopes?conversationId={conversationId}");
         Factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        var payload = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ListRunEnvelopesResponse>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        var payload = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ListRunEnvelopesResponse>(stream, JsonOptions));
 
         AssertEx.Equal(expected: 178_576L, payload.Items.Single(row => row.Id == cold).ModelReadinessMs);
         // Null, not zero: an unmeasured turn must not read as one that proved a warm start.
@@ -117,7 +117,7 @@ public sealed class ListRunEnvelopesEndpointTests
                                                               {Guid.NewGuid()}, {conversationId}, {Guid.NewGuid()}, {Guid.NewGuid()},
                                                               'llama-3.1', 'local', '', 'completed', 1500, 1, {createdAtUtc},
                                                               {modelReadinessMs});
-                                                      """).ConfigureAwait(false);
+                                                      """);
 
         return id;
     }
@@ -138,7 +138,7 @@ public sealed class ListRunEnvelopesEndpointTests
                                                               {Guid.NewGuid()}, {conversationId}, {Guid.NewGuid()}, {Guid.NewGuid()},
                                                               'llama-3.1', 'local', '', 'completed', 1500, 1, {createdAtUtc},
                                                               {dispatchedTier}, {authoredEffort});
-                                                      """).ConfigureAwait(false);
+                                                      """);
 
         return id;
     }
@@ -162,7 +162,7 @@ public sealed class ListRunEnvelopesEndpointTests
                                                               {Guid.NewGuid()}, {conversationId}, {Guid.NewGuid()}, {Guid.NewGuid()},
                                                               'llama-3.1', 'local', '', 'completed', 1500, 1, {createdAtUtc},
                                                               {toolSchemaTokens}, {maxToolSchemaTokens});
-                                                      """).ConfigureAwait(false);
+                                                      """);
 
         return id;
     }

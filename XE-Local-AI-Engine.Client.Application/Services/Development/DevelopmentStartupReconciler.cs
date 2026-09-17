@@ -8,13 +8,13 @@ public sealed class DevelopmentStartupReconciler(IServiceScopeFactory scopeFacto
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
-        _ = await coordinator.ReconcileStartupAsync(cancellationToken).ConfigureAwait(false);
+        _ = await coordinator.ReconcileStartupAsync(cancellationToken);
 
         // Projects created before the command-profile column existed carry no profile and cannot execute. Filling them
         // here covers every such project in one pass; the same service also runs on project load, so a repository that
         // happened to be offline at boot does not need a restart to become usable.
         var backfill = scope.ServiceProvider.GetRequiredService<IDevelopmentProfileBackfillService>();
-        _ = await backfill.BackfillAllAsync(cancellationToken).ConfigureAwait(false);
+        _ = await backfill.BackfillAllAsync(cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) =>

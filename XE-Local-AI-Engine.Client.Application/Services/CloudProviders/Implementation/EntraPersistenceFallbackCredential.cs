@@ -49,12 +49,12 @@ internal sealed class EntraPersistenceFallbackCredential : TokenCredential
     {
         try
         {
-            return await _current.GetTokenAsync(requestContext, cancellationToken).ConfigureAwait(false);
+            return await _current.GetTokenAsync(requestContext, cancellationToken);
         }
         catch (CredentialUnavailableException exception)
         {
             FallBackToInMemory(exception);
-            return await _current.GetTokenAsync(requestContext, cancellationToken).ConfigureAwait(false);
+            return await _current.GetTokenAsync(requestContext, cancellationToken);
         }
     }
 

@@ -30,7 +30,7 @@ public sealed class FakeOllamaServer : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _app.DisposeAsync().ConfigureAwait(false);
+        await _app.DisposeAsync();
     }
 
     [SuppressMessage("Major Code Smell", "S1075:URIs should not be hardcoded", Justification = "The fake test server must bind to loopback on a dynamic port.")]
@@ -46,7 +46,7 @@ public sealed class FakeOllamaServer : IAsyncDisposable
         var app = builder.Build();
         app.MapFakeOllamaEndpoints(state);
 
-        await app.StartAsync(ct).ConfigureAwait(false);
+        await app.StartAsync(ct);
 
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()?.Addresses.SingleOrDefault()
                       ?? throw new InvalidOperationException("Fake Ollama server did not publish a listening address.");

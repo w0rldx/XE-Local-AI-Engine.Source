@@ -29,10 +29,10 @@ public sealed class StartGgufDownloadEndpointTests
         await using var factory = CreateFactory(new ThrowingDownloadCoordinator(new GgufAcquisitionConflictException()));
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        AssertEx.Equal("The model name or destination is already in use.", await ProblemFieldAsync(response, "title").ConfigureAwait(false));
+        AssertEx.Equal("The model name or destination is already in use.", await ProblemFieldAsync(response, "title"));
     }
 
     [Test]
@@ -42,11 +42,11 @@ public sealed class StartGgufDownloadEndpointTests
         await using var factory = CreateFactory(new ThrowingDownloadCoordinator(failure));
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         // The sanitized provider message is carried through as the detail so the operator learns what was missing.
-        AssertEx.Equal("The requested GGUF file is not in that repository.", await ProblemFieldAsync(response, "detail").ConfigureAwait(false));
+        AssertEx.Equal("The requested GGUF file is not in that repository.", await ProblemFieldAsync(response, "detail"));
     }
 
     [Test]
@@ -56,7 +56,7 @@ public sealed class StartGgufDownloadEndpointTests
         await using var factory = CreateFactory(new ThrowingDownloadCoordinator(failure));
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -69,7 +69,7 @@ public sealed class StartGgufDownloadEndpointTests
         await using var factory = CreateFactory(new ThrowingDownloadCoordinator(new IOException("the volume disappeared")));
         using var client = factory.CreateClient();
 
-        using var response = await PostAsync(factory, client).ConfigureAwait(false);
+        using var response = await PostAsync(factory, client);
 
         AssertEx.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
@@ -85,12 +85,12 @@ public sealed class StartGgufDownloadEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static async Task<string?> ProblemFieldAsync(HttpResponseMessage response, string field)
     {
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(json);
         return document.RootElement.GetProperty(field).GetString();
     }

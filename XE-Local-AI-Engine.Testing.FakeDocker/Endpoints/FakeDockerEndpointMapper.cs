@@ -30,7 +30,7 @@ internal static class FakeDockerEndpointMapper
                 context.Request.Path.Value ?? string.Empty,
                 context.Request.Query.ToDictionary(entry => entry.Key, entry => entry.Value.ToString(), StringComparer.Ordinal)));
 
-            await next(context).ConfigureAwait(false);
+            await next(context);
         });
 
         app.MapGet("/_ping", PingEndpoint.Handle);
@@ -76,7 +76,7 @@ internal static class FakeDockerEndpointMapper
     {
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync(body.ToJsonString(), context.RequestAborted).ConfigureAwait(false);
+        await context.Response.WriteAsync(body.ToJsonString(), context.RequestAborted);
     }
 
     /// <summary>
@@ -101,7 +101,7 @@ internal static class FakeDockerEndpointMapper
             return null;
         }
 
-        var node = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted).ConfigureAwait(false);
+        var node = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted);
         return node as JsonObject;
     }
 
@@ -161,11 +161,11 @@ internal static class FakeDockerEndpointMapper
             header[0] = (byte)frame.Stream;
             BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(start: 4), payload.Length);
 
-            await context.Response.Body.WriteAsync(header, context.RequestAborted).ConfigureAwait(false);
-            await context.Response.Body.WriteAsync(payload, context.RequestAborted).ConfigureAwait(false);
+            await context.Response.Body.WriteAsync(header, context.RequestAborted);
+            await context.Response.Body.WriteAsync(payload, context.RequestAborted);
         }
 
-        await context.Response.Body.FlushAsync(context.RequestAborted).ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(context.RequestAborted);
     }
 
     /// <summary>A network by name or by id — the client removes by id and inspects by name.</summary>

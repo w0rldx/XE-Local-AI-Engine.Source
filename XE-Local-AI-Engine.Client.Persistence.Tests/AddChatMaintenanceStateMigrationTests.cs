@@ -36,19 +36,19 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
 
         // Bring the schema up to exactly the migration before this one, then apply the rest — so this migration's Up is
         // exercised as an in-place upgrade of an existing database, not just a fresh create.
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreChatMaintenanceStateMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreChatMaintenanceStateMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "chat_maintenance_state").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "chat_maintenance_state"),
             "Migration should create the chat_maintenance_state table.");
 
-        var columns = await GetColumnInfoAsync(connection).ConfigureAwait(false);
+        var columns = await GetColumnInfoAsync(connection);
         AssertEx.Equal(expected: 2, columns.Count, "chat_maintenance_state should expose exactly two columns.");
         AssertEx.True(columns.ContainsKey("name") && columns.ContainsKey("value"), "chat_maintenance_state should expose the name + value columns.");
         AssertEx.True(columns["name"].NotNull, "chat_maintenance_state.name must be NOT NULL.");
@@ -62,10 +62,10 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("chat-maintenance-state-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.True(await TableExistsAsync(connection, "chat_maintenance_state").ConfigureAwait(false),
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.True(await TableExistsAsync(connection, "chat_maintenance_state"),
             "A fresh migrate-to-head should create the chat_maintenance_state table.");
     }
 
@@ -74,15 +74,15 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("chat-maintenance-state-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreChatMaintenanceStateMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreChatMaintenanceStateMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.False(await TableExistsAsync(connection, "chat_maintenance_state").ConfigureAwait(false),
+        await using var connection = await OpenConnectionAsync(databasePath);
+        AssertEx.False(await TableExistsAsync(connection, "chat_maintenance_state"),
             "Rolling back one migration should drop the chat_maintenance_state table.");
     }
 
@@ -106,7 +106,7 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -115,7 +115,7 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlyDictionary<string, (bool NotNull, bool IsPrimaryKey)>> GetColumnInfoAsync(SqliteConnection connection)
@@ -126,8 +126,8 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
         command.CommandText = "PRAGMA table_info(chat_maintenance_state);";
 
         var columns = new Dictionary<string, (bool NotNull, bool IsPrimaryKey)>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             var name = reader.GetString(reader.GetOrdinal("name"));
             var notNull = reader.GetInt64(reader.GetOrdinal("notnull")) != 0L;

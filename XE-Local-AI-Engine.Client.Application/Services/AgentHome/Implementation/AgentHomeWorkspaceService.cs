@@ -51,7 +51,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         {
             // Replacement is unconditional, including an empty selection. A successful return from the provider is the
             // proof that no prior project or attachment remains visible to the next inference.
-            var clearResult = await _isolation.ClearAsync(handle, key, cancellationToken).ConfigureAwait(false);
+            var clearResult = await _isolation.ClearAsync(handle, key, cancellationToken);
             if (clearResult == AgentHomeWorkspaceClearResult.SandboxKilled)
             {
                 throw new AgentHomeRequestRejectedException("the AgentHome sandbox was reset and must be recreated before use.");
@@ -62,7 +62,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 return [];
             }
 
-            var maxSelectedFolderBytes = await _runtimeSettings.GetAgentHomeMaxSelectedFolderBytesAsync(cancellationToken).ConfigureAwait(false);
+            var maxSelectedFolderBytes = await _runtimeSettings.GetAgentHomeMaxSelectedFolderBytesAsync(cancellationToken);
             var plans = new List<PlannedFolderCopy>(resolvedFolders.Count);
             foreach (var folder in resolvedFolders)
             {
@@ -84,14 +84,14 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             foreach (var plan in plans)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var snapshot = await CopyFolderAsync(handle, plan, cancellationToken).ConfigureAwait(false);
+                var snapshot = await CopyFolderAsync(handle, plan, cancellationToken);
                 snapshots.Add(snapshot);
                 anyFileCopied |= snapshot.CopiedFileCount > 0;
             }
 
             if (anyFileCopied)
             {
-                await CreateGitBaselineAsync(handle, cancellationToken).ConfigureAwait(false);
+                await CreateGitBaselineAsync(handle, cancellationToken);
             }
 
             requiresCleanup = false;
@@ -103,7 +103,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             {
                 try
                 {
-                    _ = await _isolation.ClearAsync(handle, key, CancellationToken.None).ConfigureAwait(false);
+                    _ = await _isolation.ClearAsync(handle, key, CancellationToken.None);
                 }
                 catch (AgentHomeWorkspacePoisonedException)
                 {
@@ -130,7 +130,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                     SourcePath = file.HostPath,
                     DestinationPath = destination
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
 
         _logger.LogInformation("Copied selected folder {Alias}: {CopiedFiles} file(s), {CopiedBytes} byte(s); excluded {ExcludedFiles} file(s) and {ExcludedDirs} directory(ies).",
@@ -260,7 +260,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         // diff is taken under. --allow-empty keeps an all-ignored tree (a copied .gitignore that hides every file) from
         // failing the commit and sinking the whole prepare. On the fake provider these are scripted no-ops; the
         // configured runtime provider supplies real git state.
-        var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+        var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken);
         var timeout = TimeSpan.FromSeconds(prepareTimeoutSeconds);
         var commands = new[]
         {
@@ -281,7 +281,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         foreach (var command in commands)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var result = await _provider.ExecuteAsync(handle, command, cancellationToken).ConfigureAwait(false);
+            var result = await _provider.ExecuteAsync(handle, command, cancellationToken);
             if (!result.Completed || result.ExitCode != 0)
             {
                 // A failed baseline command leaves no reproducible HEAD for the patch export diff to compare against, so

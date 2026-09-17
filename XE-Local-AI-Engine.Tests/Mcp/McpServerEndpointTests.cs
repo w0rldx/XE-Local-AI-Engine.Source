@@ -51,14 +51,14 @@ public sealed class McpServerEndpointTests
             },
             env = new Dictionary<string, string>()
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<McpServerResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<McpServerResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.Equal("Filesystem", body.Name);
         AssertEx.Equal("Stdio", body.TransportKind.ToString());
         AssertEx.False(body.Enabled, "A new registration is reported disabled.");
-        await service.Received(1).CreateAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await service.Received(1).CreateAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -77,7 +77,7 @@ public sealed class McpServerEndpointTests
             transportKind = "Stdio",
             env = new Dictionary<string, string>()
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -91,8 +91,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, ServersRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<ListMcpServersResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<ListMcpServersResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expected: 2, body.Items.Count);
@@ -117,8 +117,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, ServersRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var raw = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var raw = await response.Content.ReadAsStringAsync();
         var body = AssertEx.NotNull(JsonSerializer.Deserialize<ListMcpServersResponse>(raw, JsonOptions));
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -141,7 +141,7 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ServersRoute}/{id}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -156,7 +156,7 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Delete, $"{ServersRoute}/{id}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
@@ -178,12 +178,12 @@ public sealed class McpServerEndpointTests
         {
             enabled = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<McpServerResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<McpServerResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(body.Enabled, "Enabling returns the toggled record.");
-        await service.Received(1).SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await service.Received(1).SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -213,8 +213,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, ToolCatalogRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<ToolCatalogResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<ToolCatalogResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         // Each entry carries its ToolCategory name and the effective approval computed through the node policy. With no
@@ -265,8 +265,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, ToolCatalogRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<ToolCatalogResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<ToolCatalogResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.ContainsSingle(body.Tools, tool => tool.Name == "custom__nightly_backup" && tool.SessionScopeEligible);
@@ -312,8 +312,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, ToolCatalogRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<ToolCatalogResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<ToolCatalogResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.ContainsSingle(body.Tools,
@@ -343,8 +343,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ServersRoute}/{id}/tools");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<McpServerToolsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<McpServerToolsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("disabled", body.Status);
@@ -389,8 +389,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ServersRoute}/{id}/tools");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<McpServerToolsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<McpServerToolsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("connected", body.Status);
@@ -423,8 +423,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ServersRoute}/{id}/tools");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<McpServerToolsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<McpServerToolsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("error", body.Status);
@@ -447,8 +447,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ServersRoute}/{id}/tools");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<McpServerToolsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<McpServerToolsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("connecting", body.Status);
@@ -482,8 +482,8 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ServersRoute}/{id}/tools");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await ReadJsonAsync<McpServerToolsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<McpServerToolsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("connecting", body.Status);
@@ -500,7 +500,7 @@ public sealed class McpServerEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"{ServersRoute}/{id}/tools");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -512,10 +512,10 @@ public sealed class McpServerEndpointTests
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(ServersRoute).ConfigureAwait(false);
+        using var response = await client.GetAsync(ServersRoute);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        await service.DidNotReceive().ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await service.DidNotReceive().ListAsync(Arg.Any<CancellationToken>());
     }
 
     private static TestServerWebAppFactory CreateFactory(IMcpServerService service, ILocalToolOfferProvider? offerProvider = null)
@@ -565,7 +565,7 @@ public sealed class McpServerEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync();
         return AssertEx.NotNull(JsonSerializer.Deserialize<T>(body, JsonOptions));
     }
 }

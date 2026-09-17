@@ -37,7 +37,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         using var client = factory.CreateClient();
         using var request = Request(method, route);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require the operator token.");
     }
@@ -56,7 +56,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         using var request = Request(method, route);
         factory.AddNonOperatorBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode, $"{method} {route} is operator-only, so an authenticated non-operator is refused.");
     }
@@ -84,7 +84,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
             }
         };
 
-        using var response = await SendAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 on a disabled node, never 500.");
         AssertEx.Empty(store.ReceivedCalls());
@@ -97,8 +97,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         store.ListDefinitionsAsync(Arg.Any<CancellationToken>()).Returns([Summary()]);
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", Definitions).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", Definitions);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -125,7 +125,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.StartAgentEnd)).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.StartAgentEnd));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(response.Headers.Location);
@@ -146,8 +146,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.TwoNodeConfigErrors)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.TwoNodeConfigErrors));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, "reasoningEffort", StringComparison.Ordinal, $"the first node's failure must survive into the body: {body}");
@@ -170,8 +170,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.ToolValidationWriteExecuteTool)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.ToolValidationWriteExecuteTool));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"a tool this node may not run is an error, never a warning: {body}");
         using var document = JsonDocument.Parse(body);
@@ -191,8 +191,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Validate, ValidateBody(GraphWorkflowGraphs.ToolValidationWriteExecuteTool)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Validate, ValidateBody(GraphWorkflowGraphs.ToolValidationWriteExecuteTool));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -221,8 +221,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.BranchOnJson)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.BranchOnJson));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         using var storedDocument = JsonDocument.Parse(AssertEx.NotNull(stored));
@@ -258,8 +258,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.ToolNode)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.ToolNode));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         using var storedDocument = JsonDocument.Parse(AssertEx.NotNull(stored));
@@ -285,7 +285,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         store.UpdateDefinitionAsync(Arg.Any<UpdateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(Snapshot());
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"name":"renamed","description":"still triage"}""").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"name":"renamed","description":"still triage"}""");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1)
@@ -311,8 +311,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", Definition, body).ConfigureAwait(false);
-        var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", Definition, body);
+        var responseBody = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, responseBody);
         AssertEx.Contains(responseBody, "version", StringComparison.OrdinalIgnoreCase, responseBody);
@@ -327,8 +327,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              .ThrowsAsyncForAnyArgs(new GraphWorkflowDefinitionConflictException("The definition version is stale."));
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", Definition, """{"version":1,"name":"renamed"}""").ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":1,"name":"renamed"}""");
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -345,8 +345,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              .ThrowsAsyncForAnyArgs(new GraphWorkflowDefinitionConflictException("A live run still pins the definition."));
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "DELETE", Definition).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "DELETE", Definition);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -359,7 +359,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "DELETE", Definition).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "DELETE", Definition);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
         await store.Received(1).DeleteDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>());
@@ -373,7 +373,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              .ThrowsAsyncForAnyArgs(new GraphWorkflowNotFoundException("Graph workflow definition was not found."));
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "GET", Definition).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "GET", Definition);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, "a missing definition is a 404, never the catch-all 500.");
     }
@@ -397,8 +397,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
              });
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.ConditionOnExplicitNull)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.ConditionOnExplicitNull));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         using var storedDocument = JsonDocument.Parse(AssertEx.NotNull(stored));
@@ -421,8 +421,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         using var response = await SendAsync(factory,
                 "PUT",
                 Definition,
-                $$"""{"version":4,"name":"renamed","graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""")
-            .ConfigureAwait(false);
+                $$"""{"version":4,"name":"renamed","graph":{{GraphWorkflowGraphs.StartAgentEnd}}}""");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1)
@@ -440,7 +439,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"description":""}""").ConfigureAwait(false);
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"description":""}""");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await store.Received(1)
@@ -465,10 +464,10 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, method, route, OversizedBody()).ConfigureAwait(false);
+        using var response = await SendAsync(factory, method, route, OversizedBody());
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode, $"{method} {route} must refuse a body over the cap.");
-        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, $"{method} {route}").ConfigureAwait(false);
+        await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, $"{method} {route}");
         AssertEx.Empty(store.ReceivedCalls());
     }
 
@@ -489,7 +488,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Null(request.Content.Headers.ContentLength, "the point of the fixture: this body declares no length.");
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode, "a body of unknown length is not an oversized body.");
@@ -510,8 +509,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         await using var factory = EnabledFactory(store);
         var graph = GraphWorkflowGraphs.StartAgentEnd.Replace("\"schemaVersion\": 1", $"\"schemaVersion\": {schemaVersion}", StringComparison.Ordinal);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"schema version {schemaVersion} is not one this node speaks: {body}");
         AssertEx.Contains(body, "schema version 1", StringComparison.Ordinal, body);
@@ -533,7 +532,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         await using var factory = EnabledFactory(store);
         var graph = GraphWorkflowGraphs.StartAgentEnd.Replace("\"schemaVersion\": 1,", string.Empty, StringComparison.Ordinal);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph)).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         using var document = JsonDocument.Parse(AssertEx.NotNull(stored));
@@ -558,7 +557,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         await using var factory = EnabledFactory(store);
         var graph = GraphWorkflowGraphs.StartAgentEnd.Replace("\"schemaVersion\": 1", "\"schemaVersion\": null", StringComparison.Ordinal);
 
-        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph)).ConfigureAwait(false);
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(graph));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         using var document = JsonDocument.Parse(AssertEx.NotNull(stored));
@@ -641,7 +640,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         using var client = factory.CreateClient();
         using var request = Request(method, route, body);
         factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage Request(string method, string route, string? body = null)

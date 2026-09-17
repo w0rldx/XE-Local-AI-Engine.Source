@@ -19,7 +19,7 @@ public sealed class IntegrationSessionServiceTests
         var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
 
-        var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Accepted, result.Outcome);
 
@@ -42,7 +42,7 @@ public sealed class IntegrationSessionServiceTests
         var trigger = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
         var session = harness.SeedSession(trigger.Id);
 
-        var result = await harness.AcceptAsync(trigger.Name, sessionId: session.Id).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name, sessionId: session.Id);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Accepted, result.Outcome);
         AssertEx.Empty(harness.CapturedConversations());
@@ -57,9 +57,9 @@ public sealed class IntegrationSessionServiceTests
         var trigger = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
         var session = harness.SeedSession(trigger.Id, executionCount: 0);
 
-        var first = await harness.AcceptAsync(trigger.Name, sessionId: session.Id).ConfigureAwait(false);
+        var first = await harness.AcceptAsync(trigger.Name, sessionId: session.Id);
         harness.Executions.Complete(first.ExecutionId!.Value);
-        _ = await harness.AcceptAsync(trigger.Name, sessionId: session.Id).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name, sessionId: session.Id);
 
         var row = harness.Sessions.Rows.Single(candidate => candidate.Id == session.Id);
         AssertEx.Equal(expected: 2, row.ExecutionCount);
@@ -77,7 +77,7 @@ public sealed class IntegrationSessionServiceTests
         var session = harness.SeedSession(trigger.Id);
         harness.Sessions.Forget(session.Id);
 
-        var result = await harness.AcceptAsync(trigger.Name, sessionId: session.Id).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name, sessionId: session.Id);
 
         AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, result.Outcome);
     }
@@ -92,7 +92,7 @@ public sealed class IntegrationSessionServiceTests
         var trigger = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
         var session = harness.SeedSession(trigger.Id);
 
-        var outcome = await harness.SessionService.DeleteAsync(session.Id).ConfigureAwait(false);
+        var outcome = await harness.SessionService.DeleteAsync(session.Id);
 
         AssertEx.Equal(IntegrationSessionDeleteOutcome.Deleted, outcome);
 
@@ -109,7 +109,7 @@ public sealed class IntegrationSessionServiceTests
     {
         var harness = new IntegrationInvokeHarness();
 
-        AssertEx.Equal(IntegrationSessionDeleteOutcome.NotFound, await harness.SessionService.DeleteAsync(Guid.NewGuid()).ConfigureAwait(false));
+        AssertEx.Equal(IntegrationSessionDeleteOutcome.NotFound, await harness.SessionService.DeleteAsync(Guid.NewGuid()));
     }
 
     [Test]
@@ -123,7 +123,7 @@ public sealed class IntegrationSessionServiceTests
         var session = harness.SeedSession(trigger.Id);
         _ = harness.Executions.Seed(Guid.NewGuid(), trigger.Id, session.Id, status);
 
-        AssertEx.Equal(IntegrationSessionDeleteOutcome.Busy, await harness.SessionService.DeleteAsync(session.Id).ConfigureAwait(false));
+        AssertEx.Equal(IntegrationSessionDeleteOutcome.Busy, await harness.SessionService.DeleteAsync(session.Id));
         AssertEx.Equal(expected: 1, harness.Sessions.Rows.Count);
         _ = harness.Persistence.DidNotReceive().DeleteConversationAsync(Arg.Any<NodeChatDeleteConversationRequest>(), Arg.Any<CancellationToken>());
     }
@@ -140,12 +140,12 @@ public sealed class IntegrationSessionServiceTests
 
         for (var i = 0; i < 8; i++)
         {
-            var result = await harness.AcceptAsync(callerManaged.Name, sessionId: Guid.NewGuid()).ConfigureAwait(false);
+            var result = await harness.AcceptAsync(callerManaged.Name, sessionId: Guid.NewGuid());
             AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, result.Outcome);
         }
 
         // The policy branch answers before the ownership read and mints an entry of its own.
-        var named = await harness.AcceptAsync(perInvocation.Name, sessionId: Guid.NewGuid()).ConfigureAwait(false);
+        var named = await harness.AcceptAsync(perInvocation.Name, sessionId: Guid.NewGuid());
         AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, named.Outcome);
 
         AssertEx.Equal(expected: 0, harness.SessionGate.TrackedCount, "An id with no row behind it must leave no gate entry.");
@@ -160,7 +160,7 @@ public sealed class IntegrationSessionServiceTests
         var trigger = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
         var foreign = harness.SeedSession(trigger.Id, principalId: Guid.NewGuid());
 
-        var result = await harness.AcceptAsync(trigger.Name, sessionId: foreign.Id).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name, sessionId: foreign.Id);
 
         AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, result.Outcome);
         AssertEx.Equal(expected: 1, harness.SessionGate.TrackedCount, "A session that exists keeps the mutual exclusion its owner depends on.");
@@ -171,7 +171,7 @@ public sealed class IntegrationSessionServiceTests
     {
         var harness = new IntegrationInvokeHarness();
 
-        AssertEx.Equal(IntegrationSessionDeleteOutcome.NotFound, await harness.SessionService.DeleteAsync(Guid.NewGuid()).ConfigureAwait(false));
+        AssertEx.Equal(IntegrationSessionDeleteOutcome.NotFound, await harness.SessionService.DeleteAsync(Guid.NewGuid()));
         AssertEx.Equal(expected: 0, harness.SessionGate.TrackedCount, "The delete path mints an entry the same way the invoke path does.");
     }
 
@@ -185,8 +185,8 @@ public sealed class IntegrationSessionServiceTests
         var trigger = harness.SeedTrigger("per-invocation");
         var session = harness.SeedSession(trigger.Id);
 
-        AssertEx.True(await harness.SessionService.CloseAsync(session.Id).ConfigureAwait(false));
-        AssertEx.True(await harness.SessionService.CloseAsync(session.Id).ConfigureAwait(false));
+        AssertEx.True(await harness.SessionService.CloseAsync(session.Id));
+        AssertEx.True(await harness.SessionService.CloseAsync(session.Id));
         AssertEx.Equal(IntegrationSessionStatus.Closed, harness.Sessions.Rows.Single().Status);
         AssertEx.Equal(expected: 0, harness.SessionGate.TrackedCount, "A closed session leaves no gate entry behind.");
     }
@@ -202,8 +202,8 @@ public sealed class IntegrationSessionServiceTests
             _ = harness.SeedSession(trigger.Id, lastActivityUtc: 100);
         }
 
-        var first = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, Status: null, Limit: 3, Offset: 0)).ConfigureAwait(false);
-        var second = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, Status: null, Limit: 3, Offset: 3)).ConfigureAwait(false);
+        var first = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, Status: null, Limit: 3, Offset: 0));
+        var second = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, Status: null, Limit: 3, Offset: 3));
 
         var ids = first.Concat(second).Select(static session => session.Id).ToArray();
         AssertEx.Equal(expected: 6, ids.Distinct().Count(), "Two pages of the same size must be disjoint and cover every row.");
@@ -221,8 +221,8 @@ public sealed class IntegrationSessionServiceTests
         _ = harness.SeedSession(mine.Id, status: IntegrationSessionStatus.Closed);
         _ = harness.SeedSession(other.Id);
 
-        var byStatus = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, IntegrationSessionStatus.Active, Limit: 50, Offset: 0)).ConfigureAwait(false);
-        var byTrigger = await harness.SessionService.ListAsync(new IntegrationSessionFilter(mine.Id, Status: null, Limit: 50, Offset: 0)).ConfigureAwait(false);
+        var byStatus = await harness.SessionService.ListAsync(new IntegrationSessionFilter(TriggerId: null, IntegrationSessionStatus.Active, Limit: 50, Offset: 0));
+        var byTrigger = await harness.SessionService.ListAsync(new IntegrationSessionFilter(mine.Id, Status: null, Limit: 50, Offset: 0));
 
         AssertEx.Equal(expected: 2, byStatus.Count);
         AssertEx.Equal(expected: 2, byTrigger.Count);
@@ -243,13 +243,13 @@ public sealed class IntegrationSessionServiceTests
         var outsideAllowlist = harness.SeedSession(sibling.Id);
         harness.RestrictKeyTo(trigger.Id);
 
-        AssertEx.Null(await harness.SessionService.GetForExternalCallerAsync(Guid.NewGuid(), harness.Caller()).ConfigureAwait(false), "Unknown id.");
-        AssertEx.Null(await harness.SessionService.GetForExternalCallerAsync(foreign.Id, harness.Caller()).ConfigureAwait(false), "Another integrator's session.");
-        AssertEx.Null(await harness.SessionService.GetForExternalCallerAsync(outsideAllowlist.Id, harness.Caller()).ConfigureAwait(false), "A trigger this key is not scoped to.");
+        AssertEx.Null(await harness.SessionService.GetForExternalCallerAsync(Guid.NewGuid(), harness.Caller()), "Unknown id.");
+        AssertEx.Null(await harness.SessionService.GetForExternalCallerAsync(foreign.Id, harness.Caller()), "Another integrator's session.");
+        AssertEx.Null(await harness.SessionService.GetForExternalCallerAsync(outsideAllowlist.Id, harness.Caller()), "A trigger this key is not scoped to.");
 
         // The positive control, and the one R4-6 exists for: a DIFFERENT key of the same principal reads it.
         harness.RotateCredential();
-        var read = await harness.SessionService.GetForExternalCallerAsync(mine.Id, harness.Caller(IntegrationInvokeHarness.RotatedKeyPrefix)).ConfigureAwait(false);
+        var read = await harness.SessionService.GetForExternalCallerAsync(mine.Id, harness.Caller(IntegrationInvokeHarness.RotatedKeyPrefix));
         AssertEx.Equal(mine.Id, AssertEx.NotNull(read).Id);
         AssertEx.Equal("caller-managed", AssertEx.NotNull(read).TriggerName);
     }
@@ -263,9 +263,9 @@ public sealed class IntegrationSessionServiceTests
         var trigger = harness.SeedTrigger("caller-managed", sessionPolicy: IntegrationSessionPolicy.CallerManaged);
         var foreign = harness.SeedSession(trigger.Id, principalId: Guid.NewGuid());
 
-        var read = await harness.SessionService.GetAsync(foreign.Id).ConfigureAwait(false);
+        var read = await harness.SessionService.GetAsync(foreign.Id);
 
         AssertEx.Equal(foreign.Id, AssertEx.NotNull(read).Id);
-        AssertEx.Null(await harness.SessionService.GetAsync(Guid.NewGuid()).ConfigureAwait(false));
+        AssertEx.Null(await harness.SessionService.GetAsync(Guid.NewGuid()));
     }
 }

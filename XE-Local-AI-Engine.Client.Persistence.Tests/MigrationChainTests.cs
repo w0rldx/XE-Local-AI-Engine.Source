@@ -21,9 +21,9 @@ public sealed class MigrationChainTests
         var declared = DeclaredChatMigrations();
         AssertEx.True(declared.Count > 0, "The chat context must declare migrations.");
 
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("chat-chain.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("chat-chain.sqlite");
 
-        var applied = await probe.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
+        var applied = await probe.AppliedMigrationsAsync(identityContext: false);
         AssertEx.True(applied.SetEquals(declared),
             $"Applied chat migrations must be exactly the declared set; missing [{string.Join(", ", declared.Except(applied, StringComparer.Ordinal))}].");
     }
@@ -34,9 +34,9 @@ public sealed class MigrationChainTests
         var declared = DeclaredIdentityMigrations();
         AssertEx.True(declared.Count > 0, "The identity context must declare migrations.");
 
-        await using var probe = await MigrationSchemaProbe.MigrateIdentityAsync("identity-chain.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.MigrateIdentityAsync("identity-chain.sqlite");
 
-        var applied = await probe.AppliedMigrationsAsync(identityContext: true).ConfigureAwait(false);
+        var applied = await probe.AppliedMigrationsAsync(identityContext: true);
         AssertEx.True(applied.SetEquals(declared),
             $"Applied identity migrations must be exactly the declared set; missing [{string.Join(", ", declared.Except(applied, StringComparer.Ordinal))}].");
     }

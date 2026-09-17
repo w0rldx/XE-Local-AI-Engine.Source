@@ -35,7 +35,7 @@ public sealed class TranscriptionHubAuthorizationTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, NegotiateRoute);
         factory.AddNonOperatorBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -49,7 +49,7 @@ public sealed class TranscriptionHubAuthorizationTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, NegotiateRoute);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", factory.CreateNodeAccessToken());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -61,7 +61,7 @@ public sealed class TranscriptionHubAuthorizationTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, NegotiateRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

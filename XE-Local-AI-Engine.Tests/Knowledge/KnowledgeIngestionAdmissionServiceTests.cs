@@ -22,7 +22,7 @@ public sealed class KnowledgeIngestionAdmissionServiceTests
         var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
         var service = CreateService(dispatcher, KnowledgeDocumentStatus.Pending);
 
-        var result = await service.AdmitStoredDocumentAsync(documentId, wasWritten: true, CancellationToken.None).ConfigureAwait(false);
+        var result = await service.AdmitStoredDocumentAsync(documentId, wasWritten: true, CancellationToken.None);
 
         AssertEx.Contains(dispatcher.Enqueued, documentId);
         AssertEx.Equal(KnowledgeDocumentStatus.Pending, result.Status);
@@ -38,7 +38,7 @@ public sealed class KnowledgeIngestionAdmissionServiceTests
         var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
         var service = CreateService(dispatcher, status);
 
-        var result = await service.AdmitStoredDocumentAsync(documentId, wasWritten: false, CancellationToken.None).ConfigureAwait(false);
+        var result = await service.AdmitStoredDocumentAsync(documentId, wasWritten: false, CancellationToken.None);
 
         // Content-hash dedupe never inserts a second row, so re-enqueueing is the only way a re-upload can retry.
         AssertEx.Contains(dispatcher.Enqueued, documentId);
@@ -56,7 +56,7 @@ public sealed class KnowledgeIngestionAdmissionServiceTests
 
         // The repository importer's update path: the row was not inserted, but its bytes changed, so the already-Indexed
         // (or mid-flight) document must be reindexed rather than left on its stale content.
-        var result = await service.AdmitStoredDocumentAsync(documentId, wasWritten: true, CancellationToken.None).ConfigureAwait(false);
+        var result = await service.AdmitStoredDocumentAsync(documentId, wasWritten: true, CancellationToken.None);
 
         AssertEx.Contains(dispatcher.Enqueued, documentId);
         AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted, result.Enqueue);
@@ -73,7 +73,7 @@ public sealed class KnowledgeIngestionAdmissionServiceTests
         var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
         var service = CreateService(dispatcher, status);
 
-        var result = await service.AdmitStoredDocumentAsync(Guid.NewGuid(), wasWritten: false, CancellationToken.None).ConfigureAwait(false);
+        var result = await service.AdmitStoredDocumentAsync(Guid.NewGuid(), wasWritten: false, CancellationToken.None);
 
         AssertEx.Empty(dispatcher.Enqueued);
         // The status still has to reach the response: the endpoint reports it on the deduplicated upload.
@@ -89,7 +89,7 @@ public sealed class KnowledgeIngestionAdmissionServiceTests
         var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
         var service = CreateService(dispatcher, status: null);
 
-        var result = await service.AdmitStoredDocumentAsync(documentId, wasWritten: false, CancellationToken.None).ConfigureAwait(false);
+        var result = await service.AdmitStoredDocumentAsync(documentId, wasWritten: false, CancellationToken.None);
 
         AssertEx.Equal(KnowledgeDocumentStatus.Pending, result.Status);
         AssertEx.Contains(dispatcher.Enqueued, documentId);
@@ -101,7 +101,7 @@ public sealed class KnowledgeIngestionAdmissionServiceTests
         var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.QueueFull);
         var service = CreateService(dispatcher, KnowledgeDocumentStatus.Pending);
 
-        var result = await service.AdmitStoredDocumentAsync(Guid.NewGuid(), wasWritten: true, CancellationToken.None).ConfigureAwait(false);
+        var result = await service.AdmitStoredDocumentAsync(Guid.NewGuid(), wasWritten: true, CancellationToken.None);
 
         AssertEx.True(result.QueueFull);
     }

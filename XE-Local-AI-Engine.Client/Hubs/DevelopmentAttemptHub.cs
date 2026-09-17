@@ -24,7 +24,7 @@ public sealed class DevelopmentAttemptHub(
         Guid taskId,
         Guid attemptId)
     {
-        var task = await managementService.GetTaskAsync(projectId, taskId, Context.ConnectionAborted).ConfigureAwait(false);
+        var task = await managementService.GetTaskAsync(projectId, taskId, Context.ConnectionAborted);
         var attempt = task.Attempts.SingleOrDefault(candidate => candidate.Id == attemptId)
                       ?? throw new HubException("The Development attempt does not belong to the requested project and task.");
         if (attempt.Status is not (DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running))
@@ -39,12 +39,12 @@ public sealed class DevelopmentAttemptHub(
 
         await Groups.AddToGroupAsync(Context.ConnectionId,
             DevelopmentAttemptHubGroups.Attempt(projectId, attemptId),
-            Context.ConnectionAborted).ConfigureAwait(false);
+            Context.ConnectionAborted);
         if (!broker.TryGetSnapshot(attemptId, out var snapshot))
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId,
                 DevelopmentAttemptHubGroups.Attempt(projectId, attemptId),
-                Context.ConnectionAborted).ConfigureAwait(false);
+                Context.ConnectionAborted);
             throw new HubException("The Development attempt completed while the subscription was being established.");
         }
 

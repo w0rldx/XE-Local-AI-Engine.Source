@@ -19,11 +19,11 @@ public sealed class ListMcpServersEndpoint(IMcpServerService mcpServerService)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var records = await _mcpServerService.ListAsync(ct).ConfigureAwait(false);
+        var records = await _mcpServerService.ListAsync(ct);
         await Send.OkAsync(new ListMcpServersResponse
             {
                 Items = [.. records.Select(static record => record.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

@@ -31,19 +31,19 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
     public async Task Backfill_DetectsTheSolutionProfileAndPersistsItWithABumpedConfigurationVersion()
     {
         Directory.CreateDirectory(_repositoryRoot);
-        await File.WriteAllTextAsync(Path.Combine(_repositoryRoot, "Fixture.slnx"), "<Solution />").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_repositoryRoot, "Fixture.slnx"), "<Solution />");
 
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
 
-        var created = await store.GetProjectAsync(seed.ProjectId).ConfigureAwait(false);
+        var created = await store.GetProjectAsync(seed.ProjectId);
         AssertEx.Null(created.CommandProfileJson);
 
         var backfill = CreateBackfill(store, new StubRepositoryBindings(_repositoryRoot));
-        var filled = await backfill.EnsureAsync(created).ConfigureAwait(false);
+        var filled = await backfill.EnsureAsync(created);
 
         var profile = AssertEx.NotNull(DevelopmentProfileSummary.TryFrom(filled.CommandProfileJson));
         AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetSlnx, profile.ProfileId);
@@ -55,7 +55,7 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         AssertEx.Equal(created.ConfigurationVersion + 1, filled.ConfigurationVersion);
         AssertEx.Equal(created.Version + 1, filled.Version);
 
-        var reloaded = await store.GetProjectAsync(seed.ProjectId).ConfigureAwait(false);
+        var reloaded = await store.GetProjectAsync(seed.ProjectId);
         AssertEx.Equal(filled.CommandProfileJson, reloaded.CommandProfileJson);
 
         // The stored bytes must satisfy the strict execution-time gate, not merely parse.
@@ -70,21 +70,21 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
     [Test]
     public async Task Backfill_LeavesTheProfileNullWhenTheRepositoryCannotBeReached()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
-        var created = await store.GetProjectAsync(seed.ProjectId).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
+        var created = await store.GetProjectAsync(seed.ProjectId);
 
         var backfill = CreateBackfill(store, new UnavailableRepositoryBindings());
-        var result = await backfill.EnsureAsync(created).ConfigureAwait(false);
+        var result = await backfill.EnsureAsync(created);
 
         AssertEx.Null(result.CommandProfileJson);
         AssertEx.Equal(created.Version, result.Version);
         AssertEx.Equal(created.ConfigurationVersion, result.ConfigurationVersion);
 
-        var reloaded = await store.GetProjectAsync(seed.ProjectId).ConfigureAwait(false);
+        var reloaded = await store.GetProjectAsync(seed.ProjectId);
         AssertEx.Null(reloaded.CommandProfileJson);
         _ = AssertEx.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentCommandProfileCatalog.ResolveStored(reloaded.CommandProfileJson));
     }
@@ -93,9 +93,9 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
     public async Task Backfill_NeverReplacesAProfileTheOperatorAlreadyConfirmed()
     {
         Directory.CreateDirectory(_repositoryRoot);
-        await File.WriteAllTextAsync(Path.Combine(_repositoryRoot, "Fixture.slnx"), "<Solution />").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_repositoryRoot, "Fixture.slnx"), "<Solution />");
 
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
 
@@ -104,12 +104,12 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         {
             CommandProfileJson = confirmed
         };
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
-        var created = await store.GetProjectAsync(seed.ProjectId).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
+        var created = await store.GetProjectAsync(seed.ProjectId);
 
         // The repository would detect dotnet-slnx, so a backfill that overwrote would visibly change the profile.
         var backfill = CreateBackfill(store, new StubRepositoryBindings(_repositoryRoot));
-        var result = await backfill.EnsureAsync(created).ConfigureAwait(false);
+        var result = await backfill.EnsureAsync(created);
 
         AssertEx.Equal(confirmed, result.CommandProfileJson);
         AssertEx.Equal(created.Version, result.Version);
@@ -121,30 +121,30 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
     public async Task BackfillAll_FillsOnlyTheProjectsThatAreMissingAProfile()
     {
         Directory.CreateDirectory(_repositoryRoot);
-        await File.WriteAllTextAsync(Path.Combine(_repositoryRoot, "Fixture.slnx"), "<Solution />").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_repositoryRoot, "Fixture.slnx"), "<Solution />");
 
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
 
         var legacy = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(legacy).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(legacy);
         var current = DevelopmentTestFixture.CreateSeed() with
         {
             CommandProfileJson = Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null).ToCanonicalUtf8())
         };
-        _ = await store.CreateProjectAsync(current).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(current);
 
         var backfill = CreateBackfill(store, new StubRepositoryBindings(_repositoryRoot));
-        AssertEx.Equal(expected: 1, await backfill.BackfillAllAsync().ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await backfill.BackfillAllAsync());
 
         // A second pass has nothing left to do, which is what makes running this on every startup safe.
-        AssertEx.Equal(expected: 0, await backfill.BackfillAllAsync().ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await backfill.BackfillAllAsync());
 
         AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetSlnx,
-            AssertEx.NotNull(DevelopmentProfileSummary.TryFrom((await store.GetProjectAsync(legacy.ProjectId).ConfigureAwait(false)).CommandProfileJson)).ProfileId);
+            AssertEx.NotNull(DevelopmentProfileSummary.TryFrom((await store.GetProjectAsync(legacy.ProjectId)).CommandProfileJson)).ProfileId);
         AssertEx.Equal(DevelopmentCommandProfileCatalog.GenericGit,
-            AssertEx.NotNull(DevelopmentProfileSummary.TryFrom((await store.GetProjectAsync(current.ProjectId).ConfigureAwait(false)).CommandProfileJson)).ProfileId);
+            AssertEx.NotNull(DevelopmentProfileSummary.TryFrom((await store.GetProjectAsync(current.ProjectId)).CommandProfileJson)).ProfileId);
     }
 
     private static DevelopmentProfileBackfillService CreateBackfill(IDevelopmentStore store,

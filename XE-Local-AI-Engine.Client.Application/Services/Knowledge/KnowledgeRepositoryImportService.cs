@@ -57,7 +57,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         string? collectionId,
         CancellationToken cancellationToken)
     {
-        var binding = await _repositories.ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
+        var binding = await _repositories.ResolveFolderAsync(selectedFolderId, cancellationToken);
         var resolvedRoot = HostPathSafety.TryResolveTrustedRoot(binding.RepositoryRoot)
                            ?? throw new KnowledgeRepositoryImportRejectedException("The registered repository is unavailable or unsafe.");
         var derivedCollection = string.IsNullOrWhiteSpace(collectionId)
@@ -70,7 +70,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
 
         var repositorySourceId = binding.SelectedFolderId.ToString("N");
 
-        var files = await ListRepositoryFilesAsync(resolvedRoot, cancellationToken).ConfigureAwait(false);
+        var files = await ListRepositoryFilesAsync(resolvedRoot, cancellationToken);
         if (files.Count > Math.Max(1, _options.MaxRepositoryImportFiles))
         {
             throw new KnowledgeRepositoryImportRejectedException("The repository contains more supported files than one import permits.");
@@ -118,8 +118,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             var bytes = await ReadFileUnderGuardAsync(fullPath,
                     resolvedRoot,
                     Math.Min(maxFileBytes, remainingBytes),
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
             admittedBytes = checked(admittedBytes + bytes.LongLength);
             if (admittedBytes > maxAggregateBytes)
             {
@@ -141,7 +140,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
                 normalizedSourcePath,
                 SourceKind,
                 repositorySourceId);
-            var result = await _blobStore.AddAsync(input, cancellationToken).ConfigureAwait(false);
+            var result = await _blobStore.AddAsync(input, cancellationToken);
             if (result.WasInserted)
             {
                 added++;
@@ -160,8 +159,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             // dedupe hit only from a retryable status. Enqueue is null when it decided not to queue at all.
             var admission = await _admission.AdmitStoredDocumentAsync(result.DocumentId,
                                                 result.WasInserted || result.WasUpdated,
-                                                cancellationToken)
-                                            .ConfigureAwait(false);
+                                                cancellationToken);
             if (admission.QueueFull)
             {
                 // Stop the scan: the rest of the repository was never offered to the queue, so the snapshot is partial
@@ -182,8 +180,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             var existingDocuments = await _catalog.ListAsync(normalizedCollection,
                                                       SourceKind,
                                                       repositorySourceId,
-                                                      cancellationToken)
-                                                  .ConfigureAwait(false);
+                                                      cancellationToken);
             foreach (var existing in existingDocuments)
             {
                 if (!string.Equals(existing.SourceKind, SourceKind, StringComparison.Ordinal)
@@ -193,7 +190,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
                     continue;
                 }
 
-                if (await _purge.PurgeAsync(existing.DocumentId, cancellationToken).ConfigureAwait(false))
+                if (await _purge.PurgeAsync(existing.DocumentId, cancellationToken))
                 {
                     removed++;
                 }
@@ -216,7 +213,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         var git = new HostGitRunner(timeoutSeconds: 60);
         var result = await git.RunAsync(root,
             AgentHomeGit.Arguments("ls-files", "--cached", "--others", "--exclude-standard", "-z"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new KnowledgeRepositoryReadException("The registered repository file index could not be read.");
@@ -298,7 +295,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             var read = 0;
             while (read < content.Length)
             {
-                var count = await RandomAccess.ReadAsync(handle, content.AsMemory(read), read, cancellationToken).ConfigureAwait(false);
+                var count = await RandomAccess.ReadAsync(handle, content.AsMemory(read), read, cancellationToken);
                 if (count == 0)
                 {
                     return content[..read];
@@ -308,7 +305,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             }
 
             Memory<byte> probe = new byte[1];
-            if (await RandomAccess.ReadAsync(handle, probe, length, cancellationToken).ConfigureAwait(false) > 0)
+            if (await RandomAccess.ReadAsync(handle, probe, length, cancellationToken) > 0)
             {
                 throw new KnowledgeRepositoryReadException("A repository file grew while it was being read.");
             }

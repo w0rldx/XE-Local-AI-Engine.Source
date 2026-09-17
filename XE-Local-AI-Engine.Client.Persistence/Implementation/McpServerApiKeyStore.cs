@@ -15,8 +15,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
     public async Task<McpServerApiKeyRecord?> GetAsync(CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.McpServerApiKeys
-                                     .FirstOrDefaultAsync(row => row.Id == McpServerApiKey.SingletonId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.Id == McpServerApiKey.SingletonId, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -44,8 +43,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var generationId = Guid.NewGuid();
         var entity = await _dbContext.McpServerApiKeys
-                                     .FirstOrDefaultAsync(row => row.Id == McpServerApiKey.SingletonId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.Id == McpServerApiKey.SingletonId, cancellationToken);
 
         if (entity is null)
         {
@@ -74,7 +72,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
             entity.LastUsedAtUtc = null;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -82,8 +80,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
     public async Task<bool> DeleteAsync(CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.McpServerApiKeys
-                                     .FirstOrDefaultAsync(row => row.Id == McpServerApiKey.SingletonId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.Id == McpServerApiKey.SingletonId, cancellationToken);
 
         if (entity is null)
         {
@@ -91,7 +88,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
         }
 
         _ = _dbContext.McpServerApiKeys.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -104,8 +101,7 @@ public sealed class McpServerApiKeyStore(NodeChatDbContext dbContext, TimeProvid
         // credential through the interceptors on every single authenticated MCP request.
         var updated = await _dbContext.McpServerApiKeys
                                       .Where(row => row.Id == McpServerApiKey.SingletonId && row.GenerationId == generationId)
-                                      .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, timestampUtc), cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, timestampUtc), cancellationToken);
         return updated == 1;
     }
 

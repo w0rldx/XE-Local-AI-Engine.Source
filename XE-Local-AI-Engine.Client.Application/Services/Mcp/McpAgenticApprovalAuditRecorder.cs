@@ -22,7 +22,7 @@ internal sealed class McpAgenticApprovalAuditRecorder(IAgentExecutionLogStore st
                 ApprovalDecisions.Approve,
                 $"mcp-agentic:{keyPrefix}",
                 LatencyMs: 0),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         NodeMetrics.ToolApprovalDecisionsTotal.Add(1,
             new KeyValuePair<string, object?>("category", categoryLabel),
             new KeyValuePair<string, object?>("decision", ApprovalDecisions.Approve));

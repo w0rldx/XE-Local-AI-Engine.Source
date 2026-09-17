@@ -19,9 +19,8 @@ public sealed class ListDevelopmentRepositoriesEndpoint(IDevelopmentManagementSe
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var repositories = await _service.ListRepositoriesAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListDevelopmentRepositoriesResponse(repositories.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct)
-                  .ConfigureAwait(false);
+        var repositories = await _service.ListRepositoriesAsync(ct);
+        await Send.OkAsync(new ListDevelopmentRepositoriesResponse(repositories.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct);
     }
 }
 
@@ -43,13 +42,13 @@ public sealed class RegisterDevelopmentRepositoryEndpoint(IDevelopmentManagement
     {
         try
         {
-            var repository = await _service.RegisterRepositoryAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
-            await Send.OkAsync(repository.ToResponse(), ct).ConfigureAwait(false);
+            var repository = await _service.RegisterRepositoryAsync(req.Alias, req.HostPath, ct);
+            await Send.OkAsync(repository.ToResponse(), ct);
         }
         catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }
@@ -72,14 +71,13 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint(IDevelopmentManag
     {
         try
         {
-            var detection = await _service.DetectRepositoryProfileAsync(req.SelectedFolderId, ct).ConfigureAwait(false);
-            await Send.OkAsync(new DevelopmentProfileDetectionResponse(detection.ProfileId, detection.BuildTarget, detection.Candidates), ct)
-                      .ConfigureAwait(false);
+            var detection = await _service.DetectRepositoryProfileAsync(req.SelectedFolderId, ct);
+            await Send.OkAsync(new DevelopmentProfileDetectionResponse(detection.ProfileId, detection.BuildTarget, detection.Candidates), ct);
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException or DirectoryNotFoundException)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }
@@ -102,9 +100,8 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint(IDevelopmentManagemen
     {
         try
         {
-            var project = await _service.ReconnectRepositoryAsync(req.ProjectId, req.SelectedFolderId, req.ExpectedVersion, ct)
-                                        .ConfigureAwait(false);
-            await Send.OkAsync(project.ToResponse(), ct).ConfigureAwait(false);
+            var project = await _service.ReconnectRepositoryAsync(req.ProjectId, req.SelectedFolderId, req.ExpectedVersion, ct);
+            await Send.OkAsync(project.ToResponse(), ct);
         }
         // Reconnect is the one Development endpoint whose request BOTH carries a folder to validate and acts on the
         // project's persisted binding, so it is the only one that has to split the workspace-security family by type:
@@ -113,12 +110,12 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint(IDevelopmentManagemen
         catch (DevelopmentRepositoryStateConflictException exception)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }

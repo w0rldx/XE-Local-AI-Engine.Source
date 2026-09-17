@@ -116,9 +116,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode, responseText);
         using var body = JsonDocument.Parse(responseText);
         AssertEx.Equal("runtime-busy", body.RootElement.GetProperty("reason").GetString());
@@ -152,9 +152,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode, responseText);
         using var body = JsonDocument.Parse(responseText);
         AssertEx.Equal("source-build-error", body.RootElement.GetProperty("reason").GetString());
@@ -221,9 +221,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode, responseText);
         using var body = JsonDocument.Parse(responseText);
         AssertEx.Equal("runtime-busy", body.RootElement.GetProperty("reason").GetString());
@@ -255,10 +255,10 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal("runtime-busy", body.RootElement.GetProperty("reason").GetString());
         AssertEx.True(body.RootElement.GetProperty("activity").GetProperty("mutationReserved").GetBoolean());
         AssertEx.Equal("The image runtime is changing; try again shortly.", body.RootElement.GetProperty("message").GetString());
@@ -337,9 +337,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, "/api/local/v1/images/runtime/source-build/remove", ActionBody);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode, responseText);
         using var body = JsonDocument.Parse(responseText);
         AssertEx.Equal("runtime-busy", body.RootElement.GetProperty("reason").GetString());
@@ -361,9 +361,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, "/api/local/v1/images/runtime/source-build/remove", ActionBody);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode, responseText);
         using var body = JsonDocument.Parse(responseText);
         AssertEx.Equal("runtime-busy", body.RootElement.GetProperty("reason").GetString());
@@ -387,9 +387,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, "/api/local/v1/images/runtime/source-build/remove", ActionBody);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, responseText);
         using var body = JsonDocument.Parse(responseText);
         AssertEx.Equal(JsonValueKind.Null, body.RootElement.GetProperty("managedRuntime").ValueKind);
@@ -410,9 +410,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, "/api/local/v1/images/runtime/source-build/cancel", ActionBody);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, responseText);
         using var body = JsonDocument.Parse(responseText);
         AssertEx.Equal("idle", body.RootElement.GetProperty("phase").GetString());
@@ -437,9 +437,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Get, "/api/local/v1/images/runtime/source-build/prerequisites?backend=99");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, responseText);
         AssertEx.Contains(responseText, "\"name\":\"backend\"",
             message: $"The refusal must name the field the operator has to correct. Body was: {responseText}");
@@ -532,15 +532,15 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         using var client = factory.CreateClient();
 
         using var anonymous = AuthRequest(method, route, static _ => { });
-        using var anonymousResponse = await client.SendAsync(anonymous).ConfigureAwait(false);
+        using var anonymousResponse = await client.SendAsync(anonymous);
         AssertEx.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode, $"'{route}' must refuse an unauthenticated caller.");
 
         using var forbidden = AuthRequest(method, route, factory.AddNonOperatorBearerToken);
-        using var forbiddenResponse = await client.SendAsync(forbidden).ConfigureAwait(false);
+        using var forbiddenResponse = await client.SendAsync(forbidden);
         AssertEx.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode, $"'{route}' must refuse an authenticated non-operator.");
 
         using var allowed = AuthRequest(method, route, factory.AddNodeBearerToken);
-        using var allowedResponse = await client.SendAsync(allowed).ConfigureAwait(false);
+        using var allowedResponse = await client.SendAsync(allowed);
         AssertEx.Equal(HttpStatusCode.OK, allowedResponse.StatusCode, $"'{route}' must admit the operator.");
     }
 
@@ -577,8 +577,8 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     private static async Task<JsonElement> GetJsonAsync(TestServerWebAppFactory factory, HttpClient client, string uri)
     {
         using var request = Authorized(factory, HttpMethod.Get, uri);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, responseText);
         return JsonSerializer.Deserialize<JsonElement>(responseText, WebJsonOptions);
     }

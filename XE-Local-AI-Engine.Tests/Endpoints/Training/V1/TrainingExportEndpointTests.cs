@@ -46,7 +46,7 @@ public sealed class TrainingExportEndpointTests
             });
         }
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -64,8 +64,8 @@ public sealed class TrainingExportEndpointTests
             quantType = "Q4_K_M"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         AssertEx.Contains(body, "\"quantType\":\"Q4_K_M\"", StringComparison.Ordinal);
@@ -83,8 +83,8 @@ public sealed class TrainingExportEndpointTests
             kind = "MergedGguf"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Contains(body, "Busy", StringComparison.Ordinal);
@@ -103,7 +103,7 @@ public sealed class TrainingExportEndpointTests
             quantType = "IQ1_S"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -121,8 +121,8 @@ public sealed class TrainingExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, $"{Api}/runs/{RunId}/artifacts");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"fileName\":\"merged-Q4_K_M.gguf\"", StringComparison.Ordinal);
@@ -143,7 +143,7 @@ public sealed class TrainingExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Delete, $"{Api}/artifacts/{ArtifactId}?expectedVersion=2");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -160,8 +160,8 @@ public sealed class TrainingExportEndpointTests
             modelName = "tuned"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, "smoke test", StringComparison.Ordinal);
@@ -178,8 +178,8 @@ public sealed class TrainingExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/artifacts/{ArtifactId}/smoke");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"smokeState\":\"Passed\"", StringComparison.Ordinal);
@@ -199,7 +199,7 @@ public sealed class TrainingExportEndpointTests
             expectedVersion = 7
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         _ = await context.Quality.Received(1).DecideAsync(ArtifactId, comparisonId, 7, Arg.Any<CancellationToken>());
@@ -218,7 +218,7 @@ public sealed class TrainingExportEndpointTests
             expectedVersion = 6
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -237,8 +237,8 @@ public sealed class TrainingExportEndpointTests
                 expectedVersion = 7
             });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"outcome\":\"Pending\"", StringComparison.Ordinal);
@@ -258,7 +258,7 @@ public sealed class TrainingExportEndpointTests
                 expectedVersion = 7
             });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -287,7 +287,7 @@ public sealed class TrainingExportEndpointTests
                     reason = "audited reason"
                 });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         _ = await context.Quality.DidNotReceiveWithAnyArgs()
@@ -311,7 +311,7 @@ public sealed class TrainingExportEndpointTests
             reason = "  "
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         _ = await context.Quality.DidNotReceiveWithAnyArgs().OverrideAsync(Guid.Empty, 0, string.Empty, CancellationToken.None);
@@ -328,7 +328,7 @@ public sealed class TrainingExportEndpointTests
             reason = new string('x', count: 1025)
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         _ = await context.Quality.DidNotReceiveWithAnyArgs().OverrideAsync(Guid.Empty, 0, string.Empty, CancellationToken.None);
@@ -348,7 +348,7 @@ public sealed class TrainingExportEndpointTests
             reason = "accepted regression"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         _ = await context.Quality.Received(1).OverrideAsync(ArtifactId, 7, "accepted regression", Arg.Any<CancellationToken>());
@@ -367,7 +367,7 @@ public sealed class TrainingExportEndpointTests
             reason = "accepted regression"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -391,8 +391,8 @@ public sealed class TrainingExportEndpointTests
             reason = "failed quality"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"discardedAtUtc\":123", StringComparison.Ordinal);
@@ -410,7 +410,7 @@ public sealed class TrainingExportEndpointTests
             reason = ""
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         _ = await context.Exports.DidNotReceiveWithAnyArgs()
@@ -430,7 +430,7 @@ public sealed class TrainingExportEndpointTests
             reason = "failed quality"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }

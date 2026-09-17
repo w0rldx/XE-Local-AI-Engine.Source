@@ -114,7 +114,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         // Resolve identity first so the lease key exists before Prepare. A second run for the same owner-node while one
         // is in flight is rejected, not queued.
-        var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+        var identity = await _identityProvider.GetAsync(cancellationToken);
         var key = LeaseKey(identity);
         if (_leaseManager.IsPoisoned(key))
         {
@@ -140,24 +140,24 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         {
             effectiveProfile = ResolveRuntimeProfile(prepareRequest.RuntimeProfile);
             attachKey = CreateAttachKey(identity, effectiveProfile);
-            var prepared = await PrepareUnderLeaseAsync(prepareRequest, attachKey, effectiveProfile, cancellationToken).ConfigureAwait(false);
+            var prepared = await PrepareUnderLeaseAsync(prepareRequest, attachKey, effectiveProfile, cancellationToken);
             var result = await RunAsync(new AgentHomeRunRequest
                 {
                     Prepared = prepared,
                     Goal = request.Goal,
                     AllowedActions = request.AllowedActions
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             if (!result.Completed || result.TimedOut)
             {
-                _ = await _isolation.ClearAsync(prepared.Handle, key, CancellationToken.None).ConfigureAwait(false);
+                _ = await _isolation.ClearAsync(prepared.Handle, key, CancellationToken.None);
             }
 
             return result;
         }
         catch
         {
-            await RecoverAfterFailureAsync(attachKey, key).ConfigureAwait(false);
+            await RecoverAfterFailureAsync(attachKey, key);
             throw;
         }
     }
@@ -167,12 +167,12 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         string effectiveProfile,
         CancellationToken cancellationToken)
     {
-        var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+        var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken);
         using var prepareCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         prepareCts.CancelAfter(TimeSpan.FromSeconds(prepareTimeoutSeconds));
         var prepareToken = prepareCts.Token;
 
-        var layout = await _manifestService.InitializeAsync(attachKey, prepareToken).ConfigureAwait(false);
+        var layout = await _manifestService.InitializeAsync(attachKey, prepareToken);
 
         var createRequest = new SandboxCreateRequest
         {
@@ -200,12 +200,12 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // site shares so this request cannot disagree with SandboxWorkloads.AgentHome's declaration.
             ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, _provider.Capabilities, _ceilingDefaults, _nodeOptions)
         };
-        var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
+        var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken);
 
         // Clear before resolution so preparation never reasons over a prior selection. The workspace service resets
         // again immediately before copying; the lifecycle catch performs final recovery on every failure.
-        await _workspaceService.PrepareSelectedFoldersAsync(handle, [], prepareToken).ConfigureAwait(false);
-        return await PrepareAttachedAsync(request, effectiveProfile, attachKey, layout, handle, prepareToken).ConfigureAwait(false);
+        await _workspaceService.PrepareSelectedFoldersAsync(handle, [], prepareToken);
+        return await PrepareAttachedAsync(request, effectiveProfile, attachKey, layout, handle, prepareToken);
     }
 
     private async Task<AgentHomePrepareResult> PrepareAttachedAsync(AgentHomePrepareRequest request,
@@ -215,7 +215,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         SandboxHandle handle,
         CancellationToken prepareToken)
     {
-        var resolvedFolders = await ResolveFoldersAsync(request.SelectedFolderIds, prepareToken).ConfigureAwait(false);
+        var resolvedFolders = await ResolveFoldersAsync(request.SelectedFolderIds, prepareToken);
 
         // Stage this conversation's uploaded attachments (the extracted, decrypted Markdown) as a synthetic read-only
         // "attachments" folder so the agent's existing file tools (list_files/read_file/search_text) discover them.
@@ -227,7 +227,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         IReadOnlyList<SelectedFolderSnapshot> folderSnapshots;
         try
         {
-            attachmentsSnapshot = await TryStageConversationAttachmentsAsync(request.ConversationId, prepareToken).ConfigureAwait(false);
+            attachmentsSnapshot = await TryStageConversationAttachmentsAsync(request.ConversationId, prepareToken);
             if (attachmentsSnapshot is not null)
             {
                 foldersToCopy =
@@ -248,13 +248,13 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // guard, per-folder byte budget, git baseline). Runs under the preparation timeout, separate from the command
             // timeout.
             folderSnapshots = await _workspaceService
-                                    .PrepareSelectedFoldersAsync(handle, foldersToCopy, prepareToken).ConfigureAwait(false);
+                                    .PrepareSelectedFoldersAsync(handle, foldersToCopy, prepareToken);
         }
         finally
         {
             if (attachmentsSnapshot is not null)
             {
-                await attachmentsSnapshot.DisposeAsync().ConfigureAwait(false);
+                await attachmentsSnapshot.DisposeAsync();
             }
         }
 
@@ -286,7 +286,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             return new ConversationSandboxPreparation([], lease: null);
         }
 
-        var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+        var identity = await _identityProvider.GetAsync(cancellationToken);
         var key = LeaseKey(identity);
         if (_leaseManager.IsPoisoned(key))
         {
@@ -315,12 +315,12 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 SelectedFolderIds = [],
                 RuntimeProfile = null,
                 ConversationId = conversationId
-            }, attachKey, effectiveProfile, cancellationToken).ConfigureAwait(false);
+            }, attachKey, effectiveProfile, cancellationToken);
             return new ConversationSandboxPreparation(prepared.StagedAttachmentRelativePaths, lease);
         }
         catch
         {
-            await RecoverAfterFailureAsync(CreateAttachKey(identity, ResolveRuntimeProfile(requestedProfile: null)), key).ConfigureAwait(false);
+            await RecoverAfterFailureAsync(CreateAttachKey(identity, ResolveRuntimeProfile(requestedProfile: null)), key);
             lease.Dispose();
             throw;
         }
@@ -347,7 +347,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     {
         try
         {
-            await _isolation.RecoverExistingAsync(attachKey, key, CancellationToken.None).ConfigureAwait(false);
+            await _isolation.RecoverExistingAsync(attachKey, key, CancellationToken.None);
         }
         catch (AgentHomeWorkspacePoisonedException exception)
         {
@@ -367,18 +367,18 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             return null;
         }
 
-        var files = await _uploadedFileStore.ListAsync(resolvedConversationId, cancellationToken).ConfigureAwait(false);
+        var files = await _uploadedFileStore.ListAsync(resolvedConversationId, cancellationToken);
         if (files.Count == 0)
         {
             return null;
         }
 
-        var snapshot = await _uploadedFileStore.CreateStagingSnapshotAsync(resolvedConversationId, cancellationToken).ConfigureAwait(false);
+        var snapshot = await _uploadedFileStore.CreateStagingSnapshotAsync(resolvedConversationId, cancellationToken);
         if (snapshot.FileCount == 0)
         {
             // No extracted Markdown was cached (e.g. every file was unsupported/failed): nothing to stage. Dispose the
             // empty temp dir rather than leave it to the caller.
-            await snapshot.DisposeAsync().ConfigureAwait(false);
+            await snapshot.DisposeAsync();
             return null;
         }
 
@@ -394,7 +394,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         cancellationToken.ThrowIfCancellationRequested();
 
         var runId = CreateRunId();
-        var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+        var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
         var commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds);
 
         using var commandCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -410,11 +410,11 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         // new instance is resolved per run from a short-lived scope). Logging is best-effort and never fails the run.
         using var loggerScope = _scopeFactory.CreateScope();
         var runLogger = loggerScope.ServiceProvider.GetRequiredService<IAgentHomeRunLogger>();
-        var identity = await _identityProvider.GetAsync(commandCts.Token).ConfigureAwait(false);
-        await OpenRunLogAsync(runLogger, runId, logDirectory, identity, cancellationToken).ConfigureAwait(false);
+        var identity = await _identityProvider.GetAsync(commandCts.Token);
+        await OpenRunLogAsync(runLogger, runId, logDirectory, identity, cancellationToken);
         await AppendEventSafelyAsync(runLogger, "prepare_completed",
             string.Create(CultureInfo.InvariantCulture, $"goal_length={request.Goal.Length}"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         // The single command is sourced from a per-profile descriptor. When a folder copied, run it with the copied
         // workspace as the CWD so patch export diffs the real working tree.
@@ -436,29 +436,29 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         SandboxCommandResult result;
         try
         {
-            result = await _provider.ExecuteAsync(request.Prepared.Handle, commandRequest, commandCts.Token).ConfigureAwait(false);
+            result = await _provider.ExecuteAsync(request.Prepared.Handle, commandRequest, commandCts.Token);
         }
         catch (OperationCanceledException)
         {
             // Best-effort cancel of the in-flight command (run id == execution id). Use a fresh token so a cancelled
             // caller token does not abort the cleanup itself. Do NOT KillAsync: the sandbox is owner-node-scoped and
             // reused across runs, so a normal cancel/timeout must not force a full re-prepare next run.
-            await CancelInFlightCommandSafelyAsync(request.Prepared.Handle, runId).ConfigureAwait(false);
+            await CancelInFlightCommandSafelyAsync(request.Prepared.Handle, runId);
 
             if (cancellationToken.IsCancellationRequested)
             {
                 // The ORIGINAL caller token fired → a user/connection cancel → propagate.
-                await AppendEventSafelyAsync(runLogger, "cancelled", detail: null, CancellationToken.None).ConfigureAwait(false);
+                await AppendEventSafelyAsync(runLogger, "cancelled", detail: null, CancellationToken.None);
                 throw;
             }
 
             // Only commandCts fired (CancelAfter) → a TIMEOUT → surface a non-throwing result so the conversation can
             // continue. The patch/memory exports are skipped; the run logger records the timeout.
             await AppendCommandSafelyAsync(runLogger, runId, descriptor, completed: false, exitCode: -1, commandStartedAt,
-                nameof(OperationCanceledException), CancellationToken.None).ConfigureAwait(false);
+                nameof(OperationCanceledException), CancellationToken.None);
             await AppendEventSafelyAsync(runLogger, "timed_out",
                 string.Create(CultureInfo.InvariantCulture, $"timeout_seconds={commandTimeoutSeconds}"),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             _logger.LogWarning("AgentHome run {RunId} timed out after {TimeoutSeconds}s.",
                 runId,
@@ -477,18 +477,18 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         }
 
         await AppendCommandSafelyAsync(runLogger, runId, descriptor, result.Completed, result.ExitCode, commandStartedAt,
-            errorClass: null, cancellationToken).ConfigureAwait(false);
+            errorClass: null, cancellationToken);
 
         // Patch export runs after the command so the agent's file edits are diffed against the workspace-copy git
         // baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate).
-        var patch = await ExportPatchAsync(request, runId, runDirectory, commandCts.Token).ConfigureAwait(false);
+        var patch = await ExportPatchAsync(request, runId, runDirectory, commandCts.Token);
 
         // memory-proposal export: collect the agent-written memory proposals — gated on propose_memory ∈ AllowedActions.
-        await CollectMemoryProposalsAsync(request, runId, runDirectory, runLogger, commandCts.Token).ConfigureAwait(false);
+        await CollectMemoryProposalsAsync(request, runId, runDirectory, runLogger, commandCts.Token);
 
         await AppendEventSafelyAsync(runLogger, "run_completed",
             string.Create(CultureInfo.InvariantCulture, $"exit_code={result.ExitCode};changed_files={patch.ChangedFileCount}"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         _logger.LogInformation("AgentHome run {RunId} finished: completed={Completed}, exitCode={ExitCode}, changedFiles={ChangedFiles}.",
             runId,
@@ -533,7 +533,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 HostRunDirectory = runDirectory,
                 ResolvedFolders = request.Prepared.ResolvedFolders
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private async Task CollectMemoryProposalsAsync(AgentHomeRunRequest request,
@@ -555,18 +555,18 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 RunId = runId,
                 HostRunDirectory = runDirectory
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         await AppendEventSafelyAsync(runLogger, "memory_collected",
             string.Create(CultureInfo.InvariantCulture, $"proposals={collected.Proposals.Count};rejections={collected.Rejections.Count}"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private async Task CancelInFlightCommandSafelyAsync(SandboxHandle handle, string runId)
     {
         try
         {
-            await _provider.CancelCommandAsync(handle, runId, CancellationToken.None).ConfigureAwait(false);
+            await _provider.CancelCommandAsync(handle, runId, CancellationToken.None);
         }
         catch (SandboxHandleInvalidException exception)
         {
@@ -591,7 +591,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                     OwnerUserId = identity.OwnerUserId,
                     ProviderName = _provider.ProviderName
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -604,7 +604,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     {
         try
         {
-            await runLogger.AppendEventAsync(eventName, detail, cancellationToken).ConfigureAwait(false);
+            await runLogger.AppendEventAsync(eventName, detail, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -641,7 +641,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                     DurationMs = (long)elapsed.TotalMilliseconds,
                     ErrorClass = errorClass
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -690,7 +690,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         var resolved = new List<ResolvedSelectedFolder>(selectedFolderIds.Count);
         foreach (var id in selectedFolderIds)
         {
-            resolved.Add(await resolver.ResolveAsync(id, cancellationToken).ConfigureAwait(false));
+            resolved.Add(await resolver.ResolveAsync(id, cancellationToken));
         }
 
         return resolved;

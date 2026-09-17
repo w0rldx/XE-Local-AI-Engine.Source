@@ -46,7 +46,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         };
 
         _ = _dbContext.AgentSkills.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity, resources: []);
     }
@@ -59,8 +59,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         // Load tracked (not AsNoTracking) so SaveChanges re-encrypts; the materialization interceptor has already
         // decrypted Description/Body/frontmatter on load, so the comparison below is plaintext-vs-plaintext.
         var entity = await _dbContext.AgentSkills
-                                     .FirstOrDefaultAsync(skill => skill.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(skill => skill.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -108,16 +107,15 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
             entity.Version++;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return ToRecord(entity, await LoadResourcesAsync(id, cancellationToken).ConfigureAwait(false));
+        return ToRecord(entity, await LoadResourcesAsync(id, cancellationToken));
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.AgentSkills
-                                     .FirstOrDefaultAsync(skill => skill.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(skill => skill.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -125,7 +123,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         }
 
         _ = _dbContext.AgentSkills.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }
@@ -134,10 +132,9 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
     {
         var entity = await _dbContext.AgentSkills
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(skill => skill.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(skill => skill.Id == id, cancellationToken);
 
-        return entity is null ? null : ToRecord(entity, await LoadResourcesAsync(id, cancellationToken).ConfigureAwait(false));
+        return entity is null ? null : ToRecord(entity, await LoadResourcesAsync(id, cancellationToken));
     }
 
     public async Task<IReadOnlyList<AgentSkillRecord>> ListAsync(CancellationToken cancellationToken = default)
@@ -145,8 +142,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         var entities = await _dbContext.AgentSkills
                                        .AsNoTracking()
                                        .OrderBy(skill => skill.Name)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         // The library list does not carry resources: decrypting every bundled file of every skill to render a list of
         // names would be pure waste. Callers that need them ask per skill.
@@ -171,8 +167,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
                                        .AsNoTracking()
                                        .Where(skill => skill.Enabled && idSet.Contains(skill.Id))
                                        .OrderBy(skill => skill.Name)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         if (entities.Count == 0)
         {
@@ -186,8 +181,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
                                         .AsNoTracking()
                                         .Where(resource => resolvedIds.Contains(resource.SkillId))
                                         .OrderBy(resource => resource.Name)
-                                        .ToListAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ToListAsync(cancellationToken);
 
         var bySkill = resources.GroupBy(resource => resource.SkillId)
                                .ToDictionary(group => group.Key, group => (IReadOnlyList<AgentSkillResourceRecord>)group.Select(ToRecord).ToArray());
@@ -197,7 +191,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
 
     public async Task<IReadOnlyList<AgentSkillResourceRecord>> ListResourcesAsync(Guid skillId, CancellationToken cancellationToken = default)
     {
-        return await LoadResourcesAsync(skillId, cancellationToken).ConfigureAwait(false);
+        return await LoadResourcesAsync(skillId, cancellationToken);
     }
 
     public async Task<AgentSkillResourceRecord?> UpsertResourceAsync(Guid skillId, AgentSkillResourceInput input, CancellationToken cancellationToken = default)
@@ -205,8 +199,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         ArgumentNullException.ThrowIfNull(input);
 
         var skill = await _dbContext.AgentSkills
-                                    .FirstOrDefaultAsync(entity => entity.Id == skillId, cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .FirstOrDefaultAsync(entity => entity.Id == skillId, cancellationToken);
 
         if (skill is null)
         {
@@ -218,8 +211,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         // fresh row (fresh id, fresh seal) is the only way an edit stays readable.
         var superseded = await _dbContext.AgentSkillResources
                                          .Where(resource => resource.SkillId == skillId && resource.Name == input.Name)
-                                         .ToListAsync(cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .ToListAsync(cancellationToken);
 
         _dbContext.AgentSkillResources.RemoveRange(superseded);
 
@@ -227,7 +219,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         _ = _dbContext.AgentSkillResources.Add(entity);
         BumpVersion(skill);
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -235,8 +227,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
     public async Task<bool> DeleteResourceAsync(Guid skillId, Guid resourceId, CancellationToken cancellationToken = default)
     {
         var skill = await _dbContext.AgentSkills
-                                    .FirstOrDefaultAsync(entity => entity.Id == skillId, cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .FirstOrDefaultAsync(entity => entity.Id == skillId, cancellationToken);
 
         if (skill is null)
         {
@@ -244,8 +235,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         }
 
         var entity = await _dbContext.AgentSkillResources
-                                     .FirstOrDefaultAsync(resource => resource.Id == resourceId && resource.SkillId == skillId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(resource => resource.Id == resourceId && resource.SkillId == skillId, cancellationToken);
 
         if (entity is null)
         {
@@ -255,7 +245,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         _ = _dbContext.AgentSkillResources.Remove(entity);
         BumpVersion(skill);
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }
@@ -267,8 +257,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         ArgumentNullException.ThrowIfNull(resources);
 
         var skill = await _dbContext.AgentSkills
-                                    .FirstOrDefaultAsync(entity => entity.Id == skillId, cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .FirstOrDefaultAsync(entity => entity.Id == skillId, cancellationToken);
 
         if (skill is null)
         {
@@ -277,8 +266,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
 
         var existing = await _dbContext.AgentSkillResources
                                        .Where(resource => resource.SkillId == skillId)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         _dbContext.AgentSkillResources.RemoveRange(existing);
 
@@ -286,7 +274,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
         _dbContext.AgentSkillResources.AddRange(replacements);
         BumpVersion(skill);
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return replacements.OrderBy(resource => resource.Name, StringComparer.Ordinal).Select(ToRecord).ToArray();
     }
@@ -297,8 +285,7 @@ public sealed partial class AgentSkillStore(NodeChatDbContext dbContext, TimePro
                                        .AsNoTracking()
                                        .Where(resource => resource.SkillId == skillId)
                                        .OrderBy(resource => resource.Name)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

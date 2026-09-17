@@ -210,9 +210,9 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
             });
 
         // Diagnose: confirm the host address and what VITE_API_URL the SPA bundle was compiled with.
-        await Console.Out.WriteLineAsync($"[DIAG] ServerAddress={Factory.ServerAddress} Page.Url={Page.Url}").ConfigureAwait(false);
-        var viteBundledUrl = await Page.EvaluateAsync<string>("window?.xeConfig?.apiUrl ?? 'not-found'").ConfigureAwait(false);
-        await Console.Out.WriteLineAsync($"[DIAG] window.xeConfig.apiUrl={viteBundledUrl}").ConfigureAwait(false);
+        await Console.Out.WriteLineAsync($"[DIAG] ServerAddress={Factory.ServerAddress} Page.Url={Page.Url}");
+        var viteBundledUrl = await Page.EvaluateAsync<string>("window?.xeConfig?.apiUrl ?? 'not-found'");
+        await Console.Out.WriteLineAsync($"[DIAG] window.xeConfig.apiUrl={viteBundledUrl}");
 
         // Capture browser console errors for diagnostics.
         var consoleErrors = new List<string>();
@@ -227,12 +227,10 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
         // Log ALL requests recorded so far (before clearing) for diagnostics.
         var allBefore = Factory.FakeOllamaState.RecordedRequests;
         await Console.Out.WriteLineAsync(
-                         $"[DIAG-BEFORE] Total FakeOllama requests before clear: {allBefore.Count}, chat: {allBefore.Count(r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))}")
-                     .ConfigureAwait(false);
+                         $"[DIAG-BEFORE] Total FakeOllama requests before clear: {allBefore.Count}, chat: {allBefore.Count(r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))}");
         foreach (var req in allBefore)
         {
-            await Console.Out.WriteLineAsync($"  {req.Path} | model={req.ModelName} | msgs={req.MessageCount}")
-                         .ConfigureAwait(false);
+            await Console.Out.WriteLineAsync($"  {req.Path} | model={req.ModelName} | msgs={req.MessageCount}");
         }
 
         var sendButton = Page.GetByTestId(SendButtonTestId);
@@ -280,21 +278,19 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
         var chatRequests = allAfter
                            .Where(static r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))
                            .ToList();
-        await Console.Out.WriteLineAsync($"[DIAG] Total requests after send: {allAfter.Count}, /api/chat: {chatRequests.Count}, toolCallEmitted: {toolCallEmitted}")
-                     .ConfigureAwait(false);
+        await Console.Out.WriteLineAsync($"[DIAG] Total requests after send: {allAfter.Count}, /api/chat: {chatRequests.Count}, toolCallEmitted: {toolCallEmitted}");
         foreach (var req in allAfter)
         {
-            await Console.Out.WriteLineAsync($"  POST {req.Path} | model={req.ModelName} | msgs={req.MessageCount} @ {req.CapturedAtUtc:HH:mm:ss}")
-                         .ConfigureAwait(false);
+            await Console.Out.WriteLineAsync($"  POST {req.Path} | model={req.ModelName} | msgs={req.MessageCount} @ {req.CapturedAtUtc:HH:mm:ss}");
         }
 
         // Log any browser console errors.
         if (consoleErrors.Count > 0)
         {
-            await Console.Out.WriteLineAsync($"[DIAG] Browser console errors ({consoleErrors.Count}):").ConfigureAwait(false);
+            await Console.Out.WriteLineAsync($"[DIAG] Browser console errors ({consoleErrors.Count}):");
             foreach (var err in consoleErrors)
             {
-                await Console.Out.WriteLineAsync($"  {err}").ConfigureAwait(false);
+                await Console.Out.WriteLineAsync($"  {err}");
             }
         }
 
@@ -314,7 +310,7 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
     // so a cancelled or torn-down run would sit on the gate.
     private static async IAsyncEnumerable<string> GatedAnswerAsync(Task gate, [EnumeratorCancellation] CancellationToken ct)
     {
-        await gate.WaitAsync(ct).ConfigureAwait(false);
+        await gate.WaitAsync(ct);
         yield return "12*9 is 108";
     }
 

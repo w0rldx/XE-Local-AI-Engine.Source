@@ -18,13 +18,13 @@ public sealed class DeletePlaybookActionEndpoint(IPlaybookActionService playbook
 
     public override async Task HandleAsync(DeletePlaybookActionRequest req, CancellationToken ct)
     {
-        var deleted = await _playbookActionService.DeleteAsync(req.AgentDefinitionId, req.ActionId, ct).ConfigureAwait(false);
+        var deleted = await _playbookActionService.DeleteAsync(req.AgentDefinitionId, req.ActionId, ct);
         if (!deleted)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

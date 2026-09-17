@@ -25,7 +25,7 @@ public sealed class LocalApiSecurityMiddlewareTests
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context).ConfigureAwait(false);
+        await middleware.InvokeAsync(context);
 
         AssertEx.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
         AssertEx.False(nextCalled, "A non-loopback peer must never reach the pipeline behind the middleware.");
@@ -42,7 +42,7 @@ public sealed class LocalApiSecurityMiddlewareTests
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context).ConfigureAwait(false);
+        await middleware.InvokeAsync(context);
 
         AssertEx.True(nextCalled, "A loopback peer with an allowed host must pass.");
     }
@@ -59,7 +59,7 @@ public sealed class LocalApiSecurityMiddlewareTests
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context).ConfigureAwait(false);
+        await middleware.InvokeAsync(context);
 
         AssertEx.True(nextCalled, "A null (in-process) peer must be treated as loopback-equivalent.");
     }
@@ -76,7 +76,7 @@ public sealed class LocalApiSecurityMiddlewareTests
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context).ConfigureAwait(false);
+        await middleware.InvokeAsync(context);
 
         AssertEx.True(nextCalled, "Only the local API surface is peer-gated.");
     }

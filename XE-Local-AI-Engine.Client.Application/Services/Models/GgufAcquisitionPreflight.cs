@@ -241,10 +241,10 @@ public sealed class GgufAcquisitionPreflight(
         }
 
         var lease = await _snapshotCoordinator.AcquireMutationAsync(new InstalledModelMutationRequest(identity.CanonicalModelName, InstalledModelMutationKind.Acquire, members),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         try
         {
-            var state = await _stateProbe.ProbeAsync(intent, identity, lease, cancellationToken).ConfigureAwait(false);
+            var state = await _stateProbe.ProbeAsync(intent, identity, lease, cancellationToken);
             if (state.Disposition == GgufAcquisitionDisposition.Conflict
                 || state.ProviderMapDisposition == ProviderMapDisposition.ConflictingProvider
                 || (intent.OperationKind == GgufAcquisitionOperationKind.Import && state.Disposition != GgufAcquisitionDisposition.Available))
@@ -254,7 +254,7 @@ public sealed class GgufAcquisitionPreflight(
 
             if (state.Disposition == GgufAcquisitionDisposition.ActiveCompatible)
             {
-                await lease.DisposeAsync().ConfigureAwait(false);
+                await lease.DisposeAsync();
                 return new PreparedGgufAcquisition(identity, state.Disposition, state.ProviderMapDisposition, lease: null, state.ActiveOperationId);
             }
 
@@ -262,7 +262,7 @@ public sealed class GgufAcquisitionPreflight(
         }
         catch
         {
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
             throw;
         }
     }
@@ -301,7 +301,7 @@ public sealed class PreparedGgufAcquisition : IAsyncDisposable
         var lease = Interlocked.Exchange(ref _lease, null);
         if (lease is not null)
         {
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
         }
     }
 }

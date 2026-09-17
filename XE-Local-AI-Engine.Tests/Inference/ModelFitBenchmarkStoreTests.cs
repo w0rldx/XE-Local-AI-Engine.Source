@@ -33,7 +33,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
     [Test]
     public async Task GetLatestSuccessfulForProfile_ReturnsNewestSucceededRowBoundToProfile()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
@@ -42,11 +42,11 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         var benchmarks = new ModelFitBenchmarkStore(dbContext);
         var profileId = Guid.NewGuid();
 
-        var olderSnapshotId = await CreateBenchmarkAsync(snapshots, benchmarks, time, ModelFitRunStatus.Succeeded, profileId, ctxSize: 8192).ConfigureAwait(false);
+        var olderSnapshotId = await CreateBenchmarkAsync(snapshots, benchmarks, time, ModelFitRunStatus.Succeeded, profileId, ctxSize: 8192);
         time.Advance(TimeSpan.FromSeconds(1));
-        var newerSnapshotId = await CreateBenchmarkAsync(snapshots, benchmarks, time, ModelFitRunStatus.Succeeded, profileId, ctxSize: 4096).ConfigureAwait(false);
+        var newerSnapshotId = await CreateBenchmarkAsync(snapshots, benchmarks, time, ModelFitRunStatus.Succeeded, profileId, ctxSize: 4096);
 
-        var result = await benchmarks.GetLatestSuccessfulForProfileAsync(profileId, CancellationToken.None).ConfigureAwait(false);
+        var result = await benchmarks.GetLatestSuccessfulForProfileAsync(profileId, CancellationToken.None);
 
         var row = AssertEx.NotNull(result);
         AssertEx.Equal<Guid?>(profileId, row.ProfileId);
@@ -59,7 +59,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
     [Test]
     public async Task GetLatestSuccessfulForProfile_IgnoresLegacyRowsWithoutProfileId()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
@@ -68,9 +68,9 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         var benchmarks = new ModelFitBenchmarkStore(dbContext);
 
         // A pre-binding (legacy) benchmark row: a successful snapshot but no ProfileId. It must never qualify a freeze.
-        _ = await CreateBenchmarkAsync(snapshots, benchmarks, time, ModelFitRunStatus.Succeeded, profileId: null, ctxSize: 8192).ConfigureAwait(false);
+        _ = await CreateBenchmarkAsync(snapshots, benchmarks, time, ModelFitRunStatus.Succeeded, profileId: null, ctxSize: 8192);
 
-        var result = await benchmarks.GetLatestSuccessfulForProfileAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+        var result = await benchmarks.GetLatestSuccessfulForProfileAsync(Guid.NewGuid(), CancellationToken.None);
 
         AssertEx.Null(result);
     }
@@ -78,7 +78,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
     [Test]
     public async Task GetLatestSuccessfulForProfile_IgnoresNonSucceededSnapshots()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
@@ -88,9 +88,9 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         var profileId = Guid.NewGuid();
 
         // A benchmark row bound to the profile, but its snapshot Failed — it must not justify a freeze.
-        _ = await CreateBenchmarkAsync(snapshots, benchmarks, time, ModelFitRunStatus.Failed, profileId, ctxSize: 8192).ConfigureAwait(false);
+        _ = await CreateBenchmarkAsync(snapshots, benchmarks, time, ModelFitRunStatus.Failed, profileId, ctxSize: 8192);
 
-        var result = await benchmarks.GetLatestSuccessfulForProfileAsync(profileId, CancellationToken.None).ConfigureAwait(false);
+        var result = await benchmarks.GetLatestSuccessfulForProfileAsync(profileId, CancellationToken.None);
 
         AssertEx.Null(result);
     }
@@ -111,7 +111,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
                 ModelName: Model,
                 Status: ModelFitRunStatus.Running,
                 StartedAtUtc: nowMs),
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         _ = await snapshots.MarkTerminalAsync(running.Id,
             terminalStatus,
@@ -121,7 +121,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
             stderrExcerpt: null,
             diagnosticsJson: null,
             completedAtUtc: nowMs,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         _ = await benchmarks.ReplaceForSnapshotAsync(running.Id,
             new[]
@@ -137,7 +137,7 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
                     CtxSize: ctxSize,
                     ProfileId: profileId)
             },
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         return running.Id;
     }
@@ -154,8 +154,8 @@ public sealed class ModelFitBenchmarkStoreTests : IDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }

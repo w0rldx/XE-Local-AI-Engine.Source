@@ -8,7 +8,7 @@ internal static class TagsEndpoint
     {
         FakeOllamaEndpointMapper.Record(context, state, model: null, messageCount: 0, prompt: null);
 
-        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model: null).ConfigureAwait(false))
+        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model: null))
         {
             return Results.Empty;
         }

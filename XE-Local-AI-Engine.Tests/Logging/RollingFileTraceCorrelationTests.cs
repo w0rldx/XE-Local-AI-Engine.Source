@@ -38,7 +38,7 @@ public sealed class RollingFileTraceCorrelationTests : IDisposable
         }
 
         var logFile = Directory.EnumerateFiles(_logDirectory, "xe-node-*.log").Single();
-        var contents = await File.ReadAllTextAsync(logFile).ConfigureAwait(false);
+        var contents = await File.ReadAllTextAsync(logFile);
 
         AssertEx.Contains(contents, traceId);
         AssertEx.Contains(contents, spanId);

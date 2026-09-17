@@ -19,7 +19,7 @@ public sealed class CreateScheduledJobEndpoint(IScheduledJobManagementService sc
 
     public override async Task HandleAsync(CreateScheduledJobRequest req, CancellationToken ct)
     {
-        var record = await _scheduledJobManagementService.CreateJobAsync(req.ToInput(), ct).ConfigureAwait(false);
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        var record = await _scheduledJobManagementService.CreateJobAsync(req.ToInput(), ct);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

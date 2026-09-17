@@ -556,7 +556,7 @@ public sealed class InferenceBenchmarkHarnessTests
         {
             yield return new ChatResponseUpdate(ChatRole.Assistant, "primary");
             yield return new ChatResponseUpdate(ChatRole.Assistant, " colors");
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)
@@ -598,7 +598,7 @@ public sealed class InferenceBenchmarkHarnessTests
                 yield return update;
             }
 
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null) =>

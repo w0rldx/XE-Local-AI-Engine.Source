@@ -46,7 +46,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     [Test]
     public async Task PrepareAsync_MountsTheFourRuntimeSubdirectoriesAndNotTheirParent()
     {
-        var (session, _) = await PrepareAsync(CreateMappingSandbox()).ConfigureAwait(false);
+        var (session, _) = await PrepareAsync(CreateMappingSandbox());
 
         foreach (var name in new[]
                  {
@@ -71,7 +71,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     {
         // Assert this boundary as the absence it is. workspace.json lives directly in RuntimePath and holds the repository
         // identity, the selected folder and the base commit the whole trust chain is anchored to.
-        var (session, _) = await PrepareAsync(CreateMappingSandbox()).ConfigureAwait(false);
+        var (session, _) = await PrepareAsync(CreateMappingSandbox());
         var manifestPath = Path.Combine(session.RuntimePath, "workspace.json");
 
         AssertEx.True(File.Exists(manifestPath), "the fixture did not produce a workspace manifest, so this asserts nothing.");
@@ -86,9 +86,9 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         // restore, build and test all fail. Asserting the values — not merely that some environment was passed — is
         // what distinguishes "the mapping was applied" from "nothing ran".
         var sandbox = CreateMappingSandbox();
-        var (session, tools) = await PrepareAsync(sandbox).ConfigureAwait(false);
+        var (session, tools) = await PrepareAsync(sandbox);
 
-        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus).ConfigureAwait(false);
+        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
 
         var environment = AssertEx.NotNull(sandbox.Executed[0].Environment);
         AssertEx.Equal("/xe-runtime/home", environment["HOME"]);
@@ -110,9 +110,9 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         // The other direction, and the reason the identity map exists: Development runs on the process provider today,
         // and a translation that changed these values there would break every build on the currently shipping path.
         using var sandbox = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
-        var (session, tools) = await PrepareAsync(sandbox).ConfigureAwait(false);
+        var (session, tools) = await PrepareAsync(sandbox);
 
-        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus).ConfigureAwait(false);
+        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
 
         AssertEx.Equal(Path.Combine(session.RuntimePath, "home"),
             session.SandboxHandle.TryResolveSandboxPath(Path.Combine(session.RuntimePath, "home")));
@@ -127,25 +127,25 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         // serving it writable, so an unconditional request would kill Development Mode outright on the process
         // provider — which is exactly why the engine-side config rewrite is the provider-independent half.
         var mapping = CreateMappingSandbox();
-        var (mapped, _) = await PrepareAsync(mapping).ConfigureAwait(false);
+        var (mapped, _) = await PrepareAsync(mapping);
         AssertEx.Contains(mapped.SandboxHandle.Mounts,
             mount => mount.ReadOnly && mount.SandboxPath.EndsWith(".git/config", StringComparison.Ordinal));
 
         using var process = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
-        var (plain, _) = await PrepareAsync(process).ConfigureAwait(false);
+        var (plain, _) = await PrepareAsync(process);
         AssertEx.Empty(plain.SandboxHandle.Mounts.Where(static mount => mount.ReadOnly));
     }
 
     private async Task<(DevelopmentWorkspaceSession Session, DevelopmentWorkspaceTools Tools)> PrepareAsync(IDevelopmentSandboxRuntimeProvider sandbox)
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "data-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(data);
         var options = Options.Create(OptionsValue());
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         if (sandbox is MappingSandboxRuntimeProvider mapping)
         {
             mapping.BaseCommit = session.BaseCommit;
@@ -212,12 +212,12 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
-        await RunGitAsync(repository, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await RunGitAsync(repository, "config", "user.email", "development-mounts@example.invalid").ConfigureAwait(false);
-        await RunGitAsync(repository, "config", "user.name", "Development Mount Test").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
-        await RunGitAsync(repository, "add", "README.md").ConfigureAwait(false);
-        await RunGitAsync(repository, "commit", "-m", "base").ConfigureAwait(false);
+        await RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await RunGitAsync(repository, "config", "user.email", "development-mounts@example.invalid");
+        await RunGitAsync(repository, "config", "user.name", "Development Mount Test");
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
+        await RunGitAsync(repository, "add", "README.md");
+        await RunGitAsync(repository, "commit", "-m", "base");
         return repository;
     }
 
@@ -242,9 +242,9 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         };
         process.Start();
         var error = process.StandardError.ReadToEndAsync();
-        _ = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        AssertEx.Equal(expected: 0, process.ExitCode, await error.ConfigureAwait(false));
+        _ = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        AssertEx.Equal(expected: 0, process.ExitCode, await error);
     }
 
     /// <summary>

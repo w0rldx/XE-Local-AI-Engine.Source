@@ -61,13 +61,13 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         DocumentRevision? revision = null;
         try
         {
-            revision = await ReadDocumentRevisionAsync(documentId, cancellationToken).ConfigureAwait(false);
+            revision = await ReadDocumentRevisionAsync(documentId, cancellationToken);
             if (revision is null)
             {
                 return;
             }
 
-            await IngestAsync(documentId, revision.Value, cancellationToken).ConfigureAwait(false);
+            await IngestAsync(documentId, revision.Value, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -77,12 +77,12 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         catch (KnowledgeIngestionException exception)
         {
             LogIngestionFailure(documentId, exception);
-            await SafeFailAsync(documentId, revision?.ContentHash, exception.Reason).ConfigureAwait(false);
+            await SafeFailAsync(documentId, revision?.ContentHash, exception.Reason);
         }
         catch (Exception exception)
         {
             LogIngestionFailure(documentId, exception);
-            await SafeFailAsync(documentId, revision?.ContentHash, UnexpectedReason).ConfigureAwait(false);
+            await SafeFailAsync(documentId, revision?.ContentHash, UnexpectedReason);
         }
     }
 
@@ -126,20 +126,19 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                 revision.ContentHash,
                 KnowledgeDocumentStatus.Extracting,
                 failureReason: null,
-                cancellationToken).ConfigureAwait(false))
+                cancellationToken))
         {
             return;
         }
 
-        var bytes = await _blobStore.ReadBytesAsync(documentId, cancellationToken).ConfigureAwait(false);
+        var bytes = await _blobStore.ReadBytesAsync(documentId, cancellationToken);
         if (bytes is null)
         {
             _ = await SetStatusAsync(documentId,
                     revision.ContentHash,
                     KnowledgeDocumentStatus.Failed,
                     ContentMissingReason,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
             return;
         }
 
@@ -147,8 +146,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         var extraction = await _extractor.ExtractStructuredAsync(stream,
                                              revision.SourcePath ?? documentId.ToString("D"),
                                              revision.Extension,
-                                             cancellationToken)
-                                         .ConfigureAwait(false);
+                                             cancellationToken);
         switch (extraction.Status)
         {
             case DocumentExtractionStatus.Unsupported:
@@ -156,16 +154,14 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                         revision.ContentHash,
                         KnowledgeDocumentStatus.Failed,
                         UnsupportedReason,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
                 return;
             case DocumentExtractionStatus.Failed:
                 _ = await SetStatusAsync(documentId,
                         revision.ContentHash,
                         KnowledgeDocumentStatus.Failed,
                         ExtractionFailedReason,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
                 return;
             case DocumentExtractionStatus.Extracted:
             default:
@@ -176,7 +172,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                 revision.ContentHash,
                 KnowledgeDocumentStatus.Chunking,
                 failureReason: null,
-                cancellationToken).ConfigureAwait(false))
+                cancellationToken))
         {
             return;
         }
@@ -185,7 +181,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         // is discoverable, so a chunk and its heading prefix fit the window. Best-effort — a null window (provider down /
         // no advertised context length) falls back to the configured MaxChunkTokens; a provider failure surfaces at the
         // embed step below, not here.
-        var embeddingContextWindow = await _embedder.ResolveEmbeddingContextWindowAsync(cancellationToken).ConfigureAwait(false);
+        var embeddingContextWindow = await _embedder.ResolveEmbeddingContextWindowAsync(cancellationToken);
         var chunking = _chunkingService.Chunk(extraction.Document!, embeddingContextWindow);
         chunking = ApplySourceMetadata(chunking, revision.Extension, revision.SourcePath);
         if (chunking.Chunks.Count == 0)
@@ -194,13 +190,12 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                     revision.ContentHash,
                     KnowledgeDocumentStatus.Failed,
                     EmptyDocumentReason,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
             return;
         }
 
         // Repository updates reuse document_id, so existence alone cannot prove this job still owns the current source.
-        if (!await DocumentMatchesRevisionAsync(documentId, revision.ContentHash, cancellationToken).ConfigureAwait(false))
+        if (!await DocumentMatchesRevisionAsync(documentId, revision.ContentHash, cancellationToken))
         {
             return;
         }
@@ -209,22 +204,21 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                 revision.ContentHash,
                 KnowledgeDocumentStatus.Embedding,
                 failureReason: null,
-                cancellationToken).ConfigureAwait(false))
+                cancellationToken))
         {
             return;
         }
 
         // Embed the contextual text (heading trail + content) so short chunks under a heading stay retrievable; the stored
         // chunk content remains the plain text.
-        var embeddingResult = await EmbedWithReuseAsync(chunking.Chunks, cancellationToken).ConfigureAwait(false);
+        var embeddingResult = await EmbedWithReuseAsync(chunking.Chunks, cancellationToken);
         if (embeddingResult.Vectors.Count != chunking.Chunks.Count)
         {
             _ = await SetStatusAsync(documentId,
                     revision.ContentHash,
                     KnowledgeDocumentStatus.Failed,
                     UnexpectedReason,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
             return;
         }
 
@@ -244,10 +238,10 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         // The writer performs the final Indexed transition atomically. A false result means the document was deleted or
         // replaced mid-flight (the stale write was skipped); the dispatcher preserves any deferred replacement admission.
         // On success push Indexed, since the writer sets it inside its own transaction rather than through SetStatusAsync.
-        var indexed = await _indexWriter.WriteAsync(input, cancellationToken).ConfigureAwait(false);
+        var indexed = await _indexWriter.WriteAsync(input, cancellationToken);
         if (indexed)
         {
-            await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Indexed, cancellationToken).ConfigureAwait(false);
+            await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Indexed, cancellationToken);
         }
     }
 
@@ -257,13 +251,13 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         var contextualTexts = chunks.Select(static chunk => chunk.ContextualContent).ToList();
         if (_embeddingCache is null)
         {
-            return await _embedder.EmbedAsync(contextualTexts, cancellationToken).ConfigureAwait(false);
+            return await _embedder.EmbedAsync(contextualTexts, cancellationToken);
         }
 
-        var descriptor = await _embedder.ResolveExpectedVectorAsync(cancellationToken).ConfigureAwait(false);
+        var descriptor = await _embedder.ResolveExpectedVectorAsync(cancellationToken);
         if (descriptor is null)
         {
-            return await _embedder.EmbedAsync(contextualTexts, cancellationToken).ConfigureAwait(false);
+            return await _embedder.EmbedAsync(contextualTexts, cancellationToken);
         }
 
         var textByKey = new Dictionary<KnowledgeChunkEmbeddingCacheKey, string>();
@@ -283,7 +277,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                                                async (missing, token) =>
                                                {
                                                    var texts = missing.Select(key => textByKey[key]).ToList();
-                                                   var generated = await _embedder.EmbedAsync(texts, token).ConfigureAwait(false);
+                                                   var generated = await _embedder.EmbedAsync(texts, token);
                                                    if (!string.Equals(generated.ResolvedModel, descriptor.ResolvedModel, StringComparison.Ordinal)
                                                        || !string.Equals(generated.VectorIdentity, descriptor.VectorIdentity, StringComparison.Ordinal)
                                                        || generated.Dimension != descriptor.Dimension)
@@ -293,8 +287,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 
                                                    return generated.Vectors;
                                                },
-                                               cancellationToken)
-                                           .ConfigureAwait(false);
+                                               cancellationToken);
         return new KnowledgeEmbeddingResult(vectors, descriptor.ResolvedModel, descriptor.VectorIdentity, descriptor.Dimension);
     }
 
@@ -328,19 +321,19 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     private async Task<DocumentRevision?> ReadDocumentRevisionAsync(Guid documentId, CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT extension, source_path, content_hash FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
         {
             return null;
         }
 
         return new DocumentRevision(reader.GetString(0),
-            await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(1),
+            await reader.IsDBNullAsync(1, cancellationToken) ? null : reader.GetString(1),
             reader.GetString(2));
     }
 
@@ -422,13 +415,13 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT 1 FROM knowledge_documents WHERE document_id = $document_id AND content_hash = $content_hash;";
         AddParameter(command, "$document_id", documentId);
         AddParameter(command, "$content_hash", contentHash);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is not null and not DBNull;
     }
 
@@ -439,7 +432,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -453,7 +446,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
         AddParameter(command, "$document_id", documentId);
         AddParameter(command, "$content_hash", contentHash);
-        var changed = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) == 1;
+        var changed = await command.ExecuteNonQueryAsync(cancellationToken) == 1;
         if (!changed)
         {
             return false;
@@ -461,7 +454,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 
         // Push every non-terminal transition and any Failed transition (the Indexed transition is pushed by the caller,
         // since the index writer sets it inside its own transaction). Best-effort — the notifier never throws.
-        await _notifier.NotifyDocumentChangedAsync(documentId, status, cancellationToken).ConfigureAwait(false);
+        await _notifier.NotifyDocumentChangedAsync(documentId, status, cancellationToken);
         return true;
     }
 
@@ -479,8 +472,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                     contentHash,
                     KnowledgeDocumentStatus.Failed,
                     reason,
-                    CancellationToken.None)
-                .ConfigureAwait(false);
+                    CancellationToken.None);
         }
         catch (DbException exception)
         {

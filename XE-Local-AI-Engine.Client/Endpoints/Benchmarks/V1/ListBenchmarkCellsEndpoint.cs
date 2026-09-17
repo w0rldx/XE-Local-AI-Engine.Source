@@ -25,13 +25,13 @@ public sealed class ListBenchmarkCellsEndpoint(BenchmarkRecordService records)
 
     public override async Task HandleAsync(ListBenchmarkCellsRequest req, CancellationToken ct)
     {
-        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
-        var cells = await _records.ListCellsAsync(req.ProjectId, ct).ConfigureAwait(false);
-        await Send.OkAsync(cells.ToResponse(), ct).ConfigureAwait(false);
+        var cells = await _records.ListCellsAsync(req.ProjectId, ct);
+        await Send.OkAsync(cells.ToResponse(), ct);
     }
 }

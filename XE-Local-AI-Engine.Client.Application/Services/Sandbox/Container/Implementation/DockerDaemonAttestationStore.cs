@@ -37,7 +37,7 @@ internal sealed class DockerDaemonAttestationStore : IDockerDaemonAttestationSto
 
     public async Task<DockerDaemonAttestation?> ReadAsync(CancellationToken cancellationToken = default)
     {
-        await _sync.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _sync.WaitAsync(cancellationToken);
         try
         {
             if (!File.Exists(_filePath))
@@ -46,8 +46,7 @@ internal sealed class DockerDaemonAttestationStore : IDockerDaemonAttestationSto
             }
 
             await using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return await JsonSerializer.DeserializeAsync<DockerDaemonAttestation>(stream, SerializerOptions, cancellationToken)
-                                       .ConfigureAwait(false);
+            return await JsonSerializer.DeserializeAsync<DockerDaemonAttestation>(stream, SerializerOptions, cancellationToken);
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -69,7 +68,7 @@ internal sealed class DockerDaemonAttestationStore : IDockerDaemonAttestationSto
     {
         ArgumentNullException.ThrowIfNull(attestation);
 
-        await _sync.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _sync.WaitAsync(cancellationToken);
         try
         {
             var directory = Path.GetDirectoryName(_filePath)!;
@@ -78,8 +77,8 @@ internal sealed class DockerDaemonAttestationStore : IDockerDaemonAttestationSto
             var temporaryPath = _filePath + ".tmp";
             await using (var stream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                await JsonSerializer.SerializeAsync(stream, attestation, SerializerOptions, cancellationToken).ConfigureAwait(false);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                await JsonSerializer.SerializeAsync(stream, attestation, SerializerOptions, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
             }
 
             File.Move(temporaryPath, _filePath, overwrite: true);

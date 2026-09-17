@@ -53,7 +53,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
-            var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync(cancellationToken).ConfigureAwait(false);
+            var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync(cancellationToken);
             if (!pendingMigrations.Any())
             {
                 _logger.LogDebug("Node database has no pending migrations; skipping the pre-migration backup.");
@@ -64,7 +64,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
             Directory.CreateDirectory(backupDirectory);
 
             var destinationPath = BuildSnapshotPath(backupDirectory);
-            await VacuumIntoAsync(dbContext, destinationPath, cancellationToken).ConfigureAwait(false);
+            await VacuumIntoAsync(dbContext, destinationPath, cancellationToken);
 
             var snapshotBytes = new FileInfo(destinationPath).Length;
             _logger.LogInformation("Snapshotted the node database to {BackupPath} ({BackupBytes} bytes) before applying {PendingCount} pending migration(s).",
@@ -107,7 +107,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
         // input); we still escape single quotes so an unusual directory can't break out of the string literal.
         var escapedPath = destinationPath.Replace("'", "''", StringComparison.Ordinal);
 
-        await dbContext.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.OpenConnectionAsync(cancellationToken);
         try
         {
             var connection = dbContext.Database.GetDbConnection();
@@ -117,11 +117,11 @@ public sealed class NodeDbBackupService : INodeDbBackupService
 #pragma warning disable CA2100, S2077
             command.CommandText = $"VACUUM INTO '{escapedPath}';";
 #pragma warning restore CA2100, S2077
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         finally
         {
-            await dbContext.Database.CloseConnectionAsync().ConfigureAwait(false);
+            await dbContext.Database.CloseConnectionAsync();
         }
     }
 

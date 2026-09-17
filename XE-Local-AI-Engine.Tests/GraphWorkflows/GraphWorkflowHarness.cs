@@ -136,7 +136,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     {
         if (_replacement is { } replacement)
         {
-            await replacement.DisposeAsync().ConfigureAwait(false);
+            await replacement.DisposeAsync();
         }
 
         if (_ownsFactory)
@@ -157,7 +157,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
                 tools.ReleaseAll();
             }
 
-            await _factory.DisposeAsync().ConfigureAwait(false);
+            await _factory.DisposeAsync();
         }
     }
 
@@ -194,7 +194,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     {
         for (var tick = 1; tick <= maxTicks; tick++)
         {
-            if (await AdvanceAsync(runId).ConfigureAwait(false) == 0)
+            if (await AdvanceAsync(runId) == 0)
             {
                 return tick;
             }
@@ -218,18 +218,18 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
 
         for (var tick = 0; tick < maxTicks; tick++)
         {
-            if (await done().ConfigureAwait(false))
+            if (await done())
             {
                 return;
             }
 
-            _ = await AdvanceAsync(runId).ConfigureAwait(false);
+            _ = await AdvanceAsync(runId);
 
             // real-timer: NOT a wait for the event — the loop polls a real condition and is bounded by tick count.
             // This hands the thread pool back between ticks, because what these ticks are waiting for is a lane's
             // detached work, and a loop that spins through sixty database round trips without yielding starves the
             // very continuation it is asking about.
-            await Task.Delay(PollPause).ConfigureAwait(false);
+            await Task.Delay(PollPause);
         }
 
         throw new AssertionException($"{message} (after {maxTicks} ticks of run {runId})");
@@ -239,21 +239,21 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
-        return (await definitions.CreateAsync($"Seeded {Guid.NewGuid():N}", description: null, graphJson).ConfigureAwait(false)).Id;
+        return (await definitions.CreateAsync($"Seeded {Guid.NewGuid():N}", description: null, graphJson)).Id;
     }
 
     /// <summary>A definition and a run of it, through the real command surface.</summary>
     public async Task<Guid> StartRunAsync(string graphJson, string? inputJson = null)
     {
-        var definitionId = await SeedDefinitionAsync(graphJson).ConfigureAwait(false);
-        return await StartRunOfAsync(definitionId, inputJson).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(graphJson);
+        return await StartRunOfAsync(definitionId, inputJson);
     }
 
     public async Task<Guid> StartRunOfAsync(Guid definitionId, string? inputJson = null)
     {
         await using var scope = Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
-        return (await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson, definitionVersion: null).ConfigureAwait(false)).Run.Id;
+        return (await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson, definitionVersion: null)).Run.Id;
     }
 
     /// <summary>
@@ -266,7 +266,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
 
         await using var scope = Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-        var definition = await store.GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        var definition = await store.GetDefinitionAsync(definitionId);
         var run = await store.StartRunAsync(new StartGraphWorkflowRunCommand(Guid.NewGuid(),
                                  Guid.NewGuid(),
                                  definitionId,
@@ -274,15 +274,14 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
                                  definition.GraphHash,
                                  pinnedGraphJson,
                                  InputJson: null,
-                                 [.. nodeRuns.Select(seed => new GraphWorkflowNodeRunSeed(Guid.NewGuid(), seed.NodeKey, seed.Kind))]))
-                             .ConfigureAwait(false);
+                                 [.. nodeRuns.Select(seed => new GraphWorkflowNodeRunSeed(Guid.NewGuid(), seed.NodeKey, seed.Kind))]));
         return run.Id;
     }
 
     public async Task CancelAsync(Guid runId)
     {
         await using var scope = Services.CreateAsyncScope();
-        _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().CancelAsync(runId).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().CancelAsync(runId);
     }
 
     /// <summary>Answers a pause through the real command surface, which is where every rule about a decision lives.</summary>
@@ -296,25 +295,24 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
-                          .DecideAsync(runId, nodeKey, operationId, decision, comment, payloadJson, decidedBySubject)
-                          .ConfigureAwait(false);
+                          .DecideAsync(runId, nodeKey, operationId, decision, comment, payloadJson, decidedBySubject);
     }
 
     public async Task<GraphWorkflowRunSnapshot> ReadRunAsync(Guid runId)
     {
         await using var scope = Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetRunAsync(runId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetRunAsync(runId);
     }
 
     public async Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ReadNodeRunsAsync(Guid runId)
     {
         await using var scope = Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().ListNodeRunsAsync(runId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().ListNodeRunsAsync(runId);
     }
 
     public async Task<GraphWorkflowNodeRunSnapshot> ReadNodeRunAsync(Guid runId, string nodeKey)
     {
-        var nodeRuns = await ReadNodeRunsAsync(runId).ConfigureAwait(false);
+        var nodeRuns = await ReadNodeRunsAsync(runId);
         return nodeRuns.SingleOrDefault(nodeRun => string.Equals(nodeRun.NodeKey, nodeKey, StringComparison.Ordinal))
                ?? throw new AssertionException($"Run {runId} carries no node run for '{nodeKey}'.");
     }
@@ -322,12 +320,12 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     public async Task<IReadOnlyList<GraphWorkflowRunEventSnapshot>> ReadEventsAsync(Guid runId)
     {
         await using var scope = Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().ListEventsAsync(runId, afterSeq: 0, limit: 500).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().ListEventsAsync(runId, afterSeq: 0, limit: 500);
     }
 
     /// <summary>The event types in order, which is what most assertions here are actually about.</summary>
     public async Task<string> ReadEventTrailAsync(Guid runId) =>
-        string.Join(", ", (await ReadEventsAsync(runId).ConfigureAwait(false)).Select(static entry => entry.EventType));
+        string.Join(", ", (await ReadEventsAsync(runId)).Select(static entry => entry.EventType));
 
     /// <summary>
     ///     Moves one node run through the STORE, which is how a test stands a row in a state only an executor this
@@ -340,7 +338,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
         string? terminalReason = null,
         bool incrementAttempt = false)
     {
-        var nodeRun = await ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
+        var nodeRun = await ReadNodeRunAsync(runId, nodeKey);
         await using var scope = Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>()
                        .TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(runId,
@@ -349,8 +347,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
                            target,
                            FailureClass: failureClass,
                            TerminalReason: terminalReason,
-                           IncrementAttempt: incrementAttempt))
-                       .ConfigureAwait(false);
+                           IncrementAttempt: incrementAttempt));
     }
 }
 

@@ -18,6 +18,6 @@ public sealed class GetTrainingRuntimeStatusEndpoint(TrainingRuntimeOrchestratio
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(runtime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(runtime.GetStatus().ToResponse(), ct);
     }
 }

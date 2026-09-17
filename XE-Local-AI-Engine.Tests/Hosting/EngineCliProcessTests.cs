@@ -33,23 +33,23 @@ public sealed class EngineCliProcessTests : IDisposable
     {
         Directory.CreateDirectory(_root);
 
-        var beforeSetup = await RunAsync(["--mcp-key", "delegate"], launchMode: null).ConfigureAwait(false);
+        var beforeSetup = await RunAsync(["--mcp-key", "delegate"], launchMode: null);
         AssertEx.Equal(expected: 5, beforeSetup.ExitCode, beforeSetup.CombinedOutput);
         AssertEx.False(beforeSetup.StandardOutput.Contains("XE_MCP_KEY=", StringComparison.Ordinal));
 
-        var firstSetup = await RunAsync(["--setup"], DesktopLaunch.McpOnlyModeValue).ConfigureAwait(false);
+        var firstSetup = await RunAsync(["--setup"], DesktopLaunch.McpOnlyModeValue);
         AssertEx.Equal(expected: 0, firstSetup.ExitCode, firstSetup.CombinedOutput);
         AssertEx.Contains(firstSetup.StandardOutput, "XE_SETUP=created");
         AssertEx.Contains(firstSetup.StandardOutput, "XE_ADMIN_EMAIL=agent@example.test");
         AssertEx.False(File.Exists(Path.Combine(_root, DesktopPortStore.ReadyFileName)),
             "An environment-only launch mode must not turn setup into a serving process.");
 
-        var secondSetup = await RunAsync(["--setup"], launchMode: null).ConfigureAwait(false);
+        var secondSetup = await RunAsync(["--setup"], launchMode: null);
         AssertEx.Equal(expected: 0, secondSetup.ExitCode, secondSetup.CombinedOutput);
         AssertEx.Contains(secondSetup.StandardOutput, "XE_SETUP=already-configured");
         AssertEx.False(secondSetup.StandardOutput.Contains("XE_ADMIN_EMAIL=", StringComparison.Ordinal));
 
-        var agentic = await RunAsync(["--mcp-key=agentic"], launchMode: null).ConfigureAwait(false);
+        var agentic = await RunAsync(["--mcp-key=agentic"], launchMode: null);
         AssertEx.Equal(expected: 0, agentic.ExitCode, agentic.CombinedOutput);
         AssertEx.Equal(expected: 1,
             agentic.StandardOutput.Split(Environment.NewLine)
@@ -70,27 +70,27 @@ public sealed class EngineCliProcessTests : IDisposable
         var serving = await LoopbackPort.BindWithRetryAsync(async candidate =>
         {
             var started = StartServing(["--setup", "--mcp-only", "--port", candidate.ToString(CultureInfo.InvariantCulture)]);
-            var line = await started.ReadReadyLineAsync().ConfigureAwait(false);
+            var line = await started.ReadReadyLineAsync();
             if (line is null)
             {
-                await started.DisposeAsync().ConfigureAwait(false);
+                await started.DisposeAsync();
                 return null;
             }
 
             return new ServingEngine(started, candidate, line);
-        }).ConfigureAwait(false);
+        });
 
         await using var engine = serving.Engine;
         var port = serving.Port;
         var readyLine = serving.ReadyLine;
-        var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root).ConfigureAwait(false));
+        var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
 
         AssertEx.Equal($"XE_READY=1 XE_VERSION={ready.Version} XE_URL={ready.Url} XE_MCP_URL={ready.McpUrl} XE_DATA_DIR={ready.DataDir}", readyLine);
         AssertEx.Equal($"http://127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}", ready.Url);
         AssertEx.Equal($"{ready.Url}/api/local/v1/mcp/server", ready.McpUrl);
         AssertEx.Equal(_root, ready.DataDir);
         AssertEx.True(engine.StandardOutput.Contains("XE_SETUP=created", StringComparison.Ordinal));
-        var status = await RunAsync(["--status", "--json"], launchMode: null).ConfigureAwait(false);
+        var status = await RunAsync(["--status", "--json"], launchMode: null);
         AssertEx.Equal(expected: 0, status.ExitCode, status.CombinedOutput);
         using (var document = JsonDocument.Parse(status.StandardOutput))
         {
@@ -99,7 +99,7 @@ public sealed class EngineCliProcessTests : IDisposable
             AssertEx.Equal(ready.Url, document.RootElement.GetProperty("url").GetString());
         }
 
-        var leaseConflict = await RunAsync(["--mcp-key", "delegate"], launchMode: null).ConfigureAwait(false);
+        var leaseConflict = await RunAsync(["--mcp-key", "delegate"], launchMode: null);
         AssertEx.Equal(expected: 4, leaseConflict.ExitCode, leaseConflict.CombinedOutput);
 
         var occupiedRoot = Path.Combine(Path.GetTempPath(), "xe-engine-cli-occupied-" + Guid.NewGuid().ToString("N"));
@@ -111,7 +111,7 @@ public sealed class EngineCliProcessTests : IDisposable
         var occupiedPort = ((IPEndPoint)listener.LocalEndpoint).Port;
         var occupied = await RunAsync(["--mcp-only", "--port", occupiedPort.ToString(CultureInfo.InvariantCulture)],
             launchMode: null,
-            occupiedRoot).ConfigureAwait(false);
+            occupiedRoot);
         AssertEx.Equal(PortInUseExitCode, occupied.ExitCode, occupied.CombinedOutput);
         Directory.Delete(occupiedRoot, recursive: true);
     }
@@ -119,7 +119,7 @@ public sealed class EngineCliProcessTests : IDisposable
     [Test]
     public async Task MalformedExplicitAdminEmail_IsProcessLevelUsageFailure()
     {
-        var result = await RunAsync(["--setup", "--admin-email="], launchMode: null).ConfigureAwait(false);
+        var result = await RunAsync(["--setup", "--admin-email="], launchMode: null);
 
         AssertEx.Equal(expected: 2, result.ExitCode, result.CombinedOutput);
         AssertEx.Contains(result.StandardError, "--admin-email");
@@ -129,10 +129,10 @@ public sealed class EngineCliProcessTests : IDisposable
     public async Task Setup_WhenFilesystemPreparationFails_ReturnsRedactedExitOneInsteadOfRuntimeAbort()
     {
         var blockedDataPath = Path.Combine(Path.GetTempPath(), "xe-engine-cli-blocked-" + Guid.NewGuid().ToString("N"));
-        await File.WriteAllTextAsync(blockedDataPath, "not-a-directory").ConfigureAwait(false);
+        await File.WriteAllTextAsync(blockedDataPath, "not-a-directory");
         try
         {
-            var result = await RunAsync(["--setup"], launchMode: null, blockedDataPath).ConfigureAwait(false);
+            var result = await RunAsync(["--setup"], launchMode: null, blockedDataPath);
 
             AssertEx.Equal(expected: 1, result.ExitCode, result.CombinedOutput);
             AssertEx.Contains(result.StandardError,
@@ -155,10 +155,9 @@ public sealed class EngineCliProcessTests : IDisposable
         // refusal to a 400; the CLI must report its documented exit code 5 with the operator-facing recovery, not die
         // through the top-level fatal handler.
         Directory.CreateDirectory(_root);
-        await File.WriteAllTextAsync(Path.Combine(_root, NodeSettingsFileName), "{ \"maxMessageRequestTimeoutSeconds\": ")
-                  .ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_root, NodeSettingsFileName), "{ \"maxMessageRequestTimeoutSeconds\": ");
 
-        var result = await RunAsync(["--setup"], launchMode: null).ConfigureAwait(false);
+        var result = await RunAsync(["--setup"], launchMode: null);
 
         AssertEx.Equal(expected: 5, result.ExitCode, result.CombinedOutput);
         AssertEx.Contains(result.StandardError, "could not be read, so nothing was written.");
@@ -183,7 +182,7 @@ public sealed class EngineCliProcessTests : IDisposable
         var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
         try
         {
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeout.Token);
         }
         catch (OperationCanceledException)
         {
@@ -192,8 +191,8 @@ public sealed class EngineCliProcessTests : IDisposable
         }
 
         return new CommandResult(process.ExitCode,
-            await stdout.ConfigureAwait(false),
-            await stderr.ConfigureAwait(false));
+            await stdout,
+            await stderr);
     }
 
     private RunningEngine StartServing(IReadOnlyList<string> arguments)
@@ -270,7 +269,7 @@ public sealed class EngineCliProcessTests : IDisposable
         internal async Task<string?> ReadReadyLineAsync()
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-            while (await _process.StandardOutput.ReadLineAsync(timeout.Token).ConfigureAwait(false) is { } line)
+            while (await _process.StandardOutput.ReadLineAsync(timeout.Token) is { } line)
             {
                 _standardOutput.Add(line);
                 if (line.StartsWith("XE_READY=1 ", StringComparison.Ordinal))
@@ -279,14 +278,14 @@ public sealed class EngineCliProcessTests : IDisposable
                 }
             }
 
-            await _process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            await _process.WaitForExitAsync(timeout.Token);
             if (_process.ExitCode == PortInUseExitCode)
             {
                 return null;
             }
 
             throw new InvalidOperationException($"The engine exited with code {_process.ExitCode.ToString(CultureInfo.InvariantCulture)} before readiness. "
-                                                + $"stderr: {await _standardError.ConfigureAwait(false)}");
+                                                + $"stderr: {await _standardError}");
         }
 
         public async ValueTask DisposeAsync()
@@ -296,8 +295,8 @@ public sealed class EngineCliProcessTests : IDisposable
                 _process.Kill(entireProcessTree: true);
             }
 
-            await _process.WaitForExitAsync().ConfigureAwait(false);
-            _ = await _standardError.ConfigureAwait(false);
+            await _process.WaitForExitAsync();
+            _ = await _standardError;
             _process.Dispose();
         }
     }

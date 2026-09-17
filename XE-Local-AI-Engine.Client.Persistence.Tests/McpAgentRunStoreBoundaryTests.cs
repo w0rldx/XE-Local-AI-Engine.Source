@@ -39,16 +39,15 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     public async Task AdmitAsync_ConcurrentDistinctRequests_NeverExceedsNonterminalCapacity()
     {
         var databasePath = GetDatabasePath("concurrent-capacity.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
 
         var starts = Enumerable.Range(start: 0, count: McpAgentRunStore.MaxNonterminalRuns + 8).Select(async index =>
         {
             await using var fixture = CreateFixture(databasePath);
-            return await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), $"task-{index}"))
-                                .ConfigureAwait(false);
+            return await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), $"task-{index}"));
         });
 
-        var results = await Task.WhenAll(starts).ConfigureAwait(false);
+        var results = await Task.WhenAll(starts);
 
         AssertEx.Equal(McpAgentRunStore.MaxNonterminalRuns,
             results.Count(result => result.Kind == McpAgentRunAdmissionKind.Accepted));
@@ -56,7 +55,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             results.Count(result => result.Kind == McpAgentRunAdmissionKind.CapacityExceeded
                                     && result.CapacityKind == McpAgentRunCapacityKind.NonterminalRuns));
         await using var verify = CreateFixture(databasePath);
-        var ledger = await verify.Store.VerifyLedgerAsync().ConfigureAwait(false);
+        var ledger = await verify.Store.VerifyLedgerAsync();
         AssertEx.True(ledger.IsConsistent, "Separate-connection admission must leave authoritative counters consistent.");
         AssertEx.Equal((long)McpAgentRunStore.MaxNonterminalRuns, ledger.Persisted.NonterminalRunCount);
     }
@@ -65,7 +64,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     public async Task AdmitAsync_ConcurrentDifferentFingerprintsForOneRequest_AcceptsOneAndConflictsTheOtherFingerprint()
     {
         var databasePath = GetDatabasePath("concurrent-conflict.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         var requestId = Guid.NewGuid();
         byte[] firstFingerprint;
         byte[] secondFingerprint;
@@ -82,111 +81,109 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             {
                 CanonicalRequest = index % 2 == 0 ? firstFingerprint : secondFingerprint
             };
-            return await fixture.Store.AdmitAsync(request).ConfigureAwait(false);
+            return await fixture.Store.AdmitAsync(request);
         });
 
-        var results = await Task.WhenAll(starts).ConfigureAwait(false);
+        var results = await Task.WhenAll(starts);
 
         AssertEx.Equal(expected: 1, results.Count(result => result.Kind == McpAgentRunAdmissionKind.Accepted));
         AssertEx.Equal(expected: 3, results.Count(result => result.Kind == McpAgentRunAdmissionKind.Existing));
         AssertEx.Equal(expected: 4, results.Count(result => result.Kind == McpAgentRunAdmissionKind.RequestIdConflict));
         await using var verify = CreateFixture(databasePath);
-        AssertEx.Equal(expected: 1L, (await verify.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.IdentityCount);
+        AssertEx.Equal(expected: 1L, (await verify.Store.VerifyLedgerAsync()).Persisted.IdentityCount);
     }
 
     [Test]
     public async Task AdmitAsync_WhenActivePayloadWouldReachExactLimit_AcceptsRequest()
     {
         var databasePath = GetDatabasePath("active-payload-exact.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
-        var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed")).ConfigureAwait(false);
+        var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed"));
         await SeedTerminalCountersAsync(databasePath,
                 seed.Run!.RequestId,
                 activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "boundary"),
-                tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1)
-            .ConfigureAwait(false);
+                tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1);
 
-        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "boundary")).ConfigureAwait(false);
+        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "boundary"));
 
         AssertEx.Equal(McpAgentRunAdmissionKind.Accepted, result.Kind);
         AssertEx.Equal(McpAgentRunStore.MaxActivePayloadBytes,
-            (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.ActivePayloadBytes);
+            (await fixture.Store.VerifyLedgerAsync()).Persisted.ActivePayloadBytes);
     }
 
     [Test]
     public async Task AdmitAsync_WhenActivePayloadWouldExceedLimit_RejectsWithoutChargingRequest()
     {
         var databasePath = GetDatabasePath("active-payload-over.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
-        var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed")).ConfigureAwait(false);
+        var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed"));
         await SeedTerminalCountersAsync(databasePath,
                 seed.Run!.RequestId,
                 activePayloadBytes: McpAgentRunStore.MaxActivePayloadBytes - CalculateReservation(fixture.Protector, "over-boundary") + 1,
-                tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1)
-            .ConfigureAwait(false);
+                tombstoneLogicalBytes: McpAgentRunStore.TombstoneReservationBytesV1);
 
-        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "over-boundary")).ConfigureAwait(false);
+        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "over-boundary"));
 
         AssertEx.Equal(McpAgentRunAdmissionKind.CapacityExceeded, result.Kind);
         AssertEx.Equal(McpAgentRunCapacityKind.ActivePayloadBytes, result.CapacityKind);
-        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.IdentityCount);
+        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync()).Persisted.IdentityCount);
     }
 
     [Test]
     public async Task AdmitAsync_WhenTombstoneBytesWouldReachExactLimit_AcceptsRequest()
     {
         var databasePath = GetDatabasePath("tombstone-exact.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
-        var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed")).ConfigureAwait(false);
+        var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed"));
         var seedRun = AssertEx.NotNull(seed.Run, "Seed admission should return its persisted run.");
         const long tombstoneBytes = McpAgentRunStore.TombstoneReservationBytesV1;
-        var activePayloadBytes = (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.ActivePayloadBytes;
+        var activePayloadBytes = (await fixture.Store.VerifyLedgerAsync()).Persisted.ActivePayloadBytes;
         await SeedTerminalCountersAsync(databasePath,
             seedRun.RequestId,
             activePayloadBytes,
-            McpAgentRunStore.MaxTombstoneLogicalBytes - tombstoneBytes).ConfigureAwait(false);
+            McpAgentRunStore.MaxTombstoneLogicalBytes - tombstoneBytes);
 
-        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "boundary")).ConfigureAwait(false);
+        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "boundary"));
 
         AssertEx.Equal(McpAgentRunAdmissionKind.Accepted, result.Kind);
         AssertEx.Equal(McpAgentRunStore.MaxTombstoneLogicalBytes,
-            (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.TombstoneLogicalBytes);
+            (await fixture.Store.VerifyLedgerAsync()).Persisted.TombstoneLogicalBytes);
     }
 
     [Test]
     public async Task AdmitAsync_WhenTombstoneBytesWouldExceedLimit_RejectsWithoutChargingRequest()
     {
         var databasePath = GetDatabasePath("tombstone-over.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
-        var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed")).ConfigureAwait(false);
+        var seed = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "seed"));
         var seedRun = AssertEx.NotNull(seed.Run, "Seed admission should return its persisted run.");
         const long tombstoneBytes = McpAgentRunStore.TombstoneReservationBytesV1;
-        var activePayloadBytes = (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.ActivePayloadBytes;
+        var activePayloadBytes = (await fixture.Store.VerifyLedgerAsync()).Persisted.ActivePayloadBytes;
         await SeedTerminalCountersAsync(databasePath,
             seedRun.RequestId,
             activePayloadBytes,
-            McpAgentRunStore.MaxTombstoneLogicalBytes - tombstoneBytes + 1).ConfigureAwait(false);
+            McpAgentRunStore.MaxTombstoneLogicalBytes - tombstoneBytes + 1);
 
-        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "over-boundary")).ConfigureAwait(false);
+        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "over-boundary"));
 
         AssertEx.Equal(McpAgentRunAdmissionKind.CapacityExceeded, result.Kind);
         AssertEx.Equal(McpAgentRunCapacityKind.TombstoneBytes, result.CapacityKind);
-        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.IdentityCount);
+        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync()).Persisted.IdentityCount);
     }
 
     [Test]
     public async Task CompactExpiredPayloadsAsync_ReleasesAllActivePayloadAccounting()
     {
         var databasePath = GetDatabasePath("compact-accounting.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var requestId = Guid.NewGuid();
-        var accepted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "compact me")).ConfigureAwait(false);
-        var claimed = await fixture.Store.TryClaimAsync(requestId, accepted.Run!.Version, claimedAtUtc: 2).ConfigureAwait(false);
+        var accepted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "compact me"));
+        var claimed = await fixture.Store.TryClaimAsync(requestId, accepted.Run!.Version, claimedAtUtc: 2);
         _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
             claimed.Run!.Version,
             claimed.Run.ClaimToken!.Value,
@@ -195,11 +192,11 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             FailureCode: null,
             Result: "answer",
             DisplayMessage: "complete",
-            CompletedAtUtc: 3)).ConfigureAwait(false);
+            CompletedAtUtc: 3));
 
-        var before = (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.ActivePayloadBytes;
-        var compacted = await fixture.Store.CompactExpiredPayloadsAsync(expiresBeforeUtc: 100_000_000).ConfigureAwait(false);
-        var after = await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false);
+        var before = (await fixture.Store.VerifyLedgerAsync()).Persisted.ActivePayloadBytes;
+        var compacted = await fixture.Store.CompactExpiredPayloadsAsync(expiresBeforeUtc: 100_000_000);
+        var after = await fixture.Store.VerifyLedgerAsync();
 
         AssertEx.True(before > 0, "A completed retained result must consume active payload accounting before compaction.");
         AssertEx.Equal(expected: 1, compacted);
@@ -211,18 +208,18 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     public async Task RebuildLedgerAsync_ReconstructsEveryCounterFromAuthoritativeRows()
     {
         var databasePath = GetDatabasePath("rebuild-all-counters.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "first")).ConfigureAwait(false);
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "second")).ConfigureAwait(false);
-        var authoritative = (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Reconstructed;
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "first"));
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "second"));
+        var authoritative = (await fixture.Store.VerifyLedgerAsync()).Reconstructed;
         await ExecuteAsync(databasePath, """
                                          UPDATE mcp_agent_run_ledger
                                          SET nonterminal_run_count = 0, queued_run_count = 0, running_run_count = 0,
                                              identity_count = 0, active_payload_bytes = 0, tombstone_logical_bytes = 0;
-                                         """).ConfigureAwait(false);
+                                         """);
 
-        var rebuilt = await fixture.Store.RebuildLedgerAsync(updatedAtUtc: 99).ConfigureAwait(false);
+        var rebuilt = await fixture.Store.RebuildLedgerAsync(updatedAtUtc: 99);
 
         AssertEx.Equal(authoritative.NonterminalRunCount, rebuilt.NonterminalRunCount);
         AssertEx.Equal(authoritative.IdentityCount, rebuilt.IdentityCount);
@@ -235,30 +232,30 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     public async Task AdmitAsync_WhenLedgerSingletonIsMissingWithExistingIdentity_FailsClosed()
     {
         var databasePath = GetDatabasePath("missing-ledger.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "existing")).ConfigureAwait(false);
-        await ExecuteAsync(databasePath, "DELETE FROM mcp_agent_run_ledger WHERE id = 1;").ConfigureAwait(false);
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "existing"));
+        await ExecuteAsync(databasePath, "DELETE FROM mcp_agent_run_ledger WHERE id = 1;");
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "new")).ConfigureAwait(false);
-        }).ConfigureAwait(false);
+            _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "new"));
+        });
     }
 
     [Test]
     public async Task AdmitAsync_DuplicateLookupPrecedesMissingLedgerValidation()
     {
         var databasePath = GetDatabasePath("duplicate-with-missing-ledger.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var requestId = Guid.NewGuid();
         var request = CreateAdmission(fixture.Protector, requestId, "existing");
-        _ = await fixture.Store.AdmitAsync(request).ConfigureAwait(false);
+        _ = await fixture.Store.AdmitAsync(request);
         var expiredId = Guid.NewGuid();
         var expiredRequest = CreateAdmission(fixture.Protector, expiredId, "expired");
-        var admittedExpired = await fixture.Store.AdmitAsync(expiredRequest).ConfigureAwait(false);
-        var claimedExpired = await fixture.Store.TryClaimAsync(expiredId, admittedExpired.Run!.Version, claimedAtUtc: 2).ConfigureAwait(false);
+        var admittedExpired = await fixture.Store.AdmitAsync(expiredRequest);
+        var claimedExpired = await fixture.Store.TryClaimAsync(expiredId, admittedExpired.Run!.Version, claimedAtUtc: 2);
         _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(expiredId,
             claimedExpired.Run!.Version,
             claimedExpired.Run.ClaimToken!.Value,
@@ -267,16 +264,16 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             FailureCode: null,
             Result: "expired result",
             DisplayMessage: "done",
-            CompletedAtUtc: 3)).ConfigureAwait(false);
-        _ = await fixture.Store.CompactExpiredPayloadsAsync(3 + McpAgentRunStore.PayloadRetentionMilliseconds).ConfigureAwait(false);
-        await ExecuteAsync(databasePath, "DELETE FROM mcp_agent_run_ledger WHERE id = 1;").ConfigureAwait(false);
+            CompletedAtUtc: 3));
+        _ = await fixture.Store.CompactExpiredPayloadsAsync(3 + McpAgentRunStore.PayloadRetentionMilliseconds);
+        await ExecuteAsync(databasePath, "DELETE FROM mcp_agent_run_ledger WHERE id = 1;");
 
-        var existing = await fixture.Store.AdmitAsync(request).ConfigureAwait(false);
+        var existing = await fixture.Store.AdmitAsync(request);
         var conflict = await fixture.Store.AdmitAsync(request with
         {
             CanonicalRequest = fixture.Protector.ComputeRequestFingerprint(Encoding.UTF8.GetBytes("different"))
-        }).ConfigureAwait(false);
-        var expired = await fixture.Store.AdmitAsync(expiredRequest).ConfigureAwait(false);
+        });
+        var expired = await fixture.Store.AdmitAsync(expiredRequest);
 
         AssertEx.Equal(McpAgentRunAdmissionKind.Existing, existing.Kind);
         AssertEx.Equal(McpAgentRunAdmissionKind.RequestIdConflict, conflict.Kind);
@@ -287,15 +284,15 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     public async Task QueuedRun_HasNoExpiry_AndReceivesFullRetentionAfterCompletion()
     {
         var databasePath = GetDatabasePath("completion-relative-retention.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var requestId = Guid.NewGuid();
-        var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "wait in queue")).ConfigureAwait(false);
+        var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "wait in queue"));
         AssertEx.Null(admitted.Run!.PayloadExpiresAtUtc);
-        AssertEx.Equal(expected: 0, await fixture.Store.CompactExpiredPayloadsAsync(long.MaxValue).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await fixture.Store.CompactExpiredPayloadsAsync(long.MaxValue));
 
         const long completedAtUtc = 10L * 24 * 60 * 60 * 1000;
-        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run.Version, claimedAtUtc: completedAtUtc - 1).ConfigureAwait(false);
+        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run.Version, claimedAtUtc: completedAtUtc - 1);
         AssertEx.True(await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
             claimed.Run!.Version,
             claimed.Run.ClaimToken!.Value,
@@ -304,29 +301,29 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             FailureCode: null,
             Result: "retained",
             DisplayMessage: "done",
-            CompletedAtUtc: completedAtUtc)).ConfigureAwait(false));
+            CompletedAtUtc: completedAtUtc)));
 
-        var terminal = AssertEx.NotNull(await fixture.Store.GetAsync(requestId).ConfigureAwait(false));
+        var terminal = AssertEx.NotNull(await fixture.Store.GetAsync(requestId));
         AssertEx.Equal(completedAtUtc + McpAgentRunStore.PayloadRetentionMilliseconds, terminal.PayloadExpiresAtUtc);
         AssertEx.Equal(expected: 0,
-            await fixture.Store.CompactExpiredPayloadsAsync(terminal.PayloadExpiresAtUtc!.Value - 1).ConfigureAwait(false));
+            await fixture.Store.CompactExpiredPayloadsAsync(terminal.PayloadExpiresAtUtc!.Value - 1));
         AssertEx.Equal(expected: 1,
-            await fixture.Store.CompactExpiredPayloadsAsync(terminal.PayloadExpiresAtUtc.Value).ConfigureAwait(false));
+            await fixture.Store.CompactExpiredPayloadsAsync(terminal.PayloadExpiresAtUtc.Value));
     }
 
     [Test]
     public async Task CompactExpiredPayloadsAsync_LeavesOnlyAccountedMinimalTombstone()
     {
         var databasePath = GetDatabasePath("minimal-tombstone.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var requestId = Guid.NewGuid();
         var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "compact all execution data") with
         {
             ModelOverrideId = "override-model",
             WorkspaceId = Guid.NewGuid()
-        }).ConfigureAwait(false);
-        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2).ConfigureAwait(false);
+        });
+        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2);
         _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
             claimed.Run!.Version,
             claimed.Run.ClaimToken!.Value,
@@ -335,11 +332,11 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             FailureCode: "stable_failure",
             Result: null,
             DisplayMessage: "safe display",
-            CompletedAtUtc: 3)).ConfigureAwait(false);
-        _ = await fixture.Store.CompactExpiredPayloadsAsync(3 + McpAgentRunStore.PayloadRetentionMilliseconds).ConfigureAwait(false);
+            CompletedAtUtc: 3));
+        _ = await fixture.Store.CompactExpiredPayloadsAsync(3 + McpAgentRunStore.PayloadRetentionMilliseconds);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               SELECT claim_token, stop_requested_at_utc, agent_definition_id, agent_definition_version,
@@ -350,11 +347,11 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
                               FROM mcp_agent_runs WHERE request_id = $requestId;
                               """;
         command.Parameters.AddWithValue("$requestId", requestId.ToString("D"));
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        AssertEx.True(await reader.ReadAsync().ConfigureAwait(false));
+        await using var reader = await command.ExecuteReaderAsync();
+        AssertEx.True(await reader.ReadAsync());
         for (var ordinal = 0; ordinal < 14; ordinal++)
         {
-            AssertEx.True(await reader.IsDBNullAsync(ordinal).ConfigureAwait(false),
+            AssertEx.True(await reader.IsDBNullAsync(ordinal),
                 $"Compacted variable column {ordinal} must be NULL.");
         }
 
@@ -371,11 +368,11 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     public async Task CompactExpiredPayloadsAsync_WhenLedgerUpdateAborts_RollsBackCompactedRowAndLedgerTogether()
     {
         var databasePath = GetDatabasePath("compaction-rollback.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var requestId = Guid.NewGuid();
-        var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "retain after abort")).ConfigureAwait(false);
-        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2).ConfigureAwait(false);
+        var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "retain after abort"));
+        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2);
         _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
             claimed.Run!.Version,
             claimed.Run.ClaimToken!.Value,
@@ -384,9 +381,9 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             FailureCode: null,
             Result: "answer",
             DisplayMessage: "done",
-            CompletedAtUtc: 3)).ConfigureAwait(false);
-        var retainedBeforeFailure = AssertEx.NotNull(await fixture.Store.GetAsync(requestId).ConfigureAwait(false));
-        var before = await fixture.Store.GetLedgerSnapshotAsync().ConfigureAwait(false);
+            CompletedAtUtc: 3));
+        var retainedBeforeFailure = AssertEx.NotNull(await fixture.Store.GetAsync(requestId));
+        var before = await fixture.Store.GetLedgerSnapshotAsync();
         await ExecuteAsync(databasePath, """
                                          CREATE TRIGGER abort_mcp_compaction_ledger_update
                                          BEFORE UPDATE ON mcp_agent_run_ledger
@@ -394,15 +391,15 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
                                          BEGIN
                                              SELECT RAISE(ABORT, 'forced ledger accounting abort after row compaction');
                                          END;
-                                         """).ConfigureAwait(false);
+                                         """);
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(async () =>
         {
-            _ = await fixture.Store.CompactExpiredPayloadsAsync(3 + McpAgentRunStore.PayloadRetentionMilliseconds).ConfigureAwait(false);
-        }).ConfigureAwait(false);
+            _ = await fixture.Store.CompactExpiredPayloadsAsync(3 + McpAgentRunStore.PayloadRetentionMilliseconds);
+        });
 
-        var after = await fixture.Store.GetLedgerSnapshotAsync().ConfigureAwait(false);
-        var retained = AssertEx.NotNull(await fixture.Store.GetAsync(requestId).ConfigureAwait(false));
+        var after = await fixture.Store.GetLedgerSnapshotAsync();
+        var retained = AssertEx.NotNull(await fixture.Store.GetAsync(requestId));
         AssertEx.Equal(before.Counters.ActivePayloadBytes, after.Counters.ActivePayloadBytes);
         AssertEx.Equal(before.Counters.TombstoneLogicalBytes, after.Counters.TombstoneLogicalBytes);
         AssertEx.Equal(retainedBeforeFailure.Version, retained.Version);
@@ -415,7 +412,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     public async Task EncryptedPayloadSentinels_DoNotAppearInSqliteWalOrSharedMemoryFiles()
     {
         var databasePath = GetDatabasePath("encrypted-file-scan.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         const string task = "task-sentinel-f4f5c74d-d30a-4882-8421-f4cb5f0db616";
         const string instructions = "instructions-sentinel-56e3cc04-e155-46a2-9d3b-d34b6398bc18";
@@ -425,8 +422,8 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, task) with
         {
             Instructions = instructions
-        }).ConfigureAwait(false);
-        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2).ConfigureAwait(false);
+        });
+        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2);
         _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization(requestId,
             claimed.Run!.Version,
             claimed.Run.ClaimToken!.Value,
@@ -435,7 +432,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             FailureCode: null,
             Result: result,
             DisplayMessage: display,
-            CompletedAtUtc: 3)).ConfigureAwait(false);
+            CompletedAtUtc: 3));
 
         foreach (var path in new[]
                  {
@@ -444,7 +441,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
                      databasePath + "-shm"
                  }.Where(File.Exists))
         {
-            var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+            var bytes = await File.ReadAllBytesAsync(path);
             AssertEx.False(bytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(task)) >= 0, $"Task plaintext leaked into {Path.GetFileName(path)}.");
             AssertEx.False(bytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(instructions)) >= 0, $"Instructions plaintext leaked into {Path.GetFileName(path)}.");
             AssertEx.False(bytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(result)) >= 0, $"Result plaintext leaked into {Path.GetFileName(path)}.");
@@ -456,19 +453,19 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     public async Task ReconcileInterruptedRunsAsync_LeavesQueuedWorkReplayableAndTerminalizesOnlyClaimedWork()
     {
         var databasePath = GetDatabasePath("queued-recovery.sqlite");
-        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await InitializeDatabaseAsync(databasePath);
         await using var fixture = CreateFixture(databasePath);
         var queuedId = Guid.NewGuid();
         var runningId = Guid.NewGuid();
-        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, queuedId, "resume after restart")).ConfigureAwait(false);
-        var running = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, runningId, "never replay")).ConfigureAwait(false);
-        _ = await fixture.Store.TryClaimAsync(runningId, running.Run!.Version, claimedAtUtc: 2).ConfigureAwait(false);
+        _ = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, queuedId, "resume after restart"));
+        var running = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, runningId, "never replay"));
+        _ = await fixture.Store.TryClaimAsync(runningId, running.Run!.Version, claimedAtUtc: 2);
 
-        var reconciled = await fixture.Store.ReconcileInterruptedRunsAsync(completedAtUtc: 3).ConfigureAwait(false);
+        var reconciled = await fixture.Store.ReconcileInterruptedRunsAsync(completedAtUtc: 3);
 
         AssertEx.Equal(expected: 1, reconciled);
-        AssertEx.Equal(McpAgentRunStatus.Queued, (await fixture.Store.GetAsync(queuedId).ConfigureAwait(false))!.Status);
-        var interrupted = AssertEx.NotNull(await fixture.Store.GetAsync(runningId).ConfigureAwait(false));
+        AssertEx.Equal(McpAgentRunStatus.Queued, (await fixture.Store.GetAsync(queuedId))!.Status);
+        var interrupted = AssertEx.NotNull(await fixture.Store.GetAsync(runningId));
         AssertEx.Equal(McpAgentRunStatus.Interrupted, interrupted.Status);
         AssertEx.Equal("interrupted", interrupted.FailureCode!);
     }
@@ -477,8 +474,8 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     {
         using var keyHolder = new FixedNodeSqliteKeyHolder();
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
-        await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
     }
 
     private static StoreFixture CreateFixture(string databasePath) =>
@@ -511,8 +508,8 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         long tombstoneLogicalBytes)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
         await using (var run = connection.CreateCommand())
         {
             run.Transaction = transaction;
@@ -526,7 +523,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             run.Parameters.AddWithValue("$activePayloadBytes", activePayloadBytes);
             run.Parameters.AddWithValue("$tombstoneLogicalBytes", tombstoneLogicalBytes);
             run.Parameters.AddWithValue("$requestId", requestId.ToString("D"));
-            _ = await run.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await run.ExecuteNonQueryAsync();
         }
 
         await using (var ledger = connection.CreateCommand())
@@ -541,10 +538,10 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
                                  """;
             ledger.Parameters.AddWithValue("$activePayloadBytes", activePayloadBytes);
             ledger.Parameters.AddWithValue("$tombstoneLogicalBytes", tombstoneLogicalBytes);
-            _ = await ledger.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await ledger.ExecuteNonQueryAsync();
         }
 
-        await transaction.CommitAsync().ConfigureAwait(false);
+        await transaction.CommitAsync();
     }
 
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
@@ -552,10 +549,10 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     private static async Task ExecuteAsync(string databasePath, string sql)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)
@@ -583,7 +580,7 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
         public async ValueTask DisposeAsync()
         {
             Protector.Dispose();
-            await _context.DisposeAsync().ConfigureAwait(false);
+            await _context.DisposeAsync();
             _keyHolder.Dispose();
         }
     }

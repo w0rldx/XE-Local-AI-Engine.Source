@@ -38,9 +38,8 @@ public sealed class UpdateExternalAppEndpoint(IExternalAppService apps) : Endpoi
         var summary = await _apps.UpdateAsync(req.InstanceId,
                                      req.ExpectedVersion!.Value,
                                      new UpdateCommand(req.ManifestVersion, req.ManifestSha256, req.AcceptPermissions, req.Variables),
-                                     ct)
-                                 .ConfigureAwait(false);
+                                     ct);
 
-        await Send.ResultAsync(Results.Accepted(value: ExternalAppMapper.ToSummaryView(summary))).ConfigureAwait(false);
+        await Send.ResultAsync(Results.Accepted(value: ExternalAppMapper.ToSummaryView(summary)));
     }
 }

@@ -66,7 +66,7 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
     /// <inheritdoc />
     public async Task<EntraAuthCodeSignInHandle> StartAsync(CancellationToken cancellationToken)
     {
-        var connection = await LoadConnectionOrThrowAsync(cancellationToken).ConfigureAwait(false);
+        var connection = await LoadConnectionOrThrowAsync(cancellationToken);
 
         var redirectUriString = EntraAuthCodeDefaults.ResolveRedirectUri(connection.EntraAuthCodeRedirectUri);
         if (!EntraAuthCodeDefaults.TryValidateRedirectUri(redirectUriString, out var redirectUri) || redirectUri is null)
@@ -151,12 +151,12 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
     {
         try
         {
-            var callback = await listener.WaitForCallbackAsync(expectedState, EntraAuthCodeDefaults.CallbackTimeout, cts.Token).ConfigureAwait(false);
+            var callback = await listener.WaitForCallbackAsync(expectedState, EntraAuthCodeDefaults.CallbackTimeout, cts.Token);
 
             switch (callback.Outcome)
             {
                 case LoopbackCallbackOutcome.Success:
-                    await CompleteRedemptionAsync(connection, callback.AuthorizationCode!, codeVerifier, redirectUri, cts).ConfigureAwait(false);
+                    await CompleteRedemptionAsync(connection, callback.AuthorizationCode!, codeVerifier, redirectUri, cts);
                     break;
 
                 case LoopbackCallbackOutcome.StateMismatch:
@@ -223,14 +223,14 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
         string redirectUri,
         CancellationTokenSource cts)
     {
-        var redemption = await _redeemer.RedeemAsync(connection, authorizationCode, codeVerifier, redirectUri, cts.Token).ConfigureAwait(false);
+        var redemption = await _redeemer.RedeemAsync(connection, authorizationCode, codeVerifier, redirectUri, cts.Token);
 
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
         var credential = new MsalDelegatedTokenCredential(redemption.ConfidentialClientApplication, redemption.Account, connection.EntraTokenScope!);
         _liveCredentialCache.Store(cacheKey, credential);
 
         // Persist with a fresh token: a superseded/cancelled attempt must not abort this save mid-flight.
-        await _accountStore.SaveHomeAccountIdAsync(redemption.Account.HomeAccountId.Identifier, CancellationToken.None).ConfigureAwait(false);
+        await _accountStore.SaveHomeAccountIdAsync(redemption.Account.HomeAccountId.Identifier, CancellationToken.None);
 
         if (UpdateStatusIfCurrent(cts, EntraAuthCodeSignInStatus.Succeeded))
         {
@@ -275,7 +275,7 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
 
     private async Task<StoredAzureFoundryConnection> LoadConnectionOrThrowAsync(CancellationToken cancellationToken)
     {
-        var config = await _credentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var config = await _credentialStore.LoadConfigAsync(cancellationToken);
         var connection = config?.AzureFoundry;
         if (connection is not { AuthMode: AzureFoundryAuthMode.EntraId, EntraSignInMethod: EntraSignInMethod.AuthorizationCode }
             || string.IsNullOrWhiteSpace(connection.EntraTenantId)

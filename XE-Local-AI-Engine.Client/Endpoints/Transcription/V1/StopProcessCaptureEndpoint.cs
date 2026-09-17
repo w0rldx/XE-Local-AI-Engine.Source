@@ -36,12 +36,12 @@ public sealed class StopProcessCaptureEndpoint(ProcessAudioCaptureCoordinator ca
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        if (!await _captures.StopAsync(req.SessionId, ct).ConfigureAwait(false))
+        if (!await _captures.StopAsync(req.SessionId, ct))
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

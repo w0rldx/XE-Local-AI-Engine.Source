@@ -20,7 +20,7 @@ public sealed class DeleteCustomToolEndpointTests
 
         using var response = await CustomToolEndpointPayloads.SendAnonymousAsync(client,
             HttpMethod.Delete,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -33,7 +33,7 @@ public sealed class DeleteCustomToolEndpointTests
         using var response = await CustomToolEndpointPayloads.SendAsNonOperatorAsync(Factory,
             client,
             HttpMethod.Delete,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -46,7 +46,7 @@ public sealed class DeleteCustomToolEndpointTests
         using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Delete,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -55,19 +55,19 @@ public sealed class DeleteCustomToolEndpointTests
     public async Task Delete_WhenExisting_Returns204ThenGetReturns404()
     {
         using var client = Factory.CreateClient();
-        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "delete_probe").ConfigureAwait(false);
+        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "delete_probe");
 
         using var deleted = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Delete,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}");
 
         AssertEx.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
 
         using var reread = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}");
 
         AssertEx.Equal(HttpStatusCode.NotFound, reread.StatusCode);
     }

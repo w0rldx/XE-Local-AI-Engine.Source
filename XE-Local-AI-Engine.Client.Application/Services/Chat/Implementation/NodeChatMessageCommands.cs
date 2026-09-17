@@ -306,7 +306,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             cancellationToken,
             requiredCurrentStatuses: NodeChatMessageTransitions.CancelSources,
             envelope: envelope,
-            envelopeWriteMode: RunEnvelopeWriteMode.InsertIfAbsent).ConfigureAwait(false);
+            envelopeWriteMode: RunEnvelopeWriteMode.InsertIfAbsent);
 
         // The guard leaves an already-terminal message untouched, so report the true persisted status and only claim a
         // cancellation when the message actually landed in the Cancelled state. This is idempotent: a repeat cancel of an
@@ -349,9 +349,9 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 while (true)
                 {
                     attempt++;
-                    await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                    await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
                     var dbTransaction = transaction.GetDbTransaction();
-                    var sequence = await NextSequenceAsync(dbContext, conversationId, dbTransaction, token).ConfigureAwait(false);
+                    var sequence = await NextSequenceAsync(dbContext, conversationId, dbTransaction, token);
                     try
                     {
                         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
@@ -377,11 +377,11 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                         // Plaintext per-message agent attribution: lets feedback aggregate by the resolved agent without
                         // decrypting the metadata blob. Stamped once at insert; later flush/terminalize never touch it.
                         AddParameter(command, "$agent_definition_id", agentDefinitionId);
-                        await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                        await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                        await OpenIfNeededAsync(command.Connection, token);
+                        await command.ExecuteNonQueryAsync(token);
 
-                        await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token).ConfigureAwait(false);
-                        await transaction.CommitAsync(token).ConfigureAwait(false);
+                        await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token);
+                        await transaction.CommitAsync(token);
 
                         return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error,
                             metadataJson, Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId, AgentDefinitionId: agentDefinitionId, AgentName: agentName,
@@ -389,11 +389,11 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                     }
                     catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
                     {
-                        await transaction.RollbackAsync(token).ConfigureAwait(false);
+                        await transaction.RollbackAsync(token);
                     }
                 }
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private async Task<NodeChatPersistedMessageDto> UpdateCorrelatedMessageAsync(NodeChatMessageCorrelation correlation,
@@ -429,7 +429,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             correlation.MessageId,
             async (dbContext, token) =>
             {
-                var current = await ReadMessageAsync(dbContext, correlation.ConversationId, correlation.MessageId, token).ConfigureAwait(false)
+                var current = await ReadMessageAsync(dbContext, correlation.ConversationId, correlation.MessageId, token)
                               ?? throw new NodeChatMessageCorrelationNotFoundException("The correlated node chat message was not found.");
                 if (current.RequestId != correlation.RequestId)
                 {
@@ -477,7 +477,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 // single-statement autocommit path unchanged, so the hot streaming path is untouched.
                 var writeEnvelope = envelope is not null && IsTerminalStatus(nextStatus);
                 await using var transaction = writeEnvelope
-                    ? await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false)
+                    ? await dbContext.Database.BeginTransactionAsync(token)
                     : null;
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
@@ -517,8 +517,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                     }
                 }
 
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                var affected = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                await OpenIfNeededAsync(command.Connection, token);
+                var affected = await command.ExecuteNonQueryAsync(token);
                 if (requiredCurrentStatuses is not null && affected == 0)
                 {
                     // The atomic predicate rejected the write because the row reached a terminal status; return the true
@@ -546,17 +546,17 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                         envelope!,
                         updatedAtUtc,
                         envelopeWriteMode,
-                        token).ConfigureAwait(false);
+                        token);
                 }
 
                 if (touchConversation)
                 {
-                    await TouchConversationAsync(dbContext, correlation.ConversationId, updatedAtUtc, token).ConfigureAwait(false);
+                    await TouchConversationAsync(dbContext, correlation.ConversationId, updatedAtUtc, token);
                 }
 
                 if (transaction is not null)
                 {
-                    await transaction.CommitAsync(token).ConfigureAwait(false);
+                    await transaction.CommitAsync(token);
                 }
 
                 return current with
@@ -575,7 +575,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                     GenerationDurationMs = nextGenerationDurationMs
                 };
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     // Writes the content-free durable run-envelope row for a terminalized message on the caller's raw connection, enlisted
@@ -654,8 +654,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         AddParameter(command, "$error_class", envelope.FailureCategory);
         AddParameter(command, "$created_at_utc", createdAtUtc);
 
-        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
-        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
+        _ = await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     // W3C trace id of the ambient activity (for cross-correlation with exported traces), or null when no activity is in

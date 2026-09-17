@@ -22,18 +22,18 @@ public sealed partial class WorkerHubConnection
         var popChallenge = keyId.ToString("N");
         var popSignature = publicKeyBase64;
 
-        await SendWorkerKeyRegisteredAsync(keyId, publicKeyBase64, popSignature, popChallenge, cancellationToken).ConfigureAwait(false);
+        await SendWorkerKeyRegisteredAsync(keyId, publicKeyBase64, popSignature, popChallenge, cancellationToken);
     }
 
     private async Task<string?> GetRequiredAccessTokenAsync()
     {
         // Explicitly not propagating: the SignalR reconnect callbacks this path serves carry no token.
-        if (!await EnsureFreshAccessTokenAsync(CancellationToken.None).ConfigureAwait(false))
+        if (!await EnsureFreshAccessTokenAsync(CancellationToken.None))
         {
             throw new InvalidOperationException("No valid access token available. Re-pairing is required.");
         }
 
-        var token = await _tokenStore.GetAccessTokenAsync().ConfigureAwait(false);
+        var token = await _tokenStore.GetAccessTokenAsync();
         return !string.IsNullOrWhiteSpace(token)
             ? token
             : throw new InvalidOperationException("No access token available. Re-pairing is required.");
@@ -41,21 +41,21 @@ public sealed partial class WorkerHubConnection
 
     private async Task<bool> EnsureFreshAccessTokenAsync(CancellationToken cancellationToken = default)
     {
-        if (!await ShouldRefreshAccessTokenAsync().ConfigureAwait(false))
+        if (!await ShouldRefreshAccessTokenAsync())
         {
             return true;
         }
 
-        await _tokenRefreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _tokenRefreshLock.WaitAsync(cancellationToken);
         try
         {
-            if (!await ShouldRefreshAccessTokenAsync().ConfigureAwait(false))
+            if (!await ShouldRefreshAccessTokenAsync())
             {
                 return true;
             }
 
             _logger.LogInformation("Worker access token is expired or close to expiry. Attempting refresh before hub authentication.");
-            var outcome = await _workerTokenRefreshService.TryRefreshAsync(cancellationToken).ConfigureAwait(false);
+            var outcome = await _workerTokenRefreshService.TryRefreshAsync(cancellationToken);
             if (outcome == WorkerTokenRefreshOutcome.CredentialsRevoked)
             {
                 throw new WorkerCredentialsRevokedException();
@@ -66,7 +66,7 @@ public sealed partial class WorkerHubConnection
                 return false;
             }
 
-            var token = await _tokenStore.GetAccessTokenAsync().ConfigureAwait(false);
+            var token = await _tokenStore.GetAccessTokenAsync();
             return !string.IsNullOrWhiteSpace(token);
         }
         finally
@@ -77,7 +77,7 @@ public sealed partial class WorkerHubConnection
 
     private async Task<bool> ShouldRefreshAccessTokenAsync()
     {
-        var token = await _tokenStore.GetAccessTokenAsync().ConfigureAwait(false);
+        var token = await _tokenStore.GetAccessTokenAsync();
         if (string.IsNullOrWhiteSpace(token))
         {
             return true;
@@ -106,7 +106,7 @@ public sealed partial class WorkerHubConnection
         connection.Reconnecting -= OnReconnectingAsync;
         connection.Reconnected -= OnReconnectedAsync;
 
-        await connection.DisposeAsync().ConfigureAwait(false);
+        await connection.DisposeAsync();
     }
 
     private Task OnConnectionClosedAsync(Exception? exception)
@@ -158,7 +158,7 @@ public sealed partial class WorkerHubConnection
         try
         {
             // Explicitly not propagating: OnReconnectedAsync is a SignalR callback and carries no token.
-            tokenIsFresh = await EnsureFreshAccessTokenAsync(CancellationToken.None).ConfigureAwait(false);
+            tokenIsFresh = await EnsureFreshAccessTokenAsync(CancellationToken.None);
         }
         catch (WorkerCredentialsRevokedException exception)
         {
@@ -173,14 +173,14 @@ public sealed partial class WorkerHubConnection
             return;
         }
 
-        var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false);
+        var clientNodeId = await _tokenStore.GetClientNodeIdAsync();
         if (clientNodeId is not null)
         {
             // Explicitly not propagating: the reconnect handshake has no token to inherit (see above).
-            await SendWorkerHelloAsync(clientNodeId.Value, CancellationToken.None).ConfigureAwait(false);
-            await _capabilityReporter.Value.ReportToApiAsync(CancellationToken.None).ConfigureAwait(false);
-            await RegisterNodeKeyAsync(CancellationToken.None).ConfigureAwait(false);
-            await _deadLetterFlushService.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            await SendWorkerHelloAsync(clientNodeId.Value, CancellationToken.None);
+            await _capabilityReporter.Value.ReportToApiAsync(CancellationToken.None);
+            await RegisterNodeKeyAsync(CancellationToken.None);
+            await _deadLetterFlushService.FlushAsync(CancellationToken.None);
         }
 
         _connectionState.TransitionTo(WorkerConnectionState.Connected);

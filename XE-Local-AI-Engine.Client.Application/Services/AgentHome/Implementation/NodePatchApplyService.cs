@@ -68,7 +68,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var plan = await BuildPlanAsync(request, cancellationToken).ConfigureAwait(false);
+        var plan = await BuildPlanAsync(request, cancellationToken);
         if (!plan.IsValid)
         {
             return new NodePatchApplyPreview
@@ -85,7 +85,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
         foreach (var alias in plan.Aliases)
         {
-            var check = await CheckSubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
+            var check = await CheckSubPatchAsync(runner, alias, cancellationToken);
             if (check is null || check.ExitCode != 0)
             {
                 rejections.Add(string.Create(CultureInfo.InvariantCulture,
@@ -93,7 +93,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 continue;
             }
 
-            var stats = await NumstatSubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
+            var stats = await NumstatSubPatchAsync(runner, alias, cancellationToken);
             if (stats is not null && stats.ExitCode == 0)
             {
                 MergeNumstat(numstat, alias.Alias, stats.StandardOutput);
@@ -114,7 +114,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         ArgumentNullException.ThrowIfNull(request);
 
         // Re-run the full validation + dry-run check (TOCTOU defense; never blind-apply).
-        var plan = await BuildPlanAsync(request, cancellationToken).ConfigureAwait(false);
+        var plan = await BuildPlanAsync(request, cancellationToken);
         var rejections = new List<string>(plan.Rejections);
         var runner = new HostGitRunner(_options.PatchApplyTimeoutSeconds);
 
@@ -122,7 +122,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         {
             foreach (var alias in plan.Aliases)
             {
-                var check = await CheckSubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
+                var check = await CheckSubPatchAsync(runner, alias, cancellationToken);
                 if (check is null || check.ExitCode != 0)
                 {
                     rejections.Add(string.Create(CultureInfo.InvariantCulture,
@@ -133,7 +133,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         if (!plan.IsValid || rejections.Count != 0)
         {
-            await LogRejectionAsync(request.RunId, rejections, cancellationToken).ConfigureAwait(false);
+            await LogRejectionAsync(request.RunId, rejections, cancellationToken);
             return new NodePatchApplyResult
             {
                 Applied = false,
@@ -149,7 +149,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             // Residual TOCTOU note: the --check above passed for this alias; the write below runs immediately after.
             // A symlink-swap in an intermediate directory between these two calls is bounded: git rejects "beyond a
             // symbolic link" on modern versions, and the host folder is user-trusted.
-            var apply = await ApplySubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
+            var apply = await ApplySubPatchAsync(runner, alias, cancellationToken);
             if (apply is null || apply.ExitCode != 0)
             {
                 // A clean --check passed for every alias above, so a non-zero apply here is a rare race. Report the
@@ -157,7 +157,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 var partial = appliedAliases > 0;
                 rejections.Add(string.Create(CultureInfo.InvariantCulture,
                     $"alias '{alias.Alias}': apply failed after a clean check ({Redact(apply?.StandardError ?? string.Empty, alias.ResolvedRoot)})"));
-                await LogRejectionAsync(request.RunId, rejections, cancellationToken).ConfigureAwait(false);
+                await LogRejectionAsync(request.RunId, rejections, cancellationToken);
                 return new NodePatchApplyResult
                 {
                     Applied = false,
@@ -169,7 +169,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
             // Populate line counts for the applied files (parity with preview).
             var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
-            var stats = await NumstatSubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
+            var stats = await NumstatSubPatchAsync(runner, alias, cancellationToken);
             if (stats is not null && stats.ExitCode == 0)
             {
                 MergeNumstat(numstat, alias.Alias, stats.StandardOutput);
@@ -179,7 +179,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             appliedAliases++;
         }
 
-        await LogAppliedAsync(request.RunId, appliedFiles, cancellationToken).ConfigureAwait(false);
+        await LogAppliedAsync(request.RunId, appliedFiles, cancellationToken);
 
         return new NodePatchApplyResult
         {
@@ -191,17 +191,17 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
     private static async Task<HostGitResult?> CheckSubPatchAsync(HostGitRunner runner, AliasPlan alias, CancellationToken cancellationToken)
     {
-        return await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--check", "--whitespace=nowarn"), cancellationToken).ConfigureAwait(false);
+        return await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--check", "--whitespace=nowarn"), cancellationToken);
     }
 
     private static async Task<HostGitResult?> NumstatSubPatchAsync(HostGitRunner runner, AliasPlan alias, CancellationToken cancellationToken)
     {
-        return await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--numstat"), cancellationToken).ConfigureAwait(false);
+        return await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--numstat"), cancellationToken);
     }
 
     private static async Task<HostGitResult?> ApplySubPatchAsync(HostGitRunner runner, AliasPlan alias, CancellationToken cancellationToken)
     {
-        return await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--whitespace=nowarn"), cancellationToken).ConfigureAwait(false);
+        return await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--whitespace=nowarn"), cancellationToken);
     }
 
     private static void MergeNumstat(Dictionary<string, LineStat> numstat, string alias, string output)
@@ -249,9 +249,9 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         var tempPatch = Path.Combine(Path.GetTempPath(), "agenthome-apply-" + Guid.NewGuid().ToString("N") + ".patch");
         try
         {
-            await File.WriteAllTextAsync(tempPatch, alias.SubPatch, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(tempPatch, alias.SubPatch, cancellationToken);
             var fullArguments = arguments.Append(tempPatch).ToArray();
-            return await runner.RunAsync(alias.ResolvedRoot, fullArguments, cancellationToken).ConfigureAwait(false);
+            return await runner.RunAsync(alias.ResolvedRoot, fullArguments, cancellationToken);
         }
         catch (IOException)
         {
@@ -288,7 +288,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return ApplyPlan.Invalid("the exported patch is empty.");
         }
 
-        var maxPatchBytes = await _runtimeSettings.GetAgentHomeMaxPatchBytesAsync(cancellationToken).ConfigureAwait(false);
+        var maxPatchBytes = await _runtimeSettings.GetAgentHomeMaxPatchBytesAsync(cancellationToken);
         if (fileInfo.Length > maxPatchBytes)
         {
             return ApplyPlan.Invalid("the exported patch exceeds the maximum allowed size.");
@@ -297,7 +297,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         string patchText;
         try
         {
-            patchText = await File.ReadAllTextAsync(patchPath, cancellationToken).ConfigureAwait(false);
+            patchText = await File.ReadAllTextAsync(patchPath, cancellationToken);
         }
         catch (IOException)
         {
@@ -349,7 +349,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         var files = new List<PatchApplyFileEntry>();
         foreach (var group in parsed.GroupBy(item => item.Alias, StringComparer.Ordinal))
         {
-            var aliasPlan = await BuildAliasPlanAsync(group.Key, [.. group], rejections, cancellationToken).ConfigureAwait(false);
+            var aliasPlan = await BuildAliasPlanAsync(group.Key, [.. group], rejections, cancellationToken);
             if (aliasPlan is null)
             {
                 continue;
@@ -380,7 +380,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         ResolvedSelectedFolder resolved;
         try
         {
-            var references = await _resolver.ListReferencesAsync(cancellationToken).ConfigureAwait(false);
+            var references = await _resolver.ListReferencesAsync(cancellationToken);
             var reference = references.FirstOrDefault(candidate => string.Equals(candidate.Alias, alias, StringComparison.Ordinal));
             if (reference is null)
             {
@@ -388,7 +388,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 return null;
             }
 
-            resolved = await _resolver.ResolveAsync(reference.Id, cancellationToken).ConfigureAwait(false);
+            resolved = await _resolver.ResolveAsync(reference.Id, cancellationToken);
         }
         catch (SelectedFolderValidationException)
         {

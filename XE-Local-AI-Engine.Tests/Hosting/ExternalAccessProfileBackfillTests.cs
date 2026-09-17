@@ -33,7 +33,7 @@ public sealed class ExternalAccessProfileBackfillTests
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
         using var provider = BuildProvider(store, SetupCompleted());
 
-        await Backfill(provider).ConfigureAwait(false);
+        await Backfill(provider);
 
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileRecommended, store.Current.ExternalAccessProfile);
         AssertEx.Equal(expected: true, store.Current.AutoCheckApplicationUpdates);
@@ -47,8 +47,8 @@ public sealed class ExternalAccessProfileBackfillTests
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
         using var provider = BuildProvider(store, SetupCompleted());
 
-        await Backfill(provider).ConfigureAwait(false);
-        await Backfill(provider).ConfigureAwait(false);
+        await Backfill(provider);
+        await Backfill(provider);
 
         AssertEx.Equal(expected: 1, store.WriteCount, "The second pass must find a profile and return before writing.");
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileRecommended, store.Current.ExternalAccessProfile);
@@ -66,7 +66,7 @@ public sealed class ExternalAccessProfileBackfillTests
         });
         using var provider = BuildProvider(store, SetupCompleted());
 
-        await Backfill(provider).ConfigureAwait(false);
+        await Backfill(provider);
 
         AssertEx.Equal(expected: 0, store.WriteCount);
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, store.Current.ExternalAccessProfile);
@@ -84,7 +84,7 @@ public sealed class ExternalAccessProfileBackfillTests
         });
         using var provider = BuildProvider(store, SetupCompleted());
 
-        await Backfill(provider).ConfigureAwait(false);
+        await Backfill(provider);
 
         AssertEx.Equal(expected: 0, store.WriteCount);
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, store.Current.ExternalAccessProfile);
@@ -96,7 +96,7 @@ public sealed class ExternalAccessProfileBackfillTests
         var store = new FakeNodeSettingsStore(new StoredNodeSettings());
         using var provider = BuildProvider(store, SetupRequired());
 
-        await Backfill(provider).ConfigureAwait(false);
+        await Backfill(provider);
 
         AssertEx.Equal(expected: 0, store.WriteCount);
         AssertEx.Null(store.Current.ExternalAccessProfile);
@@ -118,8 +118,7 @@ public sealed class ExternalAccessProfileBackfillTests
                 }
                 """,
                 expectedProfile: null,
-                expectedSwitches: false)
-            .ConfigureAwait(false);
+                expectedSwitches: false);
     }
 
     [Test]
@@ -137,8 +136,7 @@ public sealed class ExternalAccessProfileBackfillTests
                 }
                 """,
                 StoredNodeSettings.ExternalAccessProfilePending,
-                expectedSwitches: false)
-            .ConfigureAwait(false);
+                expectedSwitches: false);
     }
 
     // The regression the round-2 review bought: a settings file holding ONLY an unrecognised profile. Nulling it made
@@ -152,8 +150,7 @@ public sealed class ExternalAccessProfileBackfillTests
                 { "externalAccessProfile": "Offline" }
                 """,
                 StoredNodeSettings.ExternalAccessProfilePending,
-                expectedSwitches: null)
-            .ConfigureAwait(false);
+                expectedSwitches: null);
     }
 
     [Test]
@@ -165,7 +162,7 @@ public sealed class ExternalAccessProfileBackfillTests
         });
         using var provider = BuildProvider(store, SetupCompleted());
 
-        await Backfill(provider).ConfigureAwait(false);
+        await Backfill(provider);
 
         AssertEx.Equal(expected: 0, store.WriteCount, "One member is enough to prove the record is not a legacy install.");
         AssertEx.Null(store.Current.ExternalAccessProfile);
@@ -182,20 +179,19 @@ public sealed class ExternalAccessProfileBackfillTests
         try
         {
             var settingsPath = Path.Combine(root, "node-settings.json");
-            await File.WriteAllTextAsync(settingsPath, "{ \"externalAccessProfile\": \"offli").ConfigureAwait(false);
-            var before = await File.ReadAllBytesAsync(settingsPath).ConfigureAwait(false);
+            await File.WriteAllTextAsync(settingsPath, "{ \"externalAccessProfile\": \"offli");
+            var before = await File.ReadAllBytesAsync(settingsPath);
 
             using var store = new NodeSettingsStore(new FakeNodeDataDirectory(root), NullLogger<NodeSettingsStore>.Instance);
             using var provider = BuildProvider(store, SetupCompleted());
             var logger = new RecordingLogger<ExternalAccessProfileBackfillService>();
 
             await ExternalAccessProfileBackfillService
-                  .BackfillAsync(provider.GetRequiredService<IServiceScopeFactory>(), logger)
-                  .ConfigureAwait(false);
+                  .BackfillAsync(provider.GetRequiredService<IServiceScopeFactory>(), logger);
 
-            var after = await File.ReadAllBytesAsync(settingsPath).ConfigureAwait(false);
+            var after = await File.ReadAllBytesAsync(settingsPath);
             AssertEx.True(before.SequenceEqual(after), "The backfill must not write over an unreadable settings file.");
-            AssertEx.Null(await store.LoadStrictAsync().ConfigureAwait(false),
+            AssertEx.Null(await store.LoadStrictAsync(),
                 "The file must still be unreadable, i.e. the profile is undecided rather than recommended.");
             AssertEx.Equal(expected: 1, logger.Entries.Count(entry => entry.Level == LogLevel.Warning));
         }
@@ -218,9 +214,8 @@ public sealed class ExternalAccessProfileBackfillTests
         try
         {
             var settingsPath = Path.Combine(root, "node-settings.json");
-            await File.WriteAllTextAsync(settingsPath, "{ \"externalAccessProfile\": \"offline\", \"autoCheckRuntimeUp")
-                      .ConfigureAwait(false);
-            var before = await File.ReadAllBytesAsync(settingsPath).ConfigureAwait(false);
+            await File.WriteAllTextAsync(settingsPath, "{ \"externalAccessProfile\": \"offline\", \"autoCheckRuntimeUp");
+            var before = await File.ReadAllBytesAsync(settingsPath);
 
             using var store = new NodeSettingsStore(new FakeNodeDataDirectory(root), NullLogger<NodeSettingsStore>.Instance);
             var externalStore = new FakeExternalProviderStore(ExternalProviderRegistryTests.Connection(ExternalProviderTestData.ConnectionId,
@@ -234,17 +229,17 @@ public sealed class ExternalAccessProfileBackfillTests
                 registryCache,
                 NullLogger<ExternalProviderStartupReconciler>.Instance);
 
-            await reconciler.StartAsync(CancellationToken.None).ConfigureAwait(false);
-            await Backfill(provider).ConfigureAwait(false);
+            await reconciler.StartAsync(CancellationToken.None);
+            await Backfill(provider);
 
             // Non-vacuity: the reconciler writes its provider-map rows BEFORE the allow-list settings write, so a
             // written ext: row proves the pass really did reach the settings write rather than skipping the file.
             AssertEx.Contains(mapStore.Mappings.Keys, ExternalProviderTestData.ModelId);
 
-            var after = await File.ReadAllBytesAsync(settingsPath).ConfigureAwait(false);
+            var after = await File.ReadAllBytesAsync(settingsPath);
             AssertEx.True(before.SequenceEqual(after),
                 "Neither the startup reconciler nor the backfill may write over an unreadable settings file.");
-            AssertEx.Null(await store.LoadStrictAsync().ConfigureAwait(false),
+            AssertEx.Null(await store.LoadStrictAsync(),
                 "The profile must stay undecided, so the gated services keep waiting instead of resuming outbound checks.");
         }
         finally
@@ -266,7 +261,7 @@ public sealed class ExternalAccessProfileBackfillTests
         var service = new ExternalAccessProfileBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
             new RecordingLogger<ExternalAccessProfileBackfillService>());
 
-        await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await service.StartAsync(CancellationToken.None);
 
         AssertEx.Equal(expected: 0, store.WriteCount);
         AssertEx.Null(store.Current.ExternalAccessProfile);
@@ -278,18 +273,18 @@ public sealed class ExternalAccessProfileBackfillTests
         try
         {
             var settingsPath = Path.Combine(root, "node-settings.json");
-            await File.WriteAllTextAsync(settingsPath, json).ConfigureAwait(false);
-            var before = await File.ReadAllBytesAsync(settingsPath).ConfigureAwait(false);
+            await File.WriteAllTextAsync(settingsPath, json);
+            var before = await File.ReadAllBytesAsync(settingsPath);
 
             using var store = new NodeSettingsStore(new FakeNodeDataDirectory(root), NullLogger<NodeSettingsStore>.Instance);
             using var provider = BuildProvider(store, SetupCompleted());
 
-            await Backfill(provider).ConfigureAwait(false);
+            await Backfill(provider);
 
-            var after = await File.ReadAllBytesAsync(settingsPath).ConfigureAwait(false);
+            var after = await File.ReadAllBytesAsync(settingsPath);
             AssertEx.True(before.SequenceEqual(after), "The backfill must not write over a record that already carries an external-access member.");
 
-            var stored = AssertEx.NotNull(await store.LoadStrictAsync().ConfigureAwait(false));
+            var stored = AssertEx.NotNull(await store.LoadStrictAsync());
             AssertEx.Equal<string?>(expectedProfile, stored.ExternalAccessProfile, "The profile must stay undecided until an operator chooses one.");
             AssertEx.Equal(expectedSwitches, stored.AutoCheckApplicationUpdates);
             AssertEx.Equal(expectedSwitches, stored.AutoCheckRuntimeUpdates);

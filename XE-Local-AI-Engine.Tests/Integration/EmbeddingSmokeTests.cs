@@ -23,7 +23,7 @@ public sealed class EmbeddingSmokeTests
             Skip.Test("Set RUN_LOCAL_INTEGRATION=true to execute the local Ollama embedding smoke test.");
         }
 
-        await using var fakeOllamaServer = await StartFakeOllamaWhenConnectionStringsAreMissingAsync().ConfigureAwait(false);
+        await using var fakeOllamaServer = await StartFakeOllamaWhenConnectionStringsAreMissingAsync();
         var fallbackEndpoint = fakeOllamaServer?.BaseAddress;
         var chatConnectionString = ResolveOllamaConnectionString("ConnectionStrings__chat", fallbackEndpoint, ChatModel);
         var embeddingsConnectionString = ResolveOllamaConnectionString("ConnectionStrings__embeddings", fallbackEndpoint, EmbeddingModel);
@@ -47,20 +47,20 @@ public sealed class EmbeddingSmokeTests
                     // Resolve the embedding generator through ILocalModelProviderResolver exactly as the production
                     // retrieval path does: pick the embedding model's provider (ollama here) and create its generator.
                     var resolver = factory.Services.GetRequiredService<ILocalModelProviderResolver>();
-                    var embeddingProvider = await resolver.ResolveProviderForModelAsync(EmbeddingModel, CancellationToken.None).ConfigureAwait(false);
+                    var embeddingProvider = await resolver.ResolveProviderForModelAsync(EmbeddingModel, CancellationToken.None);
                     using var generator = embeddingProvider.CreateEmbeddingGenerator(new LocalModelSelection
                     {
                         ModelName = EmbeddingModel,
                         ProviderName = embeddingProvider.ProviderName
                     });
 
-                    var embeddings = await generator.GenerateAsync(["local embedding smoke test"]).ConfigureAwait(false);
+                    var embeddings = await generator.GenerateAsync(["local embedding smoke test"]);
                     var embedding = embeddings[0];
 
                     AssertEx.True(embedding.Dimensions > 0, "Expected a non-empty embedding vector.");
                     AssertEx.Equal(ExpectedEmbeddingDimensions, embedding.Dimensions, "Expected qwen3-embedding:0.6b to produce 4096 dimensions.");
                     AssertEx.True(embedding.Vector.Length == embedding.Dimensions, "Expected vector length to match the embedding dimensions.");
-                }).ConfigureAwait(false)).ConfigureAwait(false);
+                }));
     }
 
     private static async Task WithTemporaryEnvironmentVariableAsync(string name, string value, Func<Task> action)
@@ -70,7 +70,7 @@ public sealed class EmbeddingSmokeTests
 
         try
         {
-            await action().ConfigureAwait(false);
+            await action();
         }
         finally
         {
@@ -92,7 +92,7 @@ public sealed class EmbeddingSmokeTests
         {
             Models = [ChatModel, EmbeddingModel],
             EmbeddingDimensions = ExpectedEmbeddingDimensions
-        }).ConfigureAwait(false);
+        });
     }
 
     private static string ResolveOllamaConnectionString(string environmentVariableName, Uri? fallbackEndpoint, string model)

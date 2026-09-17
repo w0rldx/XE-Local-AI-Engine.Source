@@ -51,18 +51,17 @@ public sealed class ToolMockService(
 
     public async Task<ToolMockVerifyResult> VerifyAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        var mock = await _store.GetMockAsync(mockId, cancellationToken).ConfigureAwait(false)
+        var mock = await _store.GetMockAsync(mockId, cancellationToken)
                    ?? throw new TrainingNotFoundException("The tool mock was not found.");
         var verification = _verifier.TryParse(mock.MockJson.Span, out var body, out var parseError) && body is not null
-            ? _verifier.Verify(body, await FindSchemaAsync(mock.ToolName, cancellationToken).ConfigureAwait(false))
+            ? _verifier.Verify(body, await FindSchemaAsync(mock.ToolName, cancellationToken))
             : new ToolMockVerificationV1(SchemaVersion: 1, Passed: false, [parseError ?? "The mock body is unreadable."]);
 
         var updated = await _store.SetMockVerificationAsync(mockId,
                                       expectedVersion,
                                       verification.Passed ? ToolMockVerificationState.Verified : ToolMockVerificationState.Rejected,
                                       JsonSerializer.SerializeToUtf8Bytes(verification, TrainingJson.Options),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
         return new ToolMockVerifyResult(updated, verification);
     }
 
@@ -70,7 +69,7 @@ public sealed class ToolMockService(
     {
         // The profile pool with no active model: verification is about the mock's shape, not about which model may be
         // offered the tool, so nothing here should be capability-gated away.
-        var offered = await _offerProvider.GetOfferedToolsForProfileAsync(activeModelId: null, isCloudModel: false, cancellationToken).ConfigureAwait(false);
+        var offered = await _offerProvider.GetOfferedToolsForProfileAsync(activeModelId: null, isCloudModel: false, cancellationToken);
         return offered.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal))?.ParameterSchema;
     }
 

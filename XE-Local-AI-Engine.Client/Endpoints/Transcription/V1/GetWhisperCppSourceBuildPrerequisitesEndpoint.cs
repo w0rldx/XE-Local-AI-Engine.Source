@@ -30,7 +30,7 @@ public sealed class GetWhisperCppSourceBuildPrerequisitesEndpoint(WhisperRuntime
         ArgumentNullException.ThrowIfNull(request);
 
         var backend = request.Backend.ToContract();
-        var report = await _whisperRuntime.ProbeAsync(backend, ct).ConfigureAwait(false);
-        await Send.OkAsync(report.ToResponse(backend), ct).ConfigureAwait(false);
+        var report = await _whisperRuntime.ProbeAsync(backend, ct);
+        await Send.OkAsync(report.ToResponse(backend), ct);
     }
 }

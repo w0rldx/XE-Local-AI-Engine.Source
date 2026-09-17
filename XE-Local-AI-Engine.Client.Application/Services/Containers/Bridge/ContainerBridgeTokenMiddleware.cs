@@ -44,21 +44,21 @@ public sealed class ContainerBridgeTokenMiddleware : IMiddleware
         var presented = ReadBearerToken(context);
         if (presented is null)
         {
-            await RefuseAsync(context, "no bearer token was presented").ConfigureAwait(false);
+            await RefuseAsync(context, "no bearer token was presented");
             return;
         }
 
-        var caller = await _verifier.VerifyAsync(presented, context.RequestAborted).ConfigureAwait(false);
+        var caller = await _verifier.VerifyAsync(presented, context.RequestAborted);
         if (caller is null)
         {
-            await RefuseAsync(context, "the presented token did not verify").ConfigureAwait(false);
+            await RefuseAsync(context, "the presented token did not verify");
             return;
         }
 
         // A feature rather than Items: the routes behind this read it by type, and a typed slot cannot be shadowed by
         // some other component choosing the same string key.
         context.Features.Set(caller);
-        await next(context).ConfigureAwait(false);
+        await next(context);
     }
 
     private static string? ReadBearerToken(HttpContext context)
@@ -82,6 +82,6 @@ public sealed class ContainerBridgeTokenMiddleware : IMiddleware
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         context.Response.Headers[HeaderNames.WWWAuthenticate] = "Bearer";
         context.Response.ContentType = MediaTypeNames.Application.Json;
-        await context.Response.WriteAsync(UnauthorizedBody, context.RequestAborted).ConfigureAwait(false);
+        await context.Response.WriteAsync(UnauthorizedBody, context.RequestAborted);
     }
 }

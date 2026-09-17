@@ -21,20 +21,20 @@ public sealed class RepairAndUniqueMessageSequenceMigrationTests
     [Test]
     public async Task Migrate_OverCollidingSequences_RenumbersEachConversationContiguously()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence.sqlite", PreRepairMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence.sqlite", PreRepairMigrationId);
 
         var conversationId = Guid.NewGuid().ToString();
-        await InsertConversationAsync(probe, conversationId).ConfigureAwait(false);
+        await InsertConversationAsync(probe, conversationId);
 
         // Two messages collide on sequence 5; a third sorts ahead of both. The repair orders by (sequence, created_at,
         // message_id), so the expected result is early → 0, then the two colliding rows in created-at order → 1, 2.
-        await InsertMessageAsync(probe, conversationId, sequence: 5, createdAtUtc: 100).ConfigureAwait(false);
-        await InsertMessageAsync(probe, conversationId, sequence: 5, createdAtUtc: 200).ConfigureAwait(false);
-        await InsertMessageAsync(probe, conversationId, sequence: 3, createdAtUtc: 50).ConfigureAwait(false);
+        await InsertMessageAsync(probe, conversationId, sequence: 5, createdAtUtc: 100);
+        await InsertMessageAsync(probe, conversationId, sequence: 5, createdAtUtc: 200);
+        await InsertMessageAsync(probe, conversationId, sequence: 3, createdAtUtc: 50);
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
-        var sequences = await probe.LongsAsync("SELECT sequence FROM messages ORDER BY created_at_utc;").ConfigureAwait(false);
+        var sequences = await probe.LongsAsync("SELECT sequence FROM messages ORDER BY created_at_utc;");
 
         AssertEx.True(sequences.SequenceEqual(new[]
             {
@@ -48,17 +48,17 @@ public sealed class RepairAndUniqueMessageSequenceMigrationTests
     [Test]
     public async Task Migrate_OverWellFormedSequences_LeavesThemUntouched()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence-noop.sqlite", PreRepairMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence-noop.sqlite", PreRepairMigrationId);
 
         var conversationId = Guid.NewGuid().ToString();
-        await InsertConversationAsync(probe, conversationId).ConfigureAwait(false);
-        await InsertMessageAsync(probe, conversationId, sequence: 0, createdAtUtc: 100).ConfigureAwait(false);
-        await InsertMessageAsync(probe, conversationId, sequence: 1, createdAtUtc: 200).ConfigureAwait(false);
-        await InsertMessageAsync(probe, conversationId, sequence: 2, createdAtUtc: 300).ConfigureAwait(false);
+        await InsertConversationAsync(probe, conversationId);
+        await InsertMessageAsync(probe, conversationId, sequence: 0, createdAtUtc: 100);
+        await InsertMessageAsync(probe, conversationId, sequence: 1, createdAtUtc: 200);
+        await InsertMessageAsync(probe, conversationId, sequence: 2, createdAtUtc: 300);
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
-        var sequences = await probe.LongsAsync("SELECT sequence FROM messages ORDER BY created_at_utc;").ConfigureAwait(false);
+        var sequences = await probe.LongsAsync("SELECT sequence FROM messages ORDER BY created_at_utc;");
 
         AssertEx.True(sequences.SequenceEqual(new[]
             {
@@ -72,24 +72,24 @@ public sealed class RepairAndUniqueMessageSequenceMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_ReplacesTheConversationIndexWithAUniqueSequenceIndex()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence-index.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence-index.sqlite", ThisMigrationId);
 
         AssertEx.True(await probe.IndexExistsAsync("messages",
                 "IX_messages_conversation_id_sequence",
                 unique: true,
                 "conversation_id",
-                "sequence").ConfigureAwait(false),
+                "sequence"),
             "The sequence must be uniquely indexed per conversation.");
 
-        AssertEx.False(await probe.IndexExistsAsync("messages", "IX_messages_conversation_id", unique: false, "conversation_id").ConfigureAwait(false),
+        AssertEx.False(await probe.IndexExistsAsync("messages", "IX_messages_conversation_id", unique: false, "conversation_id"),
             "The superseded non-unique index must be dropped, not left alongside the new one.");
 
         var conversationId = Guid.NewGuid().ToString();
-        await InsertConversationAsync(probe, conversationId).ConfigureAwait(false);
-        await InsertMessageAsync(probe, conversationId, sequence: 0, createdAtUtc: 100).ConfigureAwait(false);
+        await InsertConversationAsync(probe, conversationId);
+        await InsertMessageAsync(probe, conversationId, sequence: 0, createdAtUtc: 100);
 
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertMessageAsync(probe, conversationId, sequence: 0, createdAtUtc: 200),
-            "The race this migration exists for must now be rejected by the database.").ConfigureAwait(false);
+            "The race this migration exists for must now be rejected by the database.");
     }
 
     private static Task InsertConversationAsync(MigrationSchemaProbe probe, string conversationId)

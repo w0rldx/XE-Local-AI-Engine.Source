@@ -134,43 +134,42 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
     public async Task ARealBuildToolNodePassesOrFailsAndKeepsASanitizedReport()
     {
         var repository = Path.Combine(_root, "repo");
-        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: false).ConfigureAwait(false);
-        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.PassingLibrarySource, "implement the feature").ConfigureAwait(false);
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: false);
+        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.PassingLibrarySource, "implement the feature");
 
         await using var harness = DevWorkflowHarness.WithARealSandbox(("Development:Enabled", "true"));
-        var projectId = await CreateProjectAsync(harness, repository).ConfigureAwait(false);
+        var projectId = await CreateProjectAsync(harness, repository);
 
-        var passing = await harness.StartRunAsync(BuildOnlyToolGraph, "Build the solution.", projectId).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(passing).ConfigureAwait(false);
+        var passing = await harness.StartRunAsync(BuildOnlyToolGraph, "Build the solution.", projectId);
+        await harness.AdvanceThroughToolLaneAsync(passing);
 
-        var built = await harness.ReadNodeRunAsync(passing, "build").ConfigureAwait(false);
+        var built = await harness.ReadNodeRunAsync(passing, "build");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, built.Status, AssertEx.NotNull(built.TerminalReason ?? built.OutputJson));
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(passing).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(passing)).Status);
         AssertEx.Contains(AssertEx.NotNull(built.OutputJson), "\"passed\":true");
         AssertEx.Contains(AssertEx.NotNull(built.OutputJson), "\"commandsRun\":3", message: "the node's own command list is the one that ran.");
 
-        var artifact = (await harness.ReadArtifactsAsync(passing).ConfigureAwait(false)).Single();
+        var artifact = (await harness.ReadArtifactsAsync(passing)).Single();
         AssertEx.Equal(DevWorkflowArtifactKind.ValidationReport, artifact.Kind);
-        var report = await harness.ReadArtifactTextAsync(passing, artifact).ConfigureAwait(false);
+        var report = await harness.ReadArtifactTextAsync(passing, artifact);
         AssertEx.Contains(report, "dotnet_build_release_no_restore");
         AssertEx.Contains(report, "[REDACTED:development-path]", message: "a build prints its output path, and the report must not carry this host's layout.");
         AssertEx.False(report.Contains(_root, StringComparison.OrdinalIgnoreCase), "no absolute host path survives into a stored report.");
 
         // The same repository, one commit later, no longer compiles. Nothing about the workflow changes: the same node
         // runs the same commands and the deterministic gate says no.
-        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource, "break the build").ConfigureAwait(false);
+        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource, "break the build");
 
-        var failing = await harness.StartRunAsync(BuildOnlyToolGraph, "Build the solution again.", projectId).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(failing).ConfigureAwait(false);
+        var failing = await harness.StartRunAsync(BuildOnlyToolGraph, "Build the solution again.", projectId);
+        await harness.AdvanceThroughToolLaneAsync(failing);
 
-        var broken = await harness.ReadNodeRunAsync(failing, "build").ConfigureAwait(false);
+        var broken = await harness.ReadNodeRunAsync(failing, "build");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, broken.Status, "the node allows one attempt, so a retryable failure has nowhere left to go but a human.");
         AssertEx.Equal(expected: 1, broken.Attempt, "an exhausted node run spends no further attempt on its way to being blocked.");
         AssertEx.Equal("ToolCommandFailed", broken.FailureClass, "a build that does not compile is a verdict, not an engine fault.");
         AssertEx.Contains(AssertEx.NotNull(broken.OutputJson), "\"failureCode\":\"command_failed\"");
         AssertEx.Contains(await harness.ReadArtifactTextAsync(failing,
-                                           (await harness.ReadArtifactsAsync(failing).ConfigureAwait(false)).Single())
-                                       .ConfigureAwait(false),
+                                           (await harness.ReadArtifactsAsync(failing)).Single()),
             "CS1002",
             message: "the report names the compiler error, which is the whole point of keeping it.");
     }
@@ -188,16 +187,16 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
     public async Task ARealBuildThatRunsOutOfTimeKeepsTheEvidenceItGathered()
     {
         var repository = Path.Combine(_root, "repo");
-        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: true).ConfigureAwait(false);
-        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.PassingLibrarySource, "implement the feature").ConfigureAwait(false);
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: true);
+        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.PassingLibrarySource, "implement the feature");
 
         await using var harness = DevWorkflowHarness.WithARealSandbox(("Development:Enabled", "true"));
-        var projectId = await CreateProjectAsync(harness, repository).ConfigureAwait(false);
+        var projectId = await CreateProjectAsync(harness, repository);
 
-        var runId = await harness.StartRunAsync(ImpatientBuildGraph, "Build the solution, quickly.", projectId).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ImpatientBuildGraph, "Build the solution, quickly.", projectId);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var timedOut = await harness.ReadNodeRunAsync(runId, "build").ConfigureAwait(false);
+        var timedOut = await harness.ReadNodeRunAsync(runId, "build");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, timedOut.Status, AssertEx.NotNull(timedOut.TerminalReason ?? timedOut.OutputJson));
         AssertEx.Equal(DevWorkflowFailureClasses.Timeout, timedOut.FailureClass, "the clock ended it, which is a different fact from the build's verdict.");
         AssertEx.Contains(AssertEx.NotNull(timedOut.TerminalReason), "1 seconds");
@@ -205,9 +204,9 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         AssertEx.False(AssertEx.NotNull(timedOut.OutputJson).Contains("\"commandsRun\":4", StringComparison.Ordinal),
             "a pass that ran out of time cannot have finished every command it was given.");
 
-        var artifact = (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Single();
+        var artifact = (await harness.ReadArtifactsAsync(runId)).Single();
         AssertEx.Equal(DevWorkflowArtifactKind.ValidationReport, artifact.Kind);
-        var report = await harness.ReadArtifactTextAsync(runId, artifact).ConfigureAwait(false);
+        var report = await harness.ReadArtifactTextAsync(runId, artifact);
         AssertEx.Contains(report, "\"passed\":false");
         AssertEx.Contains(report, DevelopmentCommandProfileCatalog.DotnetSlnx, message: "the report still names the profile and commit its evidence was gathered against.");
         AssertEx.False(report.Contains(_root, StringComparison.OrdinalIgnoreCase), "no absolute host path survives into a stored report.");
@@ -231,28 +230,28 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
     public async Task AMaterializedChildsValidationRefusesWhenItsSiblingsApprovedPatchNoLongerApplies()
     {
         var repository = Path.Combine(_root, "conflict");
-        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: false).ConfigureAwait(false);
-        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.PassingLibrarySource, "implement the feature").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, "slice.txt"), "someone else's work\n").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "the base moved on").ConfigureAwait(false);
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: false);
+        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.PassingLibrarySource, "implement the feature");
+        await File.WriteAllTextAsync(Path.Combine(repository, "slice.txt"), "someone else's work\n");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "the base moved on");
 
         await using var harness = DevWorkflowHarness.WithARealSandbox(("Development:Enabled", "true"));
-        var projectId = await CreateProjectAsync(harness, repository).ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(GateOnly, "Integrate the slice.", projectId).ConfigureAwait(false);
-        var childTaskId = await ApprovedChildTaskAsync(harness, projectId).ConfigureAwait(false);
-        await MaterializeCloneGroupAsync(harness, runId, projectId, childTaskId).ConfigureAwait(false);
+        var projectId = await CreateProjectAsync(harness, repository);
+        var runId = await harness.StartRunAsync(GateOnly, "Integrate the slice.", projectId);
+        var childTaskId = await ApprovedChildTaskAsync(harness, projectId);
+        await MaterializeCloneGroupAsync(harness, runId, projectId, childTaskId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var validation = await harness.ReadNodeRunAsync(runId, "validate#1").ConfigureAwait(false);
+        var validation = await harness.ReadNodeRunAsync(runId, "validate#1");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, validation.Status, AssertEx.NotNull(validation.TerminalReason ?? validation.OutputJson));
         AssertEx.Equal(DevWorkflowFailureClasses.Policy,
             validation.FailureClass,
             "a patch that will not apply is a refusal on evidence, not a command verdict and not an engine fault.");
         AssertEx.Contains(AssertEx.NotNull(validation.TerminalReason), "did not apply to this node's freshly prepared workspace");
         AssertEx.Equal(expected: 0,
-            (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Count,
+            (await harness.ReadArtifactsAsync(runId)).Count,
             "no report either: the commands never ran, so there is no evidence to keep.");
     }
 
@@ -266,11 +265,10 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var taskId = Guid.NewGuid();
-        _ = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId, taskId, Guid.NewGuid(), "Add the slice", "Add slice.txt.", "[]"))
-                       .ConfigureAwait(false);
+        _ = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId, taskId, Guid.NewGuid(), "Add the slice", "Add slice.txt.", "[]"));
 
         var attemptId = Guid.NewGuid();
-        var task = await store.GetTaskAsync(taskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(taskId);
         foreach (var next in new[]
                  {
                      DevelopmentTaskStatus.Ready,
@@ -288,22 +286,19 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
                                    DevelopmentAttemptRole.Coder,
                                    "scripted-model",
                                    "local",
-                                   task.Version))
-                               .ConfigureAwait(false);
+                                   task.Version));
                 _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
                                    Guid.NewGuid(),
                                    DevelopmentAttemptStatus.Succeeded,
-                                   ExpectedAttemptVersion: 1))
-                               .ConfigureAwait(false);
-                task = await store.GetTaskAsync(taskId).ConfigureAwait(false);
+                                   ExpectedAttemptVersion: 1));
+                task = await store.GetTaskAsync(taskId);
             }
 
             var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
                                        Guid.NewGuid(),
                                        next,
                                        task.Version,
-                                       ApprovedSubjectHash: next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null))
-                                   .ConfigureAwait(false);
+                                       ApprovedSubjectHash: next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null));
             task = task with
             {
                 Status = next,
@@ -313,8 +308,7 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
 
         var artifactId = Guid.NewGuid();
         var written = await scope.ServiceProvider.GetRequiredService<IDevelopmentArtifactBlobStore>()
-                                 .WriteAsync(projectId, artifactId, Encoding.UTF8.GetBytes(ChildPatch))
-                                 .ConfigureAwait(false);
+                                 .WriteAsync(projectId, artifactId, Encoding.UTF8.GetBytes(ChildPatch));
         _ = await store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
                            projectId,
                            taskId,
@@ -326,8 +320,7 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
                            written.ByteCount,
                            ManagedReference: written.OpaqueReference,
                            BaseCommit: "base",
-                           SubjectHash: "subject"))
-                       .ConfigureAwait(false);
+                           SubjectHash: "subject"));
         return taskId;
     }
 
@@ -337,7 +330,7 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
     /// </summary>
     private static async Task MaterializeCloneGroupAsync(DevWorkflowHarness harness, Guid runId, Guid projectId, Guid childTaskId)
     {
-        var gate = await harness.ReadNodeRunAsync(runId, "gate").ConfigureAwait(false);
+        var gate = await harness.ReadNodeRunAsync(runId, "gate");
         var implementId = Guid.NewGuid();
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
@@ -360,23 +353,21 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
                                    MaterializedFromNodeRunId: gate.Id,
                                    MaterializationIndex: 1)
                            ],
-                           GateThenCloneGroup))
-                       .ConfigureAwait(false);
+                           GateThenCloneGroup));
 
         // The implementation is done and names its task, which is the state the validation node reads it in.
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
                            implementId,
                            DevWorkflowVersions.Any,
                            DevWorkflowNodeRunStatus.Succeeded,
-                           DevelopmentTaskId: childTaskId))
-                       .ConfigureAwait(false);
+                           DevelopmentTaskId: childTaskId));
     }
 
     private static async Task<Guid> CreateProjectAsync(DevWorkflowHarness harness, string repository)
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var bindings = scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>();
-        var reference = await bindings.RegisterAsync("dev-workflow-tool-fixture", repository).ConfigureAwait(false);
+        var reference = await bindings.RegisterAsync("dev-workflow-tool-fixture", repository);
         var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx,
             DevelopmentSyntheticSolutionRepository.SolutionPath);
 
@@ -402,17 +393,15 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
                            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                            MaxTokens: 2048,
                            MaxDurationSeconds: 600,
-                           Encoding.UTF8.GetString(profile.ToCanonicalUtf8())))
-                       .ConfigureAwait(false);
+                           Encoding.UTF8.GetString(profile.ToCanonicalUtf8())));
         return projectId;
     }
 
     private static async Task WriteAndCommitAsync(string repository, string librarySource, string message)
     {
         await File.WriteAllTextAsync(Path.Combine(repository, DevelopmentSyntheticSolutionRepository.LibrarySourcePath.Replace('/', Path.DirectorySeparatorChar)),
-                      librarySource)
-                  .ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", message).ConfigureAwait(false);
+                      librarySource);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", message);
     }
 }

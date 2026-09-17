@@ -26,15 +26,14 @@ public sealed class WorkSessionCloudEgressTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        await RecordAFindingAsync(factory, sessionId).ConfigureAwait(false);
-        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await RecordAFindingAsync(factory, sessionId);
+        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                                         scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                             .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, cloudAgentId)))
-                                    .ConfigureAwait(false);
+                                             .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, cloudAgentId)));
 
         AssertEx.Contains(refusal.Message, "send them off the node");
     }
@@ -44,13 +43,12 @@ public sealed class WorkSessionCloudEgressTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, cloudAgentId))
-                                 .ConfigureAwait(false);
+                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, cloudAgentId));
 
         AssertEx.Equal(cloudAgentId, updated.AgentDefinitionId, "There is nothing extracted yet, so there is nothing to keep on the node.");
     }
@@ -61,14 +59,13 @@ public sealed class WorkSessionCloudEgressTests
         // Private host: the operator opt-in it asserts on is a host-level config value.
         await using var factory = WorkSessionServiceTests.NewFactory(("KnowledgeBase:AllowCloudModelAccess", "true"));
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        await RecordAFindingAsync(factory, sessionId).ConfigureAwait(false);
-        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await RecordAFindingAsync(factory, sessionId);
+        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, cloudAgentId))
-                                 .ConfigureAwait(false);
+                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, cloudAgentId));
 
         AssertEx.Equal(cloudAgentId, updated.AgentDefinitionId, "The operator's opt-in is the one thing that makes this egress intentional.");
     }
@@ -78,14 +75,13 @@ public sealed class WorkSessionCloudEgressTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        await RecordAFindingAsync(factory, sessionId).ConfigureAwait(false);
-        var localAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "another-local-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await RecordAFindingAsync(factory, sessionId);
+        var localAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "another-local-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
-                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, localAgentId))
-                                 .ConfigureAwait(false);
+                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, localAgentId));
 
         AssertEx.Equal(localAgentId, updated.AgentDefinitionId, "The gate is about leaving the node, not about changing agents.");
     }
@@ -99,7 +95,6 @@ public sealed class WorkSessionCloudEgressTests
                            WorkSessionVersions.Any,
                            Guid.NewGuid(),
                            AgentWorkSessionFindingKind.Finding,
-                           "The inference path runs on llama.cpp by default."))
-                       .ConfigureAwait(false);
+                           "The inference path runs on llama.cpp by default."));
     }
 }

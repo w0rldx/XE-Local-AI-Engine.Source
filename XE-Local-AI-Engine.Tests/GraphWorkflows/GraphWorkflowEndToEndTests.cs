@@ -35,13 +35,13 @@ public sealed class GraphWorkflowEndToEndTests
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
         harness.Invocations.Script(AnalyzeInstructions, new GraphWorkflowScriptedTurn(Text: """{"requiresReview":true,"summary":"worth a look"}"""));
 
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentBranchJoin, """{"topic":"the overnight logs"}""").ConfigureAwait(false);
-        var run = await AdvanceUntilRunTerminalAsync(harness, runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentBranchJoin, """{"topic":"the overnight logs"}""");
+        var run = await AdvanceUntilRunTerminalAsync(harness, runId);
 
         AssertEx.Equal(GraphWorkflowRunStatus.Completed, run.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.None, run.FailureClass);
 
-        var nodeRuns = await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false);
+        var nodeRuns = await harness.ReadNodeRunsAsync(runId);
         AssertEx.Empty(nodeRuns.Where(static nodeRun => !GraphWorkflowStateMachine.IsTerminal(nodeRun.Status)), "every node run of a finished run is terminal.");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, Node(nodeRuns, "analyze").Status);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, Node(nodeRuns, "review").Status);
@@ -70,10 +70,10 @@ public sealed class GraphWorkflowEndToEndTests
         await using var harness = GraphWorkflowHarness.PrivateAgentHost();
         harness.Invocations.Script(AnalyzeInstructions, new GraphWorkflowScriptedTurn(Text: """{"requiresReview":false,"summary":"nothing to see"}"""));
 
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentBranchJoin, """{"topic":"a quiet night"}""").ConfigureAwait(false);
-        _ = await AdvanceUntilRunTerminalAsync(harness, runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.AgentBranchJoin, """{"topic":"a quiet night"}""");
+        _ = await AdvanceUntilRunTerminalAsync(harness, runId);
 
-        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        var events = await harness.ReadEventsAsync(runId);
         AssertEx.Equal(GraphWorkflowEventTypes.RunCreated, events[0].EventType);
         AssertEx.Equal(GraphWorkflowEventTypes.RunStarted, events[1].EventType);
         AssertEx.Equal(GraphWorkflowEventTypes.RunCompleted, events[^1].EventType);
@@ -94,13 +94,13 @@ public sealed class GraphWorkflowEndToEndTests
     {
         for (var tick = 0; tick < maxTicks; tick++)
         {
-            var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+            var run = await harness.ReadRunAsync(runId);
             if (GraphWorkflowStateMachine.IsTerminal(run.Status))
             {
                 return run;
             }
 
-            _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+            _ = await harness.AdvanceAsync(runId);
         }
 
         throw new AssertionException($"Run {runId} had not settled after {maxTicks} ticks.");

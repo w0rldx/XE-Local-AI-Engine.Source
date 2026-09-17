@@ -151,7 +151,7 @@ public sealed class CodexStoreFalseOnWireTests
         {
             if (request.Content is not null)
             {
-                RequestBody = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                RequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
             }
 
             // Minimal Responses-shaped JSON so the SDK gets a 200 with a body to (attempt to) parse.

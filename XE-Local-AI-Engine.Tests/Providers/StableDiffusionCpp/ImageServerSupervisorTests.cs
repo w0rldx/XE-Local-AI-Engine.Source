@@ -382,7 +382,7 @@ public sealed class ImageServerSupervisorTests
         public async Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
         {
             _entered.TrySetResult();
-            await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             return true;
         }
 

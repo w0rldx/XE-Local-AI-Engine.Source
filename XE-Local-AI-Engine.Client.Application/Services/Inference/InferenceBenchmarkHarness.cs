@@ -77,7 +77,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 spec.RejectPreSpawnVramPressure,
                 spec.IncrementalVramDivergenceAbsoluteThresholdBytes,
                 spec.IncrementalVramDivergenceRatioThreshold);
-            var load = await _resourceSampler.CaptureAsync(spec, context.ProcessId, ct).ConfigureAwait(false);
+            var load = await _resourceSampler.CaptureAsync(spec, context.ProcessId, ct);
             resources.Add(load);
 
             if (resources.PreSpawnVram?.ExternalPressureDetected == true)
@@ -96,18 +96,18 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
             async Task CapturePassResourcesAsync(CancellationToken innerCt)
             {
-                resources.Add(await _resourceSampler.CaptureAsync(spec, context.ProcessId, innerCt).ConfigureAwait(false));
+                resources.Add(await _resourceSampler.CaptureAsync(spec, context.ProcessId, innerCt));
             }
 
             var metrics = role switch
             {
-                ModelRole.Chat => await RunChatAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct).ConfigureAwait(false),
-                ModelRole.Embedding => await RunEmbeddingAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct).ConfigureAwait(false),
-                ModelRole.Reranker => await RunRerankerAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct).ConfigureAwait(false),
+                ModelRole.Chat => await RunChatAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct),
+                ModelRole.Embedding => await RunEmbeddingAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct),
+                ModelRole.Reranker => await RunRerankerAsync(context.Endpoint, spec, CapturePassResourcesAsync, ct),
                 _ => InferenceBenchmarkMetrics.Failed($"Benchmark role '{role}' is unsupported.")
             };
 
-            resources.Add(await _resourceSampler.CaptureAsync(spec, context.ProcessId, ct).ConfigureAwait(false));
+            resources.Add(await _resourceSampler.CaptureAsync(spec, context.ProcessId, ct));
             return ApplyResourceEvidence(metrics, context, resources);
         }
         catch (OperationCanceledException)
@@ -185,16 +185,16 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     {
         for (var warmup = 0; warmup < Math.Max(0, spec.WarmupRuns); warmup++)
         {
-            _ = await RunChatPassAsync(endpoint, spec, ct).ConfigureAwait(false);
-            await captureResources(ct).ConfigureAwait(false);
+            _ = await RunChatPassAsync(endpoint, spec, ct);
+            await captureResources(ct);
         }
 
         var measuredRuns = Math.Max(1, spec.MeasuredRuns);
         var passes = new List<ChatPassMetrics>(measuredRuns);
         for (var run = 0; run < measuredRuns; run++)
         {
-            passes.Add(await RunChatPassAsync(endpoint, spec, ct).ConfigureAwait(false));
-            await captureResources(ct).ConfigureAwait(false);
+            passes.Add(await RunChatPassAsync(endpoint, spec, ct));
+            await captureResources(ct);
         }
 
         return new InferenceBenchmarkMetrics(Success: true,
@@ -231,7 +231,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         using var chatClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName).WithProviderTelemetry();
 
         var totalStopwatch = Stopwatch.StartNew();
-        var baseline = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
+        var baseline = await ScrapeMetricsAsync(metricsUri, ct);
         var chatOptions = BuildOptions(endpoint.ModelName, spec, tools: null);
 
         var coldMessages = new List<ChatMessage>
@@ -239,14 +239,14 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             new(ChatRole.System, spec.SystemPersona),
             new(ChatRole.User, spec.ColdUserTurn)
         };
-        var coldStage = await StreamStageAsync(chatClient, coldMessages, chatOptions, ct).ConfigureAwait(false);
+        var coldStage = await StreamStageAsync(chatClient, coldMessages, chatOptions, ct);
 
         var warmMessages = new List<ChatMessage>(coldMessages)
         {
             new(ChatRole.Assistant, coldStage.Text),
             new(ChatRole.User, spec.WarmFollowUpTurn)
         };
-        var warmStage = await StreamStageAsync(chatClient, warmMessages, chatOptions, ct).ConfigureAwait(false);
+        var warmStage = await StreamStageAsync(chatClient, warmMessages, chatOptions, ct);
 
         var toolInvocations = 0;
         var toolFunction = AIFunctionFactory.Create(() =>
@@ -268,7 +268,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
             {
                 var toolStopwatch = Stopwatch.StartNew();
-                _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
+                _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct);
                 toolStopwatch.Stop();
                 toolLoopMs = Volatile.Read(ref toolInvocations) > 0 ? toolStopwatch.Elapsed.TotalMilliseconds : null;
             }
@@ -278,8 +278,8 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             new(ChatRole.System, spec.SystemPersona),
             new(ChatRole.User, spec.LongContextUserTurn)
         };
-        _ = await chatClient.GetResponseAsync(longMessages, chatOptions, ct).ConfigureAwait(false);
-        var afterAll = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
+        _ = await chatClient.GetResponseAsync(longMessages, chatOptions, ct);
+        var afterAll = await ScrapeMetricsAsync(metricsUri, ct);
         totalStopwatch.Stop();
 
         return new ChatPassMetrics(DeriveRate(baseline, afterAll, PredictedTokensMetric, PredictedSecondsMetric),
@@ -317,11 +317,11 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         for (var warmup = 0; warmup < Math.Max(0, spec.WarmupRuns); warmup++)
         {
-            _ = await InferenceBenchmarkHttpProtocol.PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct).ConfigureAwait(false);
-            await captureResources(ct).ConfigureAwait(false);
+            _ = await InferenceBenchmarkHttpProtocol.PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct);
+            await captureResources(ct);
         }
 
-        var baselineMetrics = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
+        var baselineMetrics = await ScrapeMetricsAsync(metricsUri, ct);
         var latencies = new List<double>(measuredRuns);
         IReadOnlyList<IReadOnlyList<double>>? baselineVectors = null;
         var allFinite = true;
@@ -331,10 +331,10 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         for (var run = 0; run < measuredRuns; run++)
         {
             var stopwatch = Stopwatch.StartNew();
-            var vectors = await InferenceBenchmarkHttpProtocol.PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct).ConfigureAwait(false);
+            var vectors = await InferenceBenchmarkHttpProtocol.PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct);
             stopwatch.Stop();
             latencies.Add(stopwatch.Elapsed.TotalMilliseconds);
-            await captureResources(ct).ConfigureAwait(false);
+            await captureResources(ct);
 
             if (vectors.Count != inputs.Count || vectors.Count == 0)
             {
@@ -364,7 +364,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             }
         }
 
-        var afterMetrics = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
+        var afterMetrics = await ScrapeMetricsAsync(metricsUri, ct);
         var totalSeconds = latencies.Sum() / 1000d;
         var success = allFinite && deterministic;
 
@@ -412,11 +412,11 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         for (var warmup = 0; warmup < Math.Max(0, spec.WarmupRuns); warmup++)
         {
-            _ = await InferenceBenchmarkHttpProtocol.PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct).ConfigureAwait(false);
-            await captureResources(ct).ConfigureAwait(false);
+            _ = await InferenceBenchmarkHttpProtocol.PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct);
+            await captureResources(ct);
         }
 
-        var baselineMetrics = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
+        var baselineMetrics = await ScrapeMetricsAsync(metricsUri, ct);
         var latencies = new List<double>(measuredRuns);
         IReadOnlyList<double>? baselineScores = null;
         IReadOnlyList<int>? baselineOrder = null;
@@ -426,10 +426,10 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         for (var run = 0; run < measuredRuns; run++)
         {
             var stopwatch = Stopwatch.StartNew();
-            var scores = await InferenceBenchmarkHttpProtocol.PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct).ConfigureAwait(false);
+            var scores = await InferenceBenchmarkHttpProtocol.PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct);
             stopwatch.Stop();
             latencies.Add(stopwatch.Elapsed.TotalMilliseconds);
-            await captureResources(ct).ConfigureAwait(false);
+            await captureResources(ct);
 
             if (scores.Count != documents.Count)
             {
@@ -457,7 +457,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             }
         }
 
-        var afterMetrics = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
+        var afterMetrics = await ScrapeMetricsAsync(metricsUri, ct);
         var totalSeconds = latencies.Sum() / 1000d;
         var success = allFinite && deterministic;
 
@@ -705,7 +705,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var builder = new StringBuilder();
         LlamaServerGenerationTimings? timings = null;
 
-        await foreach (var update in chatClient.GetStreamingResponseAsync(messages, options, ct).ConfigureAwait(false))
+        await foreach (var update in chatClient.GetStreamingResponseAsync(messages, options, ct))
         {
             firstTokenMs ??= stopwatch.Elapsed.TotalMilliseconds;
             builder.Append(update.Text);
@@ -720,7 +720,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         try
         {
             using var client = _httpClientFactory.CreateClient();
-            return await client.GetStringAsync(metricsUri, ct).ConfigureAwait(false);
+            return await client.GetStringAsync(metricsUri, ct);
         }
         catch (HttpRequestException exception)
         {

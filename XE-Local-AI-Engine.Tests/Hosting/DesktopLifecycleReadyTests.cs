@@ -35,12 +35,12 @@ public sealed class DesktopLifecycleReadyTests
 
                 AssertEx.Equal($"XE_READY=1 XE_VERSION=1.2.3 XE_URL=http://127.0.0.1:41234 XE_MCP_URL=http://127.0.0.1:41234/api/local/v1/mcp/server XE_DATA_DIR={dataDirectory}{Environment.NewLine}",
                     output.ToString());
-                var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(dataDirectory).ConfigureAwait(false));
+                var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(dataDirectory));
                 AssertEx.Equal("1.2.3", ready.Version);
                 AssertEx.Equal(Environment.ProcessId, ready.Pid);
             }
 
-            AssertEx.Null(await DesktopPortStore.ReadReadyAsync(dataDirectory).ConfigureAwait(false));
+            AssertEx.Null(await DesktopPortStore.ReadReadyAsync(dataDirectory));
         }
         finally
         {

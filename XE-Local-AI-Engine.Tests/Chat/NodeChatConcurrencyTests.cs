@@ -33,22 +33,22 @@ public sealed class NodeChatConcurrencyTests : IDisposable
     [Test]
     public async Task ConcurrentInserts_OnOneConversation_AllocateDistinctContiguousSequences()
     {
-        await using var provider = await BuildProviderAsync("concurrent-sequences.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("concurrent-sequences.sqlite");
         var service = CreateService(provider);
 
         // Run many iterations: a dropped lock or a lost MAX(sequence)+1 read shows up as a duplicate or a gap in at
         // least one iteration, so the loop is the detector.
         for (var iteration = 0; iteration < SequenceRaceIterations; iteration++)
         {
-            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Race", "node", CreatedAtUtc: iteration)).ConfigureAwait(false);
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Race", "node", CreatedAtUtc: iteration));
 
             var inserts = Enumerable.Range(0, ConcurrentInsertsPerConversation)
                                     .Select(index => Task.Run(() => service.PersistUserMessageAsync(
                                         new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), $"m{index}", CreatedAtUtc: 100 + index))))
                                     .ToArray();
-            await Task.WhenAll(inserts).ConfigureAwait(false);
+            await Task.WhenAll(inserts);
 
-            var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+            var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
             var sequences = loaded.Messages.Select(message => message.Sequence).OrderBy(sequence => sequence).ToArray();
 
             AssertEx.Equal(ConcurrentInsertsPerConversation, loaded.Messages.Count);
@@ -63,17 +63,16 @@ public sealed class NodeChatConcurrencyTests : IDisposable
     [Test]
     public async Task PurgeDelete_RacingPayloadWrites_LeavesNoRows()
     {
-        await using var provider = await BuildProviderAsync("delete-race.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("delete-race.sqlite");
         var service = CreateService(provider);
 
         for (var iteration = 0; iteration < SequenceRaceIterations; iteration++)
         {
-            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete race", "node", CreatedAtUtc: iteration)).ConfigureAwait(false);
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete race", "node", CreatedAtUtc: iteration));
             var assistantMessageId = Guid.NewGuid();
             var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
-            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 1))
-                         .ConfigureAwait(false);
-            await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 1));
+            await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
             // Fire streaming flushes concurrently with a hard purge. A flush that loses the race to the delete finds no
             // row and throws — expected; what must never happen is a surviving/partial row after the purge commits.
@@ -83,8 +82,7 @@ public sealed class NodeChatConcurrencyTests : IDisposable
                                        try
                                        {
                                            await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, $"chunk{index}", Reasoning: null, UpdatedAtUtc: 10 + index,
-                                                            ReplaceContent: false))
-                                                        .ConfigureAwait(false);
+                                                            ReplaceContent: false));
                                        }
                                        catch (InvalidOperationException)
                                        {
@@ -93,17 +91,17 @@ public sealed class NodeChatConcurrencyTests : IDisposable
                                    }))
                                    .ToList();
             writes.Add(Task.Run(() => service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 20, PurgeImmediately: true))));
-            await Task.WhenAll(writes).ConfigureAwait(false);
+            await Task.WhenAll(writes);
 
-            AssertEx.Null(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
-            AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId).ConfigureAwait(false));
+            AssertEx.Null(await service.GetConversationAsync(conversation.ConversationId));
+            AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId));
         }
     }
 
     [Test]
     public async Task LockMap_IsReleasedAfterOperationsComplete()
     {
-        await using var provider = await BuildProviderAsync("bounded-locks.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("bounded-locks.sqlite");
         var writer = provider.GetRequiredService<NodeChatPersistenceWriter>();
         var service = new NodeChatPersistenceService(writer);
 
@@ -111,11 +109,10 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         // than growing with history.
         for (var index = 0; index < 100; index++)
         {
-            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest($"c{index}", "node", CreatedAtUtc: index)).ConfigureAwait(false);
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest($"c{index}", "node", CreatedAtUtc: index));
             var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, Guid.NewGuid(), Guid.NewGuid());
-            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, correlation.MessageId, correlation.RequestId, CreatedAtUtc: 1))
-                         .ConfigureAwait(false);
-            await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, correlation.MessageId, correlation.RequestId, CreatedAtUtc: 1));
+            await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
         }
 
         AssertEx.Equal(expected: 0, writer.ActiveConversationLockCount);
@@ -133,8 +130,8 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }
@@ -149,14 +146,14 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM messages WHERE conversation_id = $conversation_id;";
         var parameter = command.CreateParameter();
         parameter.ParameterName = "$conversation_id";
         parameter.Value = conversationId;
         command.Parameters.Add(parameter);
-        var count = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var count = await command.ExecuteScalarAsync();
         return Convert.ToInt64(count, CultureInfo.InvariantCulture);
     }
 }

@@ -125,7 +125,7 @@ internal sealed class DevWorkflowAgentExecutor
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(nodeRun);
 
-        if (await TryReadAttachedAsync(nodeRun, cancellationToken).ConfigureAwait(false) is
+        if (await TryReadAttachedAsync(nodeRun, cancellationToken) is
             {
                 Status: AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled
             })
@@ -138,12 +138,11 @@ internal sealed class DevWorkflowAgentExecutor
                                    nodeRun.Id,
                                    DevWorkflowVersions.Any,
                                    DevWorkflowNodeRunStatus.Running),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             return 1 + await PollAsync(store, graph, run, nodeRun with
             {
                 Status = DevWorkflowNodeRunStatus.Running
-            }, nodeRuns, cancellationToken).ConfigureAwait(false);
+            }, nodeRuns, cancellationToken);
         }
 
         var written = 0;
@@ -155,8 +154,7 @@ internal sealed class DevWorkflowAgentExecutor
                                    DevWorkflowVersions.Any,
                                    DevWorkflowNodeRunStatus.Queued,
                                    QueueReason: DevWorkflowQueueReasons.AwaitingAgentSlot),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             written++;
         }
 
@@ -170,31 +168,28 @@ internal sealed class DevWorkflowAgentExecutor
         WorkSessionDetail session;
         try
         {
-            session = await ResolveSessionAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
+            session = await ResolveSessionAsync(store, graph, run, node, nodeRun, cancellationToken);
         }
         catch (WorkSessionValidationException exception)
         {
             // A missing agent, a model that cannot call tools, a node with work sessions switched off. A retry produces
             // the same answer, so it goes straight to a human with the message verbatim — it is already sanitized and
             // it already names the fix.
-            return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken)
-                .ConfigureAwait(false);
+            return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken);
         }
         catch (DevWorkflowValidationException exception)
         {
-            return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken)
-                .ConfigureAwait(false);
+            return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken);
         }
         catch (DevWorkflowPolicyException exception)
         {
             // GRAPH-C4-2's runtime half. NOT Configuration: nothing is misconfigured — the node's agent may do more
             // than the definition admits to, and only a person can say whether that is meant. Policy blocks for a
             // human rather than failing the run, and a retry would produce the same answer.
-            return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, exception.Message, cancellationToken)
-                .ConfigureAwait(false);
+            return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, exception.Message, cancellationToken);
         }
 
-        if (!await TryDriveAsync(session, graph, node, cancellationToken).ConfigureAwait(false))
+        if (!await TryDriveAsync(session, graph, node, cancellationToken))
         {
             // Lost the admission race between the capacity read and the start. The row stays Queued with its reason and
             // keeps the session it already owns, so the next tick starts that one rather than creating a second.
@@ -206,8 +201,7 @@ internal sealed class DevWorkflowAgentExecutor
                                nodeRun.Id,
                                DevWorkflowVersions.Any,
                                DevWorkflowNodeRunStatus.Running),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return written + 1;
     }
 
@@ -237,11 +231,10 @@ internal sealed class DevWorkflowAgentExecutor
                     nodeRun,
                     DevWorkflowFailureClasses.Internal,
                     "This node run is running without a work session, so nothing can report what it is doing.",
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
-        var session = await TryReadAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await TryReadAsync(sessionId, cancellationToken);
         if (session is null)
         {
             return await BlockAsync(store,
@@ -249,14 +242,13 @@ internal sealed class DevWorkflowAgentExecutor
                     nodeRun,
                     DevWorkflowFailureClasses.Configuration,
                     "The work session this node run was driving no longer exists.",
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         switch (session.Status)
         {
             case AgentWorkSessionStatus.Completed:
-                return await CompleteAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken).ConfigureAwait(false);
+                return await CompleteAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken);
 
             case AgentWorkSessionStatus.Failed:
 
@@ -272,9 +264,9 @@ internal sealed class DevWorkflowAgentExecutor
                 // is read, not recomputed. The node's declaration is still consulted first, off the run's PINNED graph,
                 // so an ordinary provider failure costs nothing but a dictionary miss.
                 if (DeclarationRequired(graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey))
-                    && await ReadWriteGateRefusalAsync(sessionId, cancellationToken).ConfigureAwait(false) is { } refusal)
+                    && await ReadWriteGateRefusalAsync(sessionId, cancellationToken) is { } refusal)
                 {
-                    return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, refusal, cancellationToken).ConfigureAwait(false);
+                    return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, refusal, cancellationToken);
                 }
 
                 // The retry policy's answer, not this lane's: a provider failure is retryable, and whether THIS one is
@@ -288,8 +280,7 @@ internal sealed class DevWorkflowAgentExecutor
                                          new DevWorkflowFailure(DevWorkflowFailureClasses.ProviderError,
                                              "The agent's work session failed.",
                                              FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)),
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
+                                         cancellationToken);
 
             case AgentWorkSessionStatus.Cancelled:
                 return await SettleAsync(store,
@@ -300,8 +291,7 @@ internal sealed class DevWorkflowAgentExecutor
                         DevWorkflowFailureClasses.Cancelled,
                         "The agent's work session was cancelled.",
                         FailureOutput(nodeRun, session, DevWorkflowFailureClasses.Cancelled),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
 
             case AgentWorkSessionStatus.Draft or AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted:
 
@@ -309,7 +299,7 @@ internal sealed class DevWorkflowAgentExecutor
                 // resuming it here would undo the operator's command with the run still reading Pausing.
                 return run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling
                     ? 0
-                    : await ResumeAsync(store, run, graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey), nodeRun, session, cancellationToken).ConfigureAwait(false);
+                    : await ResumeAsync(store, run, graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey), nodeRun, session, cancellationToken);
 
             default:
                 // Running, or parked on a question it asked. Still working; nothing to write.
@@ -326,8 +316,8 @@ internal sealed class DevWorkflowAgentExecutor
         try
         {
             _ = cancel
-                ? await _sessions.CancelAsync(sessionId, cancellationToken).ConfigureAwait(false)
-                : await _sessions.PauseAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                ? await _sessions.CancelAsync(sessionId, cancellationToken)
+                : await _sessions.PauseAsync(sessionId, cancellationToken);
         }
         catch (Exception exception) when (exception is WorkSessionInvalidTransitionException or WorkSessionNotFoundException)
         {
@@ -352,15 +342,15 @@ internal sealed class DevWorkflowAgentExecutor
         DevWorkflowNodeRunSnapshot nodeRun,
         CancellationToken cancellationToken)
     {
-        if (await TryReadAttachedAsync(nodeRun, cancellationToken).ConfigureAwait(false) is { } existing)
+        if (await TryReadAttachedAsync(nodeRun, cancellationToken) is { } existing)
         {
             return existing;
         }
 
-        var agentDefinitionId = await ResolveAgentAsync(node, cancellationToken).ConfigureAwait(false);
-        await EnsureDeclaredWhatItCanWriteAsync(graph, node, agentDefinitionId, cancellationToken).ConfigureAwait(false);
-        var objective = await ComposeObjectiveAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
-        var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, RuntimeOf(graph, node), cancellationToken).ConfigureAwait(false);
+        var agentDefinitionId = await ResolveAgentAsync(node, cancellationToken);
+        await EnsureDeclaredWhatItCanWriteAsync(graph, node, agentDefinitionId, cancellationToken);
+        var objective = await ComposeObjectiveAsync(store, graph, run, node, nodeRun, cancellationToken);
+        var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, RuntimeOf(graph, node), cancellationToken);
 
         try
         {
@@ -369,8 +359,7 @@ internal sealed class DevWorkflowAgentExecutor
                                    DevWorkflowVersions.Any,
                                    created.Id,
                                    DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "attach")),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
         }
         catch
         {
@@ -378,7 +367,7 @@ internal sealed class DevWorkflowAgentExecutor
             // delete cannot find it, and the external lifecycle refuses a workflow-kind session to every other caller.
             // So the create is undone here rather than left for the startup sweep, and the original failure is what
             // propagates — the compensation is not the story.
-            await ReleaseUnattachedAsync(store, created.Id).ConfigureAwait(false);
+            await ReleaseUnattachedAsync(store, created.Id);
             throw;
         }
 
@@ -402,12 +391,12 @@ internal sealed class DevWorkflowAgentExecutor
     {
         try
         {
-            if ((await store.ListOwnedWorkSessionIdsAsync(CancellationToken.None).ConfigureAwait(false)).Contains(sessionId))
+            if ((await store.ListOwnedWorkSessionIdsAsync(CancellationToken.None)).Contains(sessionId))
             {
                 return;
             }
 
-            await _sessions.DeleteAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
+            await _sessions.DeleteAsync(sessionId, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -434,8 +423,8 @@ internal sealed class DevWorkflowAgentExecutor
             var runtime = RuntimeOf(graph, node);
             _ = session.Status switch
             {
-                AgentWorkSessionStatus.Draft => await _sessions.StartAsync(session.Id, runtime, cancellationToken).ConfigureAwait(false),
-                AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted => await _sessions.ResumeAsync(session.Id, runtime, cancellationToken).ConfigureAwait(false),
+                AgentWorkSessionStatus.Draft => await _sessions.StartAsync(session.Id, runtime, cancellationToken),
+                AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted => await _sessions.ResumeAsync(session.Id, runtime, cancellationToken),
 
                 // Already being driven — the crash window between the start and the node run's own Running write.
                 _ => session
@@ -492,7 +481,7 @@ internal sealed class DevWorkflowAgentExecutor
             return;
         }
 
-        if (await _writes.InspectAsync(agentDefinitionId, node.ModelProfile, cancellationToken).ConfigureAwait(false) is { } refusal)
+        if (await _writes.InspectAsync(agentDefinitionId, node.ModelProfile, cancellationToken) is { } refusal)
         {
             throw new DevWorkflowPolicyException(refusal);
         }
@@ -520,7 +509,7 @@ internal sealed class DevWorkflowAgentExecutor
             throw new DevWorkflowValidationException($"Agent node '{node.NodeKey}' binds no agent definition, so nothing can run it.");
         }
 
-        var seeded = await _agents.GetBySeedSlugAsync(slug, cancellationToken).ConfigureAwait(false);
+        var seeded = await _agents.GetBySeedSlugAsync(slug, cancellationToken);
         return seeded?.Id ?? throw new DevWorkflowValidationException($"Agent node '{node.NodeKey}' binds the seeded agent '{slug}', which this node does not have.");
     }
 
@@ -605,12 +594,12 @@ internal sealed class DevWorkflowAgentExecutor
 
         _ = objective.Append(inputSection);
 
-        var upstream = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken).ConfigureAwait(false);
+        var upstream = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken);
 
         // What did NOT arrive belongs in the same section as what did. An All join now carries on past a leaf a person
         // skipped, so this node can be handed four implementations where the fan-out was five wide — and with nothing
         // saying so it would judge the four as if they were the whole job. Named here rather than left to the absence.
-        var skipped = await DevWorkflowUpstreamArtifacts.SkippedAsync(store, graph, run.Id, nodeRun.NodeKey, cancellationToken).ConfigureAwait(false);
+        var skipped = await DevWorkflowUpstreamArtifacts.SkippedAsync(store, graph, run.Id, nodeRun.NodeKey, cancellationToken);
         var section = $"{Environment.NewLine}## What the steps before you produced{Environment.NewLine}";
         if ((upstream.Count > 0 || skipped.Count > 0) && objective.Length + section.Length <= MaxObjectiveCharacters)
         {
@@ -646,7 +635,7 @@ internal sealed class DevWorkflowAgentExecutor
                 // its slack on. The share has to cover this artifact's own header and marker as well as its body,
                 // which is why both come off it before the body is asked for.
                 var share = (artifactCeiling - objective.Length) / (upstream.Count - index);
-                var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - DevWorkflowPolicyText.TruncationMarkerReserve, cancellationToken).ConfigureAwait(false);
+                var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - DevWorkflowPolicyText.TruncationMarkerReserve, cancellationToken);
 
                 // The bound is enforced HERE, on the FINISHED block, with the header, the body, whichever marker was
                 // rendered and the newlines all counted. Nothing reaches the objective except through this check, so
@@ -716,7 +705,7 @@ internal sealed class DevWorkflowAgentExecutor
             return $"(It is {artifact.SizeBytes} bytes, too large to include here, so only this reference is given.)";
         }
 
-        var read = await _blobs.ReadAsync(runId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken).ConfigureAwait(false);
+        var read = await _blobs.ReadAsync(runId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken);
         if (read.Status != DevWorkflowArtifactReadStatus.Found)
         {
             _logger.LogWarning("Development workflow artifact {ArtifactId} of run {RunId} was not injected into an objective: {Status}.",
@@ -796,10 +785,10 @@ internal sealed class DevWorkflowAgentExecutor
         WorkSessionDetail session,
         CancellationToken cancellationToken)
     {
-        var unmet = await UnmetObjectiveAsync(session.Id, cancellationToken).ConfigureAwait(false);
+        var unmet = await UnmetObjectiveAsync(session.Id, cancellationToken);
         if (unmet is null)
         {
-            return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken).ConfigureAwait(false);
+            return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken);
         }
 
         // Promoted exactly as a success would be, because the STATUS carries the honesty and nothing downstream reads a
@@ -807,8 +796,8 @@ internal sealed class DevWorkflowAgentExecutor
         // reason alone, with the report that explains the block unreadable on the session — and a Retry clears the node
         // run's session pointer, so the run's own artifact table is the only place these survive the decision.
         var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
-        _ = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken).ConfigureAwait(false);
-        return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.ObjectiveNotMet, unmet, cancellationToken).ConfigureAwait(false);
+        _ = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken);
+        return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.ObjectiveNotMet, unmet, cancellationToken);
     }
 
     /// <summary>
@@ -822,12 +811,12 @@ internal sealed class DevWorkflowAgentExecutor
     {
         // The store's own order, not re-sorted: ListTasksAsync orders by CreatedStep so a task an update re-stamped
         // does not jump the page, and re-sorting here would name the three least recently touched tasks instead.
-        var blocked = (await _sessionStore.ListTasksAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false))
+        var blocked = (await _sessionStore.ListTasksAsync(sessionId, sinceSequence: 0, cancellationToken))
                       .Where(static task => task.Status == AgentWorkSessionTaskStatus.Blocked)
                       .ToList();
         if (blocked.Count == 0)
         {
-            return await DeclaredUnmetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            return await DeclaredUnmetAsync(sessionId, cancellationToken);
         }
 
         var named = string.Join("; ",
@@ -857,7 +846,7 @@ internal sealed class DevWorkflowAgentExecutor
     private async Task<string?> DeclaredUnmetAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         // Targeted, not the whole log: this used to read and decrypt every event the session ever wrote to keep one row.
-        var completion = await _sessionStore.FindLatestEventAsync(sessionId, WorkSessionEventTypes.CompletionRequested, cancellationToken).ConfigureAwait(false);
+        var completion = await _sessionStore.FindLatestEventAsync(sessionId, WorkSessionEventTypes.CompletionRequested, cancellationToken);
         if (completion?.DetailJson is not { Length: > 0 } detail)
         {
             return null;
@@ -894,8 +883,8 @@ internal sealed class DevWorkflowAgentExecutor
         // the session's own enum cannot say "task package", so without it the document this node's whole purpose is to
         // hand downstream would land as an ordinary report and the materialization would find nothing.
         var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
-        var promoted = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken).ConfigureAwait(false);
-        var findings = await _sessionStore.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var promoted = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken);
+        var findings = await _sessionStore.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken);
         var output = JsonSerializer.Serialize(new AgentOutput(DevWorkflowNodeOutputStatuses.Succeeded,
                 nodeRun.Attempt,
                 FailureClass: null,
@@ -907,8 +896,7 @@ internal sealed class DevWorkflowAgentExecutor
                         .ToDictionary(static group => JsonNamingPolicy.CamelCase.ConvertName(group.Key.ToString()), static group => group.Count(), StringComparer.Ordinal)),
             JsonOptions);
 
-        return await SettleAsync(store, run, nodeRun, nodeRuns, DevWorkflowNodeRunStatus.Succeeded, failureClass: null, terminalReason: null, output, cancellationToken)
-            .ConfigureAwait(false);
+        return await SettleAsync(store, run, nodeRun, nodeRuns, DevWorkflowNodeRunStatus.Succeeded, failureClass: null, terminalReason: null, output, cancellationToken);
     }
 
     /// <summary>
@@ -934,11 +922,10 @@ internal sealed class DevWorkflowAgentExecutor
                     nodeRun,
                     DevWorkflowFailureClasses.BudgetExhausted,
                     $"This node run resumed its work session {nodeRun.SessionResumes} times without finishing, which is as many as this node allows.",
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
-        if (!_sessions.HasCapacity || !await TryDriveAsync(session, graph, node, cancellationToken).ConfigureAwait(false))
+        if (!_sessions.HasCapacity || !await TryDriveAsync(session, graph, node, cancellationToken))
         {
             // The slot is held by another session. The row stays Running — it has not stopped working, it is waiting for
             // its own continuation — and the next tick asks again.
@@ -953,20 +940,19 @@ internal sealed class DevWorkflowAgentExecutor
                                session.Id,
                                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"resume-{nodeRun.SessionResumes}"),
                                CountsAsResume: true),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
     /// <summary>The session the row is still carrying, if it has one and it still exists.</summary>
     private async Task<WorkSessionDetail?> TryReadAttachedAsync(DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken) =>
-        nodeRun.WorkSessionId is { } attached ? await TryReadAsync(attached, cancellationToken).ConfigureAwait(false) : null;
+        nodeRun.WorkSessionId is { } attached ? await TryReadAsync(attached, cancellationToken) : null;
 
     private async Task<WorkSessionDetail?> TryReadAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         try
         {
-            return await _sessions.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            return await _sessions.GetAsync(sessionId, cancellationToken);
         }
         catch (WorkSessionNotFoundException)
         {
@@ -986,7 +972,7 @@ internal sealed class DevWorkflowAgentExecutor
     /// </summary>
     private async Task<string?> ReadWriteGateRefusalAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var events = await _sessionStore.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var events = await _sessionStore.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken);
         var refused = events.LastOrDefault(static entry => string.Equals(entry.Outcome, WorkSessionEventTypes.WriteGateOutcome, StringComparison.Ordinal));
         return WorkSessionEventTypes.ReadWriteGateDetail(refused?.DetailJson);
     }
@@ -1020,8 +1006,7 @@ internal sealed class DevWorkflowAgentExecutor
                                FailureClass: failureClass,
                                TerminalReason: terminalReason,
                                WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -1045,8 +1030,7 @@ internal sealed class DevWorkflowAgentExecutor
                                FailureClass: failureClass,
                                TerminalReason: sanitizedReason,
                                WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 

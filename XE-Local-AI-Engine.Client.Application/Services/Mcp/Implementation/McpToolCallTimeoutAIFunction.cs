@@ -36,7 +36,7 @@ internal sealed class McpToolCallTimeoutAIFunction : DelegatingAIFunction
 
         try
         {
-            return await base.InvokeCoreAsync(arguments, timeoutCts.Token).ConfigureAwait(false);
+            return await base.InvokeCoreAsync(arguments, timeoutCts.Token);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {

@@ -26,7 +26,7 @@ public sealed class ModelCapabilityResolverTests
         factory.IsCloudProviderSelected(AzureDeployment).Returns(true);
         var resolver = CreateResolver(factory, out _);
 
-        var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None).ConfigureAwait(false);
+        var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None);
 
         AssertEx.True(isCloud, "a deployment the factory would route to a cloud provider must classify cloud");
         AssertEx.False(supportsThinking, "Azure's declared matrix does not advertise thinking here");
@@ -43,7 +43,7 @@ public sealed class ModelCapabilityResolverTests
         factory.IsCloudProviderSelected(AzureDeployment).Returns(_ => throw new InvalidOperationException("credential store unavailable"));
         var resolver = CreateResolver(factory, out _);
 
-        var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None).ConfigureAwait(false);
+        var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None);
 
         AssertEx.True(isCloud, "a snapshot read failure must fail CLOSED to cloud so the private-data gate withholds");
         AssertEx.False(supportsThinking);
@@ -63,7 +63,7 @@ public sealed class ModelCapabilityResolverTests
         ggufResolver.TryResolveAsync(localModel, Arg.Any<CancellationToken>())
                     .Returns(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false));
 
-        var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(localModel, CancellationToken.None).ConfigureAwait(false);
+        var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(localModel, CancellationToken.None);
 
         AssertEx.False(isCloud, "a locally-routed model must classify local so the gate does not withhold");
         AssertEx.True(supportsThinking);
@@ -83,12 +83,12 @@ public sealed class ModelCapabilityResolverTests
         ggufResolver.TryResolveAsync(visionModel, Arg.Any<CancellationToken>())
                     .Returns(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: true));
 
-        var local = await resolver.ResolveAsync(visionModel, CancellationToken.None).ConfigureAwait(false);
+        var local = await resolver.ResolveAsync(visionModel, CancellationToken.None);
 
         AssertEx.True(local.SupportsVision, "a projector-carrying GGUF must advertise vision");
 
         factory.IsCloudProviderSelected(AzureDeployment).Returns(true);
-        var cloud = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None).ConfigureAwait(false);
+        var cloud = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None);
 
         AssertEx.False(cloud.SupportsVision, "a cloud-routed deployment must stay non-vision");
     }
@@ -113,14 +113,14 @@ public sealed class ModelCapabilityResolverTests
                         SupportsVision: false,
                         ReasoningBudgetEnforceable: false));
 
-        var local = await resolver.ResolveAsync(unenforceableModel, CancellationToken.None).ConfigureAwait(false);
+        var local = await resolver.ResolveAsync(unenforceableModel, CancellationToken.None);
 
         AssertEx.True(local.SupportsThinking, "enforceability never changes whether the model reasons");
         AssertEx.False(local.ReasoningBudgetEnforceable);
 
         // A Codex id short-circuits to the provider's declared matrix (thinking-capable), the only OTHER route whose
         // models read this flag.
-        var cloud = await resolver.ResolveAsync("gpt-5.6-terra", CancellationToken.None).ConfigureAwait(false);
+        var cloud = await resolver.ResolveAsync("gpt-5.6-terra", CancellationToken.None);
 
         AssertEx.True(cloud.SupportsThinking);
         AssertEx.True(cloud.ReasoningBudgetEnforceable, "the budget marker never reaches a cloud wire, so a cloud route reports the inert true");

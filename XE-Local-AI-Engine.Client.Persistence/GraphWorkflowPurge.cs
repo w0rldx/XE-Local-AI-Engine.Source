@@ -36,8 +36,8 @@ public static class GraphWorkflowPurge
     {
         ArgumentNullException.ThrowIfNull(dbContext);
 
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM graph_workflow_run_events WHERE run_id = {0};", [runId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM graph_workflow_node_runs WHERE run_id = {0};", [runId], cancellationToken).ConfigureAwait(false);
-        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM graph_workflow_runs WHERE id = {0};", [runId], cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM graph_workflow_run_events WHERE run_id = {0};", [runId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM graph_workflow_node_runs WHERE run_id = {0};", [runId], cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM graph_workflow_runs WHERE id = {0};", [runId], cancellationToken);
     }
 }

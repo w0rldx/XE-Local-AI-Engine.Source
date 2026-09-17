@@ -25,16 +25,15 @@ public sealed class TrainingEvaluationEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var list = await client.GetAsync(Evaluations).ConfigureAwait(false);
-        using var byId = await client.GetAsync($"{Evaluations}/{Guid.NewGuid()}").ConfigureAwait(false);
-        using var reports = await client.GetAsync(Comparisons).ConfigureAwait(false);
-        using var suggest = await client.GetAsync($"{Comparisons}/suggest?trainingRunId={Guid.NewGuid()}").ConfigureAwait(false);
-        using var createResponse = await SendAsync(client, HttpMethod.Post, Evaluations).ConfigureAwait(false);
-        using var resumeResponse = await SendAsync(client, HttpMethod.Post, $"{Evaluations}/{Guid.NewGuid()}/resume").ConfigureAwait(false);
-        using var cancelResponse = await SendAsync(client, HttpMethod.Post, $"{Evaluations}/{Guid.NewGuid()}/cancel").ConfigureAwait(false);
-        using var deleteResponse = await SendAsync(client, HttpMethod.Delete, $"{Evaluations}/{Guid.NewGuid()}?expectedVersion=1")
-            .ConfigureAwait(false);
-        using var reportResponse = await SendAsync(client, HttpMethod.Post, Comparisons).ConfigureAwait(false);
+        using var list = await client.GetAsync(Evaluations);
+        using var byId = await client.GetAsync($"{Evaluations}/{Guid.NewGuid()}");
+        using var reports = await client.GetAsync(Comparisons);
+        using var suggest = await client.GetAsync($"{Comparisons}/suggest?trainingRunId={Guid.NewGuid()}");
+        using var createResponse = await SendAsync(client, HttpMethod.Post, Evaluations);
+        using var resumeResponse = await SendAsync(client, HttpMethod.Post, $"{Evaluations}/{Guid.NewGuid()}/resume");
+        using var cancelResponse = await SendAsync(client, HttpMethod.Post, $"{Evaluations}/{Guid.NewGuid()}/cancel");
+        using var deleteResponse = await SendAsync(client, HttpMethod.Delete, $"{Evaluations}/{Guid.NewGuid()}?expectedVersion=1");
+        using var reportResponse = await SendAsync(client, HttpMethod.Post, Comparisons);
 
         foreach (var response in new[]
                  {
@@ -61,16 +60,16 @@ public sealed class TrainingEvaluationEndpointTests
 
         using var evaluationsRequest = new HttpRequestMessage(HttpMethod.Get, Evaluations);
         factory.AddNodeBearerToken(evaluationsRequest);
-        using var evaluationsResponse = await client.SendAsync(evaluationsRequest).ConfigureAwait(false);
+        using var evaluationsResponse = await client.SendAsync(evaluationsRequest);
 
         using var comparisonsRequest = new HttpRequestMessage(HttpMethod.Get, Comparisons);
         factory.AddNodeBearerToken(comparisonsRequest);
-        using var comparisonsResponse = await client.SendAsync(comparisonsRequest).ConfigureAwait(false);
+        using var comparisonsResponse = await client.SendAsync(comparisonsRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, evaluationsResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, comparisonsResponse.StatusCode);
-        await AssertEmptyItemsAsync(evaluationsResponse).ConfigureAwait(false);
-        await AssertEmptyItemsAsync(comparisonsResponse).ConfigureAwait(false);
+        await AssertEmptyItemsAsync(evaluationsResponse);
+        await AssertEmptyItemsAsync(comparisonsResponse);
     }
 
     [Test]
@@ -81,11 +80,11 @@ public sealed class TrainingEvaluationEndpointTests
 
         using var evaluationRequest = new HttpRequestMessage(HttpMethod.Get, $"{Evaluations}/{Guid.NewGuid()}");
         factory.AddNodeBearerToken(evaluationRequest);
-        using var evaluationResponse = await client.SendAsync(evaluationRequest).ConfigureAwait(false);
+        using var evaluationResponse = await client.SendAsync(evaluationRequest);
 
         using var comparisonRequest = new HttpRequestMessage(HttpMethod.Get, $"{Comparisons}/{Guid.NewGuid()}");
         factory.AddNodeBearerToken(comparisonRequest);
-        using var comparisonResponse = await client.SendAsync(comparisonRequest).ConfigureAwait(false);
+        using var comparisonResponse = await client.SendAsync(comparisonRequest);
 
         AssertEx.Equal(HttpStatusCode.NotFound, evaluationResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.NotFound, comparisonResponse.StatusCode);
@@ -110,7 +109,7 @@ public sealed class TrainingEvaluationEndpointTests
             })
         };
         factory.AddNodeBearerToken(evaluationRequest);
-        using var evaluationResponse = await client.SendAsync(evaluationRequest).ConfigureAwait(false);
+        using var evaluationResponse = await client.SendAsync(evaluationRequest);
 
         using var comparisonRequest = new HttpRequestMessage(HttpMethod.Delete, $"{Comparisons}/{Guid.NewGuid()}")
         {
@@ -120,7 +119,7 @@ public sealed class TrainingEvaluationEndpointTests
             })
         };
         factory.AddNodeBearerToken(comparisonRequest);
-        using var comparisonResponse = await client.SendAsync(comparisonRequest).ConfigureAwait(false);
+        using var comparisonResponse = await client.SendAsync(comparisonRequest);
 
         AssertEx.Equal(HttpStatusCode.NotFound, evaluationResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.NotFound, comparisonResponse.StatusCode);
@@ -142,7 +141,7 @@ public sealed class TrainingEvaluationEndpointTests
         };
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // Operator-facing lineage refusals are 400s, not 500s: "there is no run" is something the operator can act on.
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -156,7 +155,7 @@ public sealed class TrainingEvaluationEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{Comparisons}/suggest?trainingRunId={Guid.NewGuid()}");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -178,7 +177,7 @@ public sealed class TrainingEvaluationEndpointTests
         };
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -194,12 +193,12 @@ public sealed class TrainingEvaluationEndpointTests
         using var resume = new HttpRequestMessage(HttpMethod.Post, $"{Evaluations}/{Guid.NewGuid()}/resume");
         resume.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(resume);
-        using var resumeResponse = await client.SendAsync(resume).ConfigureAwait(false);
+        using var resumeResponse = await client.SendAsync(resume);
 
         using var cancel = new HttpRequestMessage(HttpMethod.Post, $"{Evaluations}/{Guid.NewGuid()}/cancel");
         cancel.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(cancel);
-        using var cancelResponse = await client.SendAsync(cancel).ConfigureAwait(false);
+        using var cancelResponse = await client.SendAsync(cancel);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, resumeResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.NotFound, cancelResponse.StatusCode);
@@ -209,12 +208,12 @@ public sealed class TrainingEvaluationEndpointTests
     {
         using var request = new HttpRequestMessage(method, route);
         request.Headers.Add("Origin", "http://localhost");
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static async Task AssertEmptyItemsAsync(HttpResponseMessage response)
     {
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.True(document.RootElement.TryGetProperty("items", out var items) && items.GetArrayLength() == 0,
             "An empty database is an empty list, never a 404.");
     }

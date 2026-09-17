@@ -78,7 +78,7 @@ public sealed class DevWorkflowRunHub(DevWorkflowRunQueryService queries, IDevWo
         DevWorkflowRunDetail detail;
         try
         {
-            detail = await _runs.GetAsync(runId, cancellationToken).ConfigureAwait(false);
+            detail = await _runs.GetAsync(runId, cancellationToken);
         }
         catch (DevWorkflowNotFoundException)
         {
@@ -88,10 +88,10 @@ public sealed class DevWorkflowRunHub(DevWorkflowRunQueryService queries, IDevWo
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
         // and the join reaches nobody. The overlap this creates is harmless — every push is an idempotent notification
         // keyed by sequence.
-        await Groups.AddToGroupAsync(Context.ConnectionId, DevWorkflowHubGroups.Run(runId), cancellationToken).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, DevWorkflowHubGroups.Run(runId), cancellationToken);
 
         // One over the cap, so "there is more" is observed rather than inferred from a full page.
-        var events = await _queries.ListEventsAsync(runId, afterSeq, ReplayCap + 1, cancellationToken).ConfigureAwait(false);
+        var events = await _queries.ListEventsAsync(runId, afterSeq, ReplayCap + 1, cancellationToken);
         return new DevWorkflowRunSubscriptionSnapshot(runId,
             detail.Run.Status.ToString(),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),

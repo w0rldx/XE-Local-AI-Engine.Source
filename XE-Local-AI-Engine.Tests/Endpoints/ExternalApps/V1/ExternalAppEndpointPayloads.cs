@@ -138,7 +138,7 @@ internal static class ExternalAppEndpointPayloads
         using var client = factory.CreateClient();
         using var request = Request(method, route, body);
         factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     public static async Task<HttpResponseMessage> SendAsNonOperatorAsync(TestServerWebAppFactory factory, string method, string route)
@@ -148,7 +148,7 @@ internal static class ExternalAppEndpointPayloads
         using var client = factory.CreateClient();
         using var request = Request(method, route);
         factory.AddNonOperatorBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     public static async Task<HttpResponseMessage> SendAnonymousAsync(TestServerWebAppFactory factory, string method, string route)
@@ -157,7 +157,7 @@ internal static class ExternalAppEndpointPayloads
 
         using var client = factory.CreateClient();
         using var request = Request(method, route);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     public static HttpRequestMessage Request(string method, string route, object? body = null)
@@ -178,7 +178,7 @@ internal static class ExternalAppEndpointPayloads
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync();
         return JsonDocument.Parse(body);
     }
 

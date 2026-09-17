@@ -22,14 +22,14 @@ public sealed class GetKnowledgeDocumentEndpoint(IKnowledgeDocumentCatalogServic
 
     public override async Task HandleAsync(KnowledgeDocumentRouteRequest req, CancellationToken ct)
     {
-        var detail = await _catalogService.GetAsync(req.DocumentId, ct).ConfigureAwait(false);
+        var detail = await _catalogService.GetAsync(req.DocumentId, ct);
         if (detail is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(ToResponse(detail), ct).ConfigureAwait(false);
+        await Send.OkAsync(ToResponse(detail), ct);
     }
 
     private static KnowledgeDocumentDetailResponse ToResponse(KnowledgeDocumentDetail detail)

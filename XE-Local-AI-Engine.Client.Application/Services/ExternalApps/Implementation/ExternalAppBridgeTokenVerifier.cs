@@ -36,7 +36,7 @@ internal sealed class ExternalAppBridgeTokenVerifier : IContainerBridgeTokenVeri
             return null;
         }
 
-        var row = await _store.GetAsync(instanceId, cancellationToken).ConfigureAwait(false);
+        var row = await _store.GetAsync(instanceId, cancellationToken);
         if (row?.BridgeToken is not { Length: > 0 } stored)
         {
             // No such instance, or one installed before the bridge existed. Neither has bridge access.

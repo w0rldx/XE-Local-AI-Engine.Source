@@ -17,7 +17,7 @@ public interface IBenchmarkInstalledModelLeaseProvider
     /// </summary>
     async Task<InstalledModelFacts?> ReadFactsAsync(string modelName, CancellationToken cancellationToken)
     {
-        await using var lease = await AcquireAsync(modelName, cancellationToken).ConfigureAwait(false);
+        await using var lease = await AcquireAsync(modelName, cancellationToken);
         var snapshot = lease.Snapshot;
         return new InstalledModelFacts(snapshot.ModelName,
             snapshot.ProviderName ?? string.Empty,
@@ -33,7 +33,7 @@ internal sealed class BenchmarkInstalledModelLeaseProvider(IInstalledModelSnapsh
 
     public async Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
     {
-        var lease = await _coordinator.AcquireReadSnapshotAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var lease = await _coordinator.AcquireReadSnapshotAsync(modelName, cancellationToken);
         return new Lease(lease);
     }
 

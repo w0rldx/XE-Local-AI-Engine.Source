@@ -29,7 +29,7 @@ public sealed class RunningLocalModelEndpointTests
     [Test]
     public async Task GetRunningModels_WhenLoaded_ReturnsModelsWithMemoryFootprint()
     {
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         context.Server!.State.RunningModels =
         [
             new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 5_000_000_000, SizeVramBytes: 4_000_000_000)
@@ -37,8 +37,8 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/running");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(running.IsAvailable);
@@ -52,12 +52,12 @@ public sealed class RunningLocalModelEndpointTests
     [Test]
     public async Task GetRunningModels_WhenNoneLoaded_ReturnsAvailableEmpty()
     {
-        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("llama3:8b");
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/running");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(running.IsAvailable);
@@ -74,8 +74,8 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/running");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(running.IsAvailable);
@@ -95,8 +95,8 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/running");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(running.IsAvailable);
@@ -120,7 +120,7 @@ public sealed class RunningLocalModelEndpointTests
         request.Headers.Add("Origin", "http://localhost");
         AssertEx.Null(request.Content);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await modelService.Received(1).UnloadModelAsync("llama3:8b", Arg.Any<CancellationToken>());
@@ -135,7 +135,7 @@ public sealed class RunningLocalModelEndpointTests
         await using var context = CreateContext(modelService);
         using var client = context.Factory.CreateClient();
 
-        using var response = await client.PostAsync("/api/local/v1/models/llama3:8b/unload", content: null).ConfigureAwait(false);
+        using var response = await client.PostAsync("/api/local/v1/models/llama3:8b/unload", content: null);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         await modelService.DidNotReceiveWithAnyArgs().UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -152,8 +152,8 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/not-loaded:latest/unload");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(unloaded.Unloaded);
@@ -170,8 +170,8 @@ public sealed class RunningLocalModelEndpointTests
         using var request = CreateRequest(context.Factory,
             HttpMethod.Post,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/unload");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", unloaded.ModelName);
@@ -191,8 +191,8 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/llama3:8b/unload");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(unloaded.Unloaded);
@@ -217,8 +217,8 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/qwen3:8b/unload");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("qwen3:8b", unloaded.ModelName);
@@ -243,8 +243,8 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/qwen3:8b/unload");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(unloaded.Unloaded);
@@ -267,7 +267,7 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/llama3:8b/unload");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
@@ -288,8 +288,8 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/qwen3:8b/unload");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var unloaded = await ReadJsonAsync<UnloadLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(unloaded.Unloaded);
@@ -305,7 +305,7 @@ public sealed class RunningLocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/hf.co%2F..%2F..%2Fetc/unload");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await modelService.DidNotReceiveWithAnyArgs().UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -316,14 +316,14 @@ public sealed class RunningLocalModelEndpointTests
         var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
         {
             Models = models.Length > 0 ? models : ["chat"]
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         try
         {
             return new RunningModelEndpointTestContext(server);
         }
         catch
         {
-            await server.DisposeAsync().ConfigureAwait(false);
+            await server.DisposeAsync();
             throw;
         }
     }
@@ -359,8 +359,8 @@ public sealed class RunningLocalModelEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 
     private sealed class StubNodeSettingsStore(StoredNodeSettings settings) : INodeSettingsStore
@@ -422,14 +422,14 @@ public sealed class RunningLocalModelEndpointTests
 
         public async ValueTask DisposeAsync()
         {
-            await Factory.DisposeAsync().ConfigureAwait(false);
+            await Factory.DisposeAsync();
 
             _ownedModelService?.Dispose();
             _ollamaClient?.Dispose();
 
             if (Server is not null)
             {
-                await Server.DisposeAsync().ConfigureAwait(false);
+                await Server.DisposeAsync();
             }
         }
 

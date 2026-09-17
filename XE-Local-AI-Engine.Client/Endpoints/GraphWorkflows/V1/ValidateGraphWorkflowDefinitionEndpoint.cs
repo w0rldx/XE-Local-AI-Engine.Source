@@ -34,11 +34,11 @@ public sealed class ValidateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefini
 
         if (GraphWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail));
             return;
         }
 
-        var result = await _definitions.ValidateAsync(GraphWorkflowContractMapper.ToGraphJson(req.Graph), ct).ConfigureAwait(false);
+        var result = await _definitions.ValidateAsync(GraphWorkflowContractMapper.ToGraphJson(req.Graph), ct);
 
         // Counted off the AUTHORED document rather than off the parse, so the number is defined for a graph the parser
         // refused too — which is the case the editor most needs it in, to say how far over the cap the canvas is.
@@ -47,6 +47,6 @@ public sealed class ValidateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefini
                 [.. result.Errors.Select(static error => new GraphWorkflowValidationErrorResponse(error.Key, error.Message))],
                 nodeCount,
                 [.. result.Warnings.Select(static warning => new GraphWorkflowValidationErrorResponse(warning.Key, warning.Message))]),
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

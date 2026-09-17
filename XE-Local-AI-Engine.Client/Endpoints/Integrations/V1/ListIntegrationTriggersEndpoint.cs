@@ -20,11 +20,11 @@ public sealed class ListIntegrationTriggersEndpoint(IIntegrationTriggerService t
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var triggers = await _triggerService.ListAsync(ct).ConfigureAwait(false);
+        var triggers = await _triggerService.ListAsync(ct);
         await Send.OkAsync(new ListIntegrationTriggersResponse
             {
                 Items = triggers.Select(IntegrationMapper.ToView).ToArray()
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

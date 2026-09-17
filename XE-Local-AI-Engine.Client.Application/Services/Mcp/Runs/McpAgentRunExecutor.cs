@@ -54,7 +54,7 @@ internal sealed class McpAgentRunExecutor(
             run.Task,
             Convert.ToHexString(run.BindingFingerprint.Value.Span),
             cancellationToken,
-            run.WorkspaceId).ConfigureAwait(false);
+            run.WorkspaceId);
     }
 
     private static McpInboundExecutionContext ToInboundContext(McpAgentRunRecord run)

@@ -27,7 +27,7 @@ public sealed class DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocati
         // SelectedFolderExceptionHandler, which is where that mapping is stated once. A busy revocation lease throws
         // WorkspaceRevocationBusyException, which the global ConflictExceptionHandler answers with the shared 409
         // ConflictProblemDetails (conflictType = WorkspaceRevocationBusy) — never hand-built here.
-        await _revocationService.RevokeAsync(req.WorkspaceId, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _revocationService.RevokeAsync(req.WorkspaceId, ct);
+        await Send.NoContentAsync(ct);
     }
 }

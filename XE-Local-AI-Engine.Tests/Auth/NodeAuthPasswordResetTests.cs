@@ -26,15 +26,15 @@ public sealed class NodeAuthPasswordResetTests
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
-        var result = await ResetAsync(factory, NewPassword).ConfigureAwait(false);
+        var result = await ResetAsync(factory, NewPassword);
         AssertEx.True(result.Succeeded, "Reset must succeed for an existing admin with a policy-compliant password.");
 
-        using var oldLogin = await LoginAsync(client, OldPassword).ConfigureAwait(false);
+        using var oldLogin = await LoginAsync(client, OldPassword);
         AssertEx.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
 
-        using var newLogin = await LoginAsync(client, NewPassword).ConfigureAwait(false);
+        using var newLogin = await LoginAsync(client, NewPassword);
         AssertEx.Equal(HttpStatusCode.OK, newLogin.StatusCode);
     }
 
@@ -43,7 +43,7 @@ public sealed class NodeAuthPasswordResetTests
     {
         await using var factory = new TestServerWebAppFactory();
 
-        var result = await ResetAsync(factory, NewPassword).ConfigureAwait(false);
+        var result = await ResetAsync(factory, NewPassword);
 
         AssertEx.False(result.Succeeded, "With no completed setup there is no account to reset.");
         AssertEx.NotEmpty(result.Errors);
@@ -54,14 +54,14 @@ public sealed class NodeAuthPasswordResetTests
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
         // "short" is under the 12-char policy: AddPassword fails after RemovePassword. The serializable transaction must
         // roll back so the account is NOT left passwordless — the original password must still authenticate.
-        var result = await ResetAsync(factory, "short").ConfigureAwait(false);
+        var result = await ResetAsync(factory, "short");
         AssertEx.False(result.Succeeded);
 
-        using var oldLogin = await LoginAsync(client, OldPassword).ConfigureAwait(false);
+        using var oldLogin = await LoginAsync(client, OldPassword);
         AssertEx.Equal(HttpStatusCode.OK, oldLogin.StatusCode);
     }
 
@@ -70,20 +70,20 @@ public sealed class NodeAuthPasswordResetTests
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
-        using var loginResponse = await LoginAsync(client, OldPassword).ConfigureAwait(false);
+        using var loginResponse = await LoginAsync(client, OldPassword);
         AssertEx.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
         var refreshCookie = GetRefreshCookie(loginResponse);
 
-        var result = await ResetAsync(factory, NewPassword).ConfigureAwait(false);
+        var result = await ResetAsync(factory, NewPassword);
         AssertEx.True(result.Succeeded);
 
         // The pre-reset refresh token must no longer mint access tokens: an operator who reset the password logs every
         // stale session out.
         using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
         refreshRequest.Headers.Add("Cookie", refreshCookie);
-        using var refreshResponse = await client.SendAsync(refreshRequest).ConfigureAwait(false);
+        using var refreshResponse = await client.SendAsync(refreshRequest);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, refreshResponse.StatusCode);
     }
@@ -93,21 +93,21 @@ public sealed class NodeAuthPasswordResetTests
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
-        using var loginResponse = await LoginAsync(client, OldPassword).ConfigureAwait(false);
+        using var loginResponse = await LoginAsync(client, OldPassword);
         AssertEx.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
-        var accessToken = AssertEx.NotNull(await loginResponse.Content.ReadFromJsonAsync<AccessTokenBody>().ConfigureAwait(false)).AccessToken;
+        var accessToken = AssertEx.NotNull(await loginResponse.Content.ReadFromJsonAsync<AccessTokenBody>()).AccessToken;
 
         // The bearer token works before the reset...
-        AssertEx.Equal(HttpStatusCode.OK, (await GetMeAsync(client, accessToken).ConfigureAwait(false)).StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, (await GetMeAsync(client, accessToken)).StatusCode);
 
-        var result = await ResetAsync(factory, NewPassword).ConfigureAwait(false);
+        var result = await ResetAsync(factory, NewPassword);
         AssertEx.True(result.Succeeded);
 
         // ...and is rejected immediately afterwards, even though it has not expired: the rotated security stamp no longer
         // matches, so an already-authenticated session cannot outlive the reset.
-        AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, accessToken).ConfigureAwait(false)).StatusCode);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, accessToken)).StatusCode);
     }
 
     [Test]
@@ -115,7 +115,7 @@ public sealed class NodeAuthPasswordResetTests
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
-        await SetupAsync(client).ConfigureAwait(false);
+        await SetupAsync(client);
 
         // A validly-signed token carrying NO security stamp — the shape of a token minted by a pre-upgrade build. The
         // validator must fail closed so such a token cannot survive a reset, rather than bypassing the stamp check.
@@ -134,21 +134,21 @@ public sealed class NodeAuthPasswordResetTests
             legacyToken = tokenService.CreateAccessToken(stamplessUser, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
         }
 
-        AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, legacyToken).ConfigureAwait(false)).StatusCode);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, legacyToken)).StatusCode);
     }
 
     private static async Task<HttpResponseMessage> GetMeAsync(HttpClient client, string accessToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/auth/me");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static async Task<NodePasswordChangeResult> ResetAsync(TestServerWebAppFactory factory, string newPassword)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
-        return await authService.ResetAdminPasswordAsync(newPassword, CancellationToken.None).ConfigureAwait(false);
+        return await authService.ResetAdminPasswordAsync(newPassword, CancellationToken.None);
     }
 
     private static Task<HttpResponseMessage> SetupAsync(HttpClient client)

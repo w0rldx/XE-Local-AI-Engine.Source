@@ -52,7 +52,7 @@ public sealed class ExternalAccessProfileBackfillService(
     {
         try
         {
-            await BackfillAsync(_scopeFactory, _logger, cancellationToken).ConfigureAwait(false);
+            await BackfillAsync(_scopeFactory, _logger, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -91,7 +91,7 @@ public sealed class ExternalAccessProfileBackfillService(
         // recommended on the strength of a corrupt file, silently re-enabling outbound checks an operator had turned
         // off. Leaving it undecided is the safe failure — the gated services keep waiting, the SPA does not show the
         // first-run step (that keys on "pending"), and Node Settings renders the profile as not chosen.
-        var stored = await store.LoadStrictAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await store.LoadStrictAsync(cancellationToken);
         if (stored is null)
         {
             logger.LogWarning("Skipping the external-access profile backfill: the node settings file could not be read, "
@@ -114,7 +114,7 @@ public sealed class ExternalAccessProfileBackfillService(
         }
 
         var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
-        var status = await authService.GetStatusAsync(new ClaimsPrincipal(), cancellationToken).ConfigureAwait(false);
+        var status = await authService.GetStatusAsync(new ClaimsPrincipal(), cancellationToken);
         if (status.SetupRequired)
         {
             // No administrator, so this is a fresh install and the first-run profile step owns the decision.
@@ -140,7 +140,7 @@ public sealed class ExternalAccessProfileBackfillService(
                     AutoProvisionFirstRunModel = true
                 };
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
         if (wrote)
         {

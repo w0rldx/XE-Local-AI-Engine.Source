@@ -194,7 +194,7 @@ public sealed class SupervisorGateScopeTests
             Interlocked.Increment(ref _probing);
             try
             {
-                await _release.Task.WaitAsync(ct).ConfigureAwait(false);
+                await _release.Task.WaitAsync(ct);
                 return true;
             }
             finally
@@ -273,7 +273,7 @@ public sealed class SupervisorGateScopeTests
         {
             try
             {
-                await _exitSignal.Task.WaitAsync(timeout, ct).ConfigureAwait(false);
+                await _exitSignal.Task.WaitAsync(timeout, ct);
                 return true;
             }
             catch (TimeoutException)

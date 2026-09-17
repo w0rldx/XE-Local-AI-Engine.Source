@@ -151,7 +151,7 @@ internal sealed class DevWorkflowRetryPolicy
 
         if (run.Status == DevWorkflowRunStatus.Cancelling)
         {
-            return await FailAsync(store, run, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false);
+            return await FailAsync(store, run, nodeRun, nodeRuns, failure, cancellationToken);
         }
 
         if (!graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node))
@@ -163,20 +163,18 @@ internal sealed class DevWorkflowRetryPolicy
                     DevWorkflowFailureClasses.Configuration,
                     $"The run's graph no longer declares node '{nodeRun.NodeKey}', so this failure cannot be retried.",
                     failure.OutputJson,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         if (!IsRetryable(node, failure.FailureClass, nodeRun.Attempt))
         {
             // No attempt is spent: nothing was tried again, and a row reading attempt 2 would say one was.
-            return await BlockAsync(store, run, nodeRun, failure.FailureClass, failure.SanitizedReason, failure.OutputJson, cancellationToken)
-                .ConfigureAwait(false);
+            return await BlockAsync(store, run, nodeRun, failure.FailureClass, failure.SanitizedReason, failure.OutputJson, cancellationToken);
         }
 
         return node.RetryTarget is { } retryTarget
-            ? await RouteAsync(store, graph, run, node, retryTarget, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false)
-            : await ReAttemptSameNodeAsync(store, run, node, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false);
+            ? await RouteAsync(store, graph, run, node, retryTarget, nodeRun, nodeRuns, failure, cancellationToken)
+            : await ReAttemptSameNodeAsync(store, run, node, nodeRun, nodeRuns, failure, cancellationToken);
     }
 
     /// <summary>
@@ -212,14 +210,12 @@ internal sealed class DevWorkflowRetryPolicy
                     failure.FailureClass,
                     $"{failure.SanitizedReason} It has now failed {nodeRun.Attempt} times, which is as many attempts as this node allows.",
                     failure.OutputJson,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
-        if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken).ConfigureAwait(false) + 1 > _options.MaxTotalAttempts)
+        if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken) + 1 > _options.MaxTotalAttempts)
         {
-            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
-                .ConfigureAwait(false);
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken);
         }
 
         // The next attempt is told what the last one came to, or the agent composes a byte-identical objective
@@ -241,8 +237,7 @@ internal sealed class DevWorkflowRetryPolicy
                     DetailFor(nodeRun, failure),
                     failure.Outcome ?? DevWorkflowOutcomes.Failed,
                     cancellationToken,
-                    PriorFailure(nodeRun.InputJson, fromNodeKey: null, fromAttempt: null, failure.OutputJson))
-                .ConfigureAwait(false);
+                    PriorFailure(nodeRun.InputJson, fromNodeKey: null, fromAttempt: null, failure.OutputJson));
         }
         catch (DevWorkflowRetryBudgetExceededException refused)
         {
@@ -254,8 +249,7 @@ internal sealed class DevWorkflowRetryPolicy
                 "Development workflow run {RunId} could not re-attempt '{NodeKey}': the run's re-attempt budget was spent under the write.",
                 run.Id,
                 nodeRun.NodeKey);
-            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
-                .ConfigureAwait(false);
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken);
         }
     }
 
@@ -294,8 +288,7 @@ internal sealed class DevWorkflowRetryPolicy
                     DevWorkflowFailureClasses.Configuration,
                     $"This node routes its failures to '{retryTarget}', which this run has no node run for.",
                     failure.OutputJson,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         var reset = graph.Descendants(retryTarget)
@@ -316,8 +309,7 @@ internal sealed class DevWorkflowRetryPolicy
                     DevWorkflowFailureClasses.BudgetExhausted,
                     $"{failure.SanitizedReason} Node '{retryTarget}' has already been attempted {target.Attempt} times, which is as many as it allows.",
                     failure.OutputJson,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said. Absent means no cap (ruling D9) —
@@ -331,7 +323,7 @@ internal sealed class DevWorkflowRetryPolicy
         // times.
         if (node.MaxLoopIterations is { } maxLoopIterations)
         {
-            var decisions = await store.ListDecisionsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+            var decisions = await store.ListDecisionsAsync(run.Id, cancellationToken);
             var loops = nodeRun.Attempt - 1 - decisions.Count(decision => decision.NodeRunId == nodeRun.Id && decision.Decision == DevWorkflowDecisionKind.Retry);
             if (loops >= maxLoopIterations)
             {
@@ -342,8 +334,7 @@ internal sealed class DevWorkflowRetryPolicy
                         $"{failure.SanitizedReason} This node's fix loop has been re-run {loops} {(loops == 1 ? "time" : "times")}, which is as many as it allows "
                         + "(invariant GRAPH-C4-4).",
                         failure.OutputJson,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
             }
         }
 
@@ -351,10 +342,9 @@ internal sealed class DevWorkflowRetryPolicy
         // how a run spends more re-attempts than it allows by the width of its graph — the same accounting the startup
         // reconciler does for the same reason.
         var cost = reset.Count + 1;
-        if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken).ConfigureAwait(false) + cost > _options.MaxTotalAttempts)
+        if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken) + cost > _options.MaxTotalAttempts)
         {
-            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
-                .ConfigureAwait(false);
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken);
         }
 
         // Composed before anything is touched, so an illegal move is refused while the run still stands where it did.
@@ -398,18 +388,17 @@ internal sealed class DevWorkflowRetryPolicy
         // the rows were read; a human Retry committing since then makes this route unaffordable, and the transactional
         // refusal below arrives too late to give the quiesced lanes their work back. Narrowing the window to the
         // transaction itself is the whole of the fix — the store stays the authority.
-        if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken).ConfigureAwait(false) + cost > _options.MaxTotalAttempts)
+        if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken) + cost > _options.MaxTotalAttempts)
         {
-            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
-                .ConfigureAwait(false);
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken);
         }
 
         foreach (var row in reset.Where(row => row.Id != nodeRun.Id))
         {
-            await QuiesceAsync(row, cancellationToken).ConfigureAwait(false);
+            await QuiesceAsync(row, cancellationToken);
         }
 
-        await QuiesceAsync(target, cancellationToken).ConfigureAwait(false);
+        await QuiesceAsync(target, cancellationToken);
 
         // ONE transaction for the routing event and every reset under it. Committing them a row at a time left a crash
         // window in which the failed check was Pending again while the verification and gate approval beside it still
@@ -428,7 +417,7 @@ internal sealed class DevWorkflowRetryPolicy
             _options.MaxTotalAttempts);
         try
         {
-            await RouteOnceMoreOnAClashAsync(store, run, nodeRun, retryTarget, route, cancellationToken).ConfigureAwait(false);
+            await RouteOnceMoreOnAClashAsync(store, run, nodeRun, retryTarget, route, cancellationToken);
         }
         catch (DevWorkflowRetryBudgetExceededException refused)
         {
@@ -443,8 +432,7 @@ internal sealed class DevWorkflowRetryPolicy
                 nodeRun.NodeKey,
                 retryTarget,
                 string.Join(", ", reset.Where(row => row.Id != nodeRun.Id).Select(static row => row.NodeKey).Append(target.NodeKey)));
-            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
-                .ConfigureAwait(false);
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken);
         }
 
         // After the commit: a cushion for a re-attempt that did not commit would hold back a row nothing reset.
@@ -486,7 +474,7 @@ internal sealed class DevWorkflowRetryPolicy
     {
         try
         {
-            _ = await store.RouteRetryAsync(route, cancellationToken).ConfigureAwait(false);
+            _ = await store.RouteRetryAsync(route, cancellationToken);
             return;
         }
         catch (DevWorkflowConcurrencyException clash)
@@ -500,7 +488,7 @@ internal sealed class DevWorkflowRetryPolicy
 
         try
         {
-            _ = await store.RouteRetryAsync(route, cancellationToken).ConfigureAwait(false);
+            _ = await store.RouteRetryAsync(route, cancellationToken);
         }
         catch (DevWorkflowConcurrencyException persistent)
         {
@@ -546,17 +534,16 @@ internal sealed class DevWorkflowRetryPolicy
         switch (nodeRun)
         {
             case { NodeType: DevWorkflowNodeType.Tool }:
-                await scope.ServiceProvider.GetRequiredService<DevWorkflowToolExecutor>().DiscardAsync(nodeRun.Id).ConfigureAwait(false);
+                await scope.ServiceProvider.GetRequiredService<DevWorkflowToolExecutor>().DiscardAsync(nodeRun.Id);
                 break;
 
             case { NodeType: DevWorkflowNodeType.DevTask }:
                 _ = await scope.ServiceProvider.GetRequiredService<DevWorkflowDevTaskExecutor>()
-                               .StopAttemptAsync(nodeRun, cancel: true, cancellationToken)
-                               .ConfigureAwait(false);
+                               .StopAttemptAsync(nodeRun, cancel: true, cancellationToken);
                 break;
 
             case { NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } sessionId }:
-                await scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>().StopAsync(sessionId, cancel: true, cancellationToken).ConfigureAwait(false);
+                await scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>().StopAsync(sessionId, cancel: true, cancellationToken);
                 break;
 
             default:
@@ -586,7 +573,7 @@ internal sealed class DevWorkflowRetryPolicy
         string? inputJson = null)
     {
         var (command, delayUntil) = ReAttempt(run, nodeRun, delaySeconds, detail, outcome, inputJson);
-        _ = await store.TransitionNodeRunAsync(command, cancellationToken).ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(command, cancellationToken);
         Cushion(run.Id, nodeRun.Id, delayUntil);
         return 1;
     }
@@ -661,8 +648,7 @@ internal sealed class DevWorkflowRetryPolicy
                                FailureClass: failureClass,
                                TerminalReason: sanitizedReason,
                                WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -684,8 +670,7 @@ internal sealed class DevWorkflowRetryPolicy
                                TerminalReason: failure.SanitizedReason,
                                Outcome: failure.Outcome,
                                WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, DevWorkflowNodeRunStatus.Failed)),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -703,7 +688,7 @@ internal sealed class DevWorkflowRetryPolicy
         Guid runId,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         CancellationToken cancellationToken) =>
-        Promised(nodeRuns, await store.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false));
+        Promised(nodeRuns, await store.ListDecisionsAsync(runId, cancellationToken));
 
     /// <summary>
     ///     The formula itself, shared with <see cref="DevWorkflowStartupReconciler" /> rather than restated there.

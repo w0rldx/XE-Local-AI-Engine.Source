@@ -89,7 +89,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         var secrets = new CollectingWorkspaceSecretsSink();
         try
         {
-            return await ExecuteAsync(run, node, nodeRun, secrets, cancellationToken).ConfigureAwait(false);
+            return await ExecuteAsync(run, node, nodeRun, secrets, cancellationToken);
         }
         catch (Exception exception) when (exception is DevelopmentRepositoryStateConflictException
                                               or SandboxCapabilityNotSupportedException
@@ -152,8 +152,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                 secrets);
         }
 
-        var project = await _development.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
-        var repository = await _bindings.ResolveProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var project = await _development.GetProjectAsync(projectId, cancellationToken);
+        var repository = await _bindings.ResolveProjectAsync(projectId, cancellationToken);
         var profile = DevelopmentCommandProfileCatalog.ResolveStored(project.CommandProfileJson);
 
         // The node's own list when it names one, the profile's otherwise. Checked BEFORE a workspace is prepared: a
@@ -171,11 +171,11 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         // comes from the container, so the wiring cannot drift from the registered one.
         var workspaces = ActivatorUtilities.CreateInstance<DevelopmentWorkspaceProvider>(_services, secrets);
         var snapshot = Synthesize(project, node, run, nodeRun, repository);
-        var session = await workspaces.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
+        var session = await workspaces.PrepareAsync(snapshot, repository, cancellationToken);
 
         // Before a single command runs: a materialized child's validation must judge THAT CHILD'S work, and the work is
         // a staged patch in the Dev Mode attempt's own worktree rather than anything the freshly cloned base contains.
-        var overlay = await OverlayAsync(run, nodeRun, session, cancellationToken).ConfigureAwait(false);
+        var overlay = await OverlayAsync(run, nodeRun, session, cancellationToken);
         if (overlay.Refusal is { } refusedOverlay)
         {
             return Refused(DevWorkflowFailureClasses.Policy, refusedOverlay, secrets);
@@ -192,7 +192,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         {
             foreach (var commandId in commandIds)
             {
-                _ = await tools.RunCommandAsync(commandId, deadline.Token).ConfigureAwait(false);
+                _ = await tools.RunCommandAsync(commandId, deadline.Token);
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -276,7 +276,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         ArgumentNullException.ThrowIfNull(session);
 
         var clone = nodeRun.MaterializedFromNodeRunId is not null && nodeRun.MaterializationIndex is not null;
-        var implementations = await UpstreamImplementationsAsync(run, nodeRun, clone, cancellationToken).ConfigureAwait(false);
+        var implementations = await UpstreamImplementationsAsync(run, nodeRun, clone, cancellationToken);
         if (implementations.Count == 0)
         {
             return default;
@@ -292,7 +292,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }
 
         var taskId = implementations[0].DevelopmentTaskId!.Value;
-        var task = await _development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var task = await _development.GetTaskAsync(taskId, cancellationToken);
         if (task.Status is not (DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed))
         {
             return Refuse($"The implementation this validation follows is {task.Status} and has produced no approved patch. This node "
@@ -302,7 +302,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
 
         try
         {
-            var patch = await _evidence.ReadLatestAsync(taskId, DevelopmentArtifactKind.Patch, cancellationToken).ConfigureAwait(false);
+            var patch = await _evidence.ReadLatestAsync(taskId, DevelopmentArtifactKind.Patch, cancellationToken);
             if (task.ApprovedSubjectHash is not { } approved)
             {
                 // A task that reached this status through the generic transition can carry no subject at all. Nothing
@@ -323,8 +323,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                                     cancellationToken,
                                     patch.Payload,
                                     _developmentOptions.MaxPatchBytes,
-                                    _developmentOptions.MaxCommandOutputBytes)
-                                .ConfigureAwait(false);
+                                    _developmentOptions.MaxCommandOutputBytes);
             if (applied.ExitCode != 0)
             {
                 // Deliberately without git's own stderr: it interpolates workspace paths, and this sentence reaches an
@@ -383,7 +382,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         ArgumentNullException.ThrowIfNull(nodeRun);
 
         var graph = _graphs.Resolve(run);
-        var rows = await _workflows.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        var rows = await _workflows.ListNodeRunsAsync(run.Id, cancellationToken);
         if (clone)
         {
             return

@@ -50,7 +50,7 @@ public sealed class ExternalAppFeatureAvailabilityTests
         var store = Substitute.For<IExternalAppInstanceStore>();
         await using var factory = ExternalAppEndpointPayloads.DisabledFactory(apps, catalog, reconciler: reconciler, store: store);
 
-        using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, method, route);
 
         // 404 and never 401, 403 or 500: the switch sits ahead of authentication, so a disabled feature is
         // indistinguishable from one this build does not have.
@@ -98,7 +98,7 @@ public sealed class ExternalAppFeatureAvailabilityTests
         var store = Substitute.For<IExternalAppInstanceStore>();
         await using var factory = ExternalAppEndpointPayloads.EnabledFactory(apps, catalog, store: store);
 
-        using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, method, route);
 
         var reachedTheFeature = response.StatusCode != HttpStatusCode.NotFound
                                 || apps.ReceivedCalls().Any()
@@ -127,7 +127,7 @@ public sealed class ExternalAppFeatureAvailabilityTests
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(expected, response.StatusCode);
     }

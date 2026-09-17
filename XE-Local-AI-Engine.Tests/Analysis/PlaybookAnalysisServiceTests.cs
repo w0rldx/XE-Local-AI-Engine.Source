@@ -29,15 +29,14 @@ public sealed class PlaybookAnalysisServiceTests
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<FeedbackInsightsResult?>(null));
 
-        var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
+        var outcome = await service.AnalyzeAsync(agentId);
 
         AssertEx.False(outcome.AgentExists, "A null aggregate must surface AgentExists == false (the endpoint 404s).");
         AssertEx.False(outcome.MeetsThreshold);
         AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
         AssertEx.Equal(expected: 0, agent.InvocationCount, "The agent must not be invoked for a missing agent.");
         await actionService.DidNotReceive()
-                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -55,15 +54,14 @@ public sealed class PlaybookAnalysisServiceTests
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<FeedbackInsightsResult?>(BuildInsights(agentId, meetsThreshold: false, [])));
 
-        var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
+        var outcome = await service.AnalyzeAsync(agentId);
 
         AssertEx.True(outcome.AgentExists);
         AssertEx.False(outcome.MeetsThreshold, "Sub-threshold feedback must report MeetsThreshold == false.");
         AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
         AssertEx.Equal(expected: 0, agent.InvocationCount, "Sub-threshold runs never invoke the model.");
         await actionService.DidNotReceive()
-                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -93,7 +91,7 @@ public sealed class PlaybookAnalysisServiceTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoCreatedSuggestion(actionService);
 
-        var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
+        var outcome = await service.AnalyzeAsync(agentId);
 
         AssertEx.True(outcome.AgentExists);
         AssertEx.True(outcome.MeetsThreshold);
@@ -102,8 +100,7 @@ public sealed class PlaybookAnalysisServiceTests
         AssertEx.Equal(expected: 0, outcome.RejectedCount);
         AssertEx.Equal(expected: 0, outcome.DuplicateCount);
         await actionService.Received(2)
-                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -121,14 +118,13 @@ public sealed class PlaybookAnalysisServiceTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoCreatedSuggestion(actionService);
 
-        var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
+        var outcome = await service.AnalyzeAsync(agentId);
 
         AssertEx.Equal(expected: 1, outcome.ProposedCount);
         AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
         AssertEx.Equal(expected: 1, outcome.RejectedCount, "A proposal with no evidence must be rejected.");
         await actionService.DidNotReceive()
-                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -153,14 +149,13 @@ public sealed class PlaybookAnalysisServiceTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoCreatedSuggestion(actionService);
 
-        var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
+        var outcome = await service.AnalyzeAsync(agentId);
 
         AssertEx.Equal(expected: 1, outcome.ProposedCount);
         AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
         AssertEx.Equal(expected: 1, outcome.RejectedCount, "A proposal citing evidence not in the aggregate must be rejected.");
         await actionService.DidNotReceive()
-                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -197,15 +192,14 @@ public sealed class PlaybookAnalysisServiceTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([existing]));
         EchoCreatedSuggestion(actionService);
 
-        var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
+        var outcome = await service.AnalyzeAsync(agentId);
 
         AssertEx.Equal(expected: 1, outcome.ProposedCount);
         AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
         AssertEx.Equal(expected: 1, outcome.DuplicateCount, "A near-duplicate of an existing live action must be skipped.");
         AssertEx.Equal(expected: 0, outcome.RejectedCount);
         await actionService.DidNotReceive()
-                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
-                           .ConfigureAwait(false);
+                           .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>());
     }
 
     private static PlaybookAnalysisService CreateService(out IFeedbackInsightsService insights,

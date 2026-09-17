@@ -38,8 +38,8 @@ public sealed class ExternalProviderProbeEndpointTests
             BaseUrl = "http://127.0.0.1:18099",
             ApiKey = "sk-typed-in-the-form"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var probe = Deserialize<ExternalProviderProbeResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -73,8 +73,8 @@ public sealed class ExternalProviderProbeEndpointTests
         {
             BaseUrl = "http://127.0.0.1:18099"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var probe = await ReadJsonAsync<ExternalProviderProbeResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var probe = await ReadJsonAsync<ExternalProviderProbeResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(probe.Reachable);
@@ -100,8 +100,8 @@ public sealed class ExternalProviderProbeEndpointTests
         {
             BaseUrl = "http://127.0.0.1:18099"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var probe = await ReadJsonAsync<ExternalProviderProbeResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var probe = await ReadJsonAsync<ExternalProviderProbeResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(probe.Reachable);
@@ -124,7 +124,7 @@ public sealed class ExternalProviderProbeEndpointTests
         {
             ConnectionId = "not-configured"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -147,7 +147,7 @@ public sealed class ExternalProviderProbeEndpointTests
         {
             BaseUrl = "ftp://box/v1"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -161,7 +161,7 @@ public sealed class ExternalProviderProbeEndpointTests
 
         using var request = CreateRequest(factory);
         request.Content = JsonContent.Create(new ExternalProviderProbeRequest());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await probeService.DidNotReceiveWithAnyArgs().ProbeAsync(Arg.Any<ExternalProviderProbeQuery>(), Arg.Any<CancellationToken>());
@@ -181,8 +181,8 @@ public sealed class ExternalProviderProbeEndpointTests
         {
             BaseUrl = "http://127.0.0.1:9"
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var probe = await ReadJsonAsync<ExternalProviderProbeResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var probe = await ReadJsonAsync<ExternalProviderProbeResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(probe.Reachable);
@@ -218,7 +218,7 @@ public sealed class ExternalProviderProbeEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 }

@@ -91,7 +91,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         // ponytail: a zero-timeout wait, so a full lane costs a tick rather than a parked thread. What this does NOT
         // bound is how long a row may sit Queued once it is in flight and waiting on a node-wide slot further down —
         // bound the lease wait, or stamp a queued-at instant and expire on it, if that ever measures.
-        if (!await _lane.WaitAsync(millisecondsTimeout: 0, cancellationToken).ConfigureAwait(false))
+        if (!await _lane.WaitAsync(millisecondsTimeout: 0, cancellationToken))
         {
             return null;
         }
@@ -111,7 +111,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         // itself, and the entry that won is the one the poll will settle. The loser is unwound like any other discard —
         // cancelled, then disposed once its work has noticed, because a token source nothing owns is a leak whatever
         // the race that produced it.
-        await cancellation.CancelAsync().ConfigureAwait(false);
+        await cancellation.CancelAsync();
         _ = DisposeWhenDoneAsync(flight);
         return null;
     }
@@ -139,7 +139,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
             return false;
         }
 
-        await flight.Cancellation.CancelAsync().ConfigureAwait(false);
+        await flight.Cancellation.CancelAsync();
         return true;
     }
 
@@ -160,7 +160,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         }
 
         _onDiscard?.Invoke(flight);
-        await flight.Cancellation.CancelAsync().ConfigureAwait(false);
+        await flight.Cancellation.CancelAsync();
         _ = DisposeWhenDoneAsync(flight);
     }
 
@@ -192,7 +192,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
                 && (flight.Attempt != nodeRun.Attempt
                     || nodeRun.Status is not (GraphWorkflowNodeRunStatus.Queued or GraphWorkflowNodeRunStatus.Running)))
             {
-                await DiscardAsync(nodeRun.Id).ConfigureAwait(false);
+                await DiscardAsync(nodeRun.Id);
             }
         }
     }
@@ -204,10 +204,10 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
             return;
         }
 
-        await _shutdown.CancelAsync().ConfigureAwait(false);
+        await _shutdown.CancelAsync();
         foreach (var flight in _inflight.Values)
         {
-            await SwallowAsync(flight.Work).ConfigureAwait(false);
+            await SwallowAsync(flight.Work);
             flight.Cancellation.Dispose();
         }
 
@@ -221,7 +221,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
     {
         try
         {
-            return await work(leaseAcquired, cancellationToken).ConfigureAwait(false);
+            return await work(leaseAcquired, cancellationToken);
         }
         finally
         {
@@ -231,7 +231,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
 
     private static async Task DisposeWhenDoneAsync(GraphWorkflowInFlight<TResult> flight)
     {
-        await SwallowAsync(flight.Work).ConfigureAwait(false);
+        await SwallowAsync(flight.Work);
         flight.Cancellation.Dispose();
     }
 
@@ -240,7 +240,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
     {
         try
         {
-            await work.ConfigureAwait(false);
+            await work;
         }
         catch (Exception)
         {

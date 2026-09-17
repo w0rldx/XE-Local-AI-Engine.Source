@@ -29,7 +29,7 @@ public sealed class BenchmarkCatalogServiceTests
         });
         var service = CreateService(models, leases);
 
-        var result = await service.ListEligibleModelsAsync(4096).ConfigureAwait(false);
+        var result = await service.ListEligibleModelsAsync(4096);
 
         AssertEx.Equal(expected: 1, result.Count);
         var model = result[0];
@@ -69,7 +69,7 @@ public sealed class BenchmarkCatalogServiceTests
             }),
             NullLogger<BenchmarkCatalogService>.Instance);
 
-        var result = await service.ListEligibleAgentsAsync("model").ConfigureAwait(false);
+        var result = await service.ListEligibleAgentsAsync("model");
 
         AssertEx.Equal(expected: 1, result.Count);
         var agent = result[0];
@@ -98,7 +98,7 @@ public sealed class BenchmarkCatalogServiceTests
         });
         var service = CreateService(models, leases);
 
-        var result = await service.ListEligibleModelsAsync(4096).ConfigureAwait(false);
+        var result = await service.ListEligibleModelsAsync(4096);
 
         AssertEx.Equal(expected: 1, result.Count);
         AssertEx.Equal("chat-with-projector", result[0].ModelName);
@@ -129,7 +129,7 @@ public sealed class BenchmarkCatalogServiceTests
         };
         var service = CreateService(models, leases);
 
-        var result = await service.ListEligibleModelsAsync(4096).ConfigureAwait(false);
+        var result = await service.ListEligibleModelsAsync(4096);
 
         AssertEx.Equal(expected: 1, result.Count);
         AssertEx.Equal("healthy", result[0].ModelName);
@@ -149,7 +149,7 @@ public sealed class BenchmarkCatalogServiceTests
         };
         var service = CreateService(models, leases);
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(() => service.ListEligibleAgentsAsync("broken")).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(() => service.ListEligibleAgentsAsync("broken"));
     }
 
     /// <summary>
@@ -180,7 +180,7 @@ public sealed class BenchmarkCatalogServiceTests
             });
         var service = CreateService(models, provider);
 
-        var result = await service.ListEligibleModelsAsync(4096).ConfigureAwait(false);
+        var result = await service.ListEligibleModelsAsync(4096);
 
         AssertEx.Equal(expected: 2, result.Count);
         AssertEx.Equal("chat", result[0].ModelName);

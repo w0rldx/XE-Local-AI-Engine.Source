@@ -76,10 +76,10 @@ internal sealed class McpAgentRunMetrics : IDisposable
         ArgumentNullException.ThrowIfNull(store);
         try
         {
-            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await _refreshGate.WaitAsync(cancellationToken);
             try
             {
-                Update(await store.GetLedgerSnapshotAsync(cancellationToken).ConfigureAwait(false));
+                Update(await store.GetLedgerSnapshotAsync(cancellationToken));
             }
             finally
             {

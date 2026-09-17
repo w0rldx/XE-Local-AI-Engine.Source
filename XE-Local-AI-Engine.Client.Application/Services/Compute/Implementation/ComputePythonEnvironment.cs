@@ -100,7 +100,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             throw new ComputeEnvironmentException("The Python compute tool is available on Linux only.");
         }
 
-        await _provisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _provisionGate.WaitAsync(cancellationToken);
         try
         {
             cached = Volatile.Read(ref _runtime);
@@ -109,7 +109,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
                 return cached;
             }
 
-            var resolved = await ProvisionAsync(cancellationToken).ConfigureAwait(false);
+            var resolved = await ProvisionAsync(cancellationToken);
             Volatile.Write(ref _runtime, resolved);
             return resolved;
         }
@@ -156,12 +156,12 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         // cached runtime above means it happens at most once per process.
         SweepLegacyScratch();
 
-        var lockfileSha = await ComputeFileShaAsync(lockfile, cancellationToken).ConfigureAwait(false);
+        var lockfileSha = await ComputeFileShaAsync(lockfile, cancellationToken);
         var venvDirectory = Path.Combine(_cacheRoot, "venv");
         var venvRoot = Path.Combine(venvDirectory, ".venv");
         var interpreter = Path.Combine(venvRoot, "bin", "python");
         var statePath = Path.Combine(_cacheRoot, StateFileName);
-        if (File.Exists(interpreter) && await MatchesInstalledLockAsync(statePath, lockfileSha, cancellationToken).ConfigureAwait(false))
+        if (File.Exists(interpreter) && await MatchesInstalledLockAsync(statePath, lockfileSha, cancellationToken))
         {
             // Re-applied on the warm path too: a venv provisioned by an older build (or left writable by an
             // interrupted run) would otherwise stay writable for the life of the process. This runs at most once per
@@ -184,7 +184,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         // A re-provision has to write over a tree the previous one locked down.
         SetTreeWritable(venvDirectory, writable: true);
 
-        var uv = await _acquirer.EnsureUvAsync(_cacheRoot, LogLine, cancellationToken).ConfigureAwait(false);
+        var uv = await _acquirer.EnsureUvAsync(_cacheRoot, LogLine, cancellationToken);
 
         // uv resolves the environment beside the pyproject it is pointed at, so the committed pair is copied into the
         // venv directory rather than the shipped (read-only) scripts directory being used as a working tree.
@@ -202,7 +202,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             venvDirectory,
             LogLine,
             SyncTimeout,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (syncExit != 0)
         {
             throw new ComputeEnvironmentException("Installing the pinned compute runtime packages failed.");
@@ -215,7 +215,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
 
         // Written only after the interpreter is proven present, so a half-finished sync is never mistaken for a warm
         // cache on the next call.
-        await File.WriteAllTextAsync(statePath, lockfileSha, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(statePath, lockfileSha, cancellationToken);
         TryDeleteDirectory(workDirectory);
         SetTreeWritable(venvDirectory, writable: false);
         return BuildRuntime(interpreter, venvRoot);
@@ -317,7 +317,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         try
         {
             return File.Exists(statePath)
-                   && string.Equals((await File.ReadAllTextAsync(statePath, cancellationToken).ConfigureAwait(false)).Trim(),
+                   && string.Equals((await File.ReadAllTextAsync(statePath, cancellationToken)).Trim(),
                        lockfileSha,
                        StringComparison.OrdinalIgnoreCase);
         }
@@ -332,7 +332,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     private static async Task<string> ComputeFileShaAsync(string path, CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
     }
 
     private static void CreateOwnerOnlyDirectory(string path)

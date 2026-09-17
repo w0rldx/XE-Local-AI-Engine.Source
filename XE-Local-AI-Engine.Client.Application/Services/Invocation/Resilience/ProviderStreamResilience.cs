@@ -59,10 +59,10 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
 
         // Establish the stream (with pre-first-token retry) OUTSIDE any yield: yield return is illegal inside a
         // try/catch, so the retry loop lives in a helper and returns a live enumerator positioned at the first item.
-        var establishment = await EstablishAsync(endpointKey, streamFactory, breaker, cancellationToken).ConfigureAwait(false);
+        var establishment = await EstablishAsync(endpointKey, streamFactory, breaker, cancellationToken);
         var enumerator = establishment.Enumerator;
 
-        await using (enumerator.ConfigureAwait(false))
+        await using (enumerator)
         {
             if (establishment.HasFirst)
             {
@@ -70,7 +70,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
             }
 
             // Past the first chunk the send is live; a mid-stream failure is NOT retried (it would duplicate output).
-            while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+            while (await enumerator.MoveNextAsync())
             {
                 yield return enumerator.Current;
             }
@@ -94,19 +94,19 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
             try
             {
                 enumerator = streamFactory(cancellationToken).GetAsyncEnumerator(cancellationToken);
-                var moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                var moved = await enumerator.MoveNextAsync();
                 RecordSuccess(breaker);
                 return new Establishment<T>(enumerator, moved, moved ? enumerator.Current : default);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // User/timeout cancellation flowing through the invocation token: never retried, never counted.
-                await DisposeQuietlyAsync(enumerator).ConfigureAwait(false);
+                await DisposeQuietlyAsync(enumerator);
                 throw;
             }
             catch (Exception exception)
             {
-                await DisposeQuietlyAsync(enumerator).ConfigureAwait(false);
+                await DisposeQuietlyAsync(enumerator);
 
                 var transient = IsTransient(exception, cancellationToken);
                 if (transient)
@@ -131,7 +131,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
                     attempt,
                     maxAttempts);
 
-                await DelayBeforeRetryAsync(attempt, cancellationToken).ConfigureAwait(false);
+                await DelayBeforeRetryAsync(attempt, cancellationToken);
             }
         }
     }
@@ -153,7 +153,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
         var jitter = capped * 0.5 * Random.Shared.NextDouble();
         var delay = TimeSpan.FromMilliseconds(Math.Min(maxMs, capped + jitter));
 
-        await Task.Delay(delay, _timeProvider, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(delay, _timeProvider, cancellationToken);
     }
 
     // Transient = the send failed at the connection/transport layer or with a server-side/overload status, so a retry
@@ -226,7 +226,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
 
         try
         {
-            await enumerator.DisposeAsync().ConfigureAwait(false);
+            await enumerator.DisposeAsync();
         }
         catch (Exception disposeException)
         {

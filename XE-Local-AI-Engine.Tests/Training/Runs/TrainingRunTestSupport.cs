@@ -113,7 +113,7 @@ internal sealed class FakeTrainingProcessHandle(
 
     private async IAsyncEnumerable<string> ReadAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var line in _output.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        await foreach (var line in _output.Reader.ReadAllAsync(cancellationToken))
         {
             yield return line;
         }

@@ -20,17 +20,17 @@ internal sealed class WorkspaceRevocationService(
             throw new SelectedFolderValidationException("The workspace id is not a valid identifier.");
         }
 
-        var record = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetByIdAsync(id, cancellationToken);
         if (record is null)
         {
             return;
         }
 
         var resolved = new ResolvedSelectedFolder(record.Id, record.Alias, record.HostPath, record.Mode);
-        await using var session = await _preparation.PrepareAsync(resolved, cancellationToken).ConfigureAwait(false)
+        await using var session = await _preparation.PrepareAsync(resolved, cancellationToken)
                                   ?? throw new InvalidOperationException("Workspace revocation preparation returned no lease-bearing session.");
 
-        if (await _store.RevokeAsync(id, cancellationToken).ConfigureAwait(false))
+        if (await _store.RevokeAsync(id, cancellationToken))
         {
             _logger.LogInformation("Revoked selected workspace {WorkspaceId} with alias {Alias}.", record.Id, record.Alias);
         }

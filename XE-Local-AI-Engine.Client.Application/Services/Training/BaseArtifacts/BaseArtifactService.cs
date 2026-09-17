@@ -40,7 +40,7 @@ internal sealed class BaseArtifactService(
         BaseCheckpointManifest manifest;
         try
         {
-            manifest = await _checkpointStore.ResolveAsync(repoId.Trim(), revision?.Trim(), ct).ConfigureAwait(false);
+            manifest = await _checkpointStore.ResolveAsync(repoId.Trim(), revision?.Trim(), ct);
         }
         catch (BaseCheckpointNotTrainableException exception)
         {
@@ -49,7 +49,7 @@ internal sealed class BaseArtifactService(
 
         EnsureDiskSpace(manifest.TotalBytes);
 
-        var record = await _store.StartDownloadAsync(manifest.RepoId, manifest.Revision, ct).ConfigureAwait(false);
+        var record = await _store.StartDownloadAsync(manifest.RepoId, manifest.Revision, ct);
         if (record.Status != TrainingBaseArtifactStatus.Downloading)
         {
             // Already Ready: hand back what exists rather than re-downloading tens of gigabytes.
@@ -64,21 +64,21 @@ internal sealed class BaseArtifactService(
     /// <inheritdoc />
     public async Task<IReadOnlyList<BaseArtifactView>> ListAsync(CancellationToken ct)
     {
-        var records = await _store.ListAsync(ct).ConfigureAwait(false);
+        var records = await _store.ListAsync(ct);
         return records.Select(ToView).ToArray();
     }
 
     /// <inheritdoc />
     public async Task<BaseArtifactView?> GetAsync(Guid artifactId, CancellationToken ct)
     {
-        var record = await _store.GetAsync(artifactId, ct).ConfigureAwait(false);
+        var record = await _store.GetAsync(artifactId, ct);
         return record is null ? null : ToView(record);
     }
 
     /// <inheritdoc />
     public async Task<BaseArtifactLicenseView?> GetLicenseAsync(Guid artifactId, CancellationToken ct)
     {
-        var record = await _store.GetAsync(artifactId, ct).ConfigureAwait(false);
+        var record = await _store.GetAsync(artifactId, ct);
         return record is null ? null : BaseArtifactManifest.DeserializeLicense(record.LicenseJson);
     }
 
@@ -91,7 +91,7 @@ internal sealed class BaseArtifactService(
     /// <inheritdoc />
     public async Task<BaseArtifactDeleteOutcome> DeleteAsync(Guid artifactId, CancellationToken ct)
     {
-        var record = await _store.GetAsync(artifactId, ct).ConfigureAwait(false);
+        var record = await _store.GetAsync(artifactId, ct);
         if (record is null)
         {
             return BaseArtifactDeleteOutcome.NotFound;
@@ -104,7 +104,7 @@ internal sealed class BaseArtifactService(
             return BaseArtifactDeleteOutcome.Downloading;
         }
 
-        var deleted = await _store.DeleteAsync(artifactId, record.Version, ct).ConfigureAwait(false);
+        var deleted = await _store.DeleteAsync(artifactId, record.Version, ct);
         if (!deleted)
         {
             return BaseArtifactDeleteOutcome.NotFound;

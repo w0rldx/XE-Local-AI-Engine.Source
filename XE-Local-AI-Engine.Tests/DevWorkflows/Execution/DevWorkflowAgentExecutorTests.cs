@@ -156,7 +156,7 @@ public sealed class DevWorkflowAgentExecutorTests
     /// </summary>
     private static async Task SaveBinaryArtifactAsync(DevWorkflowHarness harness, Guid runId, string nodeKey, string name)
     {
-        var sessionId = await harness.ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false);
+        var sessionId = await harness.ReadSessionIdAsync(runId, nodeKey);
         var artifactId = Guid.NewGuid();
         await using var scope = harness.Services.CreateAsyncScope();
         var written = await scope.ServiceProvider.GetRequiredService<IWorkSessionArtifactBlobStore>()
@@ -170,8 +170,7 @@ public sealed class DevWorkflowAgentExecutorTests
                                      0x0A,
                                      0x1A,
                                      0x0A
-                                 })
-                                 .ConfigureAwait(false);
+                                 });
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
                        .AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
                            artifactId,
@@ -182,8 +181,7 @@ public sealed class DevWorkflowAgentExecutorTests
                            "application/octet-stream",
                            written.ContentHash,
                            written.ByteCount,
-                           written.OpaqueReference))
-                       .ConfigureAwait(false);
+                           written.OpaqueReference));
     }
 
     /// <summary>
@@ -194,26 +192,26 @@ public sealed class DevWorkflowAgentExecutorTests
     {
         // A private host: Created.Count is the shared fake's whole history, not this run's.
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var dispatched = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var dispatched = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, dispatched.Status);
         AssertEx.True(dispatched.WorkSessionId is not null, "an agent node run owns the session that does its work.");
         AssertEx.Null(dispatched.QueueReason, "a running node run is not waiting for anything.");
         AssertEx.Equal(expected: 1, harness.Agent.Created.Count);
 
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var settled = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var settled = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, settled.Status);
         AssertEx.Contains(AssertEx.NotNull(settled.OutputJson), "\"sessionStatus\":\"completed\"");
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
 
         AssertEx.Equal("run.created, node.materialized, run.started, node.queued, worksession.attached, node.started, node.completed, run.completed",
-            await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
+            await harness.ReadEventTrailAsync(runId),
             "the queue hop and the session it was handed are both part of the audit.");
     }
 
@@ -229,9 +227,9 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeWithAModelAndEffort_PinsThemOnItsSessionForEveryDrive()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgentPinned).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgentPinned);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal("create=qwen3-30b/high, start=qwen3-30b/high",
             string.Join(", ", harness.Agent.Runtimes.Select(entry => $"{entry.Verb}={entry.Runtime?.ModelProfile}/{entry.Runtime?.ReasoningEffort}")),
@@ -242,9 +240,9 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeWithNeitherPin_LeavesTheSessionOnTheBoundAgentsOwn()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal("create=, start=",
             string.Join(", ", harness.Agent.Runtimes.Select(entry => $"{entry.Verb}={entry.Runtime?.ModelProfile}")),
@@ -264,9 +262,9 @@ public sealed class DevWorkflowAgentExecutorTests
     {
         // A private host, for the same reason: the window under test is "exactly one session was created".
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        var run = await harness.ReadRunAsync(runId);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "research");
 
         await using var scope = harness.Services.CreateAsyncScope();
         var executor = scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>();
@@ -283,8 +281,7 @@ public sealed class DevWorkflowAgentExecutorTests
                                       nodeRun,
                                       [nodeRun],
                                       CancellationToken.None),
-                              "the attach's failure is what the caller sees; the cleanup is not the story.")
-                          .ConfigureAwait(false);
+                              "the attach's failure is what the caller sees; the cleanup is not the story.");
 
         AssertEx.Equal(expected: 1, harness.Agent.Created.Count, "a session WAS created — that is the window under test.");
         var created = harness.Agent.Created.Single();
@@ -303,27 +300,27 @@ public sealed class DevWorkflowAgentExecutorTests
         // stall every concurrent sibling's agent node too.
         await using var harness = new DevWorkflowHarness();
         harness.Agent.HasCapacity = false;
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var queued = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var queued = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Queued, queued.Status);
         AssertEx.Equal(DevWorkflowQueueReasons.AwaitingAgentSlot, queued.QueueReason);
         AssertEx.True(queued.QueuedAtUtc is not null, "the UI shows how long the queue has held it.");
         AssertEx.Null(queued.WorkSessionId, "a refused admission must not leave a session nothing is driving.");
         AssertEx.Empty(harness.Agent.Created);
 
-        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        var events = await harness.ReadEventsAsync(runId);
         AssertEx.Empty(events.Where(static entry => entry.EventType is "node.failed" or "node.intervention.required"),
             "a lane that will not take a node run yet is queueing, and an event saying otherwise would be a lie in the durable log.");
-        AssertEx.Equal(DevWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId)).Status);
 
         // The slot frees, and nothing has to re-derive eligibility: the row is already queued, so the next tick simply
         // asks the lane again.
         harness.Agent.HasCapacity = true;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research")).Status);
     }
 
     /// <summary>A lost admission race is the same answer as a full node, and must not burn the session it already owns.</summary>
@@ -333,22 +330,22 @@ public sealed class DevWorkflowAgentExecutorTests
         // A private host: RefuseStart is the same host-wide switch, and Created.Count is the fake's whole history.
         await using var harness = new DevWorkflowHarness();
         harness.Agent.RefuseStart = true;
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var queued = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var queued = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Queued, queued.Status);
         AssertEx.True(queued.WorkSessionId is not null, "the session was created and attached before the start was refused.");
         AssertEx.Equal(expected: 1, harness.Agent.Created.Count);
 
         harness.Agent.RefuseStart = false;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(expected: 1,
             harness.Agent.Created.Count,
             "the retry starts the session it already owns rather than stranding a conversation nobody will drive.");
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research")).Status);
     }
 
     /// <summary>An agent binding this node cannot use is not retryable, so it asks a human instead of looping.</summary>
@@ -358,16 +355,16 @@ public sealed class DevWorkflowAgentExecutorTests
         // A private host: RefuseCreateWith is the same host-wide switch.
         await using var harness = new DevWorkflowHarness();
         harness.Agent.RefuseCreateWith = "The agent's model cannot call tools.";
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass);
         AssertEx.Equal("The agent's model cannot call tools.", blocked.TerminalReason, "the message already names the fix, so it is surfaced rather than replaced.");
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked,
-            (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadWorkItemAsync(runId)).Status,
             "a blocked node run blocks its work item in the same transaction, even though the run status never moved.");
     }
 
@@ -397,27 +394,26 @@ public sealed class DevWorkflowAgentExecutorTests
                                                     { "from": "bound", "to": "join" }
                                                   ]
                                                 }
-                                                """)
-                                 .ConfigureAwait(false);
+                                                """);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "unbound").ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "bound").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "unbound")).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "bound")).Status);
         AssertEx.Equal(DevWorkflowRunStatus.Running,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "the run is genuinely still working: a sibling is mid-flight.");
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked,
-            (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadWorkItemAsync(runId)).Status,
             "and it still needs a human, which no later run-status move was going to say.");
 
         // The release travels the same way: answering the blocked node with the run status still unchanged puts the
         // item back to Active without waiting for a run transition that may never come.
-        await harness.DecideAsync(runId, "unbound", DevWorkflowDecisionKind.Skip).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "unbound", DevWorkflowDecisionKind.Skip);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowWorkItemStatus.Active, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId)).Status);
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Active, (await harness.ReadWorkItemAsync(runId)).Status);
     }
 
     /// <summary>A node run whose agent binds nothing at all cannot be guessed at either.</summary>
@@ -431,12 +427,11 @@ public sealed class DevWorkflowAgentExecutorTests
                                                   "nodes": [{ "nodeKey": "research", "nodeType": "Agent" }],
                                                   "edges": []
                                                 }
-                                                """)
-                                 .ConfigureAwait(false);
+                                                """);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "binds no agent definition");
     }
@@ -450,23 +445,23 @@ public sealed class DevWorkflowAgentExecutorTests
     {
         // A private host: the per-node-run resume budget is pinned for this test alone.
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxSessionResumesPerNodeRun", "2"));
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         for (var park = 1; park <= 2; park++)
         {
-            await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+            await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-            var resumed = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+            var resumed = await harness.ReadNodeRunAsync(runId, "research");
             AssertEx.Equal(DevWorkflowNodeRunStatus.Running, resumed.Status, "a parked session is continued, not failed.");
             AssertEx.Equal(park, resumed.SessionResumes);
         }
 
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var exhausted = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var exhausted = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, exhausted.Status, "a spent budget asks a human; the work so far is on the session.");
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, exhausted.FailureClass);
     }
@@ -482,20 +477,20 @@ public sealed class DevWorkflowAgentExecutorTests
         // A host of its own: this reads the fake agent's Objectives list by position, and on the shared host that list
         // accumulates every sibling's traffic.
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var first = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var first = await harness.ReadSessionIdAsync(runId, "research");
 
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var retried = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var retried = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, retried.Status, "a provider failure with attempts left is re-attempted, not settled.");
         AssertEx.Equal(expected: 2, retried.Attempt);
         AssertEx.NotEqual(first,
-            await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false),
+            await harness.ReadSessionIdAsync(runId, "research"),
             "a retry drives a NEW session; the failed one keeps its transcript as evidence.");
-        var trail = await harness.ReadEventTrailAsync(runId).ConfigureAwait(false);
+        var trail = await harness.ReadEventTrailAsync(runId);
         AssertEx.Contains(trail, "node.retry.scheduled");
 
         // A new session is only half of it: composed from the same inputs it would be handed a byte-identical
@@ -505,27 +500,27 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Contains(objectives[1], "priorFailure");
         AssertEx.Contains(objectives[1], "ProviderError");
 
-        var scheduled = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Last(static entry => entry.EventType == "node.retry.scheduled");
+        var scheduled = (await harness.ReadEventsAsync(runId)).Last(static entry => entry.EventType == "node.retry.scheduled");
         AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson),
             "\"attempt\":1",
             message: "the event names the attempt that FAILED, which the row no longer carries.");
         AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson), "ProviderError");
 
         // Two more failures spend the node's three attempts, and the third has nowhere left to go.
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var exhausted = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var exhausted = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, exhausted.Status);
         AssertEx.Equal(expected: 3, exhausted.Attempt);
         AssertEx.Equal(DevWorkflowFailureClasses.ProviderError, exhausted.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(exhausted.OutputJson), "\"failureClass\":\"ProviderError\"");
 
-        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId)).Status);
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked,
-            (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadWorkItemAsync(runId)).Status,
             "a run waiting on a person needs attention; it is not done.");
     }
 
@@ -537,16 +532,16 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task CancellingARun_StopsTheAgentsSessionAndSettlesTheRowOnIt()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Contains(harness.Agent.Calls, call => call == ("cancel", sessionId), "the executor owns what stopping its work costs.");
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "research")).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -558,25 +553,25 @@ public sealed class DevWorkflowAgentExecutorTests
     {
         // A private host: Created.Count is the shared fake's whole history.
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Contains(harness.Agent.Calls, call => call == ("pause", sessionId));
-        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId)).Status);
 
-        var parked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var parked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, parked.Status, "a pause is meant to be resumed, so the row waits rather than terminalizing.");
         AssertEx.Equal(sessionId, parked.WorkSessionId, "it keeps the session, which is what makes the resume a continuation.");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Running).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Running);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(expected: 1, harness.Agent.Created.Count, "the resumed node run must not start a second session.");
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research")).Status);
     }
 
     /// <summary>
@@ -587,20 +582,20 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ACompletedAgent_PromotesWhatItsSessionProducedOntoTheRun()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", "# What the runtime does").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", "# What the runtime does");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var artifacts = await harness.ReadArtifactsAsync(runId).ConfigureAwait(false);
+        var artifacts = await harness.ReadArtifactsAsync(runId);
         var promoted = AssertEx.NotNull(artifacts.SingleOrDefault(), "the run carries one artifact of its own.");
         AssertEx.Equal("findings.md", promoted.Name);
         AssertEx.Equal("research", promoted.ProducingNodeKey);
         AssertEx.Equal(expected: 1, promoted.Version);
         AssertEx.True(promoted.IsLatest);
-        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).OutputJson), "\"artifactCount\":1");
+        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research")).OutputJson), "\"artifactCount\":1");
     }
 
     /// <summary>
@@ -613,30 +608,29 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ACompletedAgent_ThatLeftATaskBlocked_StandsTheNodeRunDownForAHuman()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         _ = await harness.ApplyAgentTaskAsync(runId,
                              "research",
                              "Confirm the reviewer signed the change off",
                              AgentWorkSessionTaskStatus.Blocked,
-                             "Nothing here can read the review.")
-                         .ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+                             "Nothing here can read the review.");
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
         var reason = AssertEx.NotNull(blocked.TerminalReason, "a blocked row exists to be read, so it carries why.");
         AssertEx.Contains(reason, "Confirm the reviewer signed the change off");
         AssertEx.Contains(reason, "Nothing here can read the review.");
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked,
-            (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadWorkItemAsync(runId)).Status,
             "a blocked node run blocks its work item, whatever the run status is doing.");
         AssertEx.Equal("findings.md",
-            AssertEx.NotNull((await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).SingleOrDefault()).Name,
+            AssertEx.NotNull((await harness.ReadArtifactsAsync(runId)).SingleOrDefault()).Name,
             "the operator deciding on this row has to be able to read what the session produced before it stalled.");
     }
 
@@ -651,8 +645,8 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ACompletedAgent_WhoseBlockedTaskOutgrowsTheReasonColumn_IsClampedWithoutSplittingASurrogate(int padding)
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         // Astral characters, because a naive slice would persist a lone surrogate. The one-unit padding shifts where
         // the bound falls, so between the two cases it lands inside a pair whichever way the fixed lead sentence runs.
@@ -660,12 +654,11 @@ public sealed class DevWorkflowAgentExecutorTests
                              "research",
                              "Confirm the reviewer signed the change off",
                              AgentWorkSessionTaskStatus.Blocked,
-                             new string('x', padding) + string.Concat(Enumerable.Repeat("\U0001F600", 800)))
-                         .ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+                             new string('x', padding) + string.Concat(Enumerable.Repeat("\U0001F600", 800)));
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var reason = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).TerminalReason);
+        var reason = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "research")).TerminalReason);
         AssertEx.True(reason.Length <= DevWorkflowStateMachine.MaxNodeTerminalReason,
             $"the column bounds the reason at {DevWorkflowStateMachine.MaxNodeTerminalReason}, and SQLite will not say so.");
         AssertEx.False(char.IsHighSurrogate(reason[^1]), "Half a surrogate pair is not valid text in the column or on the wire.");
@@ -679,18 +672,17 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ACompletedAgent_ThatDeclaredTheObjectiveUnmet_StandsTheNodeRunDownWithWhatItSaid()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Read the launch args", AgentWorkSessionTaskStatus.Done).ConfigureAwait(false);
+        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Read the launch args", AgentWorkSessionTaskStatus.Done);
         await harness.RequestAgentCompletionAsync(runId,
                          "research",
-                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)))
-                     .ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)));
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "NOT signed off — the runtime pin is unverifiable from here.");
@@ -704,20 +696,19 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ACompletedAgent_ThatMetItsObjective_StillSucceedsAndStillPromotes()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Read the launch args", AgentWorkSessionTaskStatus.Done).ConfigureAwait(false);
-        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Chase the second pin", AgentWorkSessionTaskStatus.Dropped).ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown).ConfigureAwait(false);
+        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Read the launch args", AgentWorkSessionTaskStatus.Done);
+        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Chase the second pin", AgentWorkSessionTaskStatus.Dropped);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown);
         await harness.RequestAgentCompletionAsync(runId,
                          "research",
-                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)))
-                     .ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)));
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var succeeded = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var succeeded = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
         AssertEx.Null(succeeded.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(succeeded.OutputJson), "\"artifactCount\":1");
@@ -731,14 +722,14 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ACompletedAgent_WhoseCompletionPredatesTheArgument_StillSucceeds()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await harness.RequestAgentCompletionAsync(runId, "research", """{"Summary":"Everything asked for is recorded."}""").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.RequestAgentCompletionAsync(runId, "research", """{"Summary":"Everything asked for is recorded."}""");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var succeeded = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var succeeded = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, succeeded.Status);
         AssertEx.Null(succeeded.FailureClass);
     }
@@ -752,24 +743,22 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ACompletedAgent_ThatDeclaredTwice_IsJudgedOnItsLatestDeclaration()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         await harness.RequestAgentCompletionAsync(runId,
                          "research",
-                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)))
-                     .ConfigureAwait(false);
-        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Verify the runtime pin", AgentWorkSessionTaskStatus.Done).ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown).ConfigureAwait(false);
+                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("Everything asked for is recorded.", ObjectiveMet: true)));
+        _ = await harness.ApplyAgentTaskAsync(runId, "research", "Verify the runtime pin", AgentWorkSessionTaskStatus.Done);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "findings.md", ResearchMarkdown);
         await harness.RequestAgentCompletionAsync(runId,
                          "research",
-                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)))
-                     .ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "notes.md", "Nothing further.").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+                         JsonSerializer.Serialize(new WorkSessionCompletionDetail("NOT signed off — the runtime pin is unverifiable from here.", ObjectiveMet: false)));
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "notes.md", "Nothing further.");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.ObjectiveNotMet, blocked.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "NOT signed off — the runtime pin is unverifiable from here.");
@@ -783,17 +772,17 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AGateAfterAnAgent_RecordsThatAgentsArtifactsAsItsEvidence()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(AgentThenGate);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "plan.md", "1. Read the code").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "plan.md", "1. Read the code");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, (await harness.ReadNodeRunAsync(runId, "approve")).Status);
 
-        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).SingleOrDefault());
-        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "approve").ConfigureAwait(false);
+        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId)).SingleOrDefault());
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "approve");
         AssertEx.Equal(expected: 1, consumed.Count);
         AssertEx.Contains(consumed,
             promoted.Id,
@@ -813,14 +802,14 @@ public sealed class DevWorkflowAgentExecutorTests
         // Two runs on the class host rather than two hosts: each objective is read back off its own node run's
         // session, so the pair cannot answer each other's assertion however the two runs interleave.
         await using var harness = new DevWorkflowHarness(Host);
-        var decomposingRun = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasks, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(decomposingRun).ConfigureAwait(false);
+        var decomposingRun = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasks, developmentProjectId: Guid.NewGuid());
+        _ = await harness.AdvanceUntilQuiescentAsync(decomposingRun);
 
-        var plainRun = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(plainRun).ConfigureAwait(false);
+        var plainRun = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(plainRun);
 
-        var decomposingObjective = await harness.ReadObjectiveAsync(decomposingRun, "decompose").ConfigureAwait(false);
-        var plainObjective = await harness.ReadObjectiveAsync(plainRun, "research").ConfigureAwait(false);
+        var decomposingObjective = await harness.ReadObjectiveAsync(decomposingRun, "decompose");
+        var plainObjective = await harness.ReadObjectiveAsync(plainRun, "research");
         AssertEx.Contains(decomposingObjective,
             "must finish by submitting a NON-EMPTY code change",
             message: "the decomposing node is told the one rule every slice it writes has to satisfy.");
@@ -841,10 +830,10 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_ForADecompositionWithNoDevTaskInItsTemplate_OmitsWhatEachTaskBecomes()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: Guid.NewGuid());
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var objective = await harness.ReadObjectiveAsync(runId, "decompose").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "decompose");
         AssertEx.False(objective.Contains("What each task becomes", StringComparison.Ordinal),
             $"an Agent-and-Tool template produces no coder attempt, so its decomposition is told nothing about one: {objective}");
     }
@@ -858,10 +847,10 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_ForADecompositionWithADevTaskBelowItsTemplateRoot_CarriesWhatEachTaskBecomes()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask, developmentProjectId: Guid.NewGuid());
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Contains(await harness.ReadObjectiveAsync(runId, "decompose").ConfigureAwait(false),
+        AssertEx.Contains(await harness.ReadObjectiveAsync(runId, "decompose"),
             "must finish by submitting a NON-EMPTY code change",
             message: "the DevTask under the template root is a coder attempt, so its decomposition is bound by the coder's contract.");
     }
@@ -891,10 +880,10 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_CarriesTheRequestAndTheUpstreamArtifacts()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(AgentThenGate, "Explain how the inference path works.").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(AgentThenGate, "Explain how the inference path works.");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var objective = await harness.ReadObjectiveAsync(runId, "research").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "research");
         AssertEx.Contains(objective, "Explain how the inference path works.");
         AssertEx.Contains(objective, "Research", message: "the node's own label says which step this is.");
     }
@@ -943,28 +932,27 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_CarriesTheOperatorsReasonThroughTheCloneThatWasSkippedBehindIt()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(MaterializedSlicesIntoAVerification).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(MaterializedSlicesIntoAVerification);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", """{"tasks":[]}""").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", """{"tasks":[]}""");
+        await harness.SettleAgentAsync(runId, "decompose");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
-            (await harness.ReadNodeRunAsync(runId, "implement#a").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "implement#a")).Status,
             "the slice bound to no agent stands down for a human, which is what an operator then skips.");
 
-        await harness.SettleAgentAsync(runId, "implement#b").ConfigureAwait(false);
-        await harness.DecideAsync(runId, "implement#a", DevWorkflowDecisionKind.Skip, comment: "This slice names a file the repository does not have.")
-                     .ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement#b");
+        await harness.DecideAsync(runId, "implement#a", DevWorkflowDecisionKind.Skip, comment: "This slice names a file the repository does not have.");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         AssertEx.Equal("Skipped: upstream 'implement#a' was skipped by an operator: This slice names a file the repository does not have.",
-            AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "validate#a").ConfigureAwait(false)).TerminalReason),
+            AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "validate#a")).TerminalReason),
             "the clone skipped behind the decision quotes it rather than restating it generically.");
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status);
-        AssertEx.Contains(await harness.ReadObjectiveAsync(runId, "verify").ConfigureAwait(false),
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "verify")).Status);
+        AssertEx.Contains(await harness.ReadObjectiveAsync(runId, "verify"),
             "- 'validate#a' was skipped: Skipped: upstream 'implement#a' was skipped by an operator: "
             + "This slice names a file the repository does not have.",
             message: "and the verification node is handed the operator's own sentence, two nodes from where it was written.");
@@ -980,20 +968,19 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_NamesTheStepsAPersonSkipped()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        await harness.DecideAsync(runId, "doomed", DevWorkflowDecisionKind.Skip, comment: "No repository binding exists for this branch.")
-                     .ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown);
+        await harness.SettleAgentAsync(runId, "research");
+        await harness.DecideAsync(runId, "doomed", DevWorkflowDecisionKind.Skip, comment: "No repository binding exists for this branch.");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "verify")).Status,
             "the join carried the branch that produced, so the verification node ran.");
 
-        var objective = await harness.ReadObjectiveAsync(runId, "verify").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "verify");
         AssertEx.Contains(objective, "### Skipped steps");
         AssertEx.Contains(objective,
             "- 'doomed' was skipped: Skipped by an operator: No repository binding exists for this branch.",
@@ -1011,20 +998,19 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_WhenAnUpstreamArtifactWouldFillIt_StillNamesTheStepsAPersonSkipped()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 20_000)).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        await harness.DecideAsync(runId, "doomed", DevWorkflowDecisionKind.Skip, comment: "No repository binding exists for this branch.")
-                     .ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 20_000));
+        await harness.SettleAgentAsync(runId, "research");
+        await harness.DecideAsync(runId, "doomed", DevWorkflowDecisionKind.Skip, comment: "No repository binding exists for this branch.");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "verify")).Status,
             "the node ran: an over-long objective is refused, and the refusal blocks it for a human.");
 
-        var objective = await harness.ReadObjectiveAsync(runId, "verify").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "verify");
         AssertEx.Contains(objective, " characters.)", message: "the document that DID arrive is truncated, which is what leaves the list nothing to fit in.");
         AssertEx.Contains(objective, "### Skipped steps");
         AssertEx.Contains(objective,
@@ -1045,16 +1031,16 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_CarriesTheContentsOfTheUpstreamArtifactsAndNotJustTheirNames()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ResearchThenPlan);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown);
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status);
-        var researchObjective = await harness.ReadObjectiveAsync(runId, "research").ConfigureAwait(false);
-        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan")).Status);
+        var researchObjective = await harness.ReadObjectiveAsync(runId, "research");
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.NotEqual(researchObjective, objective, "the plan node was handed an objective of its own.");
         AssertEx.Contains(objective, "research.md", message: "the reference is still there — the audit is what it answers.");
         AssertEx.Contains(objective, ResearchMarkdown, message: "and so are the bytes, which is what the plan node is asked to transform.");
@@ -1070,18 +1056,18 @@ public sealed class DevWorkflowAgentExecutorTests
     {
         // A private host: HasCapacity is a host-wide switch, and this holds the plan node at the queue with it.
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ResearchThenPlan);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", ResearchMarkdown);
+        await harness.SettleAgentAsync(runId, "research");
 
         // The promotion and the next node's dispatch share one tick, so the plan node is parked at the queue for the
         // tick that promotes — which is the only window in which the stored bytes can be replaced underneath it.
         harness.Agent.HasCapacity = false;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).SingleOrDefault());
+        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId)).SingleOrDefault());
         await using (var scope = harness.Services.CreateAsyncScope())
         {
             // Removed and rewritten rather than overwritten, because the blob store is write-once and refuses a second
@@ -1089,13 +1075,13 @@ public sealed class DevWorkflowAgentExecutorTests
             // The replacement is the same byte COUNT, so only the digest can catch it, which is the check under test.
             var blobs = scope.ServiceProvider.GetRequiredService<IDevWorkflowArtifactBlobStore>();
             blobs.Delete(runId, promoted.Id);
-            _ = await blobs.WriteAsync(runId, promoted.Id, Encoding.UTF8.GetBytes(new string('x', ResearchMarkdown.Length))).ConfigureAwait(false);
+            _ = await blobs.WriteAsync(runId, promoted.Id, Encoding.UTF8.GetBytes(new string('x', ResearchMarkdown.Length)));
         }
 
         harness.Agent.HasCapacity = true;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "research.md", message: "the reference survives: the artifact does exist and the audit still says so.");
         AssertEx.Contains(objective, nameof(DevWorkflowArtifactReadStatus.HashMismatch), message: "and the objective names why its contents are missing.");
         AssertEx.False(objective.Contains("xxxxxxxxxx", StringComparison.Ordinal), "unverified bytes must never reach the agent.");
@@ -1110,18 +1096,18 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_WhenAnUpstreamArtifactIsLongerThanItCanHold_TruncatesItAndSaysSo()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ResearchThenPlan);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 20_000)).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 20_000));
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "plan")).Status,
             "the node ran: an over-long objective would have been refused and blocked it for a human.");
 
-        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, " characters.)", message: "the marker says how much of the document the agent is not seeing.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling this lane holds itself to.");
@@ -1145,7 +1131,7 @@ public sealed class DevWorkflowAgentExecutorTests
         string? refusal = null;
         try
         {
-            _ = await sessions.CreateAsync("Boundary", new string('o', DevWorkflowAgentExecutor.MaxObjectiveCharacters), Guid.NewGuid()).ConfigureAwait(false);
+            _ = await sessions.CreateAsync("Boundary", new string('o', DevWorkflowAgentExecutor.MaxObjectiveCharacters), Guid.NewGuid());
         }
         catch (Exception exception)
         {
@@ -1165,21 +1151,20 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_WithManyUpstreamArtifacts_RendersEveryOneAndStaysInsideTheLimit()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(FanInToPlan(width: 6)).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(FanInToPlan(width: 6));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         for (var branch = 1; branch <= 6; branch++)
         {
-            _ = await harness.SaveAgentArtifactAsync(runId, $"r{branch}", $"research-{branch}.md", new string((char)('a' + branch), 2000))
-                             .ConfigureAwait(false);
-            await harness.SettleAgentAsync(runId, $"r{branch}").ConfigureAwait(false);
+            _ = await harness.SaveAgentArtifactAsync(runId, $"r{branch}", $"research-{branch}.md", new string((char)('a' + branch), 2000));
+            await harness.SettleAgentAsync(runId, $"r{branch}");
         }
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan")).Status);
 
-        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
         for (var branch = 1; branch <= 6; branch++)
         {
             AssertEx.Contains(objective, $"research-{branch}.md", message: "every branch the node inherited from is named, however little room each one got.");
@@ -1197,18 +1182,18 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_WhenTheNodesOwnInstructionsFillMostOfIt_SqueezesTheArtifactRatherThanOverrunning()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6000))).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6000)));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 2000)).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 2000));
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "plan")).Status,
             "the node ran: an over-long objective is refused, and the refusal blocks it for a human.");
 
-        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "research.md", message: "the reference still reaches the agent even when the contents barely do.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling.");
@@ -1227,27 +1212,27 @@ public sealed class DevWorkflowAgentExecutorTests
     {
         // A private host: HasCapacity is a host-wide switch, and this parks the plan node with it.
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ResearchThenPlan);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 300_000)).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 300_000));
+        await harness.SettleAgentAsync(runId, "research");
 
         // Promotion and the next node's dispatch share one tick, so the plan node waits at the queue for the tick that
         // promotes — the only window in which the promoted bytes can be taken away again.
         harness.Agent.HasCapacity = false;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).SingleOrDefault());
+        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId)).SingleOrDefault());
         await using (var scope = harness.Services.CreateAsyncScope())
         {
             scope.ServiceProvider.GetRequiredService<IDevWorkflowArtifactBlobStore>().Delete(runId, promoted.Id);
         }
 
         harness.Agent.HasCapacity = true;
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "research.md", message: "the node is still told the artifact exists.");
         AssertEx.Contains(objective, "too large to include here", message: "and why it is holding a reference rather than contents.");
         AssertEx.False(objective.Contains("did not verify", StringComparison.Ordinal),
@@ -1267,16 +1252,16 @@ public sealed class DevWorkflowAgentExecutorTests
         await using var harness = new DevWorkflowHarness(Host);
         // Sized so the section header and the artifact's own header still fit but nothing is left for a body: the
         // rendered marker plus that header overrun the ceiling, which is the only shape that reaches the guard.
-        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6820))).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6820)));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 2000)).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 2000));
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan")).Status);
 
-        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "research.md", message: "the reference is the half worth keeping when the contents cannot fit.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling — the header and the marker were not counted.");
@@ -1290,14 +1275,14 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_ForAnArtifactThatIsNotText_GivesTheReferenceAndSaysWhyTheresNoContent()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ResearchThenPlan);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await SaveBinaryArtifactAsync(harness, runId, "research", "diagram.png").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await SaveBinaryArtifactAsync(harness, runId, "research", "diagram.png");
+        await harness.SettleAgentAsync(runId, "research");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "diagram.png", message: "the node is told the artifact exists.");
         AssertEx.Contains(objective, "not text", message: "and why it is holding a reference rather than contents.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
@@ -1317,17 +1302,17 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task TheObjective_TruncatingAnArtifactOfAstralCharacters_NeverCutsThroughASurrogatePair()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(FanInToPlan(width: 2)).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(FanInToPlan(width: 2));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         var astral = string.Concat(Enumerable.Repeat("\U0001F642", 4000));
-        _ = await harness.SaveAgentArtifactAsync(runId, "r1", "even.md", astral).ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "r2", "odd.md", $"x{astral}").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "r1").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "r2").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "r1", "even.md", astral);
+        _ = await harness.SaveAgentArtifactAsync(runId, "r2", "odd.md", $"x{astral}");
+        await harness.SettleAgentAsync(runId, "r1");
+        await harness.SettleAgentAsync(runId, "r2");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var objective = await harness.ReadHandedObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        var objective = await harness.ReadHandedObjectiveAsync(runId, "plan");
         AssertEx.Equal(objective,
             Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(objective)),
             "an unpaired surrogate comes back from UTF-8 as U+FFFD, so a round trip that changes the text is a cut through a pair.");
@@ -1348,12 +1333,12 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeOfferedAWriteToolAndDeclaringNothing_BlocksWithPolicy()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "run_python").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "run_python");
+        var runId = await harness.StartRunAsync(BoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
@@ -1368,14 +1353,14 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeDeclaringTheWriteBehindAGate_Runs()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "run_python").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(GatedBoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "run_python");
+        var runId = await harness.StartRunAsync(GatedBoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, research.Status, $"the declared node runs: {research.FailureClass} — {research.TerminalReason}");
         AssertEx.NotEmpty(harness.Agent.Created);
     }
@@ -1403,14 +1388,13 @@ public sealed class DevWorkflowAgentExecutorTests
                                         AllowedToolNames: [],
                                         new Dictionary<string, bool>(StringComparer.Ordinal),
                                         OrchestrationTopologyJson: null),
-                                    AgentDefaults.DefaultAgentSeedSlug)
-                                .ConfigureAwait(false);
+                                    AgentDefaults.DefaultAgentSeedSlug);
         }
 
-        var runId = await harness.StartRunAsync(BoundAgent(seeded.Id)).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(BoundAgent(seeded.Id));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
             research.Status,
             "an empty allowed set is not an empty offer, and this binding is the one definition that proves it.");
@@ -1427,12 +1411,12 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeOfferedOnlyTheSessionRowTools_IsNotBlocked()
     {
         await using var harness = OfferingTools(SessionRowOffer());
-        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "record_finding");
+        var runId = await harness.StartRunAsync(BoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, research.Status, $"{research.FailureClass} — {research.TerminalReason}");
     }
 
@@ -1450,12 +1434,12 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeWhoseProjectionExcludesTheWriteTool_IsNotBlocked()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "record_finding");
+        var runId = await harness.StartRunAsync(BoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
             research.Status,
             $"a tool the effective projection does not contain is not this node's to declare: {research.FailureClass} — {research.TerminalReason}");
@@ -1471,10 +1455,10 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeThatOwesADeclaration_ArmsItsSessionToJudgeEveryTurn()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "record_finding");
+        var runId = await harness.StartRunAsync(BoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Contains(harness.Agent.Runtimes,
             entry => entry.Runtime?.RefuseUndeclaredWrites == true,
@@ -1489,12 +1473,12 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeThatDeclaredItsWrite_DoesNotArmItsSession()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "run_python").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(GatedBoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "run_python");
+        var runId = await harness.StartRunAsync(GatedBoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.NotEmpty(harness.Agent.Runtimes);
         AssertEx.False(harness.Agent.Runtimes.Any(entry => entry.Runtime?.RefuseUndeclaredWrites == true),
@@ -1511,17 +1495,17 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ASessionThatFailedAfterItsDefinitionWasWidened_BlocksTheNodeRunWithPolicy()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "record_finding");
+        var runId = await harness.StartRunAsync(BoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research")).Status);
 
-        await WideningAsync(harness, agentId, "run_python").ConfigureAwait(false);
-        await harness.RefuseAgentWriteAsync(runId, "research", WidenedRefusal).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await WideningAsync(harness, agentId, "run_python");
+        await harness.RefuseAgentWriteAsync(runId, "research", WidenedRefusal);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass, "a widened projection is a policy question for a person, not a provider failure to retry.");
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
@@ -1536,19 +1520,19 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ASessionThatFailedAfterItsDefinitionWasDeleted_BlocksRatherThanReportingAProviderFailure()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "record_finding");
+        var runId = await harness.StartRunAsync(BoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         await using (var scope = harness.Services.CreateAsyncScope())
         {
-            _ = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().DeleteAsync(agentId).ConfigureAwait(false);
+            _ = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().DeleteAsync(agentId);
         }
 
-        await harness.RefuseAgentWriteAsync(runId, "research", DeletedRefusal).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.RefuseAgentWriteAsync(runId, "research", DeletedRefusal);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "no longer exists");
@@ -1566,18 +1550,18 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ASessionRefusedForAnUndeclaredWrite_KeepsThePolicyClassAfterTheDefinitionIsNarrowedAgain()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "record_finding");
+        var runId = await harness.StartRunAsync(BoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await WideningAsync(harness, agentId, "run_python").ConfigureAwait(false);
-        await harness.RefuseAgentWriteAsync(runId, "research", WidenedRefusal).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await WideningAsync(harness, agentId, "run_python");
+        await harness.RefuseAgentWriteAsync(runId, "research", WidenedRefusal);
 
         // The operator sees the failure and takes the write tool straight back off, BEFORE the run's next tick.
-        await WideningAsync(harness, agentId, "record_finding").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await WideningAsync(harness, agentId, "record_finding");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status, "a refusal is not undone by narrowing the definition after it.");
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass, "the cause is read from the record of the refusal, not re-decided from current state.");
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
@@ -1602,14 +1586,14 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task ASessionThatFailedWithItsDefinitionUntouched_TakesTheOrdinaryFailurePath()
     {
         await using var harness = OfferingAWriteTool();
-        var agentId = await AllowingAsync(harness, "record_finding").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(BoundAgent(agentId)).ConfigureAwait(false);
+        var agentId = await AllowingAsync(harness, "record_finding");
+        var runId = await harness.StartRunAsync(BoundAgent(agentId));
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var research = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var research = await harness.ReadNodeRunAsync(runId, "research");
         AssertEx.False(research.FailureClass == DevWorkflowFailureClasses.Policy,
             $"nothing widened, so nothing this rule owns happened: {research.TerminalReason}");
     }
@@ -1619,7 +1603,7 @@ public sealed class DevWorkflowAgentExecutorTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var definition = AssertEx.NotNull(await store.GetByIdAsync(agentDefinitionId).ConfigureAwait(false));
+        var definition = AssertEx.NotNull(await store.GetByIdAsync(agentDefinitionId));
         _ = await store.UpdateAsync(agentDefinitionId,
                            new AgentDefinitionInput(definition.Name,
                                definition.Description,
@@ -1629,8 +1613,7 @@ public sealed class DevWorkflowAgentExecutorTests
                                definition.Kind,
                                toolNames,
                                new Dictionary<string, bool>(StringComparer.Ordinal),
-                               definition.OrchestrationTopologyJson))
-                       .ConfigureAwait(false);
+                               definition.OrchestrationTopologyJson));
     }
 
     /// <summary>One agent node bound to a definition this test created, which is what makes the resolver answer at all.</summary>
@@ -1670,8 +1653,7 @@ public sealed class DevWorkflowAgentExecutorTests
                                      AgentDefinitionKind.Single,
                                      toolNames,
                                      new Dictionary<string, bool>(StringComparer.Ordinal),
-                                     OrchestrationTopologyJson: null))
-                                 .ConfigureAwait(false);
+                                     OrchestrationTopologyJson: null));
         return created.Id;
     }
 
@@ -1730,22 +1712,21 @@ public sealed class DevWorkflowAgentExecutorTests
     public async Task AnAgentNodeRetriedByAnOperator_IsToldWhatTheySaid()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         for (var failure = 1; failure <= 3; failure++)
         {
-            await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+            await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
         }
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "research")).Status);
 
-        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry, comment: "Read the llama-server launch args before you answer.")
-                     .ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry, comment: "Read the llama-server launch args before you answer.");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var objective = await harness.ReadObjectiveAsync(runId, "research").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "research");
         AssertEx.Contains(objective, "## Operator retry");
         AssertEx.Contains(objective, "Read the llama-server launch args before you answer.");
         AssertEx.False(objective.Contains("operatorRetryAttempt", StringComparison.Ordinal),

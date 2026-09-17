@@ -52,7 +52,7 @@ public sealed class HttpForwardingOutboundEventRecorder : IOutboundEventRecorder
         };
         request.Headers.TryAddWithoutValidation(SinkTokenHeader, _sinkToken);
 
-        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await _httpClient.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }
 }

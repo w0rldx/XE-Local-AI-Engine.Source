@@ -15,7 +15,7 @@ public sealed class IntegrationSessionStore(NodeChatDbContext dbContext) : IInte
 
     public async Task<IntegrationSessionSnapshot?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.IntegrationSessions.AsNoTracking().SingleOrDefaultAsync(row => row.Id == sessionId, cancellationToken).ConfigureAwait(false);
+        var entity = await _dbContext.IntegrationSessions.AsNoTracking().SingleOrDefaultAsync(row => row.Id == sessionId, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
@@ -24,16 +24,14 @@ public sealed class IntegrationSessionStore(NodeChatDbContext dbContext) : IInte
         // Both columns in ONE predicate rather than a load followed by a comparison: a foreign session and a missing
         // one have to be the same non-result, and a shape that returns the row first invites a caller to look at it.
         var entity = await _dbContext.IntegrationSessions.AsNoTracking()
-                                     .SingleOrDefaultAsync(row => row.Id == sessionId && row.PrincipalId == principalId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .SingleOrDefaultAsync(row => row.Id == sessionId && row.PrincipalId == principalId, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
     public async Task<IntegrationSessionSnapshot?> FindByConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.IntegrationSessions.AsNoTracking()
-                                     .SingleOrDefaultAsync(row => row.ConversationId == conversationId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .SingleOrDefaultAsync(row => row.ConversationId == conversationId, cancellationToken);
         return entity is null ? null : ToSnapshot(entity);
     }
 
@@ -50,8 +48,7 @@ public sealed class IntegrationSessionStore(NodeChatDbContext dbContext) : IInte
                              .ThenByDescending(row => row.Id)
                              .Skip(Math.Max(val1: 0, offset))
                              .Take(Math.Max(val1: 0, limit))
-                             .ToListAsync(cancellationToken)
-                             .ConfigureAwait(false);
+                             .ToListAsync(cancellationToken);
         return [.. entities.Select(ToSnapshot)];
     }
 
@@ -88,8 +85,7 @@ public sealed class IntegrationSessionStore(NodeChatDbContext dbContext) : IInte
     public async Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         var deleted = await _dbContext.IntegrationSessions.Where(row => row.Id == sessionId)
-                                      .ExecuteDeleteAsync(cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .ExecuteDeleteAsync(cancellationToken);
         return deleted > 0;
     }
 
@@ -100,8 +96,7 @@ public sealed class IntegrationSessionStore(NodeChatDbContext dbContext) : IInte
         var updated = await _dbContext.IntegrationSessions.Where(row => row.Id == sessionId)
                                       .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.Status, IntegrationSessionStatus.Closed)
                                                                             .SetProperty(row => row.LastActivityUtc, atUtc),
-                                          cancellationToken)
-                                      .ConfigureAwait(false);
+                                          cancellationToken);
         return updated > 0;
     }
 

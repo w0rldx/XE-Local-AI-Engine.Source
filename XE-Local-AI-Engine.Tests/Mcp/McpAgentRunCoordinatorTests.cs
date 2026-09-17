@@ -88,7 +88,7 @@ public sealed class McpAgentRunCoordinatorTests
                    RequestingKeyPrefix = null
                });
 
-        var result = await harness.Coordinator.StartAsync(request, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Coordinator.StartAsync(request, CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunStartKind.Existing, result.Kind);
         await harness.Resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
@@ -115,7 +115,7 @@ public sealed class McpAgentRunCoordinatorTests
         };
         harness.Store.GetAsync(request.RequestId, Arg.Any<CancellationToken>()).Returns(existing);
 
-        var result = await harness.Coordinator.StartAsync(request, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Coordinator.StartAsync(request, CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunStartKind.Existing, result.Kind);
         await harness.Store.DidNotReceiveWithAnyArgs().AdmitAsync(default!, default);
@@ -136,7 +136,7 @@ public sealed class McpAgentRunCoordinatorTests
                 AgentKey = "Coder"
             });
 
-        var result = await harness.Coordinator.StartAsync(request, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Coordinator.StartAsync(request, CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunStartKind.Rejected, result.Kind);
         AssertEx.Equal(McpAgentRunFailureCodes.WorkspaceNotAuthorized, result.FailureCode!);
@@ -155,8 +155,8 @@ public sealed class McpAgentRunCoordinatorTests
         harness.WorkspaceResolver.ResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                .Returns<Task<ResolvedSelectedFolder>>(_ => throw new SelectedFolderValidationException("not active"));
 
-        var unknown = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None).ConfigureAwait(false);
-        var revoked = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None).ConfigureAwait(false);
+        var unknown = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None);
+        var revoked = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunStartKind.Rejected, unknown.Kind);
         AssertEx.Equal(McpAgentRunFailureCodes.WorkspaceNotAuthorized, unknown.FailureCode!);
@@ -175,7 +175,7 @@ public sealed class McpAgentRunCoordinatorTests
                    AllowedTools = []
                }));
 
-        var result = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Coordinator.StartAsync(WorkspaceRequest(Guid.NewGuid()), CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunFailureCodes.WorkspaceNotAuthorized, result.FailureCode!);
         await harness.WorkspaceResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
@@ -207,7 +207,7 @@ public sealed class McpAgentRunCoordinatorTests
                        });
                });
 
-        var result = await harness.Coordinator.StartAsync(WorkspaceRequest(workspaceId), CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Coordinator.StartAsync(WorkspaceRequest(workspaceId), CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunStartKind.Accepted, result.Kind);
         AssertEx.Equal(workspaceId, captured!.WorkspaceId!.Value);
@@ -256,7 +256,7 @@ public sealed class McpAgentRunCoordinatorTests
         var result = await harness.Coordinator.StartAsync(new McpAgentRunStartRequest(requestId,
                 "inspect the repository",
                 bindingRequest),
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunStartKind.Accepted, result.Kind);
         AssertEx.NotNull(admission);
@@ -291,8 +291,8 @@ public sealed class McpAgentRunCoordinatorTests
         AssertEx.Equal(McpAgentRunRegistrationKind.Registered,
             harness.Cancellations.TryRegister(running.RequestId, claimToken, running.Version, out var executionToken));
 
-        var first = await harness.Coordinator.CancelAsync(running.RequestId, CancellationToken.None).ConfigureAwait(false);
-        var second = await harness.Coordinator.CancelAsync(running.RequestId, CancellationToken.None).ConfigureAwait(false);
+        var first = await harness.Coordinator.CancelAsync(running.RequestId, CancellationToken.None);
+        var second = await harness.Coordinator.CancelAsync(running.RequestId, CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunCancelKind.Requested, first.Kind);
         AssertEx.Equal(McpAgentRunCancelKind.AlreadyRequested, second.Kind);
@@ -321,7 +321,7 @@ public sealed class McpAgentRunCoordinatorTests
         AssertEx.Equal(McpAgentRunRegistrationKind.Registered,
             harness.Cancellations.TryRegister(completed.RequestId, claimToken, version: 1, out var executionToken));
 
-        var result = await harness.Coordinator.CancelAsync(completed.RequestId, CancellationToken.None).ConfigureAwait(false);
+        var result = await harness.Coordinator.CancelAsync(completed.RequestId, CancellationToken.None);
 
         AssertEx.Equal(McpAgentRunCancelKind.AlreadyTerminal, result.Kind);
         AssertEx.False(executionToken.IsCancellationRequested,

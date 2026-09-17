@@ -44,14 +44,14 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     [Test]
     public async Task RegisterAsync_WhenPathIsCanonicalGitRoot_RegistersCopyFolderAndReturnsAvailableReference()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.RegisterAsync(Arg.Any<SelectedFolderRegistration>(), Arg.Any<CancellationToken>())
                        .Returns(new SelectedFolderReference(selectedFolderId.ToString(), "repo"));
         var service = CreateService(selectedFolders);
 
-        var result = await service.RegisterAsync("Repo", repository).ConfigureAwait(false);
+        var result = await service.RegisterAsync("Repo", repository);
 
         AssertEx.Equal(selectedFolderId.ToString(), result.Id);
         AssertEx.Equal("repo", result.Alias);
@@ -65,14 +65,14 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     [Test]
     public async Task ResolveFolderAsync_WhenRegisteredFolderIsCanonicalGitRoot_ReturnsBoundRepositoryIdentity()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
                        .Returns(new ResolvedSelectedFolder(selectedFolderId, "repo", repository, SelectedFolderMode.Copy));
         var service = CreateService(selectedFolders);
 
-        var result = await service.ResolveFolderAsync(selectedFolderId).ConfigureAwait(false);
+        var result = await service.ResolveFolderAsync(selectedFolderId);
 
         var canonicalRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository);
         AssertEx.Equal(Guid.Empty, result.ProjectId);
@@ -107,7 +107,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     [Test]
     public async Task RegisterAsync_WhenFolderIsBelowGitRoot_ThrowsSecurityException()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var nestedFolder = Path.Combine(repository, "src");
         Directory.CreateDirectory(nestedFolder);
         var service = CreateService(Substitute.For<ISelectedFolderResolver>());
@@ -124,7 +124,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
             return;
         }
 
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var linkedRepository = Path.Combine(_root, "repository-link");
         _ = Directory.CreateSymbolicLink(linkedRepository, repository);
         var selectedFolderId = Guid.NewGuid();
@@ -146,7 +146,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     {
         JunctionSupport.EnsureSupported();
 
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var linkedRepository = Path.Combine(_root, "repository-junction");
         AssertEx.True(JunctionSupport.TryCreate(linkedRepository, repository),
             "the fixture must be able to plant a junction once EnsureSupported has passed");
@@ -162,7 +162,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     [Test]
     public async Task ResolveFolderAsync_WhenRegisteredFolderIsReadOnly_ThrowsSecurityException()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
@@ -175,7 +175,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     [Test]
     public async Task ResolveExecutionAsync_WhenRepositoryIdentityDoesNotMatch_ThrowsSecurityException()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var selectedFolderId = Guid.NewGuid();
         var selectedFolders = Substitute.For<ISelectedFolderResolver>();
         selectedFolders.ResolveAsync(selectedFolderId.ToString(), Arg.Any<CancellationToken>())
@@ -188,7 +188,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     [Test]
     public async Task ReconnectAsync_WhenRepositoryIdentityMatches_DelegatesToStore()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var canonicalRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository);
         var repositoryIdentityHash = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRoot);
         var projectId = Guid.NewGuid();
@@ -209,7 +209,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
              .Returns(reconnectedProject);
         var service = CreateService(selectedFolders, store);
 
-        var result = await service.ReconnectAsync(projectId, selectedFolderId, expectedVersion).ConfigureAwait(false);
+        var result = await service.ReconnectAsync(projectId, selectedFolderId, expectedVersion);
 
         AssertEx.Equal(reconnectedProject, result);
         _ = store.Received(1).ReconnectProjectRepositoryAsync(projectId,
@@ -231,7 +231,7 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
-        var result = await RunProcessAsync(repository, "git", "init", "--initial-branch=main", ".").ConfigureAwait(false);
+        var result = await RunProcessAsync(repository, "git", "init", "--initial-branch=main", ".");
         AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
         return repository;
     }
@@ -260,8 +260,8 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
         process.Start();
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        return new CommandResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
+        await process.WaitForExitAsync();
+        return new CommandResult(process.ExitCode, await stdout, await stderr);
     }
 
     private static DevelopmentExecutionSnapshot ExecutionSnapshot(Guid selectedFolderId, string repositoryIdentityHash) =>

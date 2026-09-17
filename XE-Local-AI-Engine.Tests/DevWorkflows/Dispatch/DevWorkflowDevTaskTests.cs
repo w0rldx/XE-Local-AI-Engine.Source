@@ -126,15 +126,15 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ThePlanImplementValidateReviewChainRunsEndToEnd()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(PlanImplementValidateReview, "Add the feature.", projectId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        var runId = await harness.StartRunAsync(PlanImplementValidateReview, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        _ = await harness.SaveAgentArtifactAsync(runId, "plan", "plan.md", "# Plan\n\nChange the thing.").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "plan").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        _ = await harness.SaveAgentArtifactAsync(runId, "plan", "plan.md", "# Plan\n\nChange the thing.");
+        await harness.SettleAgentAsync(runId, "plan");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
         AssertEx.Equal(taskId, implemented.DevelopmentTaskId, "the node run names the task it drove, which is how a reader drills into the evidence.");
         AssertEx.Contains(AssertEx.NotNull(implemented.OutputJson), "\"taskStatus\":\"AwaitingApply\"");
@@ -142,23 +142,23 @@ public sealed class DevWorkflowDevTaskTests
             string.Join(", ", harness.Chain.Actions),
             "the node run drove the existing chain one stage at a time rather than forcing a status.");
 
-        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        var task = await ReadTaskAsync(harness, taskId);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status, "and the task is left waiting to be applied: this node applies nothing.");
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
-        AssertEx.Contains(await harness.ReadArtifactsAsync(runId).ConfigureAwait(false),
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
+        AssertEx.Contains(await harness.ReadArtifactsAsync(runId),
             artifact => artifact.Kind == DevWorkflowArtifactKind.ValidationReport,
             "the validation node's report is in the run's own artifacts, next to the plan the agent wrote.");
 
-        var review = await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false);
+        var review = await harness.ReadNodeRunAsync(runId, "review");
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, review.Status);
-        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId)).Status);
 
-        await harness.DecideAsync(runId, "review", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        await harness.DecideAsync(runId, "review", DevWorkflowDecisionKind.Approve);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
-            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, taskId)).Status,
             "approving the workflow's own gate is not applying the patch — that is a later act, behind its own gate.");
     }
 
@@ -175,19 +175,19 @@ public sealed class DevWorkflowDevTaskTests
     public async Task AReAttemptKeepsThePointerToTheTaskItIsStillImplementing()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.FailNextAttempts(1);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(expected: 2, implemented.Attempt, "the failed development attempt cost the node run one of its own.");
         AssertEx.Equal(taskId, implemented.DevelopmentTaskId, "the pointer survived the re-attempt: the task it names holds the evidence of the attempt that failed.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
-        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId)).Status);
 
-        var retry = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "node.retry.scheduled");
+        var retry = (await harness.ReadEventsAsync(runId)).Single(static entry => entry.EventType == "node.retry.scheduled");
         AssertEx.Contains(AssertEx.NotNull(retry.DetailJson), "\"failureClass\":\"ProviderError\"");
     }
 
@@ -199,13 +199,13 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ADevelopmentAttemptThatKeepsFailingStandsTheNodeRunDownForAHuman()
     {
         await using var harness = NewHarness();
-        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.FailNextAttempts(5);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(expected: 2, blocked.Attempt, "the node allowed two attempts, and both were spent on a real development attempt.");
         AssertEx.Equal(DevWorkflowFailureClasses.ProviderError, blocked.FailureClass);
@@ -213,7 +213,7 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "as many attempts as this node allows");
         AssertEx.Equal(DevWorkflowDecisionKind.Abandon, blocked.PendingDecisionKind);
         AssertEx.Equal(expected: 2, harness.Chain.Actions.Count, "each node-run attempt asked the chain for its own action rather than re-reading the last one's failure.");
-        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId)).Status);
     }
 
     /// <summary>
@@ -226,13 +226,13 @@ public sealed class DevWorkflowDevTaskTests
     public async Task AWorkspacePolicyRefusalStandsTheNodeDownForAHumanInsteadOfSpendingTheRetryBudget()
     {
         await using var harness = NewHarness();
-        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.RefuseNextAttemptsOnPolicy(5);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, blocked.FailureClass);
         AssertEx.Equal(expected: 1, blocked.Attempt, "a refusal on evidence answers the same way every time, so the second attempt is not spent finding that out.");
@@ -255,24 +255,24 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ATaskInsideItsOwnValidationWindowIsWaitedOnRatherThanStoodDown()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.StallInValidation(1);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var waiting = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var waiting = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, waiting.Status, $"the node was left on {waiting.Status}: {waiting.TerminalReason}");
         AssertEx.Null(waiting.FailureClass, "nothing failed — Dev Mode is one status ahead of this tick, and will move the task on itself.");
         AssertEx.Equal(expected: 1, waiting.Attempt, "and the wait cost the node none of its budget.");
-        AssertEx.Equal(DevelopmentTaskStatus.Validation, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.Validation, (await ReadTaskAsync(harness, taskId)).Status);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
-            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, taskId)).Status,
             "the window closed and the chain carried on from where it was, without an operator being asked for anything.");
     }
 
@@ -287,24 +287,24 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ATaskThatMovedOnBetweenTheAskAndTheReReadIsWaitedOnRatherThanStoodDown()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.StallInValidation(1, advance: true);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var waiting = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var waiting = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, waiting.Status, $"the node was left on {waiting.Status}: {waiting.TerminalReason}");
         AssertEx.Null(waiting.FailureClass, "the task is one status FURTHER on than the window, and nothing about that is a fault.");
         AssertEx.Equal(DevelopmentTaskStatus.InReview,
-            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, taskId)).Status,
             "the supervisor had already moved it past Validation by the time the guard looked.");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
-        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId)).Status);
     }
 
     /// <summary>
@@ -315,23 +315,23 @@ public sealed class DevWorkflowDevTaskTests
     public async Task CancellingARunStopsTheDevelopmentAttemptItWasDriving()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.HoldNextAttempt();
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "implement")).Status,
             "the chain is working, so the node run waits rather than asking it for more.");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(expected: 1, harness.Chain.CancelledAttempts.Count, "the development chain owns what stopping its work costs.");
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "implement")).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress,
-            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, taskId)).Status,
             "the task itself is left where it stood: a cancelled run abandons its own node run, not the operator's task.");
     }
 
@@ -343,33 +343,33 @@ public sealed class DevWorkflowDevTaskTests
     public async Task PausingARunLeavesTheDevelopmentAttemptToFinishAndParksTheNodeRun()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.HoldNextAttempt();
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Empty(harness.Chain.CancelledAttempts, "a pause is meant to be resumed, so the attempt is left to finish rather than thrown away.");
         AssertEx.Equal(DevWorkflowRunStatus.Pausing,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "and the run says so honestly until the attempt has landed.");
 
         // The attempt lands, and the pause can then complete.
-        await LandTheHeldAttemptAsync(harness, taskId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await LandTheHeldAttemptAsync(harness, taskId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var parked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var parked = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, parked.Status, "a paused implementation node waits rather than terminalizing.");
         AssertEx.Equal(taskId, parked.DevelopmentTaskId, "it keeps the task, which is what makes the resume a continuation.");
-        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId)).Status);
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Running).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Running);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "implement")).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId)).Status);
     }
 
     /// <summary>
@@ -380,11 +380,11 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ADevTaskNodeOnANodeWithDevelopmentModeOffStandsDown()
     {
         await using var harness = new DevWorkflowHarness(("Development:Enabled", "false"));
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", Guid.NewGuid()).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", Guid.NewGuid());
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass, "no retry answers a node that has nothing to run on.");
         AssertEx.Equal(expected: 1, blocked.Attempt, "and no attempt is spent finding that out.");
@@ -400,18 +400,18 @@ public sealed class DevWorkflowDevTaskTests
     {
         var clock = new ManualTimeProvider();
         await using var harness = NewHarness(clock);
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.HoldNextAttempt();
-        var runId = await harness.StartRunAsync(ImpatientDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(ImpatientDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "implement")).Status);
 
         clock.Advance(TimeSpan.FromMinutes(10));
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(expected: 1, harness.Chain.CancelledAttempts.Count, "the attempt is stopped rather than left running under a settled row.");
-        var expired = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var expired = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, expired.Status, "the node allowed one attempt, so a timeout has nowhere left to go but a human.");
         AssertEx.Equal(DevWorkflowFailureClasses.Timeout, expired.FailureClass, "the clock is why it ended, not the attempt it happened to cancel on the way.");
         AssertEx.Contains(AssertEx.NotNull(expired.TerminalReason), "5 seconds");
@@ -432,8 +432,8 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ARoutedReAttemptAsksAnApprovedTaskForANewRoundInsteadOfReSucceeding()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId);
 
         // The round the change request asks for is held mid-flight, which is the only place its brief can be read: it
         // is composed when the attempt starts, from what the transition that asked for it recorded.
@@ -444,21 +444,21 @@ public sealed class DevWorkflowDevTaskTests
                 Report = Encoding.UTF8.GetBytes(FailingReport)
             },
             FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var routed = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "node.retry.routed");
+        var routed = (await harness.ReadEventsAsync(runId)).Single(static entry => entry.EventType == "node.retry.routed");
         AssertEx.Contains(AssertEx.NotNull(routed.DetailJson), "\"from\":\"validate\"");
         AssertEx.Contains(AssertEx.NotNull(routed.DetailJson), "\"to\":\"implement\"");
         AssertEx.Contains(harness.Chain.Actions,
             static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
             $"the routed re-attempt asked for rework and a genuinely new coder round ran from it: {string.Join(", ", harness.Chain.Actions)}");
         AssertEx.Equal(DevelopmentTaskStatus.InProgress,
-            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, taskId)).Status,
             "the task left the approval it was sitting on and is being implemented again, rather than re-succeeding on the patch just refused.");
 
-        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback,
+        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId)).PreviousRoundFeedback,
             "the new round must be told what was wrong with the last one, or it re-implements blind.");
         AssertEx.Contains(feedback, "dotnet_test_release_no_build");
         AssertEx.Contains(feedback, "3 of 15 tests failed");
@@ -469,15 +469,15 @@ public sealed class DevWorkflowDevTaskTests
 
         // The second round lands where the first did, and the node run settles on ITS attempt rather than asking again:
         // the change request is one-shot per attempt, keyed on the operation the transition was written under.
-        await LandTheHeldAttemptAsync(harness, taskId).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await LandTheHeldAttemptAsync(harness, taskId);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
         AssertEx.Equal(expected: 2, implemented.Attempt);
         AssertEx.Contains(AssertEx.NotNull(implemented.OutputJson), "\"taskStatus\":\"AwaitingApply\"");
-        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -495,19 +495,19 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ATransientFailureOnTheNodeItselfDoesNotAskAnApprovedTaskToBeImplementedAgain()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.FailNextAttempts(1);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
         AssertEx.Equal(expected: 2, implemented.Attempt, "the transient failure cost the node one of its own attempts, which is the only budget it should touch.");
         AssertEx.False(AssertEx.NotNull(implemented.InputJson).Contains("priorFailureNode", StringComparison.Ordinal),
             $"a same-node retry names no rejecting node, because there is none: {implemented.InputJson}");
 
-        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        var task = await ReadTaskAsync(harness, taskId);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status);
         AssertEx.Equal(expected: 1,
             task.CurrentReviewRound,
@@ -530,27 +530,27 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ARoutedFailureWithNoReportAndNoCountsStandsTheNodeDownInsteadOfAskingForARound()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId);
         var drivenBefore = harness.Chain.Actions.Count;
         harness.Tools.Answer("validate",
             FakeDevWorkflowToolCommands.Refusing(DevWorkflowFailureClasses.ToolCommandFailed, "The gate stopped before it ran anything."),
             FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        var task = await ReadTaskAsync(harness, taskId);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status, "a verdict nobody reached does not move an approved task.");
         AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and it spends none of the rounds a real rejection would.");
         AssertEx.False(harness.Chain.Actions.Skip(drivenBefore).Contains(nameof(DevelopmentTaskStatus.ChangesRequested), StringComparer.Ordinal),
             $"no change was requested: {string.Join(", ", harness.Chain.Actions.Skip(drivenBefore))}");
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, "the node ends rather than polling forever on an ask it will not make.");
         AssertEx.Equal(DevWorkflowFailureClasses.Configuration, implemented.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "left no validation report or failing counts");
         AssertEx.Equal(DevWorkflowDecisionKind.Abandon, implemented.PendingDecisionKind, "a human is asked, which is what makes the dead end recoverable.");
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId),
             "node.intervention.required",
             message: "the stand-down reaches the feed, so the operator is told rather than left reading a stalled row.");
     }
@@ -565,8 +565,8 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ATransientFailureInsideAFixLoopKeepsTheRoutedVerdictAndItsEvidence()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId);
         harness.Tools.Answer("validate",
             FakeDevWorkflowToolCommands.Failing() with
             {
@@ -577,11 +577,11 @@ public sealed class DevWorkflowDevTaskTests
         // The coder round the route asks for fails transiently, which is what sends the node round its OWN retry while
         // the routed failure is still outstanding on its inputs.
         harness.Chain.FailNextAttempts(1);
-        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         var input = AssertEx.NotNull(implemented.InputJson);
         AssertEx.Contains(input, "\"priorFailureNode\":\"validate\"", message: "the transient retry must not drop the node whose verdict routed the run back.");
         AssertEx.Contains(input, "\"testsFailed\":3", message: "nor overwrite that verdict's counts with its own count-less output.");
@@ -589,7 +589,7 @@ public sealed class DevWorkflowDevTaskTests
             static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
             $"the rejection still asks for a new round: {string.Join(", ", harness.Chain.Actions)}");
 
-        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback);
+        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId)).PreviousRoundFeedback);
         AssertEx.Contains(feedback, "dotnet_test_release_no_build", StringComparison.Ordinal, "and still quotes the report rather than a generic sentence.");
         AssertEx.Contains(feedback, "3 of 15 tests failed");
     }
@@ -609,8 +609,8 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ATransientFailureAfterTheChangeRequest_DoesNotAskForTheSameRejectionTwice()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId);
         harness.Tools.Answer("validate",
             FakeDevWorkflowToolCommands.Failing() with
             {
@@ -621,23 +621,23 @@ public sealed class DevWorkflowDevTaskTests
         // The coder round the change request asked for fails transiently, which is what moves the node's own attempt
         // while the rejection that asked for it is still outstanding.
         harness.Chain.FailNextAttempts(1);
-        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         AssertEx.Equal(expected: 1,
             harness.Chain.Actions.Count(static action => action == nameof(DevelopmentTaskStatus.ChangesRequested)),
             $"one rejection is one ask, whatever the node spent reaching it: {string.Join(", ", harness.Chain.Actions)}");
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
 
-        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        var task = await ReadTaskAsync(harness, taskId);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, task.Status, "the round the rejection asked for landed, and nothing re-opened it afterwards.");
         AssertEx.Equal(expected: 2,
             task.CurrentReviewRound,
             "one round for the original approval and one for the rework: a third would be the same rejection charged twice.");
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -654,8 +654,8 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ACheckThatRefusedWithoutRunningAnything_DoesNotBorrowTheEarlierAttemptsReport()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId);
 
         // Round one refuses WITH a report, which is a real verdict. Round two refuses before it runs anything, so the
         // only report the node has ever written is round one's.
@@ -666,20 +666,20 @@ public sealed class DevWorkflowDevTaskTests
             },
             FakeDevWorkflowToolCommands.Refusing(DevWorkflowFailureClasses.ToolCommandFailed, "The gate stopped before it ran anything."),
             FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(PatientDevTaskFixLoop, "Add the feature.", projectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         AssertEx.Equal(expected: 1,
             harness.Chain.Actions.Count(static action => action == nameof(DevelopmentTaskStatus.ChangesRequested)),
             $"only the verdict that actually judged something asked for a round: {string.Join(", ", harness.Chain.Actions)}");
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
         AssertEx.Equal(DevWorkflowFailureClasses.Configuration, implemented.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "left no validation report or failing counts");
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
-            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, taskId)).Status,
             "and the approved work is untouched behind the stand-down.");
     }
 
@@ -698,18 +698,18 @@ public sealed class DevWorkflowDevTaskTests
                 services.RemoveAll<IDevWorkflowArtifactBlobStore>();
                 services.AddSingleton<IDevWorkflowArtifactBlobStore, UnreadableArtifactBlobStore>();
             });
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        await DriveToAwaitingApplyAsync(harness, projectId, taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        await DriveToAwaitingApplyAsync(harness, projectId, taskId);
         harness.Chain.HoldNextAttempt();
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing());
-        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).PreviousRoundFeedback,
+        var feedback = AssertEx.NotNull((await ReadCoderSnapshotAsync(harness, taskId)).PreviousRoundFeedback,
             "an unreadable report costs the detail, not the round.");
         AssertEx.Contains(feedback, "1 of 4 commands failed, 3 tests failed");
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await ReadTaskAsync(harness, taskId)).Status);
     }
 
     /// <summary>
@@ -721,21 +721,21 @@ public sealed class DevWorkflowDevTaskTests
     public async Task WithNoReviewRoundsLeft_ARoutedReAttemptStandsDownInsteadOfAskingForARoundThatCannotFinish()
     {
         await using var harness = NewHarness();
-        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var onlyOneRound = await AddTaskAsync(harness, projectId, "One review round only", maxReviewRounds: 1).ConfigureAwait(false);
-        await DriveToAwaitingApplyAsync(harness, projectId, onlyOneRound).ConfigureAwait(false);
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness);
+        var onlyOneRound = await AddTaskAsync(harness, projectId, "One review round only", maxReviewRounds: 1);
+        await DriveToAwaitingApplyAsync(harness, projectId, onlyOneRound);
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing());
-        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId).ConfigureAwait(false);
-        await PinTaskAsync(harness, runId, "implement", onlyOneRound).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevTaskFixLoop, "Add the feature.", projectId);
+        await PinTaskAsync(harness, runId, "implement", onlyOneRound);
 
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, implemented.Status, AssertEx.NotNull(implemented.OutputJson));
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, implemented.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(implemented.TerminalReason), "of its rounds");
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
-            (await ReadTaskAsync(harness, onlyOneRound).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, onlyOneRound)).Status,
             "a round it cannot finish is not asked for, so the task keeps the approval it earned.");
     }
 
@@ -748,18 +748,18 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ANodeRunAgainstAnAlreadyImplementedTaskSucceedsWithoutDrivingIt()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        while ((await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status != DevelopmentTaskStatus.AwaitingApply)
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        while ((await ReadTaskAsync(harness, taskId)).Status != DevelopmentTaskStatus.AwaitingApply)
         {
-            _ = await harness.Chain.StartNextActionAsync(projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+            _ = await harness.Chain.StartNextActionAsync(projectId, taskId, Guid.NewGuid());
         }
 
         var driven = harness.Chain.Actions.Count;
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
         AssertEx.Equal(expected: 1, implemented.Attempt);
         AssertEx.Contains(AssertEx.NotNull(implemented.OutputJson), "\"taskStatus\":\"AwaitingApply\"");
@@ -775,19 +775,19 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ANodeRunThatAlreadyNamesATaskDrivesThatOneAndNotTheProjectsFirst()
     {
         await using var harness = NewHarness();
-        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var secondTaskId = await AddTaskAsync(harness, projectId, "Implement the second slice").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        await PinTaskAsync(harness, runId, "implement", secondTaskId).ConfigureAwait(false);
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness);
+        var secondTaskId = await AddTaskAsync(harness, projectId, "Implement the second slice");
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        await PinTaskAsync(harness, runId, "implement", secondTaskId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
         AssertEx.Equal(secondTaskId, implemented.DevelopmentTaskId, "the row's own pointer decides, not the order the project's tasks happen to be in.");
-        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, secondTaskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, secondTaskId)).Status);
         AssertEx.Equal(DevelopmentTaskStatus.Planned,
-            (await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, firstTaskId)).Status,
             "and the project's first task was never touched, which is the whole point of naming one.");
     }
 
@@ -799,20 +799,20 @@ public sealed class DevWorkflowDevTaskTests
     public async Task AnOrdinaryNodeRunStillDrivesTheProjectsFirstTask()
     {
         await using var harness = NewHarness();
-        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var secondTaskId = await AddTaskAsync(harness, projectId, "Implement the second slice").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness);
+        var secondTaskId = await AddTaskAsync(harness, projectId, "Implement the second slice");
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(firstTaskId, implemented.DevelopmentTaskId, "the project's own task is the one an undecomposed graph implements.");
-        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, firstTaskId)).Status);
         AssertEx.Equal(DevelopmentTaskStatus.Planned,
-            (await ReadTaskAsync(harness, secondTaskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, secondTaskId)).Status,
             "and nothing else in the project moved.");
         AssertEx.Equal(expected: 2,
-            (await ListTasksAsync(harness, projectId).ConfigureAwait(false)).Count,
+            (await ListTasksAsync(harness, projectId)).Count,
             "no task was created: this node had one to drive.");
     }
 
@@ -829,31 +829,30 @@ public sealed class DevWorkflowDevTaskTests
     public async Task AMaterializedChildImplementsATaskOfItsOwnInTheSameProject()
     {
         await using var harness = NewHarness();
-        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
         await MaterializeChildAsync(harness,
                 runId,
                 "implement",
                 "implement#1",
                 projectId,
-                """{"title":"Implement the second slice","requirements":"Do the other half."}""")
-            .ConfigureAwait(false);
+                """{"title":"Implement the second slice","requirements":"Do the other half."}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var child = await harness.ReadNodeRunAsync(runId, "implement#1").ConfigureAwait(false);
+        var child = await harness.ReadNodeRunAsync(runId, "implement#1");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, child.Status, AssertEx.NotNull(child.TerminalReason ?? child.OutputJson));
-        var tasks = await ListTasksAsync(harness, projectId).ConfigureAwait(false);
+        var tasks = await ListTasksAsync(harness, projectId);
         AssertEx.Equal(expected: 2, tasks.Count, "the child implements its own slice, so it created its own task rather than sharing one.");
         AssertEx.Equal(firstTaskId,
-            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).DevelopmentTaskId,
+            (await harness.ReadNodeRunAsync(runId, "implement")).DevelopmentTaskId,
             "the template's own node still drives the project's task.");
 
         var childTaskId = tasks.Single(task => task.Id != firstTaskId).Id;
         AssertEx.Equal(childTaskId, child.DevelopmentTaskId, "and the child names the task it created, which is how a reader reaches its evidence.");
 
-        var created = await ReadTaskAsync(harness, childTaskId).ConfigureAwait(false);
-        var parent = await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false);
+        var created = await ReadTaskAsync(harness, childTaskId);
+        var parent = await ReadTaskAsync(harness, firstTaskId);
         AssertEx.Equal("Implement the second slice", created.Title, "the brief the materialization wrote is what the child implements.");
         AssertEx.Equal("Do the other half.", created.Requirements);
         AssertEx.Equal(parent.AcceptanceCriteriaJson, created.AcceptanceCriteriaJson, "a slice of a project is done by that project's standard.");
@@ -871,24 +870,23 @@ public sealed class DevWorkflowDevTaskTests
     public async Task AMaterializedChildWithNothingToImplementStandsDownInsteadOfWedging()
     {
         await using var harness = NewHarness();
-        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        await MaterializeChildAsync(harness, runId, "implement", "implement#1", projectId, """{"title":"Implement the second slice","requirements":"   "}""")
-            .ConfigureAwait(false);
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        await MaterializeChildAsync(harness, runId, "implement", "implement#1", projectId, """{"title":"Implement the second slice","requirements":"   "}""");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var child = await harness.ReadNodeRunAsync(runId, "implement#1").ConfigureAwait(false);
+        var child = await harness.ReadNodeRunAsync(runId, "implement#1");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, child.Status, $"the row settled on {child.Status} rather than waiting for a sweep that would never finish it.");
         AssertEx.Equal(DevWorkflowFailureClasses.Configuration, child.FailureClass, "a brief that names nothing to build is a decided fact, not something another attempt answers.");
         AssertEx.Contains(AssertEx.NotNull(child.TerminalReason), "implement#1");
         AssertEx.Contains(AssertEx.NotNull(child.TerminalReason), "requirements");
         AssertEx.Null(child.DevelopmentTaskId, "and it names no task, because it never created one.");
         AssertEx.Equal(expected: 1,
-            (await ListTasksAsync(harness, projectId).ConfigureAwait(false)).Count,
+            (await ListTasksAsync(harness, projectId)).Count,
             "the project still carries only its own task: a child with nothing to implement must not add one.");
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
-            (await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false)).Status,
+            (await ReadTaskAsync(harness, firstTaskId)).Status,
             "and the sibling that could run was unaffected.");
     }
 
@@ -902,18 +900,18 @@ public sealed class DevWorkflowDevTaskTests
         // The class host, whose Development management service is the REAL one: the scripted chain the rest of this
         // class uses is a stand-in, and this is about what Dev Mode's own page reads.
         await using var harness = new DevWorkflowHarness(Host);
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var undrivenTaskId = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        var undrivenTaskId = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this");
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        await PinTaskAsync(harness, runId, "implement", taskId);
 
         await using var scope = harness.Services.CreateAsyncScope();
         var management = scope.ServiceProvider.GetRequiredService<IDevelopmentManagementService>();
 
         AssertEx.Equal(runId,
-            (await management.GetTaskAsync(projectId, taskId).ConfigureAwait(false)).WorkflowRunId,
+            (await management.GetTaskAsync(projectId, taskId)).WorkflowRunId,
             "the task a node run named names that node run's run back.");
-        AssertEx.Null((await management.GetTaskAsync(projectId, undrivenTaskId).ConfigureAwait(false)).WorkflowRunId,
+        AssertEx.Null((await management.GetTaskAsync(projectId, undrivenTaskId)).WorkflowRunId,
             "and a task an operator drives themselves says nothing about workflows, which is every task on a node that runs none.");
     }
 
@@ -937,22 +935,22 @@ public sealed class DevWorkflowDevTaskTests
         // The class host's REAL Development management service: the scripted chain is the thing under test's stand-in
         // everywhere else, and a guard asserted against a stand-in is not asserted at all.
         await using var harness = new DevWorkflowHarness(Host);
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        await PinTaskAsync(harness, runId, "implement", taskId);
 
-        var operatorApply = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        var operatorApply = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null);
         AssertEx.Contains(operatorApply, "has not ended");
         AssertEx.Contains(operatorApply, runId.ToString("D"));
 
-        var strangerApply = await ApplyFailureAsync(harness, projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+        var strangerApply = await ApplyFailureAsync(harness, projectId, taskId, Guid.NewGuid());
         AssertEx.Contains(strangerApply, "has not ended", message: "and naming SOME run is not naming this one.");
 
-        var ownApply = await ApplyFailureAsync(harness, projectId, taskId, runId).ConfigureAwait(false);
+        var ownApply = await ApplyFailureAsync(harness, projectId, taskId, runId);
         AssertEx.False(ownApply.Contains("has not ended", StringComparison.Ordinal), $"the run's own lane must get past its own gate: {ownApply}");
 
-        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Completed).ConfigureAwait(false);
-        var afterTheRunEnded = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Completed);
+        var afterTheRunEnded = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null);
         AssertEx.False(afterTheRunEnded.Contains("has not ended", StringComparison.Ordinal), $"a terminal run hands the authority back: {afterTheRunEnded}");
     }
 
@@ -969,14 +967,14 @@ public sealed class DevWorkflowDevTaskTests
     public async Task WithTheModuleSwitchedOff_ALiveRunsTaskIsStillTheOperatorsToApply()
     {
         await using var harness = new DevWorkflowHarness(("DevWorkflows:Enabled", "false"));
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        await PinTaskAsync(harness, runId, "implement", taskId);
 
         // The run really is live and really does own the task — this is the same row that is refused with the module on.
-        AssertEx.False(DevWorkflowStateMachine.IsTerminal((await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status));
+        AssertEx.False(DevWorkflowStateMachine.IsTerminal((await harness.ReadRunAsync(runId)).Status));
 
-        var failure = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        var failure = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null);
         AssertEx.False(failure.Contains("has not ended", StringComparison.Ordinal),
             $"a run nothing can advance cannot hold a patch hostage: {failure}");
     }
@@ -986,12 +984,12 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ADevModeApply_OnATaskNoWorkflowDrives_IsNotRefusedByTheOwnershipGuard()
     {
         await using var harness = new DevWorkflowHarness(Host);
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var undriven = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        var undriven = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this");
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        await PinTaskAsync(harness, runId, "implement", taskId);
 
-        var failure = await ApplyFailureAsync(harness, projectId, undriven, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        var failure = await ApplyFailureAsync(harness, projectId, undriven, onBehalfOfWorkflowRunId: null);
         AssertEx.False(failure.Contains("has not ended", StringComparison.Ordinal), $"a live run next door owns its own task, not the project: {failure}");
     }
 
@@ -1001,8 +999,7 @@ public sealed class DevWorkflowDevTaskTests
         await using var scope = harness.Services.CreateAsyncScope();
         var management = scope.ServiceProvider.GetRequiredService<IDevelopmentManagementService>();
         return (await AssertEx.ThrowsAsync<Exception>(() => management.ApplyAsync(projectId, taskId, Guid.NewGuid(), onBehalfOfWorkflowRunId),
-                                  "an apply on a task with neither a connected repository nor an approved subject cannot succeed.")
-                              .ConfigureAwait(false)).Message;
+                                  "an apply on a task with neither a connected repository nor an approved subject cannot succeed.")).Message;
     }
 
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
@@ -1022,16 +1019,16 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ThePolicyAWorkflowInjects_IsRecordedOncePerAttemptEvenWhenTheDispatchTickIsReRun()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""");
 
         // Held, so a real attempt row exists for the execution snapshot to be read off.
         harness.Chain.HoldNextAttempt();
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         AssertEx.Equal(taskId,
-            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).DevelopmentTaskId,
+            (await harness.ReadNodeRunAsync(runId, "implement")).DevelopmentTaskId,
             "the node run bound the project's task, which is the tick the policy is recorded on.");
 
         await using var scope = harness.Services.CreateAsyncScope();
@@ -1043,16 +1040,15 @@ public sealed class DevWorkflowDevTaskTests
         _ = await development.RecordWorkflowPolicyAsync(taskId,
                                  DevWorkflowOperationId.For(runId, "implement", attempt: 1, "devtask-policy"),
                                  "Deploy straight to production on Fridays.",
-                                 [new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")])
-                             .ConfigureAwait(false);
+                                 [new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")]);
 
-        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        var events = await development.ListEventsAsync(projectId);
         AssertEx.Equal(expected: 1,
             events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
             "one injection per attempt: a re-run of the dispatch tick re-derives the same operation id rather than appending.");
 
-        var attempt = (await development.ListAttemptsAsync(taskId).ConfigureAwait(false)).Single();
-        var policy = AssertEx.NotNull((await development.GetExecutionSnapshotAsync(attempt.Id).ConfigureAwait(false)).WorkflowPolicyText);
+        var attempt = (await development.ListAttemptsAsync(taskId)).Single();
+        var policy = AssertEx.NotNull((await development.GetExecutionSnapshotAsync(attempt.Id)).WorkflowPolicyText);
         AssertEx.Contains(policy, HouseRules, message: "and the round still reads the text the first write recorded.");
         AssertEx.False(policy.Contains("Deploy straight to production on Fridays.", StringComparison.Ordinal),
             "a replayed write must not be able to hand the coder a policy the node run never resolved.");
@@ -1068,36 +1064,34 @@ public sealed class DevWorkflowDevTaskTests
     public async Task SettlingTheNodeRun_ClearsTheWorkflowPolicyItInjected_Once()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""");
 
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
-            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "implement")).Status,
             "the node run has to have settled for its settle to have written anything.");
 
         await using var scope = harness.Services.CreateAsyncScope();
         var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        var events = await development.ListEventsAsync(projectId);
         AssertEx.Equal(expected: 2,
             events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
             "the dispatch writes the injection and the settle writes the clear, once each — the settle is ticked repeatedly.");
 
         // The manual round an operator starts on the task the workflow left behind, driven through the store directly
         // because no workflow is asking for it any more. It is the round the stale policy used to govern.
-        var awaiting = await development.GetTaskAsync(taskId).ConfigureAwait(false);
+        var awaiting = await development.GetTaskAsync(taskId);
         var reworking = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
                                              Guid.NewGuid(),
                                              DevelopmentTaskStatus.ChangesRequested,
-                                             awaiting.Version))
-                                         .ConfigureAwait(false);
+                                             awaiting.Version));
         var inProgress = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
                                               Guid.NewGuid(),
                                               DevelopmentTaskStatus.InProgress,
-                                              reworking.Version))
-                                          .ConfigureAwait(false);
+                                              reworking.Version));
         var attemptId = Guid.NewGuid();
         _ = await development.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
                                  attemptId,
@@ -1105,10 +1099,9 @@ public sealed class DevWorkflowDevTaskTests
                                  DevelopmentAttemptRole.Coder,
                                  "local-model",
                                  "local",
-                                 inProgress.Version))
-                             .ConfigureAwait(false);
+                                 inProgress.Version));
 
-        AssertEx.Null((await development.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+        AssertEx.Null((await development.GetExecutionSnapshotAsync(attemptId)).WorkflowPolicyText,
             "a round started after the workflow settled is governed by nothing the workflow injected.");
     }
 
@@ -1129,8 +1122,8 @@ public sealed class DevWorkflowDevTaskTests
     public async Task EveryTerminalPath_ClearsTheWorkflowPolicyItInjected(string shape, DevWorkflowNodeRunStatus expected)
     {
         await using var harness = NewHarness();
-        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness);
+        _ = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""");
 
         switch (shape)
         {
@@ -1150,20 +1143,20 @@ public sealed class DevWorkflowDevTaskTests
                 break;
         }
 
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         if (shape != "blocked")
         {
-            await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
-            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+            await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
         }
 
-        AssertEx.Equal(expected, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected, (await harness.ReadNodeRunAsync(runId, "implement")).Status);
 
         await using var scope = harness.Services.CreateAsyncScope();
         var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var events = await development.ListEventsAsync(projectId).ConfigureAwait(false);
+        var events = await development.ListEventsAsync(projectId);
         AssertEx.Equal(expected: 2,
             events.Count(entry => entry.EventType == "WorkflowPolicyApplied"),
             $"the '{shape}' terminal must revoke the policy it was dispatched with, once.");
@@ -1184,44 +1177,43 @@ public sealed class DevWorkflowDevTaskTests
     public async Task AnOperatorRetryOfABlockedDevTask_TellsTheNextCoderRoundWhatTheySaid()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
 
         // One refusal blocks the node with the task left InProgress behind a FAILED coder attempt, which is where a
         // retried implementation node lands. Nothing is held after it: the round the change request asks for has to
         // actually run, because the tick that walks the task back through InProgress is the one that re-reaches the
         // guard, and a held attempt would return at the "something is already working" check long before it.
         harness.Chain.RefuseNextAttemptsOnPolicy(1);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await ReadTaskAsync(harness, taskId)).Status);
 
-        await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "Do not add a test file; extend the existing negate tests.")
-                     .ConfigureAwait(false);
+        await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "Do not add a test file; extend the existing negate tests.");
 
         // Read WHILE the node run is still live. An OPERATOR instruction, not the previous round's feedback: the two
         // are separate fields because the prompts rank them, a person's sentence amending the task's immutable
         // requirements and outranking a reviewer's. It is bounded by the node run that made it, so the read has to
         // happen before the settle rather than after — see the last assertion in this test.
-        var snapshot = await AdvanceUntilTheOperatorIsQuotedAsync(harness, runId, taskId).ConfigureAwait(false);
+        var snapshot = await AdvanceUntilTheOperatorIsQuotedAsync(harness, runId, taskId);
         var said = AssertEx.NotNull(snapshot.OperatorInstruction,
             "the round the operator paid for must be told what they said, or it redoes exactly what was refused.");
         AssertEx.Contains(said, "extend the existing negate tests");
         AssertEx.Contains(said, "implement", message: "and which step of the workflow the person was answering.");
         AssertEx.Null(snapshot.PreviousRoundFeedback, "nothing reviewed this round, so there is no previous round to quote.");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var retried = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var retried = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(expected: 2, retried.Attempt);
         AssertEx.Equal(expected: 3, retried.MaxAttempts, "the retry bought the attempt it is spending.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
             retried.Status,
             $"the round the retry asked for ran to AwaitingApply: {retried.TerminalReason ?? retried.OutputJson}");
 
-        AssertEx.Null((await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false)).OperatorInstruction,
+        AssertEx.Null((await ReadCoderSnapshotAsync(harness, taskId)).OperatorInstruction,
             "and it stops governing the moment the node run that made it settles, or it would outrank the requirements of every round after.");
 
         // The tick after the asked-for round walks the task back to InProgress with no attempt this node run is
@@ -1248,40 +1240,40 @@ public sealed class DevWorkflowDevTaskTests
     public async Task AnOperatorRetryOfADevTaskBlockedAtItsRoundCap_BuysTheTaskOneMoreRound()
     {
         await using var harness = NewHarness();
-        var (projectId, _) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
-        var lastRound = await AddTaskAsync(harness, projectId, "One review round only", maxReviewRounds: 1).ConfigureAwait(false);
-        await BlockAtTheRoundCapAsync(harness, lastRound).ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        await PinTaskAsync(harness, runId, "implement", lastRound).ConfigureAwait(false);
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness);
+        var lastRound = await AddTaskAsync(harness, projectId, "One review round only", maxReviewRounds: 1);
+        await BlockAtTheRoundCapAsync(harness, lastRound);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        await PinTaskAsync(harness, runId, "implement", lastRound);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var blocked = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status, AssertEx.NotNull(blocked.TerminalReason ?? blocked.OutputJson));
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, blocked.FailureClass);
         AssertEx.Equal(expected: 1,
-            (await ReadTaskAsync(harness, lastRound).ConfigureAwait(false)).MaxReviewRounds,
+            (await ReadTaskAsync(harness, lastRound)).MaxReviewRounds,
             "nothing widens a cap on its own: the node run that found the task blocked stands down.");
 
-        await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "Skip the failing test for now.").ConfigureAwait(false);
+        await harness.DecideAsync(runId, "implement", DevWorkflowDecisionKind.Retry, comment: "Skip the failing test for now.");
 
         // Read WHILE the node run is still live: the instruction is bounded by the node run that made it, so the settle
         // correctly revokes it and a read after quiescence would say it never arrived.
-        var snapshot = await AdvanceUntilTheOperatorIsQuotedAsync(harness, runId, lastRound).ConfigureAwait(false);
+        var snapshot = await AdvanceUntilTheOperatorIsQuotedAsync(harness, runId, lastRound);
         AssertEx.Contains(AssertEx.NotNull(snapshot.OperatorInstruction), "Skip the failing test for now.");
-        var reworking = await ReadTaskAsync(harness, lastRound).ConfigureAwait(false);
+        var reworking = await ReadTaskAsync(harness, lastRound);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, reworking.Status, "the task left Blocked for the status a coder round starts from.");
         AssertEx.Equal(expected: 2, reworking.MaxReviewRounds, "the Retry bought exactly the round the cap stopped.");
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         AssertEx.Contains(harness.Chain.Actions,
             static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
             $"the round the Retry paid for was actually asked for: {string.Join(", ", harness.Chain.Actions)}");
-        var task = await ReadTaskAsync(harness, lastRound).ConfigureAwait(false);
+        var task = await ReadTaskAsync(harness, lastRound);
         AssertEx.Equal(expected: 2, task.MaxReviewRounds, "a tick that finds the widening already written must not buy a second round.");
         AssertEx.Equal(expected: 1,
-            (await ListDevelopmentEventsAsync(harness, projectId).ConfigureAwait(false))
+            (await ListDevelopmentEventsAsync(harness, projectId))
             .Count(entry => entry.TaskId == lastRound && entry.EventType == "TaskTransitioned" && entry.Outcome == "TransitionedByOperator"),
             "one Retry, one operator-directed transition: the ledger operation id is what stops the poll asking again.");
     }
@@ -1304,12 +1296,11 @@ public sealed class DevWorkflowDevTaskTests
             _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
                                Guid.NewGuid(),
                                target,
-                               (await store.GetTaskAsync(taskId).ConfigureAwait(false)).Version,
-                               reason))
-                           .ConfigureAwait(false);
+                               (await store.GetTaskAsync(taskId)).Version,
+                               reason));
 
-        await MoveAsync(DevelopmentTaskStatus.Ready).ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.InProgress).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.Ready);
+        await MoveAsync(DevelopmentTaskStatus.InProgress);
 
         // A real attempt row, because the brief the retry's round is composed from is read through one.
         var attemptId = Guid.NewGuid();
@@ -1319,18 +1310,16 @@ public sealed class DevWorkflowDevTaskTests
                                      DevelopmentAttemptRole.Coder,
                                      "scripted-model",
                                      "local",
-                                     (await store.GetTaskAsync(taskId).ConfigureAwait(false)).Version))
-                                 .ConfigureAwait(false);
+                                     (await store.GetTaskAsync(taskId)).Version));
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
                            Guid.NewGuid(),
                            DevelopmentAttemptStatus.Succeeded,
-                           attempt.Version))
-                       .ConfigureAwait(false);
+                           attempt.Version));
 
-        await MoveAsync(DevelopmentTaskStatus.Validation).ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.InReview).ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.ChangesRequested, "The reviewer rejected the round.").ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.Blocked, "The configured maximum number of rounds has been reached.").ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.Validation);
+        await MoveAsync(DevelopmentTaskStatus.InReview);
+        await MoveAsync(DevelopmentTaskStatus.ChangesRequested, "The reviewer rejected the round.");
+        await MoveAsync(DevelopmentTaskStatus.Blocked, "The configured maximum number of rounds has been reached.");
     }
 
     private static Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentTaskAsync(DevWorkflowHarness harness) =>
@@ -1355,13 +1344,13 @@ public sealed class DevWorkflowDevTaskTests
     public async Task ADevTaskNodeWhoseGateFailsAsksForACoderRoundInsteadOfRevalidatingTheSameAttempt()
     {
         await using var harness = NewHarness();
-        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
         harness.Chain.FailTheDeterministicGate();
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var events = await ListDevelopmentEventsAsync(harness, projectId).ConfigureAwait(false);
+        var events = await ListDevelopmentEventsAsync(harness, projectId);
         var validations = events.Count(static entry => entry.EventType == "ValidationStarted");
         AssertEx.Equal(expected: 1,
             validations,
@@ -1370,10 +1359,10 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.Contains(harness.Chain.Actions,
             static action => action == nameof(DevelopmentTaskStatus.ChangesRequested),
             $"the failed gate left the task where a CODER round starts: {string.Join(", ", harness.Chain.Actions)}");
-        var task = await ReadTaskAsync(harness, taskId).ConfigureAwait(false);
+        var task = await ReadTaskAsync(harness, taskId);
         AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and the failure spent a round, which is the only thing bounding the rework loop.");
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status, "the rework round is running: this node run is working, not stuck.");
-        var running = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var running = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
             running.Status,
             $"a working node run carries no terminal: {running.TerminalReason ?? running.OutputJson}");
@@ -1382,7 +1371,7 @@ public sealed class DevWorkflowDevTaskTests
     private static async Task<IReadOnlyList<DevelopmentEventSnapshot>> ListDevelopmentEventsAsync(DevWorkflowHarness harness, Guid projectId)
     {
         await using var scope = harness.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListEventsAsync(projectId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListEventsAsync(projectId);
     }
 
     private static Task<DevelopmentTaskSnapshot> ReadTaskAsync(DevWorkflowHarness harness, Guid taskId) =>
@@ -1402,8 +1391,7 @@ public sealed class DevWorkflowDevTaskTests
                                      title,
                                      "It has to do the other thing.",
                                      "[\"it does the other thing\"]",
-                                     maxReviewRounds))
-                                 .ConfigureAwait(false);
+                                     maxReviewRounds));
         return created.TaskId ?? throw new AssertionException("The create answered without naming the task it created.");
     }
 
@@ -1413,15 +1401,14 @@ public sealed class DevWorkflowDevTaskTests
     /// </summary>
     private static async Task PinTaskAsync(DevWorkflowHarness harness, Guid runId, string nodeKey, Guid taskId)
     {
-        var nodeRun = await harness.ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, nodeKey);
         await using var scope = harness.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
                        .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
                            nodeRun.Id,
                            DevWorkflowVersions.Any,
                            DevWorkflowNodeRunStatus.Pending,
-                           DevelopmentTaskId: taskId))
-                       .ConfigureAwait(false);
+                           DevelopmentTaskId: taskId));
     }
 
     /// <summary>
@@ -1435,7 +1422,7 @@ public sealed class DevWorkflowDevTaskTests
         Guid projectId,
         string inputJson)
     {
-        var template = await harness.ReadNodeRunAsync(runId, templateNodeKey).ConfigureAwait(false);
+        var template = await harness.ReadNodeRunAsync(runId, templateNodeKey);
         await using var scope = harness.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
                        .MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
@@ -1458,16 +1445,15 @@ public sealed class DevWorkflowDevTaskTests
                                          { "nodeKey": "{{childNodeKey}}", "nodeType": "DevTask", "label": "Implement (1)", "maxAttempts": 1 }],
                                "edges": [{ "from": "{{templateNodeKey}}", "to": "{{childNodeKey}}" }]
                              }
-                             """))
-                       .ConfigureAwait(false);
+                             """));
     }
 
     /// <summary>Walks the task to <c>AwaitingApply</c> out of band, which is where a routed re-attempt finds it.</summary>
     private static async Task DriveToAwaitingApplyAsync(DevWorkflowHarness harness, Guid projectId, Guid taskId)
     {
-        while ((await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status != DevelopmentTaskStatus.AwaitingApply)
+        while ((await ReadTaskAsync(harness, taskId)).Status != DevelopmentTaskStatus.AwaitingApply)
         {
-            _ = await harness.Chain.StartNextActionAsync(projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+            _ = await harness.Chain.StartNextActionAsync(projectId, taskId, Guid.NewGuid());
         }
     }
 
@@ -1484,8 +1470,8 @@ public sealed class DevWorkflowDevTaskTests
     {
         for (var tick = 0; tick < maxTicks; tick++)
         {
-            _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-            var snapshot = await ReadCoderSnapshotAsync(harness, taskId).ConfigureAwait(false);
+            _ = await harness.AdvanceAsync(runId);
+            var snapshot = await ReadCoderSnapshotAsync(harness, taskId);
             if (snapshot.OperatorInstruction is not null)
             {
                 return snapshot;
@@ -1499,8 +1485,8 @@ public sealed class DevWorkflowDevTaskTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var attempts = await store.ListAttemptsAsync(taskId).ConfigureAwait(false);
-        return await store.GetExecutionSnapshotAsync(attempts[^1].Id).ConfigureAwait(false);
+        var attempts = await store.ListAttemptsAsync(taskId);
+        return await store.GetExecutionSnapshotAsync(attempts[^1].Id);
     }
 
     /// <summary>
@@ -1538,12 +1524,11 @@ public sealed class DevWorkflowDevTaskTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var attempts = await store.ListAttemptsAsync(taskId).ConfigureAwait(false);
+        var attempts = await store.ListAttemptsAsync(taskId);
         var attempt = attempts[^1];
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attempt.Id,
                            Guid.NewGuid(),
                            DevelopmentAttemptStatus.Succeeded,
-                           attempt.Version))
-                       .ConfigureAwait(false);
+                           attempt.Version));
     }
 }

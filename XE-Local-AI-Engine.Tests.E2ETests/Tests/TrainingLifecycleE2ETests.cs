@@ -27,8 +27,8 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
     {
         var verdicts = Factory.Services.GetRequiredService<TrainingLifecycleE2ETestDoubles.Verdicts>();
         verdicts.Reset();
-        var fixture = await SeedDatasetAndCheckpointAsync().ConfigureAwait(false);
-        var token = await LoginForApiAsync().ConfigureAwait(false);
+        var fixture = await SeedDatasetAndCheckpointAsync();
+        var token = await LoginForApiAsync();
 
         using var runDocument = await SendJsonAsync(HttpMethod.Post,
                 $"{Api}/runs",
@@ -41,8 +41,7 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                     licenseConfirmed = true,
                     linkedModelName = TrainingLifecycleE2ETestDoubles.InstalledBaseModel
                 },
-                expectedStatus: 200)
-            .ConfigureAwait(false);
+                expectedStatus: 200);
         var runId = runDocument.RootElement.GetProperty("id").GetGuid();
 
         TrainingRunRecord run;
@@ -50,21 +49,20 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         await using (var scope = Factory.Services.CreateAsyncScope())
         {
             var runs = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-            run = Check.NotNull(await runs.GetAsync(runId).ConfigureAwait(false), "The run endpoint persisted the run.");
+            run = Check.NotNull(await runs.GetAsync(runId), "The run endpoint persisted the run.");
             freeze = Check.NotNull(JsonSerializer.Deserialize<TrainingRunFreezeV1>(run.FreezeJson.Span, TrainingJson.Options),
                 "The run carries a readable immutable freeze.");
             Check.Equal(TrainingRunFreezeV1.CurrentSchemaVersion, freeze.SchemaVersion);
             Check.True(freeze.HoldoutSampleIds.Count > 0, "The lifecycle must evaluate a real non-empty hold-out membership.");
             verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.RunFrozen);
 
-            var claim = Check.NotNull(await runs.ClaimNextAsync(TrainingWorkKind.TrainingRun).ConfigureAwait(false),
+            var claim = Check.NotNull(await runs.ClaimNextAsync(TrainingWorkKind.TrainingRun),
                 "The run endpoint must enqueue real durable work.");
             await scope.ServiceProvider.GetRequiredService<ITrainingRunExecutor>()
-                       .ExecuteAsync(claim, CancellationToken.None)
-                       .ConfigureAwait(false);
-            run = Check.NotNull(await runs.GetAsync(runId).ConfigureAwait(false), "The production executor retained the run.");
+                       .ExecuteAsync(claim, CancellationToken.None);
+            run = Check.NotNull(await runs.GetAsync(runId), "The production executor retained the run.");
             Check.Equal(TrainingRunStatus.Succeeded, run.Status);
-            Check.True((await runs.ListArtifactsAsync(runId).ConfigureAwait(false)).Any(item => item.Kind == TrainingArtifactKind.HfAdapterDir),
+            Check.True((await runs.ListArtifactsAsync(runId)).Any(item => item.Kind == TrainingArtifactKind.HfAdapterDir),
                 "The production executor must register the trainer's staged adapter output.");
             verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.TrainingSucceeded);
         }
@@ -77,16 +75,15 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                     kind = "MergedGguf",
                     quantType = "Q4_K_M"
                 },
-                expectedStatus: 202)
-            .ConfigureAwait(false);
+                expectedStatus: 202);
         Check.Equal("MergedGguf", exportDocument.RootElement.GetProperty("kind").GetString());
 
-        var artifact = await WaitForExportAsync(runId).ConfigureAwait(false);
+        var artifact = await WaitForExportAsync(runId);
         var artifactId = artifact.Id;
         verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.ExportStaged);
         verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.SmokePassed);
 
-        var (baseEvaluationId, tunedEvaluationId) = await CompleteEvaluationsAsync(token, runId, artifact, verdicts).ConfigureAwait(false);
+        var (baseEvaluationId, tunedEvaluationId) = await CompleteEvaluationsAsync(token, runId, artifact, verdicts);
 
         using var comparisonDocument = await SendJsonAsync(HttpMethod.Post,
                 $"{Api}/comparisons",
@@ -98,8 +95,7 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                     tunedEvaluationRunId = tunedEvaluationId,
                     trainingRunId = runId
                 },
-                expectedStatus: 200)
-            .ConfigureAwait(false);
+                expectedStatus: 200);
         var comparisonId = comparisonDocument.RootElement.GetProperty("id").GetGuid();
         Check.True(comparisonDocument.RootElement.GetProperty("deltas").GetProperty("accuracyAvailable").GetBoolean(),
             "A comparison with no scored work is not a lifecycle verdict.");
@@ -108,8 +104,7 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         await using (var scope = Factory.Services.CreateAsyncScope())
         {
             artifact = Check.NotNull(await scope.ServiceProvider.GetRequiredService<ITrainingRunStore>()
-                                                .GetArtifactAsync(artifactId)
-                                                .ConfigureAwait(false), "The staged artifact still exists before quality review.");
+                                                .GetArtifactAsync(artifactId), "The staged artifact still exists before quality review.");
         }
 
         using var qualityDocument = await SendJsonAsync(HttpMethod.Put,
@@ -120,8 +115,7 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                     comparisonId,
                     expectedVersion = artifact.Version
                 },
-                expectedStatus: 200)
-            .ConfigureAwait(false);
+                expectedStatus: 200);
         Check.Equal("Passed", qualityDocument.RootElement.GetProperty("outcome").GetString());
         verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.QualityPassed);
 
@@ -132,15 +126,14 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                 {
                     modelName = $"e2e-trained-{runId:N}"
                 },
-                expectedStatus: 200)
-            .ConfigureAwait(false);
+                expectedStatus: 200);
         Check.Contains(promotionDocument.RootElement.GetProperty("modelName").GetString()!, ":Q4_K_M", StringComparison.Ordinal);
 
         await Page.GotoAsync($"{NodeAppUrl}/training/comparisons", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
-        }).ConfigureAwait(false);
-        await Expect(Page.GetByText($"E2E lifecycle {runId:N}")).ToBeVisibleAsync().ConfigureAwait(false);
+        });
+        await Expect(Page.GetByText($"E2E lifecycle {runId:N}")).ToBeVisibleAsync();
 
         verdicts.AssertComplete();
         Check.Equal(Enum.GetValues<TrainingLifecycleE2ETestDoubles.Stage>().Length, verdicts.Snapshot().Count,
@@ -153,11 +146,11 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         var datasets = scope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
         var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput($"E2E lifecycle {Guid.NewGuid():N}",
             TrainingDatasetKind.ToolCalling,
-            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.2}"""))).ConfigureAwait(false);
+            Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.2}""")));
         var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand(definition.Id,
             definition.Version,
-            $"E2E lifecycle {Guid.NewGuid():N}")).ConfigureAwait(false);
-        _ = Check.NotNull(await datasets.ClaimNextAsync().ConfigureAwait(false), "Dataset generation must own a durable work item.");
+            $"E2E lifecycle {Guid.NewGuid():N}"));
+        _ = Check.NotNull(await datasets.ClaimNextAsync(), "Dataset generation must own a durable work item.");
         for (var index = 0; index < 10; index++)
         {
             var content = JsonSerializer.SerializeToUtf8Bytes(new TrainingSampleContentV1
@@ -170,18 +163,17 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                                   content,
                                   ValidationJson: null,
                                   TrainingSampleProvenance.Generated,
-                                  new string((char)('a' + index), count: 64)))
-                              .ConfigureAwait(false);
+                                  new string((char)('a' + index), count: 64)));
         }
 
-        var ready = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Succeeded, errorMessage: null).ConfigureAwait(false);
+        var ready = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Succeeded, errorMessage: null);
         var baseArtifacts = scope.ServiceProvider.GetRequiredService<ITrainingBaseArtifactStore>();
-        var downloading = await baseArtifacts.StartDownloadAsync("e2e/base", new string('b', 40)).ConfigureAwait(false);
+        var downloading = await baseArtifacts.StartDownloadAsync("e2e/base", new string('b', 40));
         var checkpoint = await baseArtifacts.MarkReadyAsync(downloading.Id,
             downloading.Version,
             Encoding.UTF8.GetBytes("[]"),
             totalBytes: 1,
-            licenseJson: null).ConfigureAwait(false);
+            licenseJson: null);
         return new SeedFixture(ready.Id, ready.Version, checkpoint.Id);
     }
 
@@ -196,10 +188,9 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                     trainingRunId = runId,
                     target = "Base",
                     modelName = TrainingLifecycleE2ETestDoubles.InstalledBaseModel
-                }, 202)
-            .ConfigureAwait(false);
+                }, 202);
         var baseId = baseDocument.RootElement.GetProperty("id").GetGuid();
-        await ExecuteEvaluationAsync(baseId).ConfigureAwait(false);
+        await ExecuteEvaluationAsync(baseId);
         verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.BaseEvaluationSucceeded);
 
         using var tunedDocument = await SendJsonAsync(HttpMethod.Post, $"{Api}/evaluations", token,
@@ -208,9 +199,9 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                 trainingRunId = runId,
                 target = "Tuned",
                 artifactId = artifact.Id
-            }, 202).ConfigureAwait(false);
+            }, 202);
         var tunedId = tunedDocument.RootElement.GetProperty("id").GetGuid();
-        await ExecuteEvaluationAsync(tunedId).ConfigureAwait(false);
+        await ExecuteEvaluationAsync(tunedId);
         verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.TunedEvaluationSucceeded);
         return (baseId, tunedId);
     }
@@ -220,13 +211,12 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         await using var scope = Factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
         var evaluations = scope.ServiceProvider.GetRequiredService<ITrainingEvaluationStore>();
-        var claim = Check.NotNull(await runs.ClaimNextAsync(TrainingWorkKind.EvaluationRun).ConfigureAwait(false),
+        var claim = Check.NotNull(await runs.ClaimNextAsync(TrainingWorkKind.EvaluationRun),
             "Every evaluation must be claimed from the shared durable queue.");
         Check.Equal(expectedEvaluationId, claim.TargetId);
         await scope.ServiceProvider.GetRequiredService<IEvaluationRunExecutor>()
-                   .ExecuteAsync(claim, CancellationToken.None)
-                   .ConfigureAwait(false);
-        var completed = Check.NotNull(await evaluations.GetAsync(expectedEvaluationId).ConfigureAwait(false),
+                   .ExecuteAsync(claim, CancellationToken.None);
+        var completed = Check.NotNull(await evaluations.GetAsync(expectedEvaluationId),
             "The production evaluation executor retained its verdict.");
         Check.Equal(TrainingEvaluationStatus.Succeeded, completed.Status);
         Check.Equal(completed.TotalCount, completed.ScoredCount, "An incomplete evaluation must never count as a lifecycle verdict.");
@@ -245,8 +235,7 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
             timeout.Token.ThrowIfCancellationRequested();
             await using var scope = Factory.Services.CreateAsyncScope();
             var artifacts = await scope.ServiceProvider.GetRequiredService<ITrainingRunStore>()
-                                       .ListArtifactsAsync(runId, timeout.Token)
-                                       .ConfigureAwait(false);
+                                       .ListArtifactsAsync(runId, timeout.Token);
             var artifact = artifacts.SingleOrDefault(item => item.Kind == TrainingArtifactKind.MergedGguf);
             if (artifact?.SmokeState == TrainingArtifactSmokeState.Passed)
             {
@@ -254,7 +243,7 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                 return artifact;
             }
 
-            await Task.Delay(50, timeout.Token).ConfigureAwait(false);
+            await Task.Delay(50, timeout.Token);
         }
     }
 
@@ -267,9 +256,9 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                 email = XENodeE2EWebApplicationFactory.AdminEmail,
                 password = XENodeE2EWebApplicationFactory.AdminPassword
             }
-        }).ConfigureAwait(false);
+        });
         Check.True(response.Ok, $"API login failed with HTTP {response.Status} {response.StatusText}.");
-        using var document = JsonDocument.Parse(await response.TextAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.TextAsync());
         return document.RootElement.GetProperty("accessToken").GetString()
                ?? throw new InvalidOperationException("API login returned no access token.");
     }
@@ -290,9 +279,9 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
             }
         };
         var response = method == HttpMethod.Post
-            ? await Context.APIRequest.PostAsync(NodeAppUrl + path, options).ConfigureAwait(false)
-            : await Context.APIRequest.PutAsync(NodeAppUrl + path, options).ConfigureAwait(false);
-        var text = await response.TextAsync().ConfigureAwait(false);
+            ? await Context.APIRequest.PostAsync(NodeAppUrl + path, options)
+            : await Context.APIRequest.PutAsync(NodeAppUrl + path, options);
+        var text = await response.TextAsync();
         Check.Equal(expectedStatus, response.Status, $"{method} {path} returned {response.Status}: {text}");
         return JsonDocument.Parse(text);
     }

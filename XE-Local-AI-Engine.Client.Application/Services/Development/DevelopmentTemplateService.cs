@@ -57,13 +57,13 @@ internal sealed class DevelopmentTemplateService(
 
     public async Task<IReadOnlyList<DevelopmentTemplateReference>> ListTemplatesAsync(CancellationToken cancellationToken = default)
     {
-        var templates = await _templateStore.ListAsync(cancellationToken).ConfigureAwait(false);
+        var templates = await _templateStore.ListAsync(cancellationToken);
         var references = new List<DevelopmentTemplateReference>(templates.Count);
         foreach (var template in templates)
         {
             // A template lives on the host and can be moved or deleted behind the registry's back, so availability is
             // probed rather than assumed — the same treatment registered repositories get.
-            var availability = await ProbeAvailabilityAsync(template.HostPath, cancellationToken).ConfigureAwait(false);
+            var availability = await ProbeAvailabilityAsync(template.HostPath, cancellationToken);
             references.Add(new DevelopmentTemplateReference(template.Id.ToString(), template.Alias, availability));
         }
 
@@ -76,8 +76,8 @@ internal sealed class DevelopmentTemplateService(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(templateAlias);
         var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(hostPath);
-        await EnsureGitTopLevelAsync(canonical, cancellationToken).ConfigureAwait(false);
-        var template = await _templateStore.AddAsync(templateAlias.Trim(), canonical, cancellationToken).ConfigureAwait(false);
+        await EnsureGitTopLevelAsync(canonical, cancellationToken);
+        var template = await _templateStore.AddAsync(templateAlias.Trim(), canonical, cancellationToken);
         return new DevelopmentTemplateReference(template.Id.ToString(), template.Alias, "Available");
     }
 
@@ -93,31 +93,31 @@ internal sealed class DevelopmentTemplateService(
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryAlias);
         EnsureSafeBranch(baseBranch);
 
-        var template = await _templateStore.GetAsync(templateId, cancellationToken).ConfigureAwait(false);
+        var template = await _templateStore.GetAsync(templateId, cancellationToken);
         var templateRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(template.HostPath);
-        await EnsureGitTopLevelAsync(templateRoot, cancellationToken).ConfigureAwait(false);
+        await EnsureGitTopLevelAsync(templateRoot, cancellationToken);
 
         var destination = ResolveDestination(destinationPath, templateRoot);
-        var templateCommit = await ResolveTemplateHeadAsync(templateRoot, cancellationToken).ConfigureAwait(false);
+        var templateCommit = await ResolveTemplateHeadAsync(templateRoot, cancellationToken);
 
         var created = false;
         try
         {
             Directory.CreateDirectory(destination);
             created = true;
-            await MaterializeAsync(templateRoot, destination, template.Alias, templateCommit, baseBranch, cancellationToken).ConfigureAwait(false);
+            await MaterializeAsync(templateRoot, destination, template.Alias, templateCommit, baseBranch, cancellationToken);
 
             // Registration is what makes the new folder a bindable Development repository, and it re-runs the same
             // git-top-level check every registered repository passes — so a materialization that produced something
             // that is not a canonical repository root fails here rather than at the first attempt.
-            var repository = await _repositoryBindings.RegisterAsync(repositoryAlias, destination, cancellationToken).ConfigureAwait(false);
+            var repository = await _repositoryBindings.RegisterAsync(repositoryAlias, destination, cancellationToken);
             await _templateStore.RecordMaterializationAsync(new DevelopmentTemplateMaterializationSnapshot(Guid.Parse(repository.Id),
                     template.Id,
                     template.Alias,
                     templateRoot,
                     templateCommit,
                     _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             return new DevelopmentTemplateMaterializationResult(repository, template.Alias, templateCommit);
         }
         catch
@@ -154,7 +154,7 @@ internal sealed class DevelopmentTemplateService(
         // store instead, which is exactly the shared-objects coupling this design exists to avoid.
         var clone = await git.RunAsync(parent,
             AgentHomeGit.Arguments([.. StandaloneGitClone.Arguments(templateRoot, destination)]),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(clone, "The template could not be cloned.");
 
         if (!StandaloneGitClone.IsStandalone(destination))
@@ -171,12 +171,12 @@ internal sealed class DevelopmentTemplateService(
 
         var init = await git.RunAsync(destination,
             AgentHomeGit.Arguments("init", "--initial-branch", baseBranch),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(init, "The materialized repository could not be initialized.");
 
         var add = await git.RunAsync(destination,
             AgentHomeGit.Arguments("add", "-A", "--", "."),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(add, "The materialized repository contents could not be staged.");
 
         // Identity is supplied per-command rather than written into the new repository's config: the operator's own
@@ -187,7 +187,7 @@ internal sealed class DevelopmentTemplateService(
                 "-c", $"user.email={CommitAuthorEmail}",
                 "commit", "--no-gpg-sign",
                 "-m", $"Initial commit from template {templateAlias} @ {templateCommit}"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(commit, "The materialized repository initial commit could not be created.");
     }
 
@@ -250,7 +250,7 @@ internal sealed class DevelopmentTemplateService(
         var git = new HostGitRunner(_options.TemplateMaterializationTimeoutSeconds);
         var head = await git.RunAsync(templateRoot,
             AgentHomeGit.Arguments("rev-parse", "--verify", "HEAD^{commit}"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         EnsureGitSuccess(head, "The template has no resolvable HEAD commit.");
         return head.StandardOutput.Trim();
     }
@@ -260,7 +260,7 @@ internal sealed class DevelopmentTemplateService(
         try
         {
             var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(hostPath);
-            await EnsureGitTopLevelAsync(canonical, cancellationToken).ConfigureAwait(false);
+            await EnsureGitTopLevelAsync(canonical, cancellationToken);
             return "Available";
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException
@@ -277,7 +277,7 @@ internal sealed class DevelopmentTemplateService(
         var git = new HostGitRunner(_options.TemplateMaterializationTimeoutSeconds);
         var result = await git.RunAsync(canonicalRoot,
             AgentHomeGit.Arguments("rev-parse", "--show-toplevel"),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new DevelopmentWorkspaceSecurityException("The template must be a Git repository root.");

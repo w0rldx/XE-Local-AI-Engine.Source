@@ -18,7 +18,7 @@ public sealed class GraphWorkflowPurgeCoverageTests
     public async Task NoWorkflowTable_IsKeyedByAConversationOrMessage()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var offenders = new List<string>();
         var inspected = 0;
@@ -52,7 +52,7 @@ public sealed class GraphWorkflowPurgeCoverageTests
     public async Task CoveredChildTables_MatchesEveryRunScopedTableInTheModel()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var discovered = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entityType in context.Model.GetEntityTypes())
@@ -96,25 +96,22 @@ public sealed class GraphWorkflowPurgeCoverageTests
     public async Task DeleteRun_TakesItsSubtreeAndLeavesTheDefinitionStanding()
     {
         using var fixture = new GraphWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = GraphWorkflowTestFixture.StoreFor(context);
-        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store).ConfigureAwait(false);
-        var runId = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id).ConfigureAwait(false);
-        _ = await GraphWorkflowTestFixture.SeedNodeRunAsync(context, runId, "analyze", GraphWorkflowNodeKind.Agent, inputJson: """{"run":{"input":1}}""")
-                                          .ConfigureAwait(false);
-        _ = await GraphWorkflowTestFixture.SeedRunEventAsync(context, runId, seq: 1, "run.started", """{"note":"seeded"}""").ConfigureAwait(false);
+        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
+        var runId = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id);
+        _ = await GraphWorkflowTestFixture.SeedNodeRunAsync(context, runId, "analyze", GraphWorkflowNodeKind.Agent, inputJson: """{"run":{"input":1}}""");
+        _ = await GraphWorkflowTestFixture.SeedRunEventAsync(context, runId, seq: 1, "run.started", """{"note":"seeded"}""");
 
-        var survivorRunId = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id).ConfigureAwait(false);
+        var survivorRunId = await GraphWorkflowTestFixture.SeedRunAsync(context, definition.Id);
         var survivorNodeRunId = await GraphWorkflowTestFixture
-                                      .SeedNodeRunAsync(context, survivorRunId, "review", GraphWorkflowNodeKind.Agent, inputJson: """{"run":{"input":2}}""")
-                                      .ConfigureAwait(false);
-        var survivorEventId = await GraphWorkflowTestFixture.SeedRunEventAsync(context, survivorRunId, seq: 1, "run.started", """{"note":"survivor"}""")
-                                                            .ConfigureAwait(false);
+                                      .SeedNodeRunAsync(context, survivorRunId, "review", GraphWorkflowNodeKind.Agent, inputJson: """{"run":{"input":2}}""");
+        var survivorEventId = await GraphWorkflowTestFixture.SeedRunEventAsync(context, survivorRunId, seq: 1, "run.started", """{"note":"survivor"}""");
 
-        await using (var transaction = await context.Database.BeginTransactionAsync().ConfigureAwait(false))
+        await using (var transaction = await context.Database.BeginTransactionAsync())
         {
-            await GraphWorkflowPurge.DeleteRunAsync(context, runId, CancellationToken.None).ConfigureAwait(false);
-            await transaction.CommitAsync().ConfigureAwait(false);
+            await GraphWorkflowPurge.DeleteRunAsync(context, runId, CancellationToken.None);
+            await transaction.CommitAsync();
         }
 
         context.ChangeTracker.Clear();
@@ -127,25 +124,25 @@ public sealed class GraphWorkflowPurgeCoverageTests
                  })
         {
             AssertEx.Equal(expected: 1L,
-                await fixture.RawTableCountAsync(table).ConfigureAwait(false),
+                await fixture.RawTableCountAsync(table),
                 $"{table} must hold exactly the other run's row after the first run is deleted.");
         }
 
         // By id rather than by count: one row of the right shape in the wrong run would satisfy the counts above.
-        AssertEx.Equal(survivorRunId, await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_runs;").ConfigureAwait(false), "The other run must be the survivor.");
+        AssertEx.Equal(survivorRunId, await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_runs;"), "The other run must be the survivor.");
         AssertEx.Equal(survivorNodeRunId,
-            await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_node_runs;").ConfigureAwait(false),
+            await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_node_runs;"),
             "and its node run must be untouched.");
-        AssertEx.Equal(survivorEventId, await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_run_events;").ConfigureAwait(false), "and so must its event.");
+        AssertEx.Equal(survivorEventId, await ScalarGuidAsync(fixture, "SELECT id FROM graph_workflow_run_events;"), "and so must its event.");
 
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions").ConfigureAwait(false),
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("graph_workflow_definitions"),
             "A definition is not run-scoped and survives by design; only deleting the definition takes it.");
     }
 
     /// <summary>The one id a single-row query returns, read straight from the file rather than through the model.</summary>
     private static async Task<Guid> ScalarGuidAsync(GraphWorkflowTestFixture fixture, string sql)
     {
-        var value = await fixture.RawScalarAsync(sql).ConfigureAwait(false);
+        var value = await fixture.RawScalarAsync(sql);
         return value switch
         {
             Guid guid => guid,

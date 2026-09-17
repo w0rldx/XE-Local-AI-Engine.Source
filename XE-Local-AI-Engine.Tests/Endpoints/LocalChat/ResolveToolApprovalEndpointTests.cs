@@ -26,12 +26,11 @@ public sealed class ResolveToolApprovalEndpointTests
             requestId = "approval-xyz",
             approved = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await dispatcher.Received(1)
-                        .DispatchApprovalResolvedAsync(Arg.Is<ApprovalResolvedEvent>(evt => evt.RequestId == "approval-xyz" && evt.Approved))
-                        .ConfigureAwait(false);
+                        .DispatchApprovalResolvedAsync(Arg.Is<ApprovalResolvedEvent>(evt => evt.RequestId == "approval-xyz" && evt.Approved));
     }
 
     [Test]
@@ -47,12 +46,11 @@ public sealed class ResolveToolApprovalEndpointTests
             requestId = "approval-den",
             approved = false
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await dispatcher.Received(1)
-                        .DispatchApprovalResolvedAsync(Arg.Is<ApprovalResolvedEvent>(evt => evt.RequestId == "approval-den" && !evt.Approved))
-                        .ConfigureAwait(false);
+                        .DispatchApprovalResolvedAsync(Arg.Is<ApprovalResolvedEvent>(evt => evt.RequestId == "approval-den" && !evt.Approved));
     }
 
     [Test]
@@ -67,10 +65,10 @@ public sealed class ResolveToolApprovalEndpointTests
             requestId = "",
             approved = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await dispatcher.DidNotReceive().DispatchApprovalResolvedAsync(Arg.Any<ApprovalResolvedEvent>()).ConfigureAwait(false);
+        await dispatcher.DidNotReceive().DispatchApprovalResolvedAsync(Arg.Any<ApprovalResolvedEvent>());
     }
 
     [Test]
@@ -89,10 +87,10 @@ public sealed class ResolveToolApprovalEndpointTests
             })
         };
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        await dispatcher.DidNotReceive().DispatchApprovalResolvedAsync(Arg.Any<ApprovalResolvedEvent>()).ConfigureAwait(false);
+        await dispatcher.DidNotReceive().DispatchApprovalResolvedAsync(Arg.Any<ApprovalResolvedEvent>());
     }
 
     private static TestServerWebAppFactory CreateFactory(IWorkerEventDispatcher dispatcher)

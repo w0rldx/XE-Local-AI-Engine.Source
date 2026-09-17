@@ -49,7 +49,7 @@ internal static class EntraAuthCodeConfidentialClientFactory
                                     .WithMacKeyChain(KeyChainServiceName, KeyChainAccountName)
                                     .Build();
 
-            var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
+            var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
 
             // CreateAsync can succeed even when the backend is silently broken (e.g. dbus present but
             // org.freedesktop.secrets not provided by any service, live-confirmed on WSL2) — VerifyPersistence()

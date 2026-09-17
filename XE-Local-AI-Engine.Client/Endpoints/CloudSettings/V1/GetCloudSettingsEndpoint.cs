@@ -18,7 +18,7 @@ public sealed class GetCloudSettingsEndpoint(ICloudCredentialStore cloudCredenti
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var config = await _cloudCredentialStore.LoadConfigAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(config.ToResponse(), ct).ConfigureAwait(false);
+        var config = await _cloudCredentialStore.LoadConfigAsync(ct);
+        await Send.OkAsync(config.ToResponse(), ct);
     }
 }

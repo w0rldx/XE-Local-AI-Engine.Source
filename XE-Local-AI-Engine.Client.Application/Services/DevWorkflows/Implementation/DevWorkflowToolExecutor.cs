@@ -84,7 +84,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             // attempt before it would settle one attempt off another's answer.
             return nodeRun.Status == DevWorkflowNodeRunStatus.Running
                 ? 0
-                : await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
+                : await RunningAsync(store, run, nodeRun, cancellationToken);
         }
 
         var written = 0;
@@ -96,12 +96,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                    DevWorkflowVersions.Any,
                                    DevWorkflowNodeRunStatus.Queued,
                                    QueueReason: DevWorkflowQueueReasons.AwaitingSandboxSlot),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             written++;
         }
 
-        if (!await _lane.WaitAsync(millisecondsTimeout: 0, cancellationToken).ConfigureAwait(false))
+        if (!await _lane.WaitAsync(millisecondsTimeout: 0, cancellationToken))
         {
             // Queueing, not failure: the lane is simply full. No event and no failure class — the row's reason says
             // what it is waiting for, and the next tick asks again.
@@ -111,7 +110,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         // Started before the row says Running, and the slot is already held: the task releases it in its own finally,
         // so a throw anywhere below cannot leak the slot.
         _ = _inflight.TryAdd(nodeRun.Id, Start(run, node, nodeRun));
-        return written + await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
+        return written + await RunningAsync(store, run, nodeRun, cancellationToken);
     }
 
     /// <summary>
@@ -144,8 +143,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                          StoppedReason(graph, nodeRun, "The host stopped"),
                                          Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
                                          DevWorkflowOutcomes.Interrupted),
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+                                     cancellationToken);
         }
 
         var written = 0;
@@ -154,7 +152,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             // The row never caught up with the pass already running for it — the Running write failed after the slot
             // and the registry entry were taken. Outside a drain the next admission repairs it; inside one nothing
             // admits, so the poll has to, or the drain waits forever on a row nobody will ever move.
-            written = await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            written = await RunningAsync(store, run, nodeRun, cancellationToken);
             nodeRun = nodeRun with
             {
                 Status = DevWorkflowNodeRunStatus.Running
@@ -178,8 +176,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     Output(nodeRun, DevWorkflowFailureClasses.Cancelled, run: null),
                     DevWorkflowOutcomes.Cancelled,
                     cancellationToken)
-                .ConfigureAwait(false)
-            : await SettleLandedAsync(store, graph, run, nodeRun, nodeRuns, await flight.Work.ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+            : await SettleLandedAsync(store, graph, run, nodeRun, nodeRuns, await flight.Work, cancellationToken);
 
         // Consumed only once the settle has COMMITTED. Doing it first would spend the result on a write that may throw
         // — an over-budget blob, a lost version race — and the next poll would then find no entry, take the branch
@@ -199,11 +196,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         DevWorkflowToolRun result,
         CancellationToken cancellationToken)
     {
-        await RecordSecretsAsync(store, run, nodeRun, result, cancellationToken).ConfigureAwait(false);
+        await RecordSecretsAsync(store, run, nodeRun, result, cancellationToken);
 
         // Evidence first, status last — the same order the agent lane and the work-session loop use one level down. A
         // crash in that window re-derives the same answer, because the artifact write is keyed and the poll runs again.
-        await PromoteReportAsync(store, graph, run, nodeRun, result, cancellationToken).ConfigureAwait(false);
+        await PromoteReportAsync(store, graph, run, nodeRun, result, cancellationToken);
 
         if (result.Passed)
         {
@@ -216,8 +213,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     terminalReason: null,
                     Output(nodeRun, failureClass: null, result),
                     outcome: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         if (string.Equals(result.FailureClass, DevWorkflowFailureClasses.Cancelled, StringComparison.Ordinal))
@@ -236,8 +232,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     result.SanitizedReason ?? "The run was cancelled while this node run was working.",
                     Output(nodeRun, DevWorkflowFailureClasses.Cancelled, result),
                     DevWorkflowOutcomes.Cancelled,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         // A failed verdict is the fix loop's fuel rather than an error, so where it goes — another attempt here, another
@@ -252,8 +247,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                      result.SanitizedReason ?? "This node run's validation commands did not pass.",
                                      Output(nodeRun, failureClass, result),
                                      failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null),
-                                 cancellationToken)
-                             .ConfigureAwait(false);
+                                 cancellationToken);
     }
 
     /// <summary>
@@ -284,7 +278,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return false;
         }
 
-        await flight.Cancellation.CancelAsync().ConfigureAwait(false);
+        await flight.Cancellation.CancelAsync();
         return true;
     }
 
@@ -307,7 +301,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             if (_inflight.TryGetValue(nodeRun.Id, out var flight)
                 && (flight.Attempt != nodeRun.Attempt || nodeRun.Status is not (DevWorkflowNodeRunStatus.Queued or DevWorkflowNodeRunStatus.Running)))
             {
-                await DiscardAsync(nodeRun.Id).ConfigureAwait(false);
+                await DiscardAsync(nodeRun.Id);
             }
         }
     }
@@ -333,14 +327,14 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return;
         }
 
-        await flight.Cancellation.CancelAsync().ConfigureAwait(false);
+        await flight.Cancellation.CancelAsync();
         _ = DisposeWhenDoneAsync(flight);
     }
 
     /// <summary>Disposes a discarded pass's cancellation once the pass has actually stopped using its token.</summary>
     private static async Task DisposeWhenDoneAsync(InFlight flight)
     {
-        await SwallowAsync(flight.Work).ConfigureAwait(false);
+        await SwallowAsync(flight.Work);
         flight.Cancellation.Dispose();
     }
 
@@ -358,10 +352,10 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return;
         }
 
-        await _shutdown.CancelAsync().ConfigureAwait(false);
+        await _shutdown.CancelAsync();
         foreach (var flight in _inflight.Values)
         {
-            await SwallowAsync(flight.Work).ConfigureAwait(false);
+            await SwallowAsync(flight.Work);
             flight.Cancellation.Dispose();
         }
 
@@ -397,7 +391,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                 // — and it is the ONE difference from the DevTask lane, which takes no slot because what it drives is a
                 // Dev Mode attempt with a bound of its own.
                 return scope.ServiceProvider.GetService<DevWorkflowApplyCommands>() is { } apply
-                    ? await apply.RunAsync(run, nodeRun, cancellationToken).ConfigureAwait(false)
+                    ? await apply.RunAsync(run, nodeRun, cancellationToken)
                     : Refused(DevWorkflowFailureClasses.Configuration,
                         "This node applies approved patches, and Development Mode is switched off on this node.");
             }
@@ -410,7 +404,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     "This node runs repository commands, and Development Mode is switched off on this node.");
             }
 
-            return await commands.RunAsync(run, node, nodeRun, cancellationToken).ConfigureAwait(false);
+            return await commands.RunAsync(run, node, nodeRun, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -477,8 +471,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                nodeRun.Id,
                                DevWorkflowVersions.Any,
                                DevWorkflowNodeRunStatus.Running),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -503,8 +496,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                nodeRun.Id,
                                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "workspace-secrets"),
                                DetailJson: JsonSerializer.Serialize(new SecretsDetail(result.SecretPaths), JsonOptions)),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
     }
 
     /// <summary>
@@ -532,7 +524,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         var apply = IsApplying(graph, nodeRun);
         var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "validation-report");
-        var write = await _blobs.WriteAsync(run.Id, artifactId, result.Report, cancellationToken).ConfigureAwait(false);
+        var write = await _blobs.WriteAsync(run.Id, artifactId, result.Report, cancellationToken);
         var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(run.Id,
                                           artifactId,
                                           nodeRun.Id,
@@ -544,8 +536,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                           write.ContentHash,
                                           write.ByteCount,
                                           write.OpaqueReference),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
 
         if (appended.SupersededArtifactId is not { } superseded)
         {
@@ -559,8 +550,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                artifactId,
                                DevWorkflowVersions.Any,
                                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report-stale")),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
     }
 
     private static async Task<int> SettleAsync(IDevWorkflowStore store,
@@ -590,8 +580,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                WorkItemStatus: target == DevWorkflowNodeRunStatus.Blocked
                                    ? DevWorkflowWorkItemStatus.Blocked
                                    : DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, nodeRuns, nodeRun.Id, target)),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -617,7 +606,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     {
         try
         {
-            await work.ConfigureAwait(false);
+            await work;
         }
         catch (Exception)
         {

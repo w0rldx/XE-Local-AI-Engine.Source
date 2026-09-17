@@ -38,7 +38,7 @@ public sealed class DevWorkflowOwnedWorkSessionTests
             provider => stream = new FakeNodeChatStreamService(provider.GetRequiredService<INodeChatStreamCancellationRegistry>(), provider, Guid.Empty),
             publisher)(services));
 
-        var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model");
 
         Guid sessionId;
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -47,8 +47,7 @@ public sealed class DevWorkflowOwnedWorkSessionTests
                                      .CreateAsync(new CreateWorkSessionRequestModel("Research the runtime",
                                          "Answer the work item's request.",
                                          AgentWorkSessionKind.Workflow,
-                                         agentId))
-                                     .ConfigureAwait(false);
+                                         agentId));
             sessionId = created.Id;
             AssertEx.Equal(AgentWorkSessionKind.Workflow, created.Kind);
             AssertEx.Equal(AgentWorkSessionStatus.Draft, created.Status);
@@ -61,11 +60,11 @@ public sealed class DevWorkflowOwnedWorkSessionTests
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var started = await scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>().StartAsync(sessionId).ConfigureAwait(false);
+            var started = await scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>().StartAsync(sessionId);
             AssertEx.Equal(AgentWorkSessionStatus.Running, started.Status);
         }
 
-        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed).ConfigureAwait(false);
+        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Completed);
         AssertEx.Equal(expected: 1, settled.StepCount);
     }
 
@@ -83,7 +82,7 @@ public sealed class DevWorkflowOwnedWorkSessionTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, AgentWorkSessionKind.Workflow).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, AgentWorkSessionKind.Workflow);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
@@ -94,13 +93,12 @@ public sealed class DevWorkflowOwnedWorkSessionTests
                                         "resume" => service.ResumeAsync(sessionId),
                                         "cancel" => service.CancelAsync(sessionId),
                                         _ => service.DeleteAsync(sessionId)
-                                    })
-                                    .ConfigureAwait(false);
+                                    });
 
         AssertEx.Contains(refusal.Message, "development workflow run");
 
         // Refused, not half-applied: the row is untouched and still there for the run to drive.
-        AssertEx.Equal(AgentWorkSessionStatus.Draft, (await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(AgentWorkSessionStatus.Draft, (await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId)).Status);
     }
 
     /// <summary>The mirror case: the owner surface must not reach a session no run is driving.</summary>
@@ -109,12 +107,11 @@ public sealed class DevWorkflowOwnedWorkSessionTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var refusal = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
-                                        scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>().StartAsync(sessionId))
-                                    .ConfigureAwait(false);
+                                        scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>().StartAsync(sessionId));
 
         AssertEx.Contains(refusal.Message, "belongs to no development workflow run");
     }
@@ -132,7 +129,6 @@ public sealed class DevWorkflowOwnedWorkSessionTests
                            JsonSerializer.Serialize(new
                            {
                                summary = "The node's objective is answered."
-                           })))
-                       .ConfigureAwait(false);
+                           })));
     }
 }

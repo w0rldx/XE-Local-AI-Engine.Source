@@ -24,8 +24,8 @@ public sealed class ListDevWorkflowRunsEndpoint(DevWorkflowRunQueryService runQu
 
         // Safe to parse rather than TryParse: the validator has already refused anything that is not a member.
         var status = req.Status is null ? (DevWorkflowRunStatus?)null : Enum.Parse<DevWorkflowRunStatus>(req.Status, ignoreCase: true);
-        var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, status, req.Limit, ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListDevWorkflowRunsResponse([.. runs.Select(DevWorkflowContractMapper.ToResponse)]), ct).ConfigureAwait(false);
+        var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, status, req.Limit, ct);
+        await Send.OkAsync(new ListDevWorkflowRunsResponse([.. runs.Select(DevWorkflowContractMapper.ToResponse)]), ct);
     }
 }
 
@@ -57,8 +57,8 @@ public sealed class StartDevWorkflowRunEndpoint(IDevWorkflowRunService runs, Dev
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var detail = await _runs.StartAsync(req.WorkItemId, req.DefinitionId, req.InputsJson, req.OperationId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct).ConfigureAwait(false))).ConfigureAwait(false);
+        var detail = await _runs.StartAsync(req.WorkItemId, req.DefinitionId, req.InputsJson, req.OperationId, ct);
+        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct)));
     }
 }
 
@@ -78,8 +78,8 @@ public sealed class GetDevWorkflowRunEndpoint(IDevWorkflowRunService runs, DevWo
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var detail = await _runs.GetAsync(req.RunId, ct).ConfigureAwait(false);
-        await Send.OkAsync(await _composer.ComposeAsync(detail, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        var detail = await _runs.GetAsync(req.RunId, ct);
+        await Send.OkAsync(await _composer.ComposeAsync(detail, ct), ct);
     }
 }
 
@@ -107,8 +107,8 @@ public sealed class PauseDevWorkflowRunEndpoint(IDevWorkflowRunService runs, Dev
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var detail = await _runs.PauseAsync(req.RunId, req.OperationId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct).ConfigureAwait(false))).ConfigureAwait(false);
+        var detail = await _runs.PauseAsync(req.RunId, req.OperationId, ct);
+        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct)));
     }
 }
 
@@ -132,8 +132,8 @@ public sealed class ResumeDevWorkflowRunEndpoint(IDevWorkflowRunService runs, De
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var detail = await _runs.ResumeAsync(req.RunId, req.OperationId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct).ConfigureAwait(false))).ConfigureAwait(false);
+        var detail = await _runs.ResumeAsync(req.RunId, req.OperationId, ct);
+        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct)));
     }
 }
 
@@ -157,8 +157,8 @@ public sealed class CancelDevWorkflowRunEndpoint(IDevWorkflowRunService runs, De
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var detail = await _runs.CancelAsync(req.RunId, req.OperationId, ct).ConfigureAwait(false);
-        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct).ConfigureAwait(false))).ConfigureAwait(false);
+        var detail = await _runs.CancelAsync(req.RunId, req.OperationId, ct);
+        await Send.ResultAsync(Results.Accepted(value: await _composer.ComposeAsync(detail, ct)));
     }
 }
 
@@ -184,14 +184,14 @@ public sealed class ListDevWorkflowRunEventsEndpoint(DevWorkflowRunQueryService 
 
         // The run is read first so an unknown one answers 404 rather than an empty page — a feed that pretends a
         // missing run is a quiet one is the shape a client cannot tell apart from "nothing happened yet".
-        _ = await _runQueries.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+        _ = await _runQueries.GetRunAsync(req.RunId, ct);
 
         // One over the limit, so "there is more" is observed rather than inferred from a full page.
-        var events = await _runQueries.ListEventsAsync(req.RunId, req.SinceSeq, req.Limit + 1, ct).ConfigureAwait(false);
+        var events = await _runQueries.ListEventsAsync(req.RunId, req.SinceSeq, req.Limit + 1, ct);
         var page = events.Take(req.Limit).Select(DevWorkflowContractMapper.ToResponse).ToList();
         await Send.OkAsync(new ListDevWorkflowRunEventsResponse(page,
                 DevWorkflowContractMapper.HighestSequence(page.Select(static item => item.Sequence)),
                 events.Count > req.Limit),
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

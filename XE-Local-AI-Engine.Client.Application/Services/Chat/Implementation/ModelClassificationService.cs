@@ -38,7 +38,7 @@ internal sealed class ModelClassificationService(
                 continue;
             }
 
-            var record = await ResolveAsync(modelName, digest, cancellationToken).ConfigureAwait(false);
+            var record = await ResolveAsync(modelName, digest, cancellationToken);
             results[modelName] = ToResult(record);
         }
 
@@ -49,7 +49,7 @@ internal sealed class ModelClassificationService(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        var record = await _store.SetOverrideAsync(modelName, kind, cancellationToken).ConfigureAwait(false);
+        var record = await _store.SetOverrideAsync(modelName, kind, cancellationToken);
         return ToResult(record);
     }
 
@@ -62,7 +62,7 @@ internal sealed class ModelClassificationService(
         // the next list (which knows the real live digest) would see a mismatch and immediately re-probe — a redundant
         // double probe. Detection happens lazily on the next ClassifyAsync with the real digest, mirroring the override
         // (PUT) nuance where the React client invalidates the list rather than trusting the mutation response.
-        var cleared = await _store.SetOverrideAsync(modelName, overrideKind: null, cancellationToken).ConfigureAwait(false);
+        var cleared = await _store.SetOverrideAsync(modelName, overrideKind: null, cancellationToken);
         return ToResult(cleared);
     }
 
@@ -73,14 +73,14 @@ internal sealed class ModelClassificationService(
     /// </summary>
     private async Task<ModelClassificationRecord> ResolveAsync(string modelName, string? digest, CancellationToken cancellationToken)
     {
-        var record = await _store.GetByNameAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetByNameAsync(modelName, cancellationToken);
 
         if (!NeedsDetection(record, digest))
         {
             return record!;
         }
 
-        var detected = await TryDetectAsync(modelName, digest, cancellationToken).ConfigureAwait(false);
+        var detected = await TryDetectAsync(modelName, digest, cancellationToken);
 
         // On a detection failure fall back to the cached record (preserving any override) or a synthetic Unknown so the
         // model still appears in the list — it just cannot be classified until the daemon is reachable again.
@@ -113,14 +113,14 @@ internal sealed class ModelClassificationService(
     {
         try
         {
-            var details = await _ollamaModelService.ShowModelDetailsAsync(modelName, cancellationToken).ConfigureAwait(false);
+            var details = await _ollamaModelService.ShowModelDetailsAsync(modelName, cancellationToken);
             var capabilities = details.Capabilities;
             var detectedKind = ModelKindDetector.FromCapabilities(capabilities, modelName);
             var capabilitiesJson = capabilities.Count > 0
                 ? JsonSerializer.Serialize(capabilities, SerializerOptions)
                 : null;
 
-            return await _store.UpsertDetectedAsync(modelName, digest, detectedKind, capabilitiesJson, cancellationToken).ConfigureAwait(false);
+            return await _store.UpsertDetectedAsync(modelName, digest, detectedKind, capabilitiesJson, cancellationToken);
         }
         catch (OperationCanceledException)
         {

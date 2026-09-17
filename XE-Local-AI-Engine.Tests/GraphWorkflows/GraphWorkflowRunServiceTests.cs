@@ -28,11 +28,11 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task StartAsync_WithTheSameRequestIdTwice_AnswersTheSameRunAndSignalsAgain()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
         var requestId = Guid.NewGuid();
 
-        var first = await StartAsync(definitionId, requestId).ConfigureAwait(false);
-        var second = await StartAsync(definitionId, requestId).ConfigureAwait(false);
+        var first = await StartAsync(definitionId, requestId);
+        var second = await StartAsync(definitionId, requestId);
 
         AssertEx.Equal(first.Run.Id, second.Run.Id, "the request id is the idempotency key, so a retry resolves to the run it already created.");
         AssertEx.Equal(expected: 3, first.NodeRuns.Count, "one Pending node run per graph node, written in the same commit as the run.");
@@ -47,18 +47,18 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task StartAsync_WithTwoConcurrentIdenticalStarts_WritesOneRunAndBothCallersGetIt()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
         var requestId = Guid.NewGuid();
 
         // Each in its own DI scope, because the store and its DbContext are scoped: one scope would serialize them
         // through a single change tracker and prove nothing about two writers.
-        var both = await Task.WhenAll(StartAsync(definitionId, requestId), StartAsync(definitionId, requestId)).ConfigureAwait(false);
+        var both = await Task.WhenAll(StartAsync(definitionId, requestId), StartAsync(definitionId, requestId));
 
         AssertEx.Equal(both[0].Run.Id, both[1].Run.Id, "one run row, and both callers hold its id.");
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-        AssertEx.Equal(both[0].Run.Id, AssertEx.NotNull(await store.FindRunByRequestAsync(requestId).ConfigureAwait(false)).Id);
+        AssertEx.Equal(both[0].Run.Id, AssertEx.NotNull(await store.FindRunByRequestAsync(requestId)).Id);
     }
 
     /// <summary>
@@ -69,11 +69,11 @@ public sealed class GraphWorkflowRunServiceTests
     public async Task StartAsync_WithARequestIdAlreadyUsedForAnotherDefinition_Refuses()
     {
         var requestId = Guid.NewGuid();
-        var first = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var second = await SeedDefinitionAsync(GraphWorkflowGraphs.BranchOnJson).ConfigureAwait(false);
-        _ = await StartAsync(first, requestId).ConfigureAwait(false);
+        var first = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var second = await SeedDefinitionAsync(GraphWorkflowGraphs.BranchOnJson);
+        _ = await StartAsync(first, requestId);
 
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => StartAsync(second, requestId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => StartAsync(second, requestId));
     }
 
     /// <summary>
@@ -85,19 +85,19 @@ public sealed class GraphWorkflowRunServiceTests
     public async Task StartAsync_WithTwoConcurrentStartsOfDifferentDefinitionsSharingARequestId_WritesOneRunAndRefusesTheOther()
     {
         var requestId = Guid.NewGuid();
-        var first = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var second = await SeedDefinitionAsync(GraphWorkflowGraphs.BranchOnJson).ConfigureAwait(false);
+        var first = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var second = await SeedDefinitionAsync(GraphWorkflowGraphs.BranchOnJson);
 
         // Each in its own DI scope, because the store and its DbContext are scoped: one scope would serialize them
         // through a single change tracker and prove nothing about two writers.
-        var outcomes = await Task.WhenAll(TryStartAsync(first, requestId), TryStartAsync(second, requestId)).ConfigureAwait(false);
+        var outcomes = await Task.WhenAll(TryStartAsync(first, requestId), TryStartAsync(second, requestId));
 
         AssertEx.ContainsSingle(outcomes, outcome => outcome.Detail is not null, "one start wins the request id — either of them may.");
         AssertEx.ContainsSingle(outcomes, outcome => outcome.Refusal is not null, "and the other is refused rather than handed the winner's run.");
 
         var winner = AssertEx.NotNull(outcomes.Single(static outcome => outcome.Detail is not null).Detail);
         await using var scope = Host.Factory.Services.CreateAsyncScope();
-        var stored = AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().FindRunByRequestAsync(requestId).ConfigureAwait(false));
+        var stored = AssertEx.NotNull(await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().FindRunByRequestAsync(requestId));
         AssertEx.Equal(winner.Run.Id, stored.Id, "one run row holds the request id.");
         AssertEx.Equal(winner.Run.DefinitionId, stored.DefinitionId, "and it is a run of the definition that won, not of the one that lost.");
     }
@@ -157,8 +157,7 @@ public sealed class GraphWorkflowRunServiceTests
         var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), Options.Create(new GraphWorkflowOptions()));
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
-                              runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null))
-                          .ConfigureAwait(false);
+                              runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null));
 
         _ = store.Received(requiredNumberOfCalls: 1).StartRunAsync(Arg.Any<StartGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>());
         AssertEx.Equal(expected: 0,
@@ -182,8 +181,8 @@ public sealed class GraphWorkflowRunServiceTests
     public async Task DecideAsync_WhenAConcurrentAnswerLandsInsideTheWrite_RefusesWithTheStandingDecision(GraphWorkflowRace race)
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var racing = new RacingGraphWorkflowStore(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), GraphWorkflowDecisionKind.Reject, race);
@@ -194,13 +193,12 @@ public sealed class GraphWorkflowRunServiceTests
 
         var refusal = await AssertEx
                             .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
-                                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"))
-                            .ConfigureAwait(false);
+                                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"));
 
         AssertEx.Equal(GraphWorkflowDecisionKind.Reject, refusal.StandingDecision, "the answer that WON is what the loser is told about.");
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "review")).Status);
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
             "the loser wrote nothing, so the winner's answer is the only decision on the run.");
     }
 
@@ -217,22 +215,21 @@ public sealed class GraphWorkflowRunServiceTests
     public async Task DecideAsync_WhenACancelLandsInsideTheWrite_RefusesAndCommitsNothing()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var runs = Service(scope, GraphWorkflowDecisionKind.Approve, GraphWorkflowRace.CancelledMidWrite, harness);
 
         var refusal = await AssertEx
                             .ThrowsAsync<GraphWorkflowRunConflictException>(() =>
-                                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"))
-                            .ConfigureAwait(false);
+                                runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator"));
 
         AssertEx.Contains(refusal.Message, "Cancelling", StringComparison.Ordinal, "the cancel is the reason, so the cancel is what the refusal names.");
         AssertEx.NotEqual(GraphWorkflowNodeRunStatus.Succeeded,
-            (await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(runId, "review")).Status,
             "a decision the run can no longer route must not land on the row.");
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
             "and nothing was audited as an answer.");
     }
 
@@ -245,19 +242,18 @@ public sealed class GraphWorkflowRunServiceTests
     public async Task DecideAsync_WhenAnIdenticalRequestCommitsFirst_ReplaysItRatherThanRefusing()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var runs = Service(scope, GraphWorkflowDecisionKind.Approve, GraphWorkflowRace.IdenticalAnswer, harness);
 
-        var result = await runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator")
-                               .ConfigureAwait(false);
+        var result = await runs.DecideAsync(runId, "review", Guid.NewGuid(), GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator");
 
         AssertEx.Equal(GraphWorkflowDecisionKind.Approve, result.Decision);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, result.NodeRunStatus, "the answer the other request committed is this one's answer too.");
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
             "one act, one audited decision, however many times it was sent.");
     }
 
@@ -271,20 +267,19 @@ public sealed class GraphWorkflowRunServiceTests
     public async Task DecideAsync_WhenAnIdenticalRequestCommitsAndTheRunThenStops_ReplaysItRatherThanRefusing()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.PauseTwoDecisions);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         var operationId = Guid.NewGuid();
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var runs = Service(scope, GraphWorkflowDecisionKind.Approve, GraphWorkflowRace.IdenticalAnswerThenRunStops, harness, operationId);
 
-        var result = await runs.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator")
-                               .ConfigureAwait(false);
+        var result = await runs.DecideAsync(runId, "review", operationId, GraphWorkflowDecisionKind.Approve, comment: null, payloadJson: null, "operator");
 
         AssertEx.Equal(GraphWorkflowDecisionKind.Approve, result.Decision);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, result.NodeRunStatus, "the answer that committed is this caller's answer too.");
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == GraphWorkflowEventTypes.GateDecided),
             "one act, one audited decision, whatever the run did afterwards.");
     }
 
@@ -303,18 +298,17 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task StartAsync_WithAStaleDefinitionVersion_Conflicts()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
 
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() => StartAsync(definitionId, Guid.NewGuid(), definitionVersion: 99))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() => StartAsync(definitionId, Guid.NewGuid(), definitionVersion: 99));
     }
 
     [Test]
     public async Task StartAsync_WithAnEmptyRequestId_Refuses()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
 
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() => StartAsync(definitionId, Guid.Empty)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() => StartAsync(definitionId, Guid.Empty));
     }
 
     /// <summary>
@@ -324,18 +318,17 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task StartAsync_PinsTheGraphSoALaterDefinitionEditDoesNotChangeTheRun()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var started = await StartAsync(definitionId, Guid.NewGuid());
 
         await using (var scope = Host.Factory.Services.CreateAsyncScope())
         {
             var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
-            _ = await definitions.UpdateAsync(definitionId, expectedVersion: 1, name: null, description: null, GraphWorkflowGraphs.BranchOnJson)
-                                 .ConfigureAwait(false);
+            _ = await definitions.UpdateAsync(definitionId, expectedVersion: 1, name: null, description: null, GraphWorkflowGraphs.BranchOnJson);
         }
 
         await using var readScope = Host.Factory.Services.CreateAsyncScope();
-        var run = await readScope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetRunAsync(started.Run.Id).ConfigureAwait(false);
+        var run = await readScope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetRunAsync(started.Run.Id);
         AssertEx.Equal(GraphWorkflowGraphs.StartAgentEnd, run.GraphJson, "the run keeps the graph it started with, byte for byte.");
         AssertEx.Equal(expected: 1, run.DefinitionVersion, "and the version it was started against, which is what a later reader compares.");
     }
@@ -347,9 +340,9 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task StartAsync_WithAToolNodeNamingInvocableTools_CreatesTheRun()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.ToolNode).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.ToolNode);
 
-        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+        var started = await StartAsync(definitionId, Guid.NewGuid());
 
         AssertEx.Equal(GraphWorkflowRunStatus.Pending, started.Run.Status, "no dispatcher in this slice, so a started run sits Pending.");
         AssertEx.Contains(started.NodeRuns, nodeRun => nodeRun.Kind == GraphWorkflowNodeKind.Tool);
@@ -362,17 +355,16 @@ public sealed class GraphWorkflowRunServiceTests
         // A private host: the cap is host-level configuration, and a sibling starting a normal run must not see it. 1024
         // is the validator's floor, so this is the smallest cap a real node can be configured with.
         await using var factory = GraphWorkflowHostFixture.NewFactory(("GraphWorkflows:MaxRunInputBytes", "1024"));
-        var definitionId = await SeedDefinitionAsync(factory, GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(factory, GraphWorkflowGraphs.StartAgentEnd);
         var requestId = Guid.NewGuid();
 
         await using var scope = factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         _ = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                              runs.StartAsync(definitionId, requestId, $$"""{"blob":"{{new string('x', 2048)}}"}""", definitionVersion: null))
-                          .ConfigureAwait(false);
+                              runs.StartAsync(definitionId, requestId, $$"""{"blob":"{{new string('x', 2048)}}"}""", definitionVersion: null));
 
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-        AssertEx.Null(await store.FindRunByRequestAsync(requestId).ConfigureAwait(false), "a refused start leaves nothing behind for the request id to find.");
+        AssertEx.Null(await store.FindRunByRequestAsync(requestId), "a refused start leaves nothing behind for the request id to find.");
     }
 
     /// <summary>
@@ -393,13 +385,11 @@ public sealed class GraphWorkflowRunServiceTests
         var definition = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(),
                                         "Saved under a wider cap",
                                         GraphWorkflowGraphs.StartAgentEnd,
-                                        NodeCount: 3))
-                                    .ConfigureAwait(false);
+                                        NodeCount: 3));
 
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
         var thrown = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
-                                       runs.StartAsync(definition.Id, Guid.NewGuid(), inputJson: null, definitionVersion: null))
-                                   .ConfigureAwait(false);
+                                       runs.StartAsync(definition.Id, Guid.NewGuid(), inputJson: null, definitionVersion: null));
         AssertEx.Contains(thrown.Message, "3 nodes", message: "the refusal names what the graph declares against what a run may instantiate.");
     }
 
@@ -410,11 +400,11 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task CancelAsync_OnAPendingRun_RecordsTheIntentWithoutSettlingItsNodeRuns()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var started = await StartAsync(definitionId, Guid.NewGuid());
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
-        var cancelled = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().CancelAsync(started.Run.Id).ConfigureAwait(false);
+        var cancelled = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().CancelAsync(started.Run.Id);
 
         AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, cancelled.Run.Status, "cancel is fire-and-forget: the run drains before it is Cancelled.");
         AssertEx.True(cancelled.Run.CancelRequestedAtUtc is not null, "the intent is stamped, which is what the drain reads it off.");
@@ -430,13 +420,13 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task CancelAsync_OnARunAlreadyCancelling_IsANoOpThatReportsTheCurrentDetail()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var started = await StartAsync(definitionId, Guid.NewGuid());
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
-        var first = await runs.CancelAsync(started.Run.Id).ConfigureAwait(false);
-        var repeat = await runs.CancelAsync(started.Run.Id).ConfigureAwait(false);
+        var first = await runs.CancelAsync(started.Run.Id);
+        var repeat = await runs.CancelAsync(started.Run.Id);
 
         AssertEx.Equal(GraphWorkflowRunStatus.Cancelling, repeat.Run.Status);
         AssertEx.Equal(first.Run.Version, repeat.Run.Version, "a no-op writes nothing, so the row is the one the first cancel left.");
@@ -446,8 +436,8 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task CancelAsync_OnATerminalRun_Conflicts()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var started = await StartAsync(definitionId, Guid.NewGuid());
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
@@ -456,11 +446,10 @@ public sealed class GraphWorkflowRunServiceTests
         _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(started.Run.Id,
                            started.Run.Version,
                            GraphWorkflowRunStatus.Failed,
-                           GraphWorkflowFailureClass.NodeFailed))
-                       .ConfigureAwait(false);
+                           GraphWorkflowFailureClass.NodeFailed));
 
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() => runs.CancelAsync(started.Run.Id)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowRunConflictException>(() => runs.CancelAsync(started.Run.Id));
     }
 
     /// <summary>
@@ -471,27 +460,26 @@ public sealed class GraphWorkflowRunServiceTests
     public async Task ListEventsAsync_PagesFromTheWatermarkAndReportsTruncation()
     {
         await using var factory = GraphWorkflowHostFixture.NewFactory(("GraphWorkflows:EventReplayLimit", "2"));
-        var definitionId = await SeedDefinitionAsync(factory, GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(factory, GraphWorkflowGraphs.StartAgentEnd);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
-        var started = await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null).ConfigureAwait(false);
+        var started = await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson: null, definitionVersion: null);
 
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
         for (var index = 0; index < 3; index++)
         {
             _ = await store.AppendEventAsync(new AppendGraphWorkflowEventCommand(started.Run.Id,
                                GraphWorkflowVersions.Any,
-                               GraphWorkflowEventTypes.RunStarted))
-                           .ConfigureAwait(false);
+                               GraphWorkflowEventTypes.RunStarted));
         }
 
-        var first = await runs.ListEventsAsync(started.Run.Id, afterSeq: 0).ConfigureAwait(false);
+        var first = await runs.ListEventsAsync(started.Run.Id, afterSeq: 0);
         AssertEx.Equal(expected: 2, first.Events.Count);
         AssertEx.True(first.ReplayTruncated, "there are four events and the cap is two, so the page says it was cut off.");
         AssertEx.Equal(GraphWorkflowEventTypes.RunCreated, first.Events[0].EventType, "run.created is the run's first event, at the first watermark.");
 
-        var second = await runs.ListEventsAsync(started.Run.Id, first.LastSeq).ConfigureAwait(false);
+        var second = await runs.ListEventsAsync(started.Run.Id, first.LastSeq);
         AssertEx.False(second.ReplayTruncated, "and the next page from that watermark is the rest of them.");
         AssertEx.True(second.Events.All(entry => entry.Seq > first.LastSeq), "the watermark is exclusive, so nothing is replayed twice.");
     }
@@ -499,27 +487,27 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task ListEventsAsync_WithANegativeWatermark_Refuses()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var started = await StartAsync(definitionId, Guid.NewGuid());
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() => runs.ListEventsAsync(started.Run.Id, afterSeq: -1)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() => runs.ListEventsAsync(started.Run.Id, afterSeq: -1));
     }
 
     [Test]
     public async Task GetNodeRunAsync_ReadsTheRowByItsNodeKey()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var started = await StartAsync(definitionId, Guid.NewGuid());
 
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
 
-        var nodeRun = await runs.GetNodeRunAsync(started.Run.Id, "analyze").ConfigureAwait(false);
+        var nodeRun = await runs.GetNodeRunAsync(started.Run.Id, "analyze");
         AssertEx.Equal(GraphWorkflowNodeKind.Agent, nodeRun.Kind);
 
-        _ = await AssertEx.ThrowsAsync<GraphWorkflowNotFoundException>(() => runs.GetNodeRunAsync(started.Run.Id, "nosuchnode")).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowNotFoundException>(() => runs.GetNodeRunAsync(started.Run.Id, "nosuchnode"));
     }
 
     /// <summary>
@@ -530,19 +518,18 @@ public sealed class GraphWorkflowRunServiceTests
     [Test]
     public async Task GetRunAsync_CarriesThePinnedGraph_AfterTheDefinitionMovedOn()
     {
-        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd).ConfigureAwait(false);
-        var started = await StartAsync(definitionId, Guid.NewGuid()).ConfigureAwait(false);
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var started = await StartAsync(definitionId, Guid.NewGuid());
 
         await using (var scope = Host.Factory.Services.CreateAsyncScope())
         {
-            var current = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(definitionId).ConfigureAwait(false);
+            var current = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(definitionId);
             _ = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>()
-                           .UpdateAsync(definitionId, current.Version, name: null, description: null, GraphWorkflowGraphs.BranchOnJson)
-                           .ConfigureAwait(false);
+                           .UpdateAsync(definitionId, current.Version, name: null, description: null, GraphWorkflowGraphs.BranchOnJson);
         }
 
         await using var read = Host.Factory.Services.CreateAsyncScope();
-        var detail = await read.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().GetRunAsync(started.Run.Id).ConfigureAwait(false);
+        var detail = await read.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>().GetRunAsync(started.Run.Id);
 
         AssertEx.Equal("analyze, done, start",
             string.Join(", ", GraphWorkflowGraph.Parse(detail.Run.GraphJson).Nodes.Keys.Order(StringComparer.Ordinal)),
@@ -559,7 +546,7 @@ public sealed class GraphWorkflowRunServiceTests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
-        var created = await definitions.CreateAsync($"Seeded {Guid.NewGuid():N}", description: null, graphJson).ConfigureAwait(false);
+        var created = await definitions.CreateAsync($"Seeded {Guid.NewGuid():N}", description: null, graphJson);
         return created.Id;
     }
 
@@ -568,7 +555,7 @@ public sealed class GraphWorkflowRunServiceTests
     {
         try
         {
-            return new StartOutcome(await StartAsync(definitionId, requestId).ConfigureAwait(false), Refusal: null);
+            return new StartOutcome(await StartAsync(definitionId, requestId), Refusal: null);
         }
         catch (GraphWorkflowInvalidTransitionException refusal)
         {
@@ -581,8 +568,7 @@ public sealed class GraphWorkflowRunServiceTests
     {
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
-                          .StartAsync(definitionId, requestId, inputJson: null, definitionVersion)
-                          .ConfigureAwait(false);
+                          .StartAsync(definitionId, requestId, inputJson: null, definitionVersion);
     }
 
     /// <summary>What one racer came back with: a run, or the refusal it was given instead.</summary>
@@ -614,10 +600,10 @@ internal sealed class RacingGraphWorkflowStore(
     {
         if (race != GraphWorkflowRace.IdenticalAnswer || Interlocked.Increment(ref _operationLookups) != 1)
         {
-            return await inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false);
+            return await inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
         }
 
-        await CommitIdenticalAnswerAsync(runId, cancellationToken, operationId).ConfigureAwait(false);
+        await CommitIdenticalAnswerAsync(runId, cancellationToken, operationId);
         return null;
     }
 
@@ -627,7 +613,7 @@ internal sealed class RacingGraphWorkflowStore(
     /// </summary>
     private async Task CommitIdenticalAnswerAsync(Guid runId, CancellationToken cancellationToken, Guid? operationId = null)
     {
-        var waiting = await inner.GetNodeRunAsync(runId, "review", cancellationToken).ConfigureAwait(false);
+        var waiting = await inner.GetNodeRunAsync(runId, "review", cancellationToken);
         _ = await inner.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand(runId,
                                waiting.Id,
                                GraphWorkflowVersions.Any,
@@ -635,8 +621,7 @@ internal sealed class RacingGraphWorkflowStore(
                                winningDecision,
                                "operator",
                                GraphWorkflowStateMachine.PauseOutputJson(winningDecision)),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
     }
 
     /// <summary>
@@ -648,15 +633,14 @@ internal sealed class RacingGraphWorkflowStore(
     {
         if (race != GraphWorkflowRace.IdenticalAnswerThenRunStops || Interlocked.Increment(ref _runReads) != 1)
         {
-            return await inner.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+            return await inner.GetRunAsync(runId, cancellationToken);
         }
 
         // The answer lands BEFORE the cancel: the store refuses a decision on a run that has stopped, so the other
         // request only wins if it got there first — which is exactly the interleaving this reproduces.
-        await CommitIdenticalAnswerAsync(runId, cancellationToken).ConfigureAwait(false);
-        _ = await inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling), cancellationToken)
-                       .ConfigureAwait(false);
-        return await inner.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        await CommitIdenticalAnswerAsync(runId, cancellationToken);
+        _ = await inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(runId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling), cancellationToken);
+        return await inner.GetRunAsync(runId, cancellationToken);
     }
 
     public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
@@ -666,9 +650,8 @@ internal sealed class RacingGraphWorkflowStore(
             // A cancel committing between this caller's checks and its write. Delegated afterwards, so what refuses the
             // decision is the store's own in-transaction re-read rather than anything this seam decides.
             _ = await inner.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(command.RunId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Cancelling),
-                               cancellationToken)
-                           .ConfigureAwait(false);
-            return await inner.DecideNodeRunAsync(command, cancellationToken).ConfigureAwait(false);
+                               cancellationToken);
+            return await inner.DecideNodeRunAsync(command, cancellationToken);
         }
 
         // The winner, committed for real between this caller's checks and its own write — with its own operation id,
@@ -679,8 +662,7 @@ internal sealed class RacingGraphWorkflowStore(
                                Decision = winningDecision,
                                OutputJson = GraphWorkflowStateMachine.PauseOutputJson(winningDecision)
                            },
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
 
         return race == GraphWorkflowRace.ConcurrencyToken
             ? throw new GraphWorkflowInvalidTransitionException($"A concurrent writer moved graph workflow run '{command.RunId}' before this write could commit.")

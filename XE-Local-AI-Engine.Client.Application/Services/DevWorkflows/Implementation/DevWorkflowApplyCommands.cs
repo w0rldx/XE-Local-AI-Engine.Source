@@ -79,7 +79,7 @@ internal sealed class DevWorkflowApplyCommands
                 $"Node run '{nodeRun.NodeKey}' applies approved patches but names no development project to apply them to.");
         }
 
-        var implementations = await ImplementedAsync(run, nodeRun, projectId, cancellationToken).ConfigureAwait(false);
+        var implementations = await ImplementedAsync(run, nodeRun, projectId, cancellationToken);
         var applied = new List<AppliedTask>();
         for (var index = 0; index < implementations.Count; index++)
         {
@@ -99,7 +99,7 @@ internal sealed class DevWorkflowApplyCommands
             }
 
             var taskId = implementation.DevelopmentTaskId!.Value;
-            var task = await _development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+            var task = await _development.GetTaskAsync(taskId, cancellationToken);
             var title = Sanitized(task);
             if (task.Status == DevelopmentTaskStatus.Completed)
             {
@@ -109,7 +109,7 @@ internal sealed class DevWorkflowApplyCommands
                 continue;
             }
 
-            var (entry, failureClass) = await ApplyOneAsync(projectId, implementation, task, title, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            var (entry, failureClass) = await ApplyOneAsync(projectId, implementation, task, title, run, nodeRun, cancellationToken);
             applied.Add(entry);
             if (failureClass is not null)
             {
@@ -149,7 +149,7 @@ internal sealed class DevWorkflowApplyCommands
         {
             // On behalf of THIS run, which is what gets past the ownership guard the same method enforces against
             // every other caller: the gate that authorised this apply is a node of this run.
-            var result = await _management.ApplyAsync(projectId, task.Id, operationId, run.Id, cancellationToken).ConfigureAwait(false);
+            var result = await _management.ApplyAsync(projectId, task.Id, operationId, run.Id, cancellationToken);
             if (!string.Equals(result.Phase, DevelopmentOperationPhases.ApplyBlocked, StringComparison.Ordinal))
             {
                 return (new AppliedTask(implementation.NodeKey, task.Id, title, AppliedOutcomes.Applied, Detail: null), null);
@@ -307,7 +307,7 @@ internal sealed class DevWorkflowApplyCommands
         var upstream = _graphs.Resolve(run).Ancestors(applyNodeRun.NodeKey);
         return
         [
-            .. (await _store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false))
+            .. (await _store.ListNodeRunsAsync(run.Id, cancellationToken))
                .Where(nodeRun => nodeRun.DevelopmentTaskId is not null
                                  && nodeRun.DevelopmentProjectId == projectId
                                  && nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded

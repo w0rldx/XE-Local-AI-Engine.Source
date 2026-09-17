@@ -18,7 +18,6 @@ public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeReten
         return await _dbContext.Conversations
                                .Where(conversation => conversation.Purged || conversation.LastSeenUtc <= cutoffUtc)
                                .Select(conversation => conversation.ConversationId)
-                               .ToListAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                               .ToListAsync(cancellationToken);
     }
 }

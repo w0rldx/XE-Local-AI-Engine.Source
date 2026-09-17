@@ -51,40 +51,40 @@ internal sealed partial class AgentWorkSessionStore(NodeChatDbContext dbContext,
     {
         // Query-first, never insert-then-catch: a caught unique-index violation leaves an Added entity in the change
         // tracker that every later write in the same scope would trip over.
-        if (operationId is { } preflight && await FindOperationAsync(sessionId, preflight, cancellationToken).ConfigureAwait(false) is { } recorded)
+        if (operationId is { } preflight && await FindOperationAsync(sessionId, preflight, cancellationToken) is { } recorded)
         {
             return recorded;
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            if (operationId is { } inTransaction && await FindOperationAsync(sessionId, inTransaction, cancellationToken).ConfigureAwait(false) is { } alreadyRecorded)
+            if (operationId is { } inTransaction && await FindOperationAsync(sessionId, inTransaction, cancellationToken) is { } alreadyRecorded)
             {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken);
                 return alreadyRecorded;
             }
 
-            var session = await _dbContext.AgentWorkSessions.SingleOrDefaultAsync(entity => entity.Id == sessionId, cancellationToken).ConfigureAwait(false)
+            var session = await _dbContext.AgentWorkSessions.SingleOrDefaultAsync(entity => entity.Id == sessionId, cancellationToken)
                           ?? throw new WorkSessionNotFoundException($"Work session '{sessionId}' was not found.");
             EnsureVersion(session, expectedVersion);
 
-            var outcome = await mutate(session).ConfigureAwait(false);
+            var outcome = await mutate(session);
             var sequence = AddEvent(session, outcome.EventType, outcome.Outcome, operationId, outcome.DetailJson);
             session.Version++;
             session.UpdatedAtUtc = Now();
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return new WorkSessionMutationResult(sessionId, sequence, session.StepCount, session.Version, session.Status, session.CurrentTaskId, outcome.SupersededArtifactId);
         }
         catch (DbUpdateException exception)
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw new WorkSessionConcurrencyException("A concurrent writer won the race before the work session mutation committed.", exception);
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -96,14 +96,13 @@ internal sealed partial class AgentWorkSessionStore(NodeChatDbContext dbContext,
     private async Task<WorkSessionMutationResult?> FindOperationAsync(Guid sessionId, Guid operationId, CancellationToken cancellationToken)
     {
         var recorded = await _dbContext.AgentWorkSessionEvents.AsNoTracking()
-                                       .SingleOrDefaultAsync(entity => entity.SessionId == sessionId && entity.OperationId == operationId, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleOrDefaultAsync(entity => entity.SessionId == sessionId && entity.OperationId == operationId, cancellationToken);
         if (recorded is null)
         {
             return null;
         }
 
-        var session = await _dbContext.AgentWorkSessions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _dbContext.AgentWorkSessions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == sessionId, cancellationToken);
         return session is null
             ? null
             : new WorkSessionMutationResult(sessionId, recorded.Sequence, recorded.Step, session.Version, session.Status, session.CurrentTaskId);
@@ -160,7 +159,7 @@ internal sealed partial class AgentWorkSessionStore(NodeChatDbContext dbContext,
 
     private async Task RollbackAsync(IDbContextTransaction transaction)
     {
-        await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+        await transaction.RollbackAsync(CancellationToken.None);
         _dbContext.ChangeTracker.Clear();
     }
 

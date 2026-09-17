@@ -57,7 +57,7 @@ public sealed class BenchmarkRunExecutor(
             // A row frozen under a different launch-identity scheme is failed BEFORE anything is leased or
             // spawned, so it never writes an effective identity that could not be compared to its intended one.
             BenchmarkLaunchIdentityScheme.RequireCurrent(work.Run.PrimaryLaunchIntent);
-            await using var modelLease = await installedModels.AcquireAsync(snapshot.PrimaryModel.ModelName, token).ConfigureAwait(false);
+            await using var modelLease = await installedModels.AcquireAsync(snapshot.PrimaryModel.ModelName, token);
             if (!BenchmarkSnapshotModelComparer.Matches(snapshot.PrimaryModel, modelLease.Snapshot))
             {
                 throw new BenchmarkExecutionException(FingerprintChangedMessage);
@@ -65,7 +65,7 @@ public sealed class BenchmarkRunExecutor(
 
             // The host facts this measurement was taken on, captured before anything is reserved or spawned so a
             // failed launch still carries them. Non-throwing by contract.
-            environment = await environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token).ConfigureAwait(false);
+            environment = await environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token);
 
             // Admission sizes against the context the FROZEN runtime will actually launch with, not the context the
             // project requested: a profile replay can pin a larger window, and reserving the smaller one under-books.
@@ -91,8 +91,7 @@ public sealed class BenchmarkRunExecutor(
                                                                    CapacityRejectedMessage),
                                                                waitBudget,
                                                                logger,
-                                                               token)
-                                                           .ConfigureAwait(false);
+                                                               token);
 
             using var reservation = decision.Reservation;
             var package = BuildPrimaryPackage(snapshot, work.Run.InvocationTimeoutSeconds);
@@ -102,7 +101,7 @@ public sealed class BenchmarkRunExecutor(
                 BenchmarkRunStreamEventKind.PrimaryState,
                 new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Running.ToString()));
 
-            var currentVariant = await variantSelector.SelectVariantAsync(token).ConfigureAwait(false);
+            var currentVariant = await variantSelector.SelectVariantAsync(token);
             if (currentVariant != snapshot.PrimaryRuntime.Variant)
             {
                 throw new BenchmarkExecutionException("The selected llama.cpp runtime changed after the benchmark was created.");
@@ -119,13 +118,13 @@ public sealed class BenchmarkRunExecutor(
                                                          {
                                                              // Durable BEFORE any token is generated: a run that reached readiness keeps
                                                              // its evidence no matter how the invocation ends.
-                                                             await CheckpointAsync(work, profiling.LaunchReceipt, environment).ConfigureAwait(false);
+                                                             await CheckpointAsync(work, profiling.LaunchReceipt, environment);
                                                              using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                                                             await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken).ConfigureAwait(false);
+                                                             await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
                                                              using var context = InvocationExecutionContext.CreatePlain(package,
                                                                  Guid.Empty,
                                                                  generationAdmissionPolicy: admission);
-                                                             await runner.RunAsync(context, profilingToken).ConfigureAwait(false);
+                                                             await runner.RunAsync(context, profilingToken);
                                                              return true;
                                                          },
                                                          spawnToken),
@@ -133,8 +132,7 @@ public sealed class BenchmarkRunExecutor(
                                                  work.RunId,
                                                  "primary",
                                                  logger,
-                                                 token)
-                                             .ConfigureAwait(false);
+                                                 token);
             token.ThrowIfCancellationRequested();
 
             var terminal = capture.TerminalState;
@@ -193,8 +191,7 @@ public sealed class BenchmarkRunExecutor(
                         // run has to carry why it stopped, or the ranking and the judge grade an incomplete answer as
                         // if it were a finished one.
                         stopReason,
-                        Throughput: throughput))
-                .ConfigureAwait(false);
+                        Throughput: throughput));
             events.PublishReserved(metricsEvent);
             events.PublishReserved(terminalEvent with
             {
@@ -208,7 +205,7 @@ public sealed class BenchmarkRunExecutor(
             // A newly succeeded run is newly eligible to be compared against every other one. In pointwise mode this
             // is a no-op; in pairwise mode it is the second of the three places a cohort grows, and it is incremental
             // — one more run enqueues 2N comparisons, not the whole tournament again.
-            _ = await pairwisePlanner.EnsurePairsAsync(work.Run.ProjectId, CancellationToken.None).ConfigureAwait(false);
+            _ = await pairwisePlanner.EnsurePairsAsync(work.Run.ProjectId, CancellationToken.None);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -217,7 +214,7 @@ public sealed class BenchmarkRunExecutor(
         }
         catch (OperationCanceledException)
         {
-            await TerminalizeCancelledAsync(work, environment).ConfigureAwait(false);
+            await TerminalizeCancelledAsync(work, environment);
         }
         catch (Exception exception)
         {
@@ -225,7 +222,7 @@ public sealed class BenchmarkRunExecutor(
             await TerminalizeFailedAsync(work,
                 exception is BenchmarkExecutionException or LlamaRuntimeException ? exception.Message : InvocationFailedMessage,
                 environment,
-                (exception as BenchmarkExecutionException)?.StopReason).ConfigureAwait(false);
+                (exception as BenchmarkExecutionException)?.StopReason);
         }
     }
 
@@ -279,18 +276,18 @@ public sealed class BenchmarkRunExecutor(
     {
         for (var round = 1; round <= JudgePolicyResolutionAttempts; round++)
         {
-            var revision = await store.GetCurrentJudgePolicyRevisionAsync(work.Run.ProjectId, CancellationToken.None).ConfigureAwait(false);
+            var revision = await store.GetCurrentJudgePolicyRevisionAsync(work.Run.ProjectId, CancellationToken.None);
             if (revision is null)
             {
-                return await store.MarkPrimarySucceededAsync(command, CancellationToken.None).ConfigureAwait(false);
+                return await store.MarkPrimarySucceededAsync(command, CancellationToken.None);
             }
 
             try
             {
                 return await store.MarkPrimarySucceededAsync(command with
                 {
-                    JudgeAttempt = await ResolveJudgeSeedAsync(revision).ConfigureAwait(false)
-                }, CancellationToken.None).ConfigureAwait(false);
+                    JudgeAttempt = await ResolveJudgeSeedAsync(revision)
+                }, CancellationToken.None);
             }
             catch (BenchmarkJudgePolicyChangedException) when (round < JudgePolicyResolutionAttempts)
             {
@@ -303,7 +300,7 @@ public sealed class BenchmarkRunExecutor(
         return await store.MarkPrimarySucceededAsync(command with
         {
             JudgeAttempt = new BenchmarkJudgeAttemptSeed(ExpectedJudgePolicyRevisionId: null, RuntimeJson: null, JudgePolicyChangedMessage)
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
     }
 
     /// <summary>
@@ -315,7 +312,7 @@ public sealed class BenchmarkRunExecutor(
         try
         {
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
-            var resolution = await judgeRuntimeResolver.ResolveAsync(policy, CancellationToken.None).ConfigureAwait(false);
+            var resolution = await judgeRuntimeResolver.ResolveAsync(policy, CancellationToken.None);
             return new BenchmarkJudgeAttemptSeed(revision.Id,
                 new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
                 RuntimeUnresolvedReason: null,
@@ -399,8 +396,7 @@ public sealed class BenchmarkRunExecutor(
 
         try
         {
-            _ = await store.MarkPrimaryLaunchReadyAsync(work.RunId, work.QueueSequence, work.Version, command, CancellationToken.None)
-                           .ConfigureAwait(false);
+            _ = await store.MarkPrimaryLaunchReadyAsync(work.RunId, work.QueueSequence, work.Version, command, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -412,9 +408,9 @@ public sealed class BenchmarkRunExecutor(
 
     private async Task TerminalizeCancelledAsync(BenchmarkClaimedWork work, RuntimeEnvironmentFactsV1? environment)
     {
-        await CheckpointAsync(work, receipt: null, environment).ConfigureAwait(false);
+        await CheckpointAsync(work, receipt: null, environment);
         var runId = work.RunId;
-        var run = await store.GetRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
+        var run = await store.GetRunAsync(runId, CancellationToken.None);
         if (run is null || run.PrimaryStatus == BenchmarkPrimaryStatus.Cancelled)
         {
             events.EvictPlaintext(runId);
@@ -430,7 +426,7 @@ public sealed class BenchmarkRunExecutor(
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Cancelled.ToString(), RunVersion: run.Version + 1));
-        var persisted = await store.MarkPrimaryCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None).ConfigureAwait(false);
+        var persisted = await store.MarkPrimaryCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
         events.PublishReserved(terminal with
         {
             Payload = terminal.Payload with
@@ -446,9 +442,9 @@ public sealed class BenchmarkRunExecutor(
         RuntimeEnvironmentFactsV1? environment,
         string? primaryStopReason = null)
     {
-        await CheckpointAsync(work, receipt: null, environment).ConfigureAwait(false);
+        await CheckpointAsync(work, receipt: null, environment);
         var runId = work.RunId;
-        var run = await store.GetRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
+        var run = await store.GetRunAsync(runId, CancellationToken.None);
         if (run is null || run.PrimaryStatus is BenchmarkPrimaryStatus.Succeeded or BenchmarkPrimaryStatus.Failed or BenchmarkPrimaryStatus.Cancelled)
         {
             events.EvictPlaintext(runId);
@@ -458,8 +454,7 @@ public sealed class BenchmarkRunExecutor(
         var terminal = events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkPrimaryStatus.Failed.ToString(), RunVersion: run.Version + 1));
-        var persisted = await store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, primaryStopReason, CancellationToken.None)
-                                   .ConfigureAwait(false);
+        var persisted = await store.MarkPrimaryFailedAsync(runId, work.Version, message, terminal.Sequence, primaryStopReason, CancellationToken.None);
         events.PublishReserved(terminal with
         {
             Payload = terminal.Payload with

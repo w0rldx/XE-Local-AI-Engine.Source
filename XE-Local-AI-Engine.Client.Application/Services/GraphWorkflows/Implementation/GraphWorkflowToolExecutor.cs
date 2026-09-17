@@ -104,7 +104,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             // The attempt is compared rather than assumed: a retry re-attempts a row WITHOUT coming through this lane,
             // and admitting such a row against the call belonging to the attempt before would settle one off the other.
             return nodeRun.Status == GraphWorkflowNodeRunStatus.Queued
-                ? await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false)
+                ? await RunningAsync(store, run, nodeRun, cancellationToken)
                 : 0;
         }
 
@@ -120,8 +120,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                     GraphWorkflowFailureClass.ValidationFailed,
                     $"Node '{node.NodeKey}' is a Tool node without tool settings.",
                     eventType: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         string inputJson;
@@ -130,7 +129,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         {
             // Composed here rather than in the task body: it is the same set the admission that got us here judged,
             // and it is what the row persists, so a later reader can reconcile the arguments with what was bound.
-            inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken).ConfigureAwait(false);
+            inputJson = await InputDocumentAsync(store, graph, node, run, cancellationToken);
             GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Queued, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
                                    nodeRun.Id,
@@ -138,8 +137,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                                    GraphWorkflowNodeRunStatus.Queued,
                                    QueueReason: AwaitingToolSlot,
                                    InputJson: inputJson),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Queued
@@ -150,15 +148,14 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         {
             // A re-offer of a row this lane already queued. Only that first write persists a document, so composing a
             // second one here would resolve the bindings against something the row does not carry.
-            inputJson = nodeRun.InputJson ?? await InputDocumentAsync(store, graph, node, run, cancellationToken).ConfigureAwait(false);
+            inputJson = nodeRun.InputJson ?? await InputDocumentAsync(store, graph, node, run, cancellationToken);
         }
 
         if (!TryResolveArguments(config, inputJson, out var argumentsJson, out var refusal))
         {
             // Never retried, and correctly so: the same document resolves the same way, so a re-attempt would spend an
             // attempt to reach the identical refusal.
-            return written + await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.ValidationFailed, refusal, eventType: null, cancellationToken)
-                .ConfigureAwait(false);
+            return written + await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.ValidationFailed, refusal, eventType: null, cancellationToken);
         }
 
         // Guid.Empty rather than a minted id: the lane takes one because the agent lane's stop path has to hand its
@@ -168,14 +165,13 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                                     nodeRun.Attempt,
                                     Guid.Empty,
                                     (leaseAcquired, token) => InvokeAsync(run.Id, nodeRun.Id, node, config.ToolName, argumentsJson, leaseAcquired, token),
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                                    cancellationToken);
 
         // Queueing, not failure: every slot is held. No event and no failure class — the row's reason says what it is
         // waiting for, and the next tick asks again.
         return flight is null
             ? written
-            : written + await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            : written + await RunningAsync(store, run, nodeRun, cancellationToken);
     }
 
     /// <summary>Settles the row if its tool call has landed, and answers how many transitions that wrote.</summary>
@@ -206,14 +202,13 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                     GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Interrupted, nodeRun.Attempt, node.MaxAttempts),
                     "The host stopped while this node run's tool call was in flight.",
                     GraphWorkflowEventTypes.NodeInterrupted,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         if (!flight.Work.IsCompleted)
         {
             return nodeRun.Status == GraphWorkflowNodeRunStatus.Queued
-                ? await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false)
+                ? await RunningAsync(store, run, nodeRun, cancellationToken)
                 : 0;
         }
 
@@ -223,7 +218,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             // Defence rather than an expected path: the invocation service answers every cancellation with an outcome
             // instead of throwing. Checked anyway, and BEFORE the await, because awaiting a cancelled task would
             // rethrow, the dispatcher would swallow it, and the row would rethrow again on every tick forever.
-            written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken).ConfigureAwait(false);
+            written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken);
         }
         else if (flight.Work.IsFaulted)
         {
@@ -244,25 +239,24 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                     GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.NodeFailed, nodeRun.Attempt, node.MaxAttempts),
                     "This node run's tool call did not complete. See the node logs for details.",
                     eventType: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
         else
         {
             // A Queued row whose call landed between ticks: the state machine has no Queued → Succeeded edge, and
             // deliberately so — an attempt that produced an answer ran, whatever the row managed to say while it did.
             written = nodeRun.Status == GraphWorkflowNodeRunStatus.Queued
-                ? await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false)
+                ? await RunningAsync(store, run, nodeRun, cancellationToken)
                 : 0;
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Running
             };
 
-            var outcome = await flight.Work.ConfigureAwait(false);
+            var outcome = await flight.Work;
             written += outcome.Kind == ToolInvocationOutcomeKind.Cancelled
-                ? await SettleCancelledAsync(store, run, nodeRun, outcome.Reason, cancellationToken).ConfigureAwait(false)
-                : await SettleLandedAsync(store, graph, run, node, nodeRun, ToolNameOf(node), outcome, cancellationToken).ConfigureAwait(false);
+                ? await SettleCancelledAsync(store, run, nodeRun, outcome.Reason, cancellationToken)
+                : await SettleLandedAsync(store, graph, run, node, nodeRun, ToolNameOf(node), outcome, cancellationToken);
         }
 
         // Consumed only once the settle has COMMITTED. Doing it first would spend the answer on a write that may throw
@@ -316,8 +310,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         // The graph author's own budget, which the service enforces as a hard deadline over the whole call — argument
         // validation included — so the dispatcher's expiry stage stays a backstop rather than a race with the answer.
         var timeout = TimeSpan.FromSeconds(node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds);
-        return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext(runId, nodeRunId, node.NodeKey, timeout), cancellationToken)
-                           .ConfigureAwait(false);
+        return await _tools.InvokeAsync(toolName, argumentsJson, new ToolInvocationContext(runId, nodeRunId, node.NodeKey, timeout), cancellationToken);
     }
 
     /// <summary>
@@ -378,7 +371,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         GraphWorkflowRunSnapshot run,
         CancellationToken cancellationToken)
     {
-        var byKey = (await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false))
+        var byKey = (await store.ListNodeRunsAsync(run.Id, cancellationToken))
             .ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
         return GraphWorkflowDocuments.ComposeInput(run.InputJson, GraphWorkflowInlineExecutor.Upstream(graph, node, byKey));
     }
@@ -394,8 +387,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                                nodeRun.Id,
                                GraphWorkflowVersions.Any,
                                GraphWorkflowNodeRunStatus.Running),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -437,8 +429,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                     GraphWorkflowFailures.Classify(failureClass, nodeRun.Attempt, node.MaxAttempts),
                     outcome.Reason,
                     eventType: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         string document;
@@ -464,8 +455,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                     GraphWorkflowFailureClass.OutputTooLarge,
                     $"{exception.Message} Its tool was '{toolName}'.",
                     eventType: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
         }
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Succeeded, nodeRun.NodeKey);
@@ -474,8 +464,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                                GraphWorkflowVersions.Any,
                                GraphWorkflowNodeRunStatus.Succeeded,
                                OutputJson: document),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -493,8 +482,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                                GraphWorkflowNodeRunStatus.Cancelled,
                                FailureClass: GraphWorkflowFailureClass.Cancelled,
                                TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason)),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 1;
     }
 
@@ -520,8 +508,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                                    nodeRun.Id,
                                    GraphWorkflowVersions.Any,
                                    GraphWorkflowNodeRunStatus.Running),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             nodeRun = nodeRun with
             {
                 Status = GraphWorkflowNodeRunStatus.Running
@@ -553,8 +540,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
                                FailureClass: failureClass,
                                TerminalReason: GraphWorkflowStateMachine.Bounded(sanitizedReason, GraphWorkflowStateMachine.MaxTerminalReason),
                                EventType: eventType),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return written + 1;
     }
 }

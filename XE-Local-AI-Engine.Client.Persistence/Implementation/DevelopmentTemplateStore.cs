@@ -14,8 +14,7 @@ public sealed class DevelopmentTemplateStore(NodeChatDbContext dbContext, TimePr
     {
         var templates = await _dbContext.DevelopmentTemplates.AsNoTracking()
                                         .OrderBy(entity => entity.Alias)
-                                        .ToListAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ToListAsync(cancellationToken);
         return templates.Select(Snapshot).ToArray();
     }
 
@@ -23,7 +22,6 @@ public sealed class DevelopmentTemplateStore(NodeChatDbContext dbContext, TimePr
     {
         var template = await _dbContext.DevelopmentTemplates.AsNoTracking()
                                        .SingleOrDefaultAsync(entity => entity.Id == templateId, cancellationToken)
-                                       .ConfigureAwait(false)
                        ?? throw new DevelopmentNotFoundException($"Development template '{templateId}' was not found.");
         return Snapshot(template);
     }
@@ -46,7 +44,7 @@ public sealed class DevelopmentTemplateStore(NodeChatDbContext dbContext, TimePr
         _dbContext.DevelopmentTemplates.Add(template);
         try
         {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
         {
@@ -60,8 +58,7 @@ public sealed class DevelopmentTemplateStore(NodeChatDbContext dbContext, TimePr
     public async Task<bool> RemoveAsync(Guid templateId, CancellationToken cancellationToken = default)
     {
         var template = await _dbContext.DevelopmentTemplates
-                                       .SingleOrDefaultAsync(entity => entity.Id == templateId, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleOrDefaultAsync(entity => entity.Id == templateId, cancellationToken);
         if (template is null)
         {
             return false;
@@ -70,7 +67,7 @@ public sealed class DevelopmentTemplateStore(NodeChatDbContext dbContext, TimePr
         // Materialization rows deliberately survive: they carry their own copy of the template path and commit, so a
         // project created from this template keeps its provenance after the template is unregistered.
         _dbContext.DevelopmentTemplates.Remove(template);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -87,15 +84,14 @@ public sealed class DevelopmentTemplateStore(NodeChatDbContext dbContext, TimePr
             TemplateCommit = materialization.TemplateCommit,
             CreatedAtUtc = materialization.CreatedAtUtc
         });
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<DevelopmentTemplateMaterializationSnapshot?> FindMaterializationAsync(Guid selectedFolderId,
         CancellationToken cancellationToken = default)
     {
         var materialization = await _dbContext.DevelopmentTemplateMaterializations.AsNoTracking()
-                                              .SingleOrDefaultAsync(entity => entity.SelectedFolderId == selectedFolderId, cancellationToken)
-                                              .ConfigureAwait(false);
+                                              .SingleOrDefaultAsync(entity => entity.SelectedFolderId == selectedFolderId, cancellationToken);
         return materialization is null
             ? null
             : new DevelopmentTemplateMaterializationSnapshot(materialization.SelectedFolderId,

@@ -51,7 +51,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             new FakeModelTrustResolver(),
             NullLogger<DevelopmentReviewerModel>.Instance);
 
-        _ = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8).ConfigureAwait(false);
+        _ = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8);
 
         var options = AssertEx.NotNull(chat.Options);
         AssertEx.True(AssertEx.NotNull(options.AdditionalProperties).TryGetValue<int>(SamplingOptionKeys.NumCtx, out var numCtx),
@@ -78,7 +78,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var logger = new RecordingLogger<DevelopmentReviewerModel>();
         var model = new DevelopmentReviewerModel(chat, cloud, LocalModelResolver(ReviewerLocalModel()), new FakeModelTrustResolver(), logger);
 
-        _ = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8).ConfigureAwait(false);
+        _ = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), MaxOutput, maxToolCalls: 8);
 
         var budget = AssertEx.NotNull(chat.Budget);
         AssertEx.Equal(MaxOutput * 2, budget.DefaultContextTokens, "the fallback is the pre-existing synthetic window, unchanged.");
@@ -106,7 +106,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             new FakeModelTrustResolver(),
             NullLogger<DevelopmentReviewerModel>.Instance);
 
-        var result = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), maxOutputTokens: 64, maxToolCalls: 8).ConfigureAwait(false);
+        var result = await model.RunAsync("reviewer-local", "review", new NullWorkspaceTools(), maxOutputTokens: 64, maxToolCalls: 8);
 
         AssertEx.Equal(DevelopmentReviewDisposition.Approved, result.Submission.Disposition, "the corrected second call is the round's verdict.");
         AssertEx.Contains(AssertEx.NotNull(chat.FirstAnswer), "Approved", message: "the tool result names the two values that are accepted.");
@@ -173,8 +173,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task LocalWorkflow_RequiresValidationIndependentReviewAndExplicitHashBoundApply()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
@@ -188,12 +188,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
              .ResolveProjectAsync(seed.ProjectId, Arg.Any<CancellationToken>())
              .Returns(repositoryBinding);
 
-        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await coordinator.CreateProjectAsync(seed);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                          Guid.NewGuid(),
                                          DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1))
-                                     .ConfigureAwait(false);
+                                         ExpectedTaskVersion: 1));
         var coderAttemptId = Guid.NewGuid();
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  coderAttemptId,
@@ -201,14 +200,13 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Coder,
                                  "coder-local",
                                  "local",
-                                 ready.Version))
-                             .ConfigureAwait(false);
-        _ = await coder.RunAsync(coderAttemptId, repositoryBinding).ConfigureAwait(false);
+                                 ready.Version));
+        _ = await coder.RunAsync(coderAttemptId, repositoryBinding);
 
-        var validation = await validator.RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
+        var validation = await validator.RunAsync(seed.TaskId, repositoryBinding);
         AssertEx.True(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
-        var inReview = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var inReview = await store.GetTaskAsync(seed.TaskId);
         var reviewerAttemptId = Guid.NewGuid();
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  reviewerAttemptId,
@@ -216,31 +214,30 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Reviewer,
                                  "reviewer-local",
                                  "local",
-                                 inReview.Version))
-                             .ConfigureAwait(false);
-        var review = await reviewer.RunAsync(reviewerAttemptId, repositoryBinding).ConfigureAwait(false);
+                                 inReview.Version));
+        var review = await reviewer.RunAsync(reviewerAttemptId, repositoryBinding);
         AssertEx.Equal(DevelopmentReviewDisposition.Approved, review.Disposition);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, review.TaskStatus);
 
-        var preview = await apply.PreviewAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
+        var preview = await apply.PreviewAsync(seed.TaskId, repositoryBinding);
         AssertEx.Equal(review.SubjectHash, preview.Subject.SubjectHash);
         AssertEx.Contains(preview.ChangedFiles.Select(static file => file.Path), "feature.txt");
         AssertEx.False(File.Exists(Path.Combine(repository, "feature.txt")));
 
         var operationId = Guid.NewGuid();
-        var completed = await apply.ApplyAsync(seed.TaskId, operationId, repositoryBinding).ConfigureAwait(false);
-        var replay = await apply.ApplyAsync(seed.TaskId, operationId, repositoryBinding).ConfigureAwait(false);
+        var completed = await apply.ApplyAsync(seed.TaskId, operationId, repositoryBinding);
+        var replay = await apply.ApplyAsync(seed.TaskId, operationId, repositoryBinding);
         AssertEx.Equal(completed, replay);
         AssertEx.Equal(DevelopmentOperationPhases.ApplyCompleted, completed.Phase);
-        AssertEx.Equal("implemented\n", await File.ReadAllTextAsync(Path.Combine(repository, "feature.txt")).ConfigureAwait(false));
-        AssertEx.Equal(DevelopmentTaskStatus.Completed, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
+        AssertEx.Equal("implemented\n", await File.ReadAllTextAsync(Path.Combine(repository, "feature.txt")));
+        AssertEx.Equal(DevelopmentTaskStatus.Completed, (await store.GetTaskAsync(seed.TaskId)).Status);
     }
 
     [Test]
     public async Task ValidationFailure_MovesTaskToChangesRequestedAndCannotStartReviewer()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
@@ -249,12 +246,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var seed = Seed(repository);
         var repositoryBinding = Binding(seed, repository);
 
-        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await coordinator.CreateProjectAsync(seed);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                          Guid.NewGuid(),
                                          DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1))
-                                     .ConfigureAwait(false);
+                                         ExpectedTaskVersion: 1));
         var coderAttemptId = Guid.NewGuid();
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  coderAttemptId,
@@ -262,13 +258,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Coder,
                                  "coder-local",
                                  "local",
-                                 ready.Version))
-                             .ConfigureAwait(false);
-        _ = await coder.RunAsync(coderAttemptId, repositoryBinding).ConfigureAwait(false);
-        var validation = await validator.RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
+                                 ready.Version));
+        _ = await coder.RunAsync(coderAttemptId, repositoryBinding);
+        var validation = await validator.RunAsync(seed.TaskId, repositoryBinding);
 
         AssertEx.False(validation.Passed);
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested,
             task.Status,
             "a failed gate hands the failure to the coder; leaving it InProgress asked for the same validation again.");
@@ -280,8 +275,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                           DevelopmentAttemptRole.Reviewer,
                           "reviewer-local",
                           "local",
-                          task.Version)))
-                      .ConfigureAwait(false);
+                          task.Version)));
     }
 
     /// <summary>
@@ -294,22 +288,20 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_WhenTheAttemptChangesADependencyManifest_ReturnsToChangesRequestedWithTheSpecificCode()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         await using var provider = await BuildProviderAsync(new WritingCoderModel("<Project />\n", "Directory.Packages.props"),
-                new ApprovingReviewerModel())
-            .ConfigureAwait(false);
+                new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
         var seed = Seed(repository);
         var repositoryBinding = Binding(seed, repository);
 
-        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await coordinator.CreateProjectAsync(seed);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                          Guid.NewGuid(),
                                          DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1))
-                                     .ConfigureAwait(false);
+                                         ExpectedTaskVersion: 1));
         var coderAttemptId = Guid.NewGuid();
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  coderAttemptId,
@@ -317,49 +309,45 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Coder,
                                  "coder-local",
                                  "local",
-                                 ready.Version))
-                             .ConfigureAwait(false);
+                                 ready.Version));
 
         // The coder attempt itself succeeds: writing a manifest is not a security violation, so it produces evidence
         // and the gate is what refuses it.
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                       .RunAsync(coderAttemptId, repositoryBinding)
-                       .ConfigureAwait(false);
+                       .RunAsync(coderAttemptId, repositoryBinding);
 
         var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
-                                    .RunAsync(seed.TaskId, repositoryBinding)
-                                    .ConfigureAwait(false);
+                                    .RunAsync(seed.TaskId, repositoryBinding);
 
         AssertEx.False(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
-        var report = await ReadValidationReportAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId).ConfigureAwait(false);
+        var report = await ReadValidationReportAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId);
         AssertEx.Equal(DevelopmentValidationFailureCodes.DependencyManifestChanged, report.FailureCode);
         AssertEx.Contains(AssertEx.NotNull(report.FailureDetail), "Directory.Packages.props", StringComparison.Ordinal);
 
         // The gate deliberately ran nothing: the answer was known before the first command, and an attempt with no
         // egress cannot resolve the change anyway.
         AssertEx.Empty(report.Commands);
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
     }
 
     [Test]
     public async Task Validation_WhenAnotherCoderAttemptIsRunning_RejectsWithoutChangingTaskState()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = Seed(repository);
         var repositoryBinding = Binding(seed, repository);
 
-        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await coordinator.CreateProjectAsync(seed);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                          Guid.NewGuid(),
                                          DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1))
-                                     .ConfigureAwait(false);
+                                         ExpectedTaskVersion: 1));
         var completedCoderAttemptId = Guid.NewGuid();
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  completedCoderAttemptId,
@@ -367,25 +355,21 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Coder,
                                  "coder-local",
                                  "local",
-                                 ready.Version))
-                             .ConfigureAwait(false);
+                                 ready.Version));
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                       .RunAsync(completedCoderAttemptId, repositoryBinding)
-                       .ConfigureAwait(false);
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+                       .RunAsync(completedCoderAttemptId, repositoryBinding);
+        var task = await store.GetTaskAsync(seed.TaskId);
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  Guid.NewGuid(),
                                  Guid.NewGuid(),
                                  DevelopmentAttemptRole.Coder,
                                  "coder-local",
                                  "local",
-                                 task.Version))
-                             .ConfigureAwait(false);
+                                 task.Version));
 
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
-                                                                                     .RunAsync(seed.TaskId, repositoryBinding))
-                      .ConfigureAwait(false);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
+                                                                                     .RunAsync(seed.TaskId, repositoryBinding));
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await store.GetTaskAsync(seed.TaskId)).Status);
     }
 
     [Test]
@@ -413,7 +397,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             "review exact subject",
             new NullWorkspaceTools(),
             maxOutputTokens: 64,
-            maxToolCalls: 8).ConfigureAwait(false);
+            maxToolCalls: 8);
 
         AssertEx.Equal(DevelopmentReviewDisposition.Approved, result.Submission.Disposition);
         AssertEx.False(chat.ToolNames.Contains("write_file"));
@@ -425,28 +409,26 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task RunAsync_WhenReviewRequestsChanges_ReturnsTaskToChangesRequestedAndBlocksApply()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ChangesRequestingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ChangesRequestingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
 
-        var (seed, reviewerAttemptId, review) = await RunThroughReviewAsync(scope.ServiceProvider, repository).ConfigureAwait(false);
+        var (seed, reviewerAttemptId, review) = await RunThroughReviewAsync(scope.ServiceProvider, repository);
         AssertEx.Equal(DevelopmentReviewDisposition.ChangesRequested, review.Disposition);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, review.TaskStatus);
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentApplyService>()
-                                                                                     .PreviewAsync(seed.TaskId, Binding(seed, repository)))
-                      .ConfigureAwait(false);
+                                                                                     .PreviewAsync(seed.TaskId, Binding(seed, repository)));
 
         // FU4-1, and asserted on the ChangesRequested path on purpose: the reviewer's prompt is written before the
         // model is called, so it is there whatever the model then decides. It is the only system record of what the
         // reviewer was told; every earlier claim about it was quoted back by the model itself.
-        var prompts = (await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListArtifactsAsync(seed.TaskId).ConfigureAwait(false))
+        var prompts = (await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListArtifactsAsync(seed.TaskId))
                       .Where(static artifact => artifact.Kind == Client.Persistence.Entities.DevelopmentArtifactKind.Prompt)
                       .ToArray();
         var reviewerPrompt = AssertEx.NotNull(prompts.SingleOrDefault(artifact => artifact.AttemptId == reviewerAttemptId));
         AssertEx.Equal(review.SubjectHash, reviewerPrompt.SubjectHash);
         var payload = await scope.ServiceProvider.GetRequiredService<IDevelopmentArtifactBlobStore>()
-                                 .ReadAsync(reviewerPrompt.ProjectId, reviewerPrompt.Id, reviewerPrompt.ContentHash, reviewerPrompt.ByteCount)
-                                 .ConfigureAwait(false);
+                                 .ReadAsync(reviewerPrompt.ProjectId, reviewerPrompt.Id, reviewerPrompt.ContentHash, reviewerPrompt.ByteCount);
         AssertEx.Equal(DevelopmentArtifactReadStatus.Found, payload.Status);
         var promptText = Encoding.UTF8.GetString(payload.Content.Span);
         AssertEx.Contains(promptText, "Validated subject: " + review.SubjectHash);
@@ -462,44 +444,41 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task PreviewAsync_WhenWorkspaceChangesAfterApproval_RejectsStaleEvidence()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
 
-        var (seed, reviewerAttemptId, review) = await RunThroughReviewAsync(scope.ServiceProvider, repository).ConfigureAwait(false);
+        var (seed, reviewerAttemptId, review) = await RunThroughReviewAsync(scope.ServiceProvider, repository);
         AssertEx.Equal(DevelopmentReviewDisposition.Approved, review.Disposition);
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var snapshot = await store.GetExecutionSnapshotAsync(reviewerAttemptId).ConfigureAwait(false);
+        var snapshot = await store.GetExecutionSnapshotAsync(reviewerAttemptId);
         var session = await scope.ServiceProvider.GetRequiredService<IDevelopmentWorkspaceProvider>()
-                                 .PrepareAsync(snapshot, Binding(seed, repository))
-                                 .ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "mutated after approval\n").ConfigureAwait(false);
+                                 .PrepareAsync(snapshot, Binding(seed, repository));
+        await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "mutated after approval\n");
 
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentApplyService>()
-                                                                                     .PreviewAsync(seed.TaskId, Binding(seed, repository)))
-                      .ConfigureAwait(false);
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+                                                                                     .PreviewAsync(seed.TaskId, Binding(seed, repository)));
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
         AssertEx.Null(task.ApprovedSubjectHash);
-        var approvalArtifacts = (await store.ListArtifactsAsync(seed.TaskId).ConfigureAwait(false))
+        var approvalArtifacts = (await store.ListArtifactsAsync(seed.TaskId))
                                 .Where(artifact => artifact.Kind is Client.Persistence.Entities.DevelopmentArtifactKind.ValidationReport
                                     or Client.Persistence.Entities.DevelopmentArtifactKind.ReviewReport)
                                 .ToArray();
         AssertEx.True(approvalArtifacts.Length >= 2);
         AssertEx.True(approvalArtifacts.All(static artifact => !artifact.IsValid));
-        AssertEx.Contains(await store.ListEventsAsync(seed.ProjectId).ConfigureAwait(false),
+        AssertEx.Contains(await store.ListEventsAsync(seed.ProjectId),
             static developmentEvent => developmentEvent.EventType == "EvidenceInvalidated");
     }
 
     [Test]
     public async Task ReviewerRun_WhenSubmissionContainsCredential_RejectsBeforePersistingApproval()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new CredentialLeakingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new CredentialLeakingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
 
-        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => RunThroughReviewAsync(scope.ServiceProvider, repository))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => RunThroughReviewAsync(scope.ServiceProvider, repository));
     }
 
     [Test]
@@ -511,8 +490,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.False(sanitized.Contains("/etc/passwd", StringComparison.Ordinal));
         AssertEx.False(sanitized.Contains("C:\\Users", StringComparison.Ordinal));
         AssertEx.Contains(sanitized, "[REDACTED:development-path]");
-        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.Run(() => DevelopmentArtifactSanitizer.SanitizeText("!Sensitive12345678")))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.Run(() => DevelopmentArtifactSanitizer.SanitizeText("!Sensitive12345678")));
     }
 
     /// <summary>
@@ -525,7 +503,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task ArtifactSanitizer_ForCommandEvidence_RedactsInsteadOfRejectingOrdinaryBuildOutput()
     {
-        await Task.CompletedTask.ConfigureAwait(false);
+        await Task.CompletedTask;
         var evidence = new DevelopmentCommandEvidence(DevelopmentCommandIds.DotnetTestRelease,
             ExitCode: 1,
             Completed: true,
@@ -571,66 +549,57 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             "-----BEGIN RSA PRIVATE KEY-----\nMIIEow==\n-----END RSA PRIVATE KEY-----\n",
             string.Empty);
 
-        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.Run(() => DevelopmentArtifactSanitizer.Sanitize(evidence)))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => Task.Run(() => DevelopmentArtifactSanitizer.Sanitize(evidence)));
     }
 
     [Test]
     public async Task TransitionTaskAsync_WhenFourthReviewRoundWouldStart_Rejects()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = Seed(repository);
 
-        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await coordinator.CreateProjectAsync(seed);
         var current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                            Guid.NewGuid(),
                                            DevelopmentTaskStatus.Ready,
-                                           ExpectedTaskVersion: 1))
-                                       .ConfigureAwait(false);
+                                           ExpectedTaskVersion: 1));
         current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                        Guid.NewGuid(),
                                        DevelopmentTaskStatus.InProgress,
-                                       current.Version))
-                                   .ConfigureAwait(false);
+                                       current.Version));
         for (var round = 0; round < 3; round++)
         {
             current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                            Guid.NewGuid(),
                                            DevelopmentTaskStatus.Validation,
-                                           current.Version))
-                                       .ConfigureAwait(false);
+                                           current.Version));
             current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                            Guid.NewGuid(),
                                            DevelopmentTaskStatus.InReview,
-                                           current.Version))
-                                       .ConfigureAwait(false);
+                                           current.Version));
             current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                            Guid.NewGuid(),
                                            DevelopmentTaskStatus.ChangesRequested,
-                                           current.Version))
-                                       .ConfigureAwait(false);
+                                           current.Version));
             current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                            Guid.NewGuid(),
                                            DevelopmentTaskStatus.InProgress,
-                                           current.Version))
-                                       .ConfigureAwait(false);
+                                           current.Version));
         }
 
         current = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                        Guid.NewGuid(),
                                        DevelopmentTaskStatus.Validation,
-                                       current.Version))
-                                   .ConfigureAwait(false);
+                                       current.Version));
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                           Guid.NewGuid(),
                           DevelopmentTaskStatus.InReview,
-                          current.Version)))
-                      .ConfigureAwait(false);
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+                          current.Version)));
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.Validation, task.Status);
         AssertEx.Equal(expected: 3, task.CurrentReviewRound);
     }
@@ -665,7 +634,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             "review exact subject",
             new NullWorkspaceTools(),
             maxOutputTokens: 64,
-            maxToolCalls: 8).ConfigureAwait(false);
+            maxToolCalls: 8);
 
         AssertEx.Equal<long?>(40_000, result.InputTokens);
         AssertEx.Equal<long?>(64, result.OutputTokens);
@@ -677,8 +646,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                            "review exact subject",
                                            new NullWorkspaceTools(),
                                            maxOutputTokens: 64,
-                                           maxToolCalls: 8)
-                                       .ConfigureAwait(false);
+                                           maxToolCalls: 8);
         AssertEx.Equal<long?>(65, accepted.OutputTokens);
 
         // maxToolCalls 8 => at most 9 provider calls => a whole-attempt ceiling of 9 x 64.
@@ -689,8 +657,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                         "review exact subject",
                                         new NullWorkspaceTools(),
                                         maxOutputTokens: 64,
-                                        maxToolCalls: 8))
-                                    .ConfigureAwait(false);
+                                        maxToolCalls: 8));
         AssertEx.Equal(DevelopmentAttemptFailureCodes.OutputTokenBudgetExceeded, failure.FailureCode);
     }
 
@@ -713,7 +680,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task CodeOwnedProfiles_ValidateWhitespaceRestoreBuildAndTestInDependencyOrder()
     {
-        await Task.CompletedTask.ConfigureAwait(false);
+        await Task.CompletedTask;
         AssertEx.Equal(ExpectedDotnetValidationProfile,
             string.Join(',',
                 DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx, "Fixture.slnx")
@@ -731,8 +698,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded()
     {
-        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
-            .ConfigureAwait(false);
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource);
 
         AssertEx.True(validation.Passed, DescribeValidation(commands, report));
         AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
@@ -785,8 +751,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchBreaksTheBuild_DoesNotReachInReview()
     {
-        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource)
-            .ConfigureAwait(false);
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.BuildBreakingLibrarySource);
 
         AssertEx.False(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
@@ -819,8 +784,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetSlnxProfile_WhenPatchFailsATest_DoesNotReachInReview()
     {
-        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
-            .ConfigureAwait(false);
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource);
 
         AssertEx.False(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
@@ -862,8 +826,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     {
         var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(SlnxProfile(),
                 DevelopmentSyntheticSolutionRepository.PassingLibrarySource,
-                includeTests: false)
-            .ConfigureAwait(false);
+                includeTests: false);
 
         AssertEx.False(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
@@ -894,8 +857,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetCsprojProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded()
     {
-        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource)
-            .ConfigureAwait(false);
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.PassingLibrarySource);
 
         AssertEx.True(validation.Passed, DescribeValidation(commands, report));
         AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
@@ -924,8 +886,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task Validation_UnderTheDotnetCsprojProfile_WhenPatchFailsATest_DoesNotReachInReview()
     {
-        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource)
-            .ConfigureAwait(false);
+        var (validation, task, commands, report) = await RunDotnetProfileValidationAsync(CsprojProfile(), DevelopmentSyntheticSolutionRepository.TestFailingLibrarySource);
 
         AssertEx.False(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, validation.TaskStatus);
@@ -956,15 +917,15 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     public async Task AFailingGateSpendsCoderRoundsUntilTheBudgetIsGone_AndNeverValidatesOneAttemptTwice()
     {
         const int TickCeiling = 24;
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coder = scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>();
         var validator = scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>();
         var seed = Seed(repository);
         var repositoryBinding = Binding(seed, repository);
-        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed);
         var service = CreateManagementService(scope.ServiceProvider);
 
         var actions = new List<string>();
@@ -972,7 +933,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var coderRounds = 0;
         for (var tick = 0; tick < TickCeiling; tick++)
         {
-            var action = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+            var action = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid());
             actions.Add(action.Action);
             if (action.Action == "Blocked")
             {
@@ -982,15 +943,15 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             if (action.Action == "Validation")
             {
                 // WHICH attempt this validation is about, read before it runs: two entries for one id is the livelock.
-                validatedAttempts.Add((await store.ListAttemptsAsync(seed.TaskId).ConfigureAwait(false))
+                validatedAttempts.Add((await store.ListAttemptsAsync(seed.TaskId))
                                       .Last(attempt => attempt.Role == DevelopmentAttemptRole.Coder && attempt.Status == Client.Persistence.Entities.DevelopmentAttemptStatus.Succeeded)
                                       .Id);
-                _ = await validator.RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
+                _ = await validator.RunAsync(seed.TaskId, repositoryBinding);
                 continue;
             }
 
             coderRounds++;
-            _ = await coder.RunAsync(action.AttemptId!.Value, repositoryBinding).ConfigureAwait(false);
+            _ = await coder.RunAsync(action.AttemptId!.Value, repositoryBinding);
         }
 
         var trail = string.Join(", ", actions);
@@ -1003,7 +964,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Empty(actions.Zip(actions.Skip(1)).Where(static pair => pair is { First: "Validation", Second: "Validation" }),
             $"a failed gate hands the round to the coder; asking for validation again is the state the fix removes: {trail}");
 
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, task.Status, "and it ends where a rejected FINAL review round ends, by the same route.");
         AssertEx.Contains(AssertEx.NotNull(task.BlockedReason), "maximum number of rounds");
         AssertEx.Equal(task.MaxReviewRounds, task.CurrentReviewRound, "the failing gate spent the rounds, which is what bounded the loop.");
@@ -1022,27 +983,26 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task TheRoundAFailedGateAsksForIsBriefedWithTheGatesOwnComplaint()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("trailing whitespace \n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = Seed(repository);
         var repositoryBinding = Binding(seed, repository);
-        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed);
         var service = CreateManagementService(scope.ServiceProvider);
 
-        var first = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+        var first = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid());
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                       .RunAsync(first.AttemptId!.Value, repositoryBinding)
-                       .ConfigureAwait(false);
-        AssertEx.Equal("Validation", (await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false)).Action);
-        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
+                       .RunAsync(first.AttemptId!.Value, repositoryBinding);
+        AssertEx.Equal("Validation", (await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid())).Action);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>().RunAsync(seed.TaskId, repositoryBinding);
 
-        var rework = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+        var rework = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid());
 
         AssertEx.Equal("Attempt", rework.Action);
         AssertEx.Equal(DevelopmentAttemptRole.Coder, rework.Role, "the failure is the coder's to fix, not something to re-measure.");
-        var feedback = AssertEx.NotNull((await store.GetExecutionSnapshotAsync(rework.AttemptId!.Value).ConfigureAwait(false)).PreviousRoundFeedback,
+        var feedback = AssertEx.NotNull((await store.GetExecutionSnapshotAsync(rework.AttemptId!.Value)).PreviousRoundFeedback,
             "the round must be told what the gate found.");
         AssertEx.Contains(feedback, "Deterministic validation failed", StringComparison.Ordinal);
         AssertEx.Contains(feedback, DevelopmentValidationFailureCodes.CommandFailed, StringComparison.Ordinal);
@@ -1067,8 +1027,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     public async Task AValidationThatAlwaysThrowsRecoversOnceAndThenStandsTheTaskDown()
     {
         const int TickCeiling = 10;
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coder = scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>();
@@ -1079,7 +1039,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         {
             RepositoryIdentityHash = "not-the-persisted-repository-identity"
         };
-        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>().CreateProjectAsync(seed);
         var service = CreateManagementService(scope.ServiceProvider);
 
         var actions = new List<string>();
@@ -1089,7 +1049,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             DevelopmentNextActionResult action;
             try
             {
-                action = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
+                action = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid());
             }
             catch (DevelopmentInvalidTransitionException)
             {
@@ -1102,13 +1062,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             actions.Add(action.Action);
             if (action.Action == "Validation")
             {
-                _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding))
-                                  .ConfigureAwait(false);
-                statusAfterEachValidation.Add((await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
+                _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding));
+                statusAfterEachValidation.Add((await store.GetTaskAsync(seed.TaskId)).Status);
                 continue;
             }
 
-            _ = await coder.RunAsync(action.AttemptId!.Value, repositoryBinding).ConfigureAwait(false);
+            _ = await coder.RunAsync(action.AttemptId!.Value, repositoryBinding);
         }
 
         var trail = string.Join(", ", actions);
@@ -1119,7 +1078,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, statusAfterEachValidation[1], "the second throw on the same implementation goes to a human.");
         AssertEx.Equal("None", actions[^1], $"and a stood-down task is offered no next action at all, least of all another validation: {trail}");
 
-        var blocked = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var blocked = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, blocked.Status);
         var reason = AssertEx.NotNull(blocked.BlockedReason);
         AssertEx.Contains(reason, "failed twice", StringComparison.Ordinal);
@@ -1138,8 +1097,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     [Test]
     public async Task TheFreeReRunIsCountedPerCoderAttemptAndResetsOnTheNextOne()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
-        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel()).ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("implemented\n"), new ApprovingReviewerModel());
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
@@ -1151,14 +1110,14 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         {
             RepositoryIdentityHash = "not-the-persisted-repository-identity"
         };
-        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await coordinator.CreateProjectAsync(seed);
         var service = CreateManagementService(scope.ServiceProvider);
 
-        var first = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false);
-        _ = await coder.RunAsync(first.AttemptId!.Value, repositoryBinding).ConfigureAwait(false);
-        AssertEx.Equal("Validation", (await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid()).ConfigureAwait(false)).Action);
-        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding)).ConfigureAwait(false);
-        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
+        var first = await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid());
+        _ = await coder.RunAsync(first.AttemptId!.Value, repositoryBinding);
+        AssertEx.Equal("Validation", (await service.StartNextActionAsync(seed.ProjectId, seed.TaskId, Guid.NewGuid())).Action);
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding));
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await store.GetTaskAsync(seed.TaskId)).Status);
 
         // A genuinely new implementation, which nothing has tried to validate yet.
         var second = Guid.NewGuid();
@@ -1168,12 +1127,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Coder,
                                  "coder-local",
                                  "local",
-                                 (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version))
-                             .ConfigureAwait(false);
-        _ = await coder.RunAsync(second, repositoryBinding).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding)).ConfigureAwait(false);
+                                 (await store.GetTaskAsync(seed.TaskId)).Version));
+        _ = await coder.RunAsync(second, repositoryBinding);
+        _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => validator.RunAsync(seed.TaskId, refusedBinding));
 
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress,
             task.Status,
             "the count is keyed on the coder attempt, so a new implementation gets its own free re-run.");
@@ -1231,7 +1189,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "solution-" + Guid.NewGuid().ToString("N"));
-        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests).ConfigureAwait(false);
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests);
 
         // 10 minutes because MaxAttemptDurationSeconds still bounds the validation run AS A WHOLE (and, with the
         // task's MaxDurationSeconds, is the smaller of the two that wins). Per-command timeouts no longer come from
@@ -1239,20 +1197,18 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // in a couple of seconds; the headroom is for a cold NuGet fallback resolve on a loaded machine.
         await using var provider = await BuildProviderAsync(new WritingCoderModel(librarySource, DevelopmentSyntheticSolutionRepository.LibrarySourcePath),
                 new ApprovingReviewerModel(),
-                maxAttemptDurationSeconds: 600)
-            .ConfigureAwait(false);
+                maxAttemptDurationSeconds: 600);
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
         var seed = Seed(repository, profile, maxDurationSeconds: 600);
         var repositoryBinding = Binding(seed, repository);
 
-        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await coordinator.CreateProjectAsync(seed);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                          Guid.NewGuid(),
                                          DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1))
-                                     .ConfigureAwait(false);
+                                         ExpectedTaskVersion: 1));
         var coderAttemptId = Guid.NewGuid();
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  coderAttemptId,
@@ -1260,17 +1216,14 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Coder,
                                  "coder-local",
                                  "local",
-                                 ready.Version))
-                             .ConfigureAwait(false);
+                                 ready.Version));
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                       .RunAsync(coderAttemptId, repositoryBinding)
-                       .ConfigureAwait(false);
+                       .RunAsync(coderAttemptId, repositoryBinding);
 
         var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
-                                    .RunAsync(seed.TaskId, repositoryBinding)
-                                    .ConfigureAwait(false);
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
-        var report = await ReadValidationReportAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId).ConfigureAwait(false);
+                                    .RunAsync(seed.TaskId, repositoryBinding);
+        var task = await store.GetTaskAsync(seed.TaskId);
+        var report = await ReadValidationReportAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId);
         return (validation, task, report.Commands, report);
     }
 
@@ -1279,11 +1232,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         Guid artifactId,
         Guid taskId)
     {
-        var artifact = (await services.GetRequiredService<IDevelopmentStore>().ListArtifactsAsync(taskId).ConfigureAwait(false))
+        var artifact = (await services.GetRequiredService<IDevelopmentStore>().ListArtifactsAsync(taskId))
             .Single(item => item.Id == artifactId);
         var payload = await services.GetRequiredService<IDevelopmentArtifactBlobStore>()
-                                    .ReadAsync(artifact.ProjectId, artifact.Id, artifact.ContentHash, artifact.ByteCount)
-                                    .ConfigureAwait(false);
+                                    .ReadAsync(artifact.ProjectId, artifact.Id, artifact.ContentHash, artifact.ByteCount);
         AssertEx.Equal(DevelopmentArtifactReadStatus.Found, payload.Status);
         var report = JsonSerializer.Deserialize<DevelopmentValidationReport>(payload.Content.Span, ReportJsonOptions);
         return AssertEx.NotNull(report);
@@ -1346,12 +1298,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var store = services.GetRequiredService<IDevelopmentStore>();
         var seed = Seed(repository);
         var repositoryBinding = Binding(seed, repository);
-        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await coordinator.CreateProjectAsync(seed);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                          Guid.NewGuid(),
                                          DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1))
-                                     .ConfigureAwait(false);
+                                         ExpectedTaskVersion: 1));
         var coderAttemptId = Guid.NewGuid();
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  coderAttemptId,
@@ -1359,16 +1310,13 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Coder,
                                  "coder-local",
                                  "local",
-                                 ready.Version))
-                             .ConfigureAwait(false);
+                                 ready.Version));
         _ = await services.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                          .RunAsync(coderAttemptId, repositoryBinding)
-                          .ConfigureAwait(false);
+                          .RunAsync(coderAttemptId, repositoryBinding);
         var validation = await services.GetRequiredService<IDevelopmentValidationRunner>()
-                                       .RunAsync(seed.TaskId, repositoryBinding)
-                                       .ConfigureAwait(false);
+                                       .RunAsync(seed.TaskId, repositoryBinding);
         AssertEx.True(validation.Passed);
-        var inReview = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var inReview = await store.GetTaskAsync(seed.TaskId);
         var reviewerAttemptId = Guid.NewGuid();
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                  reviewerAttemptId,
@@ -1376,11 +1324,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                  DevelopmentAttemptRole.Reviewer,
                                  "reviewer-local",
                                  "local",
-                                 inReview.Version))
-                             .ConfigureAwait(false);
+                                 inReview.Version));
         var review = await services.GetRequiredService<IDevelopmentReviewerAttemptRunner>()
-                                   .RunAsync(reviewerAttemptId, repositoryBinding)
-                                   .ConfigureAwait(false);
+                                   .RunAsync(reviewerAttemptId, repositoryBinding);
         return (seed, reviewerAttemptId, review);
     }
 
@@ -1453,11 +1399,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureCreatedAsync();
         _ = await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
                                                                   INSERT INTO selected_folders (id, alias, host_path, mode, created_at_utc)
                                                                   VALUES ({SelectedFolderId}, {"development-validation-repository"}, {Encoding.UTF8.GetBytes(dataRoot)}, {(int)SelectedFolderMode.Copy}, {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()})
-                                                                  """).ConfigureAwait(false);
+                                                                  """);
         return provider;
     }
 
@@ -1506,12 +1452,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
-        EnsureSuccess(await RunProcessAsync(repository, "git", "init", "--initial-branch=main", ".").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.email", "development-review@example.invalid").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.name", "Development Review Test").ConfigureAwait(false));
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
-        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "base").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "init", "--initial-branch=main", "."));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.email", "development-review@example.invalid"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.name", "Development Review Test"));
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md"));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "base"));
         return repository;
     }
 
@@ -1537,8 +1483,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         process.Start();
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        return new CommandResult(process.ExitCode, await output.ConfigureAwait(false), await error.ConfigureAwait(false));
+        await process.WaitForExitAsync();
+        return new CommandResult(process.ExitCode, await output, await error);
     }
 
     private static void EnsureSuccess(CommandResult result) =>
@@ -1630,7 +1576,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             DevelopmentCloudRoleRoute? cloudRoute = null,
             CancellationToken cancellationToken = default)
         {
-            _ = await tools.WriteFileAsync(path, content, cancellationToken).ConfigureAwait(false);
+            _ = await tools.WriteFileAsync(path, content, cancellationToken);
             return new DevelopmentCoderModelResult(new DevelopmentCoderSubmission("Implemented feature file.",
                     [path],
                     [],
@@ -1706,13 +1652,13 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                 ["disposition"] = "approve",
                 ["summary"] = "looks fine",
                 ["findings"] = Array.Empty<DevelopmentReviewFinding>()
-            }, cancellationToken).ConfigureAwait(false))?.ToString();
+            }, cancellationToken))?.ToString();
             _ = await submit.InvokeAsync(new AIFunctionArguments
             {
                 ["disposition"] = "Approved",
                 ["summary"] = "looks fine",
                 ["findings"] = Array.Empty<DevelopmentReviewFinding>()
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken);
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, "approved"))
             {
                 Usage = new UsageDetails
@@ -1729,7 +1675,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            var response = await GetResponseAsync(messages, options, cancellationToken);
             foreach (var update in response.ToChatResponseUpdates())
             {
                 yield return update;
@@ -1768,7 +1714,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                 ["disposition"] = "Approved",
                 ["summary"] = "approved",
                 ["findings"] = Array.Empty<DevelopmentReviewFinding>()
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken);
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, "approved"))
             {
                 Usage = new UsageDetails
@@ -1785,7 +1731,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            _ = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            _ = await GetResponseAsync(messages, options, cancellationToken);
             yield return new ChatResponseUpdate(ChatRole.Assistant, "approved");
             yield return new ChatResponseUpdate(ChatRole.Assistant,
             [

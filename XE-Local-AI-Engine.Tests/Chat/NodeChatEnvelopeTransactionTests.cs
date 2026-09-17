@@ -37,29 +37,27 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     [Test]
     public async Task Terminalize_WhenEnvelopeInsertFails_RollsBackTheMessageUpdate()
     {
-        await using var provider = await BuildProviderAsync("envelope-insert-rollback.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("envelope-insert-rollback.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Rollback", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Rollback", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
         // Sabotage ONLY the envelope insert with a BEFORE INSERT trigger that aborts run-envelope rows (no production
         // seam; the trigger keys on the same record_kind the envelope write uses). The terminalize UPDATE and the
         // envelope INSERT share one transaction, so the abort must undo the terminal UPDATE as well.
-        await InstallEnvelopeSabotageTriggerAsync(provider).ConfigureAwait(false);
+        await InstallEnvelopeSabotageTriggerAsync(provider);
 
         await AssertEx.ThrowsAsync<SqliteException>(async () =>
                           _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                                                    NodeChatMessageStatusValues.Completed,
                                                    UpdatedAtUtc: 3,
                                                    "answer",
-                                                   Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                                               .ConfigureAwait(false))
-                      .ConfigureAwait(false);
+                                                   Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L))));
 
         // The whole transaction rolled back: the row is still non-terminal (streaming) and no envelope was written.
-        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, await ReadStatusAsync(provider, correlation).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider).ConfigureAwait(false));
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, await ReadStatusAsync(provider, correlation));
+        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider));
     }
 
     [Test]
@@ -67,26 +65,24 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     {
         // Deterministic "purge wins" ordering: the conversation (and its message) is fully purged before terminalize
         // runs. Terminalize finds no row and throws — it can never resurrect an orphaned envelope for a purged conversation.
-        await using var provider = await BuildProviderAsync("purge-then-terminalize.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("purge-then-terminalize.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("PurgeWins", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("PurgeWins", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
-        await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 3, PurgeImmediately: true)).ConfigureAwait(false);
+        await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 3, PurgeImmediately: true));
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
                           _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                                                    NodeChatMessageStatusValues.Completed,
                                                    UpdatedAtUtc: 4,
                                                    "answer",
-                                                   Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                                               .ConfigureAwait(false))
-                      .ConfigureAwait(false);
+                                                   Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L))));
 
-        AssertEx.Null(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider).ConfigureAwait(false));
+        AssertEx.Null(await persistence.GetConversationAsync(conversation.ConversationId));
+        AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId));
+        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider));
     }
 
     [Test]
@@ -94,25 +90,24 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     {
         // Deterministic "terminalize wins" ordering: terminalize commits the terminal row AND its envelope, then the
         // purge deletes the conversation footprint — including the envelope — so nothing carrying plaintext ids survives.
-        await using var provider = await BuildProviderAsync("terminalize-then-purge.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("terminalize-then-purge.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("TerminalizeWins", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("TerminalizeWins", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                              NodeChatMessageStatusValues.Completed,
                              UpdatedAtUtc: 3,
                              "answer",
-                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                         .ConfigureAwait(false);
-        AssertEx.Equal(expected: 1, await CountEnvelopesAsync(provider).ConfigureAwait(false));
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)));
+        AssertEx.Equal(expected: 1, await CountEnvelopesAsync(provider));
 
-        await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 4, PurgeImmediately: true)).ConfigureAwait(false);
+        await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 4, PurgeImmediately: true));
 
-        AssertEx.Null(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider).ConfigureAwait(false));
+        AssertEx.Null(await persistence.GetConversationAsync(conversation.ConversationId));
+        AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId));
+        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider));
     }
 
     [Test]
@@ -130,7 +125,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         //      the intended branch instead of the scheduler — proving BOTH terminalize-then-purge and
         //      purge-then-terminalize on every run. There is no production seam to force the interleaving inside a single
         //      gated round, so forcing it across dedicated rounds is the deterministic equivalent.
-        await using var provider = await BuildProviderAsync("purge-terminalize-race.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("purge-terminalize-race.sqlite");
         var service = CreateService(provider);
 
         var terminalizeWon = 0;
@@ -138,26 +133,26 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 
         for (var iteration = 0; iteration < RaceIterations; iteration++)
         {
-            var correlation = await SeedStreamingConversationAsync(service, iteration).ConfigureAwait(false);
+            var correlation = await SeedStreamingConversationAsync(service, iteration);
 
             var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var terminalize = Task.Run(async () =>
             {
-                await gate.Task.ConfigureAwait(false);
-                return await TryTerminalizeAsync(service, correlation).ConfigureAwait(false);
+                await gate.Task;
+                return await TryTerminalizeAsync(service, correlation);
             });
 
             var purge = Task.Run(async () =>
             {
-                await gate.Task.ConfigureAwait(false);
-                await PurgeAsync(service, correlation.ConversationId).ConfigureAwait(false);
+                await gate.Task;
+                await PurgeAsync(service, correlation.ConversationId);
             });
 
             gate.SetResult();
-            await Task.WhenAll(terminalize, purge).ConfigureAwait(false);
+            await Task.WhenAll(terminalize, purge);
 
-            if (await terminalize.ConfigureAwait(false))
+            if (await terminalize)
             {
                 terminalizeWon++;
             }
@@ -168,14 +163,14 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 
             // Safety invariant, whichever operation won the lock: the conversation footprint is gone and NO envelope row
             // survives to orphan the plaintext conversation/message correlation.
-            await AssertNoOrphanedFootprintAsync(service, provider, correlation.ConversationId).ConfigureAwait(false);
+            await AssertNoOrphanedFootprintAsync(service, provider, correlation.ConversationId);
         }
 
         // Deterministic backstop: force each ordering through the real lock (winner run to completion first) so both
         // lock-arbitration branches are exercised on every run regardless of how the scheduler happened to arbitrate the
         // gated rounds above. The same safety invariant must hold for each forced ordering.
-        terminalizeWon += await AssertForcedOrderingAsync(service, provider, terminalizeFirst: true, iteration: RaceIterations).ConfigureAwait(false);
-        purgeWon += await AssertForcedOrderingAsync(service, provider, terminalizeFirst: false, iteration: RaceIterations + 1).ConfigureAwait(false);
+        terminalizeWon += await AssertForcedOrderingAsync(service, provider, terminalizeFirst: true, iteration: RaceIterations);
+        purgeWon += await AssertForcedOrderingAsync(service, provider, terminalizeFirst: false, iteration: RaceIterations + 1);
 
         // Both lock-arbitration orderings were exercised (the forced backstop guarantees this deterministically; the
         // gated rounds typically add more of each), so the invariant above is proven for each.
@@ -189,20 +184,19 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // Row-level round-trip of the fine-grained provider dimension: a terminalize carrying a resolved provider
         // must persist it onto the run-envelope row via WriteRunEnvelopeRowAsync — not fall back to the 'unknown' column
         // default. The pump resolves this label; here it rides in directly so the write path is proven end to end.
-        await using var provider = await BuildProviderAsync("envelope-provider-roundtrip.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("envelope-provider-roundtrip.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Provider", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Provider", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                              NodeChatMessageStatusValues.Completed,
                              UpdatedAtUtc: 3,
                              "answer",
-                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L, Provider: AgentUsageProviders.Codex)))
-                         .ConfigureAwait(false);
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L, Provider: AgentUsageProviders.Codex)));
 
-        AssertEx.Equal(AgentUsageProviders.Codex, await ReadEnvelopeProviderAsync(provider, correlation).ConfigureAwait(false));
+        AssertEx.Equal(AgentUsageProviders.Codex, await ReadEnvelopeProviderAsync(provider, correlation));
     }
 
     [Test]
@@ -210,20 +204,19 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     {
         // The interrupted/thin path resolves no provider: AgentRunEnvelopeMetadata defaults Provider to 'unknown', which
         // must land on the row (proving the column default + the metadata default agree).
-        await using var provider = await BuildProviderAsync("envelope-provider-default.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("envelope-provider-default.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Default", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Default", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                              NodeChatMessageStatusValues.Interrupted,
                              UpdatedAtUtc: 3,
                              "partial",
-                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 0L)))
-                         .ConfigureAwait(false);
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 0L)));
 
-        AssertEx.Equal(AgentUsageProviders.Unknown, await ReadEnvelopeProviderAsync(provider, correlation).ConfigureAwait(false));
+        AssertEx.Equal(AgentUsageProviders.Unknown, await ReadEnvelopeProviderAsync(provider, correlation));
     }
 
     [Test]
@@ -232,20 +225,19 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // A row whose field set changed must never be emitted under the old version, or a reader cannot tell a v3 row
         // that predates the token columns from one that carries them. Asserted against the constant rather than the
         // literal 4, so a later slice's own bump does not break this test.
-        await using var provider = await BuildProviderAsync("envelope-schema-version.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("envelope-schema-version.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Version", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Version", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                              NodeChatMessageStatusValues.Completed,
                              UpdatedAtUtc: 3,
                              "answer",
-                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                         .ConfigureAwait(false);
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)));
 
-        var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation).ConfigureAwait(false);
+        var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation);
         AssertEx.Equal(AgentRunEnvelope.CurrentSchemaVersion, telemetry.SchemaVersion);
     }
 
@@ -255,11 +247,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // The cumulative estimate is a long end to end — its source counter is one, and a whole session's worth of these
         // is summed downstream — so a value above int.MaxValue must survive the write and read back equal. This is the
         // one test that fails if any link in column -> record -> DTO narrows back to an int.
-        await using var provider = await BuildProviderAsync("envelope-tool-schema-tokens.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("envelope-tool-schema-tokens.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Tokens", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Tokens", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
         const long wideEstimate = (long)int.MaxValue + 1;
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
@@ -269,10 +261,9 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
                              Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(),
                                  DurationMs: 5L,
                                  ToolSchemaTokens: wideEstimate,
-                                 MaxToolSchemaTokens: 4_096)))
-                         .ConfigureAwait(false);
+                                 MaxToolSchemaTokens: 4_096)));
 
-        var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation).ConfigureAwait(false);
+        var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation);
         AssertEx.Equal(wideEstimate, telemetry.ToolSchemaTokens);
         AssertEx.Equal(expected: 4_096L, telemetry.MaxToolSchemaTokens);
     }
@@ -280,20 +271,19 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     [Test]
     public async Task TerminalizeAsync_WhenNoEstimateWasReported_LeavesTheTokenColumnsNull()
     {
-        await using var provider = await BuildProviderAsync("envelope-tool-schema-null.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("envelope-tool-schema-null.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Null", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Null", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                              NodeChatMessageStatusValues.Interrupted,
                              UpdatedAtUtc: 3,
                              "partial",
-                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 0L)))
-                         .ConfigureAwait(false);
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 0L)));
 
-        var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation).ConfigureAwait(false);
+        var telemetry = await ReadEnvelopeTelemetryAsync(provider, correlation);
         AssertEx.Null(telemetry.ToolSchemaTokens);
         AssertEx.Null(telemetry.MaxToolSchemaTokens);
     }
@@ -304,11 +294,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         // The envelope is the COST ledger: a tool-calling turn's rounds add up there, while the message row keeps the
         // last round's counts because that is the context the model actually held. The two numbers are deliberately
         // different, and this is the write that has to prefer the turn totals.
-        await using var provider = await BuildProviderAsync("envelope-turn-totals.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("envelope-turn-totals.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Turn", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Turn", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                              NodeChatMessageStatusValues.Completed,
@@ -323,10 +313,9 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
                                  TurnInputTokens: 6_000,
                                  TurnOutputTokens: 60,
                                  TurnTotalTokens: 6_078,
-                                 TurnReasoningTokens: 18)))
-                         .ConfigureAwait(false);
+                                 TurnReasoningTokens: 18)));
 
-        var tokens = await ReadEnvelopeTokensAsync(provider, correlation).ConfigureAwait(false);
+        var tokens = await ReadEnvelopeTokensAsync(provider, correlation);
         AssertEx.Equal(expected: 6_000L, tokens.PromptTokens);
         AssertEx.Equal(expected: 60L, tokens.CompletionTokens);
         AssertEx.Equal(expected: 18L, tokens.ReasoningTokens);
@@ -338,11 +327,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     {
         // The restart-recovery backfill and the platform path report no turn totals, so their envelope rows keep the
         // exact values they have always carried rather than silently becoming null.
-        await using var provider = await BuildProviderAsync("envelope-turn-totals-fallback.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("envelope-turn-totals-fallback.sqlite");
         var persistence = CreateService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Fallback", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
-        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Fallback", "node", CreatedAtUtc: 1));
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                              NodeChatMessageStatusValues.Completed,
@@ -352,10 +341,9 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
                              OutputCount: 30,
                              TotalCount: 3_038,
                              ReasoningCount: 8,
-                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                         .ConfigureAwait(false);
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)));
 
-        var tokens = await ReadEnvelopeTokensAsync(provider, correlation).ConfigureAwait(false);
+        var tokens = await ReadEnvelopeTokensAsync(provider, correlation);
         AssertEx.Equal(expected: 3_000L, tokens.PromptTokens);
         AssertEx.Equal(expected: 30L, tokens.CompletionTokens);
         AssertEx.Equal(expected: 8L, tokens.ReasoningTokens);
@@ -369,22 +357,22 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT prompt_tokens, completion_tokens, reasoning_tokens, total_tokens FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id;";
         AddParameter(command, "$record_kind", EnvelopeKind);
         AddParameter(command, "$message_id", correlation.MessageId);
 
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        if (!await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
         {
             throw new InvalidOperationException("The run-envelope row was not found.");
         }
 
-        return new EnvelopeTokens(await reader.IsDBNullAsync(0).ConfigureAwait(false) ? null : reader.GetInt64(0),
-            await reader.IsDBNullAsync(1).ConfigureAwait(false) ? null : reader.GetInt64(1),
-            await reader.IsDBNullAsync(2).ConfigureAwait(false) ? null : reader.GetInt64(2),
-            await reader.IsDBNullAsync(3).ConfigureAwait(false) ? null : reader.GetInt64(3));
+        return new EnvelopeTokens(await reader.IsDBNullAsync(0) ? null : reader.GetInt64(0),
+            await reader.IsDBNullAsync(1) ? null : reader.GetInt64(1),
+            await reader.IsDBNullAsync(2) ? null : reader.GetInt64(2),
+            await reader.IsDBNullAsync(3) ? null : reader.GetInt64(3));
     }
 
     private sealed record EnvelopeTokens(long? PromptTokens, long? CompletionTokens, long? ReasoningTokens, long? TotalTokens);
@@ -396,21 +384,21 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT schema_version, tool_schema_tokens, max_tool_schema_tokens FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id;";
         AddParameter(command, "$record_kind", EnvelopeKind);
         AddParameter(command, "$message_id", correlation.MessageId);
 
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        if (!await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
         {
             throw new InvalidOperationException("The run-envelope row was not found.");
         }
 
         return new EnvelopeTelemetry(reader.GetInt32(0),
-            await reader.IsDBNullAsync(1).ConfigureAwait(false) ? null : reader.GetInt64(1),
-            await reader.IsDBNullAsync(2).ConfigureAwait(false) ? null : reader.GetInt64(2));
+            await reader.IsDBNullAsync(1) ? null : reader.GetInt64(1),
+            await reader.IsDBNullAsync(2) ? null : reader.GetInt64(2));
     }
 
     private sealed record EnvelopeTelemetry(int SchemaVersion, long? ToolSchemaTokens, long? MaxToolSchemaTokens);
@@ -427,8 +415,8 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }
@@ -441,8 +429,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     private static async Task<NodeChatMessageCorrelation> CreatePlaceholderAsync(NodeChatPersistenceService persistence, Guid conversationId)
     {
         var correlation = new NodeChatMessageCorrelation(conversationId, Guid.NewGuid(), Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, correlation.MessageId, correlation.RequestId, CreatedAtUtc: 1))
-                         .ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, correlation.MessageId, correlation.RequestId, CreatedAtUtc: 1));
         return correlation;
     }
 
@@ -450,9 +437,9 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     // enveloped terminalize race from.
     private static async Task<NodeChatMessageCorrelation> SeedStreamingConversationAsync(NodeChatPersistenceService service, int iteration)
     {
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Race", "node", CreatedAtUtc: iteration)).ConfigureAwait(false);
-        var correlation = await CreatePlaceholderAsync(service, conversation.ConversationId).ConfigureAwait(false);
-        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Race", "node", CreatedAtUtc: iteration));
+        var correlation = await CreatePlaceholderAsync(service, conversation.ConversationId);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
         return correlation;
     }
 
@@ -466,8 +453,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
                              NodeChatMessageStatusValues.Completed,
                              UpdatedAtUtc: 10,
                              "answer",
-                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                         .ConfigureAwait(false);
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)));
             return true;
         }
         catch (InvalidOperationException)
@@ -488,22 +474,22 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     // the caller can prove both branches ran.
     private static async Task<int> AssertForcedOrderingAsync(NodeChatPersistenceService service, ServiceProvider provider, bool terminalizeFirst, int iteration)
     {
-        var correlation = await SeedStreamingConversationAsync(service, iteration).ConfigureAwait(false);
+        var correlation = await SeedStreamingConversationAsync(service, iteration);
 
         if (terminalizeFirst)
         {
-            var committed = await TryTerminalizeAsync(service, correlation).ConfigureAwait(false);
+            var committed = await TryTerminalizeAsync(service, correlation);
             AssertEx.True(committed, "Terminalize must commit when it runs to completion before the purge.");
-            await PurgeAsync(service, correlation.ConversationId).ConfigureAwait(false);
+            await PurgeAsync(service, correlation.ConversationId);
         }
         else
         {
-            await PurgeAsync(service, correlation.ConversationId).ConfigureAwait(false);
-            var committed = await TryTerminalizeAsync(service, correlation).ConfigureAwait(false);
+            await PurgeAsync(service, correlation.ConversationId);
+            var committed = await TryTerminalizeAsync(service, correlation);
             AssertEx.False(committed, "Terminalize must find no row and throw when the purge runs to completion first.");
         }
 
-        await AssertNoOrphanedFootprintAsync(service, provider, correlation.ConversationId).ConfigureAwait(false);
+        await AssertNoOrphanedFootprintAsync(service, provider, correlation.ConversationId);
         return 1;
     }
 
@@ -511,9 +497,9 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     // plaintext conversation/message correlation.
     private static async Task AssertNoOrphanedFootprintAsync(NodeChatPersistenceService service, ServiceProvider provider, Guid conversationId)
     {
-        AssertEx.Null(await service.GetConversationAsync(conversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversationId).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider).ConfigureAwait(false));
+        AssertEx.Null(await service.GetConversationAsync(conversationId));
+        AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversationId));
+        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider));
     }
 
     // Installs a BEFORE INSERT trigger that aborts any run-envelope row. Schema-level, so it applies to the envelope
@@ -527,7 +513,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         var triggerSql = "CREATE TRIGGER sabotage_envelope_insert BEFORE INSERT ON agent_execution_logs WHEN NEW.record_kind = "
                          + EnvelopeKind.ToString(CultureInfo.InvariantCulture)
                          + " BEGIN SELECT RAISE(ABORT, 'sabotaged envelope insert'); END;";
-        await dbContext.Database.ExecuteSqlRawAsync(triggerSql).ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync(triggerSql);
     }
 
     private static async Task<string> ReadStatusAsync(ServiceProvider provider, NodeChatMessageCorrelation correlation)
@@ -535,12 +521,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT status FROM messages WHERE conversation_id = $conversation_id AND message_id = $message_id;";
         AddParameter(command, "$conversation_id", correlation.ConversationId);
         AddParameter(command, "$message_id", correlation.MessageId);
-        var status = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var status = await command.ExecuteScalarAsync();
         return status as string ?? throw new InvalidOperationException("The message row was not found.");
     }
 
@@ -549,11 +535,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM messages WHERE conversation_id = $conversation_id;";
         AddParameter(command, "$conversation_id", conversationId);
-        return Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
     }
 
     private static async Task<long> CountEnvelopesAsync(ServiceProvider provider)
@@ -561,11 +547,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM agent_execution_logs WHERE record_kind = $record_kind;";
         AddParameter(command, "$record_kind", EnvelopeKind);
-        return Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
     }
 
     private static async Task<string> ReadEnvelopeProviderAsync(ServiceProvider provider, NodeChatMessageCorrelation correlation)
@@ -573,12 +559,12 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT provider FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id;";
         AddParameter(command, "$record_kind", EnvelopeKind);
         AddParameter(command, "$message_id", correlation.MessageId);
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value as string ?? throw new InvalidOperationException("The run-envelope row was not found.");
     }
 

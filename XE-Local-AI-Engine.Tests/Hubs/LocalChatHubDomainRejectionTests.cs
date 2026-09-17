@@ -36,7 +36,7 @@ public sealed class LocalChatHubDomainRejectionTests
 
         var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
         {
-            await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(conversationId, "hi"), CancellationToken.None).ConfigureAwait(false))
+            await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(conversationId, "hi"), CancellationToken.None))
             {
                 // The guard throws before the first event, so the body never runs.
             }
@@ -71,8 +71,7 @@ public sealed class LocalChatHubDomainRejectionTests
                                            useKnowledgeBase: false,
                                            selectedPath: null,
                                            samplingOptions: null,
-                                           CancellationToken.None)
-                                       .ConfigureAwait(false))
+                                           CancellationToken.None))
             {
                 // The guard throws before the first event, so the body never runs.
             }
@@ -89,7 +88,7 @@ public sealed class LocalChatHubDomainRejectionTests
         // "An unexpected error occurred invoking 'RegenerateMessage' on the server." and the operator learns nothing.
         var conversationId = Guid.NewGuid();
 
-        var exception = await RegenerateThrowingAsync(new NodeChatConversationNotFoundException(conversationId)).ConfigureAwait(false);
+        var exception = await RegenerateThrowingAsync(new NodeChatConversationNotFoundException(conversationId));
 
         AssertEx.Equal(new NodeChatConversationNotFoundException(conversationId).Message, exception.Message);
     }
@@ -99,7 +98,7 @@ public sealed class LocalChatHubDomainRejectionTests
     {
         var messageId = Guid.NewGuid();
 
-        var exception = await RegenerateThrowingAsync(new NodeChatMessageNotFoundException(messageId)).ConfigureAwait(false);
+        var exception = await RegenerateThrowingAsync(new NodeChatMessageNotFoundException(messageId));
 
         AssertEx.Equal(new NodeChatMessageNotFoundException(messageId).Message, exception.Message);
     }
@@ -107,7 +106,7 @@ public sealed class LocalChatHubDomainRejectionTests
     [Test]
     public async Task RegenerateMessage_WhenTheCorrelationIsAlreadyStreaming_SurfacesTheSentenceInsteadOfSignalRsGenericError()
     {
-        var exception = await RegenerateThrowingAsync(new NodeChatStreamAlreadyActiveException()).ConfigureAwait(false);
+        var exception = await RegenerateThrowingAsync(new NodeChatStreamAlreadyActiveException());
 
         AssertEx.Equal(new NodeChatStreamAlreadyActiveException().Message, exception.Message);
     }
@@ -125,7 +124,7 @@ public sealed class LocalChatHubDomainRejectionTests
 
         var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(Guid.NewGuid(), "hi"), CancellationToken.None).ConfigureAwait(false))
+            await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(Guid.NewGuid(), "hi"), CancellationToken.None))
             {
                 // Nothing is ever yielded.
             }
@@ -158,12 +157,11 @@ public sealed class LocalChatHubDomainRejectionTests
                                            useKnowledgeBase: false,
                                            selectedPath: null,
                                            samplingOptions: null,
-                                           CancellationToken.None)
-                                       .ConfigureAwait(false))
+                                           CancellationToken.None))
             {
                 // The rejection is thrown before the first event, so the body never runs.
             }
-        }).ConfigureAwait(false);
+        });
     }
 
     private static void AssertReadOnlyMessage(HubException exception, Guid conversationId)

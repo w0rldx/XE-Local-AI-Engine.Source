@@ -23,12 +23,12 @@ public sealed class ListImageJobsEndpoint(IImageJobCoordinator coordinator)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var jobs = await _coordinator.ListAsync(ct).ConfigureAwait(false);
+        var jobs = await _coordinator.ListAsync(ct);
 
         await Send.OkAsync(new ListImageJobsResponse
             {
                 Items = [.. jobs.Select(static j => j.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

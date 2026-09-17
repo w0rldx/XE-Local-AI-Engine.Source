@@ -35,19 +35,18 @@ public sealed class RemoveCudaBuildEndpoint(
     public override async Task HandleAsync(CancellationToken ct)
     {
         if (await LlamaCppPrebuiltRuntimeMutationGuard
-                  .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct)
-                  .ConfigureAwait(false))
+                  .IsKeepModelWarmEnabledAsync(_nodeRuntimeSettings, ct))
         {
             await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
             {
                 Reason = "keep-model-warm-enabled",
                 Message = LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage,
                 RunningProcessCount = _runtime.CountRunningProcesses()
-            })).ConfigureAwait(false);
+            }));
             return;
         }
 
-        var (removed, runningProcessCount, buildActive) = await _runtime.TryRemoveCudaBuildAsync(ct).ConfigureAwait(false);
+        var (removed, runningProcessCount, buildActive) = await _runtime.TryRemoveCudaBuildAsync(ct);
         if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
@@ -57,15 +56,15 @@ public sealed class RemoveCudaBuildEndpoint(
                     ? "Wait for the active llama.cpp source build to finish or cancel it before removing the runtime."
                     : "Stop or eject all running llama.cpp models before removing the runtime.",
                 RunningProcessCount = runningProcessCount
-            })).ConfigureAwait(false);
+            }));
             return;
         }
 
         // The runtime record is gone; a cached deferred chat client may still point at the removed binary's endpoint.
         _localChatClientCacheInvalidator.ClearClientCache();
 
-        var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
-        var installed = await _runtime.ReadInstalledRuntimeAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(_runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
+        var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct);
+        var installed = await _runtime.ReadInstalledRuntimeAsync(ct);
+        await Send.OkAsync(_runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct);
     }
 }

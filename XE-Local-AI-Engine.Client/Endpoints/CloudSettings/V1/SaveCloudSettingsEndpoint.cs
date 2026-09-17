@@ -27,7 +27,7 @@ public sealed class SaveCloudSettingsEndpoint(
         // Load prior state so a secret header re-sent with a blank value keeps its stored value. The mapper
         // stays pure — the merge is the only impure step and it runs here. Loaded before validation so the validator can
         // tell a fresh/renamed blank secret header (rejected, 400) apart from one that resolves via the stored merge.
-        var existing = await _cloudCredentialStore.LoadConfigAsync(ct).ConfigureAwait(false);
+        var existing = await _cloudCredentialStore.LoadConfigAsync(ct);
         var existingHeaders = existing?.AzureFoundry?.Headers ?? [];
 
         // Reserved-name, character-set, capacity, and host-suffix validation. Error messages carry only the offending
@@ -42,7 +42,7 @@ public sealed class SaveCloudSettingsEndpoint(
                 AddError(headerError);
             }
 
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -57,21 +57,21 @@ public sealed class SaveCloudSettingsEndpoint(
         if (CloudSettingsEndpointDtoMapper.RequestsAuthorizationCode(req) && string.IsNullOrWhiteSpace(mergedEntraClientSecret))
         {
             AddError("EntraSignInMethod is 'AuthorizationCode', which requires a client secret (typed on this request or previously stored).");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var config = req.ToStoredConfig(mergedHeaders, mergedEntraClientSecret);
-        await _cloudCredentialStore.SaveConfigAsync(config, ct).ConfigureAwait(false);
-        await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(config.ToResponse(), ct).ConfigureAwait(false);
+        await _cloudCredentialStore.SaveConfigAsync(config, ct);
+        await TryReportCapabilitiesAsync(ct);
+        await Send.OkAsync(config.ToResponse(), ct);
     }
 
     private async Task TryReportCapabilitiesAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await _capabilityReporter.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
+            await _capabilityReporter.ReportToApiAsync(cancellationToken);
         }
         catch (Exception exception)
         {

@@ -420,11 +420,11 @@ public sealed class IntegrationSseWriterTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await using (cancellationToken.Register(() => _cancelled.TrySetResult()).ConfigureAwait(false))
+            await using (cancellationToken.Register(() => _cancelled.TrySetResult()))
             {
                 try
                 {
-                    await (releaseOnCancellation ? _release.Task.WaitAsync(cancellationToken) : _release.Task).ConfigureAwait(false);
+                    await (releaseOnCancellation ? _release.Task.WaitAsync(cancellationToken) : _release.Task);
                 }
                 finally
                 {
@@ -509,7 +509,7 @@ public sealed class IntegrationSseWriterTests
 
         private static async IAsyncEnumerable<IntegrationStreamEvent> Empty()
         {
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
     }

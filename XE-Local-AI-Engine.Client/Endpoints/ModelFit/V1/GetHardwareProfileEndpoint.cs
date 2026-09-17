@@ -31,9 +31,9 @@ public sealed class GetHardwareProfileEndpoint(IHardwareProfiler hardwareProfile
     {
         // The response shows physical hardware (the raw profile) AND runtime truth (the audit): a GPU box whose Vulkan
         // runtime enumerates no devices reports the GPU as present but flags cpuFallback so the UI can surface it.
-        var profile = await _hardwareProfiler.GetProfileAsync(req.Refresh, ct).ConfigureAwait(false);
-        var audit = await _runtimeAudit.GetAuditAsync(req.Refresh, ct).ConfigureAwait(false);
-        await Send.OkAsync(profile.ToResponse(audit), ct).ConfigureAwait(false);
+        var profile = await _hardwareProfiler.GetProfileAsync(req.Refresh, ct);
+        var audit = await _runtimeAudit.GetAuditAsync(req.Refresh, ct);
+        await Send.OkAsync(profile.ToResponse(audit), ct);
     }
 }
 

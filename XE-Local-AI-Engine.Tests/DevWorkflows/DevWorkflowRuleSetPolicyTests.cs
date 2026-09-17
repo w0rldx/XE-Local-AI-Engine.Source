@@ -91,15 +91,14 @@ public sealed class DevWorkflowRuleSetPolicyTests
     public async Task AScopedRuleSet_IsRecordedOnTheNodeRunAndItsBodyReachesTheObjective()
     {
         await using var harness = new DevWorkflowHarness();
-        var applies = await harness.CreateRuleSetAsync("House rules", HouseRules, $$"""{"projectIds":["{{ProjectId}}"],"nodeTypes":["Agent"]}""").ConfigureAwait(false);
-        _ = await harness.CreateRuleSetAsync("Someone else's rules", "Deploy on Fridays.", $$"""{"projectIds":["{{OtherProjectId}}"],"nodeTypes":[]}""")
-                         .ConfigureAwait(false);
-        _ = await harness.CreateRuleSetAsync("Disabled rules", "Ignore the tests.", """{"projectIds":[],"nodeTypes":[]}""", enabled: false).ConfigureAwait(false);
+        var applies = await harness.CreateRuleSetAsync("House rules", HouseRules, $$"""{"projectIds":["{{ProjectId}}"],"nodeTypes":["Agent"]}""");
+        _ = await harness.CreateRuleSetAsync("Someone else's rules", "Deploy on Fridays.", $$"""{"projectIds":["{{OtherProjectId}}"],"nodeTypes":[]}""");
+        _ = await harness.CreateRuleSetAsync("Disabled rules", "Ignore the tests.", """{"projectIds":[],"nodeTypes":[]}""", enabled: false);
 
-        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "research");
         var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
 
         AssertEx.Equal(expected: 1, recorded.Count, "only the rule set whose every populated axis matched is recorded.");
@@ -125,33 +124,29 @@ public sealed class DevWorkflowRuleSetPolicyTests
     public async Task AMaterializedClone_RecordsItsOwnResolution()
     {
         await using var harness = new DevWorkflowHarness();
-        var toolRules = await harness.CreateRuleSetAsync("Sandbox rules", "Run the fast suite only.", """{"projectIds":[],"nodeTypes":["Tool"]}""")
-                                     .ConfigureAwait(false);
+        var toolRules = await harness.CreateRuleSetAsync("Sandbox rules", "Run the fast suite only.", """{"projectIds":[],"nodeTypes":["Tool"]}""");
 
         // The project axis on the clone side, both ways. A clone inherits its PRODUCER's project rather than re-deriving
         // one, so a rule set scoped to that project has to reach it and one scoped to another must not — the half that
         // an all-empty scope would have passed without ever being exercised.
         var projectRules = await harness.CreateRuleSetAsync("Project sandbox rules",
                                             "Never run the slow suite here.",
-                                            $$"""{"projectIds":["{{ProjectId}}"],"nodeTypes":["Tool"]}""")
-                                        .ConfigureAwait(false);
+                                            $$"""{"projectIds":["{{ProjectId}}"],"nodeTypes":["Tool"]}""");
         _ = await harness.CreateRuleSetAsync("Another project's sandbox rules",
                              "Run everything.",
-                             $$"""{"projectIds":["{{OtherProjectId}}"],"nodeTypes":["Tool"]}""")
-                         .ConfigureAwait(false);
+                             $$"""{"projectIds":["{{OtherProjectId}}"],"nodeTypes":["Tool"]}""");
 
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: ProjectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: ProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
         _ = await harness.SaveAgentArtifactAsync(runId,
                              "decompose",
                              "tasks.json",
-                             """[{ "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest." }]""")
-                         .ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+                             """[{ "id": "alpha", "title": "Add the parser", "goal": "Parse the manifest." }]""");
+        await harness.SettleAgentAsync(runId, "decompose");
+        _ = await harness.AdvanceAsync(runId);
 
-        var clonedTool = await harness.ReadNodeRunAsync(runId, "validate#alpha").ConfigureAwait(false);
-        var clonedAgent = await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false);
+        var clonedTool = await harness.ReadNodeRunAsync(runId, "validate#alpha");
+        var clonedAgent = await harness.ReadNodeRunAsync(runId, "implement#alpha");
 
         var onTheTool = DevWorkflowRulePolicyResolver.Read(clonedTool.PolicyResolutionJson);
         AssertEx.True(onTheTool.All(entry => entry.Body is null), "a Tool node run records which rule sets applied without carrying text nothing will inject.");
@@ -171,14 +166,14 @@ public sealed class DevWorkflowRuleSetPolicyTests
     public async Task ARuleSetEditedAfterMaterialization_StillInjectsTheTextTheNodeRunRecorded()
     {
         await using var harness = new DevWorkflowHarness();
-        var original = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
+        var original = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":[]}""");
 
         // The run is STARTED — which is what writes the resolution — and only then is the rule set rewritten.
-        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId).ConfigureAwait(false);
-        _ = await harness.UpdateRuleSetAsync(original.Id, original.Version, "House rules", "Deploy straight to production on Fridays.").ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId);
+        _ = await harness.UpdateRuleSetAsync(original.Id, original.Version, "House rules", "Deploy straight to production on Fridays.");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "research");
         var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
         var objective = harness.Agent.Objectives.Single();
 
@@ -196,13 +191,13 @@ public sealed class DevWorkflowRuleSetPolicyTests
     public async Task ARuleSetDeletedAfterMaterialization_StillInjectsTheTextTheNodeRunRecorded()
     {
         await using var harness = new DevWorkflowHarness();
-        var ruleSet = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
-        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId).ConfigureAwait(false);
+        var ruleSet = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":[]}""");
+        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId);
 
-        await harness.DeleteRuleSetAsync(ruleSet.Id).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.DeleteRuleSetAsync(ruleSet.Id);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "research");
         var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
 
         AssertEx.Equal(expected: 1, recorded.Count, "P3.7: the node run keeps the ids it recorded, whatever became of the documents.");
@@ -222,11 +217,11 @@ public sealed class DevWorkflowRuleSetPolicyTests
     public async Task PolicyTextTooLongForTheObjective_IsTruncatedWithAMarkerRatherThanSilentlyDropped()
     {
         await using var harness = new DevWorkflowHarness();
-        _ = await harness.CreateRuleSetAsync("Alpha rules", "ALPHA-HEAD " + new string('a', 4096), """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
-        _ = await harness.CreateRuleSetAsync("Bravo rules", "BRAVO-HEAD " + new string('b', 4096), """{"projectIds":[],"nodeTypes":[]}""").ConfigureAwait(false);
+        _ = await harness.CreateRuleSetAsync("Alpha rules", "ALPHA-HEAD " + new string('a', 4096), """{"projectIds":[],"nodeTypes":[]}""");
+        _ = await harness.CreateRuleSetAsync("Bravo rules", "BRAVO-HEAD " + new string('b', 4096), """{"projectIds":[],"nodeTypes":[]}""");
 
-        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleAgent, developmentProjectId: ProjectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         var objective = harness.Agent.Objectives.Single();
 
@@ -285,18 +280,18 @@ public sealed class DevWorkflowRuleSetPolicyTests
     public async Task ADevTaskNodeRun_SnapshotsItsPolicyAndPutsItOnTheExecutionSnapshotDevModeComposesFrom()
     {
         await using var harness = DevWorkflowHarness.WithAScriptedChain();
-        var (projectId, taskId) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
-        var applies = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""").ConfigureAwait(false);
-        _ = await harness.CreateRuleSetAsync("Agent rules", "Ignore the tests.", """{"projectIds":[],"nodeTypes":["Agent"]}""").ConfigureAwait(false);
+        var (projectId, taskId) = await harness.SeedDevelopmentProjectAsync();
+        var applies = await harness.CreateRuleSetAsync("House rules", HouseRules, """{"projectIds":[],"nodeTypes":["DevTask"]}""");
+        _ = await harness.CreateRuleSetAsync("Agent rules", "Ignore the tests.", """{"projectIds":[],"nodeTypes":["Agent"]}""");
 
         // Held rather than walked on, so a real attempt row exists to read the execution snapshot off — which is the
         // row Dev Mode's coder and reviewer runners are handed.
         harness.Chain.HoldNextAttempt();
 
-        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var nodeRun = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "implement");
         var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
         AssertEx.Equal(expected: 1, recorded.Count, "only the rule set whose node-type axis names DevTask applied.");
         AssertEx.Equal(applies.Id, recorded[0].Id);
@@ -304,8 +299,8 @@ public sealed class DevWorkflowRuleSetPolicyTests
 
         await using var scope = harness.Services.CreateAsyncScope();
         var development = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var attempt = (await development.ListAttemptsAsync(taskId).ConfigureAwait(false)).Single();
-        var policy = AssertEx.NotNull((await development.GetExecutionSnapshotAsync(attempt.Id).ConfigureAwait(false)).WorkflowPolicyText,
+        var attempt = (await development.ListAttemptsAsync(taskId)).Single();
+        var policy = AssertEx.NotNull((await development.GetExecutionSnapshotAsync(attempt.Id)).WorkflowPolicyText,
             "the task the node run bound carries the policy the run resolved for it.");
 
         AssertEx.Contains(policy, "## Policy: House rules", message: "the rule set is rendered as its own section, exactly as the agent lane renders it.");

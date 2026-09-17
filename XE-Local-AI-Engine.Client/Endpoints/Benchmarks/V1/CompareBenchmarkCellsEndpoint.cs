@@ -33,7 +33,7 @@ public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService records
         var requested = req.CellKeys ?? [];
         if (requested.Count is < MinimumCells or > MaximumCells)
         {
-            await RefuseAsync($"Provide between {MinimumCells} and {MaximumCells} cellKeys to compare.").ConfigureAwait(false);
+            await RefuseAsync($"Provide between {MinimumCells} and {MaximumCells} cellKeys to compare.");
             return;
         }
 
@@ -41,17 +41,17 @@ public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService records
         {
             // A cell against itself is a delta of exactly zero with a zero-width interval — a true statement that
             // reads as a finding. Refused rather than served.
-            await RefuseAsync("The cellKeys to compare must be distinct.").ConfigureAwait(false);
+            await RefuseAsync("The cellKeys to compare must be distinct.");
             return;
         }
 
-        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
-        var page = await _records.ListCellsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var page = await _records.ListCellsAsync(req.ProjectId, ct);
 
         // Which leaves count toward a quality number. A NIAH case is judged and carries its own score, but that score
         // is a recall figure on its own axis and never enters the cell mean, so it must not enter a paired delta
@@ -59,7 +59,7 @@ public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService records
         // can, which costs one extra read whose payloads get decrypted to reach one boolean. That is acceptable on a
         // compare an operator triggers by hand. If it ever stops being acceptable, surface the scorable id set on the
         // ranking instead of widening this read.
-        var items = await _records.ListTaskItemsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var items = await _records.ListTaskItemsAsync(req.ProjectId, ct);
         var scorable = items.Where(static item => item.IsLeaf && item.CountsTowardScore).Select(static item => item.Id).ToHashSet();
         var byKey = page.Cells.ToDictionary(static cell => cell.CellKey, StringComparer.Ordinal);
         var selected = new List<BenchmarkCellRecord>(requested.Count);
@@ -69,7 +69,7 @@ public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService records
             {
                 // Named, not counted: an operator comparing a cell a re-freeze replaced needs to know WHICH key is
                 // gone, and a cell key is the project's own opaque identifier, not user content.
-                await RefuseAsync($"Cell '{key}' is not part of this project.").ConfigureAwait(false);
+                await RefuseAsync($"Cell '{key}' is not part of this project.");
                 return;
             }
 
@@ -83,7 +83,7 @@ public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService records
             RankCohort = listed.RankCohort,
             ScorableItemCount = listed.ScorableItemCount,
             PairedDeltas = PairedDeltas(selected, scorable)
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 
     /// <summary>

@@ -25,7 +25,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HubNegotiateRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -38,7 +38,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HubNegotiateRoute);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", factory.CreateNodeAccessToken());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -50,7 +50,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, HubRoute);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -65,7 +65,7 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
         var route = $"{HubRoute}?access_token={Uri.EscapeDataString(accessToken)}";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, route);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // The access_token query token is accepted by the JwtBearer handler, so authorization
         // passes. SignalR then rejects the non-WebSocket GET at the transport layer, but it must

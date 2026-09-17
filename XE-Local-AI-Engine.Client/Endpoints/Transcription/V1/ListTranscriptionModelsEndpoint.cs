@@ -24,7 +24,7 @@ public sealed class ListTranscriptionModelsEndpoint(ITranscriptionRuntimeService
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var catalog = await _runtimeService.GetModelsAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(catalog.ToResponse(), ct).ConfigureAwait(false);
+        var catalog = await _runtimeService.GetModelsAsync(ct);
+        await Send.OkAsync(catalog.ToResponse(), ct);
     }
 }

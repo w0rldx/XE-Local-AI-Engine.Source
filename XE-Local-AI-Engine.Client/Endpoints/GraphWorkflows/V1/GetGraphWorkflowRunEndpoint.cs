@@ -27,7 +27,7 @@ public sealed class GetGraphWorkflowRunEndpoint(IGraphWorkflowRunService runs) :
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var detail = await _runs.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
-        await Send.OkAsync(detail.ToResponse(), ct).ConfigureAwait(false);
+        var detail = await _runs.GetRunAsync(req.RunId, ct);
+        await Send.OkAsync(detail.ToResponse(), ct);
     }
 }

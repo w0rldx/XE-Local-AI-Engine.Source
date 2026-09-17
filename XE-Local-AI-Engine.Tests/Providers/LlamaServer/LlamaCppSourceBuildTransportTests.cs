@@ -131,10 +131,10 @@ public sealed class LlamaCppSourceBuildTransportTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal(expectedReason, body.RootElement.GetProperty("reason").GetString());
         if (outcome == LlamaCppSourceBuildStartOutcome.ProcessesRunning)
         {
@@ -178,10 +178,10 @@ public sealed class LlamaCppSourceBuildTransportTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal("keep-model-warm-enabled", body.RootElement.GetProperty("reason").GetString());
         AssertEx.Contains(body.RootElement.GetProperty("message").GetString()!, "Disable Keep Model Warm", StringComparison.Ordinal);
         await service.DidNotReceive().StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>());
@@ -233,10 +233,10 @@ public sealed class LlamaCppSourceBuildTransportTests
         };
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.True(body.RootElement.GetProperty("started").GetBoolean());
         await service.Received(1).StartAsync(Arg.Is<LlamaCppSourceBuildRequest>(sourceRequest =>
                 sourceRequest.Source == LlamaCppSourceSelection.Official && sourceRequest.Repository == null),
@@ -276,10 +276,10 @@ public sealed class LlamaCppSourceBuildTransportTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-fit/llamacpp/cuda-build");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal(expectedReason, body.RootElement.GetProperty("reason").GetString());
         if (outcome == LlamaCppSourceBuildStartOutcome.ProcessesRunning)
         {
@@ -564,8 +564,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
                                      CudaBuildPrerequisitesRoute,
-                                     services => ReplaceSingleton(services, probe))
-                                 .ConfigureAwait(false);
+                                     services => ReplaceSingleton(services, probe));
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         var report = AssertEx.NotNull(JsonSerializer.Deserialize<CudaBuildPrerequisitesResponse>(body, WebJsonOptions));
@@ -594,8 +593,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
                                      CudaBuildStatusRoute,
-                                     services => ReplaceSingleton(services, service))
-                                 .ConfigureAwait(false);
+                                     services => ReplaceSingleton(services, service));
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         var payload = AssertEx.NotNull(JsonSerializer.Deserialize<CudaBuildStatusResponse>(body, WebJsonOptions));
@@ -618,8 +616,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
                                      SourceBuildPrerequisitesRoute + "?backend=99",
-                                     services => ReplaceSingleton(services, probe))
-                                 .ConfigureAwait(false);
+                                     services => ReplaceSingleton(services, probe));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
         using var problem = JsonDocument.Parse(body);
@@ -640,8 +637,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
                                      SourceBuildPrerequisitesRoute + "?backend=vulkan",
-                                     services => ReplaceSingleton(services, probe))
-                                 .ConfigureAwait(false);
+                                     services => ReplaceSingleton(services, probe));
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var payload = JsonDocument.Parse(body);
@@ -673,8 +669,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         var (status, body) = await SendOperatorRequestAsync(HttpMethod.Post,
                                      CudaBuildCancelRoute,
-                                     services => ReplaceSingleton(services, service))
-                                 .ConfigureAwait(false);
+                                     services => ReplaceSingleton(services, service));
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         var payload = AssertEx.NotNull(JsonSerializer.Deserialize<CudaBuildStatusResponse>(body, WebJsonOptions));
@@ -702,8 +697,7 @@ public sealed class LlamaCppSourceBuildTransportTests
                                          ReplaceSingleton(services, runtimeSettings);
                                          ReplaceSingleton(services, supervisor);
                                          ReplaceSingleton(services, cacheInvalidator);
-                                     })
-                                 .ConfigureAwait(false);
+                                     });
 
         AssertEx.Equal(HttpStatusCode.Conflict, status);
         using var blocked = JsonDocument.Parse(body);
@@ -736,8 +730,7 @@ public sealed class LlamaCppSourceBuildTransportTests
                                          ReplaceSingleton(services, supervisor);
                                          ReplaceSingleton(services, binaryManager);
                                          ReplaceSingleton(services, cacheInvalidator);
-                                     })
-                                 .ConfigureAwait(false);
+                                     });
 
         AssertEx.Equal(HttpStatusCode.Conflict, status);
         using var blocked = JsonDocument.Parse(body);
@@ -765,8 +758,7 @@ public sealed class LlamaCppSourceBuildTransportTests
                                          ReplaceSingleton(services, supervisor);
                                          ReplaceSingleton(services, binaryManager);
                                          ReplaceSingleton(services, cacheInvalidator);
-                                     })
-                                 .ConfigureAwait(false);
+                                     });
 
         AssertEx.Equal(HttpStatusCode.Conflict, status);
         using var blocked = JsonDocument.Parse(body);
@@ -811,8 +803,7 @@ public sealed class LlamaCppSourceBuildTransportTests
                                          ReplaceSingleton(services, installedRuntimeStore);
                                          ReplaceSingleton(services, binaryManager);
                                          ReplaceSingleton(services, cacheInvalidator);
-                                     })
-                                 .ConfigureAwait(false);
+                                     });
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         var payload = AssertEx.NotNull(JsonSerializer.Deserialize<LlamaCppRuntimeStatusResponse>(body, WebJsonOptions));
@@ -837,8 +828,8 @@ public sealed class LlamaCppSourceBuildTransportTests
         using var request = new HttpRequestMessage(method, route);
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        return (response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
     private static void ReplaceSingleton<TService>(IServiceCollection services, TService instance)

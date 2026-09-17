@@ -25,6 +25,6 @@ public sealed class GetInvocationMonitorEndpoint(
             _invocationHistory.Snapshot(),
             _invocationHistory.Capacity);
 
-        await Send.OkAsync(response, ct).ConfigureAwait(false);
+        await Send.OkAsync(response, ct);
     }
 }

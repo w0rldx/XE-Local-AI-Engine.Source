@@ -63,7 +63,7 @@ public sealed class ModelCapabilityResolver(
         // that check would report it node-local and hand a hosted endpoint the private-data gates.
         if (ExternalModelId.HasExternalScheme(model))
         {
-            if (await modelTrustResolver.TryResolveExternalAsync(model, cancellationToken).ConfigureAwait(false) is not { } registration)
+            if (await modelTrustResolver.TryResolveExternalAsync(model, cancellationToken) is not { } registration)
             {
                 return UnresolvedExternal;
             }
@@ -103,13 +103,11 @@ public sealed class ModelCapabilityResolver(
         // non-Ollama provider; for a llama.cpp model the GGUF detection supplies thinking/tools, otherwise the safe
         // default applies.
         var providerName = await localModelProviderResolver
-                                 .ResolveProviderNameForModelAsync(model, cancellationToken)
-                                 .ConfigureAwait(false);
+                                 .ResolveProviderNameForModelAsync(model, cancellationToken);
         if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
         {
             var ggufCapabilities = await ggufModelCapabilityResolver
-                                         .TryResolveAsync(model, cancellationToken)
-                                         .ConfigureAwait(false);
+                                         .TryResolveAsync(model, cancellationToken);
             // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL. Vision rides the GGUF descriptor's
             // projector-gated flag — the only path that can advertise it (cloud/Ollama stay non-vision here).
             return ggufCapabilities is { } caps
@@ -124,8 +122,7 @@ public sealed class ModelCapabilityResolver(
         }
 
         var classifications = await modelClassificationService
-                                    .ClassifyAsync([new ModelIdentity(model, Digest: null)], cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ClassifyAsync([new ModelIdentity(model, Digest: null)], cancellationToken);
         if (!classifications.TryGetValue(model, out var classification))
         {
             return NotCapableLocal;

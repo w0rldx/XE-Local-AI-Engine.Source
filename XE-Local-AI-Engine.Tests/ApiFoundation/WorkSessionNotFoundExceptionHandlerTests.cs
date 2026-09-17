@@ -16,8 +16,7 @@ public sealed class WorkSessionNotFoundExceptionHandlerTests
         using var responseBody = new MemoryStream();
         httpContext.Response.Body = responseBody;
 
-        var handled = await handler.TryHandleAsync(httpContext, new WorkSessionNotFoundException("gone"), CancellationToken.None)
-                                   .ConfigureAwait(false);
+        var handled = await handler.TryHandleAsync(httpContext, new WorkSessionNotFoundException("gone"), CancellationToken.None);
 
         AssertEx.True(handled);
         AssertEx.Equal(StatusCodes.Status404NotFound, httpContext.Response.StatusCode);
@@ -31,8 +30,7 @@ public sealed class WorkSessionNotFoundExceptionHandlerTests
         var handler = new WorkSessionNotFoundExceptionHandler();
         var httpContext = new DefaultHttpContext();
 
-        var handled = await handler.TryHandleAsync(httpContext, new KeyNotFoundException("unrelated"), CancellationToken.None)
-                                   .ConfigureAwait(false);
+        var handled = await handler.TryHandleAsync(httpContext, new KeyNotFoundException("unrelated"), CancellationToken.None);
 
         AssertEx.False(handled);
         AssertEx.Equal(StatusCodes.Status200OK, httpContext.Response.StatusCode);

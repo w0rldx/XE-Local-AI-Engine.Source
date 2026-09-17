@@ -33,7 +33,7 @@ public sealed class LicenseGateService(ITrainingBaseArtifactStore store, TimePro
 
     public async Task<TrainingLicenseGateView?> GetAsync(Guid baseArtifactId, CancellationToken cancellationToken = default)
     {
-        var artifact = await _store.GetAsync(baseArtifactId, cancellationToken).ConfigureAwait(false);
+        var artifact = await _store.GetAsync(baseArtifactId, cancellationToken);
         if (artifact is null)
         {
             return null;

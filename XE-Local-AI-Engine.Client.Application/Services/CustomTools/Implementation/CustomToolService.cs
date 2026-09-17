@@ -55,8 +55,8 @@ internal sealed partial class CustomToolService : ICustomToolService
     {
         ArgumentNullException.ThrowIfNull(definition);
 
-        var input = await ValidateAndBuildInputAsync(definition, existingId: null, existing: null, cancellationToken).ConfigureAwait(false);
-        var record = await _store.CreateAsync(input, cancellationToken).ConfigureAwait(false);
+        var input = await ValidateAndBuildInputAsync(definition, existingId: null, existing: null, cancellationToken);
+        var record = await _store.CreateAsync(input, cancellationToken);
         return ToView(record);
     }
 
@@ -66,9 +66,9 @@ internal sealed partial class CustomToolService : ICustomToolService
 
         // Read the raw stored record (secrets in the clear) so a masked secret the client round-trips resolves back to
         // the stored value instead of overwriting it with the sentinel.
-        var existing = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
-        var input = await ValidateAndBuildInputAsync(definition, id, existing, cancellationToken).ConfigureAwait(false);
-        var record = await _store.UpdateAsync(id, input, cancellationToken).ConfigureAwait(false);
+        var existing = await _store.GetByIdAsync(id, cancellationToken);
+        var input = await ValidateAndBuildInputAsync(definition, id, existing, cancellationToken);
+        var record = await _store.UpdateAsync(id, input, cancellationToken);
         return record is null ? null : ToView(record);
     }
 
@@ -79,13 +79,13 @@ internal sealed partial class CustomToolService : ICustomToolService
 
     public async Task<CustomToolView?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var record = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetByIdAsync(id, cancellationToken);
         return record is null ? null : ToView(record);
     }
 
     public async Task<IReadOnlyList<CustomToolView>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var records = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var records = await _store.ListAsync(cancellationToken);
         return [.. records.Select(ToView)];
     }
 
@@ -159,7 +159,7 @@ internal sealed partial class CustomToolService : ICustomToolService
             _ => throw new CustomToolValidationException($"Unknown custom-tool kind '{definition.Kind}'.")
         };
 
-        await EnsureNameIsAvailableAsync(name, existingId, cancellationToken).ConfigureAwait(false);
+        await EnsureNameIsAvailableAsync(name, existingId, cancellationToken);
 
         var parametersJson = JsonSerializer.Serialize(parameters, CustomToolJson.Options);
         return new CustomToolInput(name,
@@ -451,7 +451,7 @@ internal sealed partial class CustomToolService : ICustomToolService
             throw new CustomToolValidationException($"The name '{name}' collides with an existing built-in or MCP tool.");
         }
 
-        var existing = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var existing = await _store.ListAsync(cancellationToken);
         if (existing.Any(tool =>
                 (existingId is null || tool.Id != existingId.Value)
                 && string.Equals(tool.Name, name, StringComparison.OrdinalIgnoreCase)))

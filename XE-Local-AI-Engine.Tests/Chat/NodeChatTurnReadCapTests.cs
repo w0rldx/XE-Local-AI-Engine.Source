@@ -31,17 +31,16 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     [Test]
     public async Task TurnRead_OnBranchedCompactedConversation_BuildsTheIdenticalContextAsTheFullRead()
     {
-        await using var provider = await BuildProviderAsync("turn-read-cap-branched.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("turn-read-cap-branched.sqlite");
         var service = CreateService(provider);
-        var built = await BuildBranchedConversationAsync(service).ConfigureAwait(false);
+        var built = await BuildBranchedConversationAsync(service);
 
         // The synopsis covers up to sequence 3, so the turn drops sequences 1-3 from the verbatim history. Set it LAST:
         // both SetSelectedPathAsync and CreateMessageVariantAsync deliberately invalidate a stored synopsis.
-        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(built.ConversationId, "SYNOPSIS", CoversToSequence: 3, UpdatedAtUtc: 60))
-                     .ConfigureAwait(false);
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(built.ConversationId, "SYNOPSIS", CoversToSequence: 3, UpdatedAtUtc: 60));
 
-        var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId).ConfigureAwait(false));
-        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId).ConfigureAwait(false));
+        var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId));
+        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId));
 
         AssertEx.True(full.CompactionSummaryCoversToSequence == 3, "The full read must report the covered sequence.");
         AssertEx.True(turn.CompactionSummaryCoversToSequence == 3, "The turn read must report the same covered sequence.");
@@ -104,12 +103,12 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     {
         // The cap is gated on a non-empty synopsis AND a covered sequence — the same pair ConversationContextBuilder.Build gates
         // its own drop on — so an uncompacted conversation (the overwhelming majority) must be untouched.
-        await using var provider = await BuildProviderAsync("turn-read-cap-uncompacted.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("turn-read-cap-uncompacted.sqlite");
         var service = CreateService(provider);
-        var built = await BuildBranchedConversationAsync(service).ConfigureAwait(false);
+        var built = await BuildBranchedConversationAsync(service);
 
-        var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId).ConfigureAwait(false));
-        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId).ConfigureAwait(false));
+        var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId));
+        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId));
 
         AssertEx.Null(turn.CompactionSummary);
         AssertEx.Equal(full.Messages.Count, turn.Messages.Count);
@@ -132,18 +131,17 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         // synopsis stands in for it. The cap is deliberately the more conservative of the two (it keys on each row's own
         // sequence, and a group's anchor is never above a member's sequence), so it can only ever over-load, never
         // blank a payload the turn still needs.
-        await using var provider = await BuildProviderAsync("turn-read-cap-newest.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("turn-read-cap-newest.sqlite");
         var service = CreateService(provider);
-        var built = await BuildBranchedConversationAsync(service, pinOldSibling: false).ConfigureAwait(false);
+        var built = await BuildBranchedConversationAsync(service, pinOldSibling: false);
 
         // Sequences are 0-based: 0 user-one, 1 assistant-one (sibling A), 2 user-two, 3 assistant-two, 4 assistant-one-variant
         // (sibling B). The boundary sits at 2, so the cap blanks sibling A's payload and keeps assistant-two's — the one
         // message the turn still sends verbatim.
-        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(built.ConversationId, "SYNOPSIS", CoversToSequence: 2, UpdatedAtUtc: 60))
-                     .ConfigureAwait(false);
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(built.ConversationId, "SYNOPSIS", CoversToSequence: 2, UpdatedAtUtc: 60));
 
-        var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId).ConfigureAwait(false));
-        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId).ConfigureAwait(false));
+        var full = AssertEx.NotNull(await service.GetConversationAsync(built.ConversationId));
+        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(built.ConversationId));
 
         var turnPath = SelectedPathResolver.Resolve(turn.Messages, turn.SelectedPath).Select(message => message.MessageId).ToArray();
         AssertEx.Contains(turnPath, built.NewerSiblingId, "With no pin the newest sibling is the default selection.");
@@ -173,17 +171,17 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         // assistant row FOR its tool parts (ConversationContextBuilder with tool history on), the capped read hands it
         // a row with none and the replay is silently empty. This pins both halves of that fact against real SQLite:
         // the full read carries the parts, the turn read does not.
-        await using var provider = await BuildProviderAsync("turn-read-cap-parts.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("turn-read-cap-parts.sqlite");
         var service = CreateService(provider);
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Parts", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Parts", "node", CreatedAtUtc: 10));
         var conversationId = conversation.ConversationId;
 
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "user-one", CreatedAtUtc: 11)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "user-one", CreatedAtUtc: 11));
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId);
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, CreatedAtUtc: 12, "llama")).ConfigureAwait(false);
-        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, CreatedAtUtc: 12, "llama"));
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                          NodeChatMessageStatusValues.Completed,
                          UpdatedAtUtc: 13,
@@ -201,14 +199,13 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
                                  NodeChatToolPartStates.Received,
                                  "{\"name\":\"s6.txt\"}",
                                  "saved")
-                         ]))
-                     .ConfigureAwait(false);
+                         ]));
 
         // The synopsis covers the assistant row itself (sequence 1), which is exactly the shape the survivor rule exists for.
-        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversationId, "SYNOPSIS", CoversToSequence: 1, UpdatedAtUtc: 60)).ConfigureAwait(false);
+        await service.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversationId, "SYNOPSIS", CoversToSequence: 1, UpdatedAtUtc: 60));
 
-        var full = AssertEx.NotNull(await service.GetConversationAsync(conversationId).ConfigureAwait(false));
-        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(conversationId).ConfigureAwait(false));
+        var full = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
+        var turn = AssertEx.NotNull(await service.GetConversationForTurnAsync(conversationId));
 
         var fromFull = full.Messages.Single(message => message.MessageId == messageId);
         var part = AssertEx.NotNull(fromFull.Parts, "The full read must carry the persisted tool parts.").Single();
@@ -226,21 +223,20 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         // ReadMessageAsync used to materialize the WHOLE conversation and pick one entry out of it, on the ~10/s
         // partial-flush path. It now filters in SQL. This pins the equivalence: for every message, the single-message
         // read must project exactly what the full read projects for it — including the LEFT JOIN'd feedback row.
-        await using var provider = await BuildProviderAsync("read-message-targeted.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("read-message-targeted.sqlite");
         var service = CreateService(provider);
-        var built = await BuildBranchedConversationAsync(service).ConfigureAwait(false);
-        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(built.ConversationId, built.NewerSiblingId, "up", "nice", UpdatedAtUtc: 40))
-                     .ConfigureAwait(false);
-        var other = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Other", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var built = await BuildBranchedConversationAsync(service);
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(built.ConversationId, built.NewerSiblingId, "up", "nice", UpdatedAtUtc: 40));
+        var other = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Other", "node", CreatedAtUtc: 10));
 
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var all = await NodeChatPersistenceSql.ReadMessagesAsync(dbContext, built.ConversationId, CancellationToken.None).ConfigureAwait(false);
+        var all = await NodeChatPersistenceSql.ReadMessagesAsync(dbContext, built.ConversationId, CancellationToken.None);
         AssertEx.Equal(expected: 5, all.Count);
 
         foreach (var expected in all)
         {
-            var actual = AssertEx.NotNull(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, built.ConversationId, expected.MessageId, CancellationToken.None).ConfigureAwait(false));
+            var actual = AssertEx.NotNull(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, built.ConversationId, expected.MessageId, CancellationToken.None));
 
             // Parts/Sources are collections, which record equality compares by reference; normalise them out and check
             // them separately so this stays meaningful if a fixture later persists parts.
@@ -259,14 +255,14 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         }
 
         // The feedback join must survive the narrowed WHERE.
-        var rated = AssertEx.NotNull(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, built.ConversationId, built.NewerSiblingId, CancellationToken.None).ConfigureAwait(false));
+        var rated = AssertEx.NotNull(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, built.ConversationId, built.NewerSiblingId, CancellationToken.None));
         AssertEx.Equal("up", rated.FeedbackRating);
         AssertEx.Equal("nice", rated.FeedbackComment);
 
-        AssertEx.Null(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, built.ConversationId, Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Null(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, built.ConversationId, Guid.NewGuid(), CancellationToken.None));
 
         // The conversation guard still applies: a real message id under the WRONG conversation must not resolve.
-        AssertEx.Null(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, other.ConversationId, built.NewerSiblingId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Null(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, other.ConversationId, built.NewerSiblingId, CancellationToken.None));
     }
 
     /// <summary>
@@ -297,29 +293,27 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     /// </summary>
     private static async Task<BranchedConversation> BuildBranchedConversationAsync(NodeChatPersistenceService service, bool pinOldSibling = true)
     {
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Branched", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Branched", "node", CreatedAtUtc: 10));
         var conversationId = conversation.ConversationId;
 
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "user-one", CreatedAtUtc: 11)).ConfigureAwait(false);
-        var oldSiblingId = await CompleteAssistantAsync(service, conversationId, "assistant-one", "reasoning-one", createdAtUtc: 12).ConfigureAwait(false);
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "user-two", CreatedAtUtc: 13)).ConfigureAwait(false);
-        await CompleteAssistantAsync(service, conversationId, "assistant-two", "reasoning-two", createdAtUtc: 14).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "user-one", CreatedAtUtc: 11));
+        var oldSiblingId = await CompleteAssistantAsync(service, conversationId, "assistant-one", "reasoning-one", createdAtUtc: 12);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId, Guid.NewGuid(), "user-two", CreatedAtUtc: 13));
+        await CompleteAssistantAsync(service, conversationId, "assistant-two", "reasoning-two", createdAtUtc: 14);
 
         var newerSiblingId = Guid.NewGuid();
         var variantRequestId = Guid.NewGuid();
-        await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversationId, oldSiblingId, newerSiblingId, variantRequestId, CreatedAtUtc: 15))
-                     .ConfigureAwait(false);
+        await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversationId, oldSiblingId, newerSiblingId, variantRequestId, CreatedAtUtc: 15));
         var variantCorrelation = new NodeChatMessageCorrelation(conversationId, newerSiblingId, variantRequestId);
-        await service.MarkAssistantStreamingAsync(variantCorrelation, updatedAtUtc: 16).ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(variantCorrelation, updatedAtUtc: 16);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(variantCorrelation,
                          NodeChatMessageStatusValues.Completed,
                          UpdatedAtUtc: 17,
                          "assistant-one-variant",
                          "reasoning-one-variant",
-                         Model: "llama"))
-                     .ConfigureAwait(false);
+                         Model: "llama"));
 
-        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversationId).ConfigureAwait(false));
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
         var variantGroupId = loaded.Messages.Single(message => message.MessageId == oldSiblingId).VariantGroupId;
         AssertEx.True(variantGroupId.HasValue, "Minting a variant must back-stamp the original with a variant group.");
 
@@ -332,8 +326,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
                              {
                                  [variantGroupId!.Value] = oldSiblingId
                              },
-                             UpdatedAtUtc: 18))
-                         .ConfigureAwait(false);
+                             UpdatedAtUtc: 18));
         }
 
         return new BranchedConversation(conversationId, oldSiblingId, newerSiblingId);
@@ -348,15 +341,14 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId);
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, createdAtUtc, "llama")).ConfigureAwait(false);
-        await service.MarkAssistantStreamingAsync(correlation, createdAtUtc).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, createdAtUtc, "llama"));
+        await service.MarkAssistantStreamingAsync(correlation, createdAtUtc);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                          NodeChatMessageStatusValues.Completed,
                          createdAtUtc,
                          content,
                          reasoning,
-                         Model: "llama"))
-                     .ConfigureAwait(false);
+                         Model: "llama"));
         return messageId;
     }
 
@@ -371,8 +363,8 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
         return provider;
     }
 

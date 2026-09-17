@@ -19,19 +19,18 @@ public sealed class DeleteBaseArtifactEndpoint(IBaseArtifactService baseArtifact
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)
     {
-        var outcome = await baseArtifactService.DeleteAsync(request.ArtifactId, ct).ConfigureAwait(false);
+        var outcome = await baseArtifactService.DeleteAsync(request.ArtifactId, ct);
         switch (outcome)
         {
             case BaseArtifactDeleteOutcome.NotFound:
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                await Send.NotFoundAsync(ct);
                 return;
             case BaseArtifactDeleteOutcome.Downloading:
                 await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("downloading",
-                              "The base checkpoint is still downloading. Cancel the download before deleting it."))
-                          .ConfigureAwait(false);
+                              "The base checkpoint is still downloading. Cancel the download before deleting it."));
                 return;
             case BaseArtifactDeleteOutcome.Deleted:
-                await Send.NoContentAsync(ct).ConfigureAwait(false);
+                await Send.NoContentAsync(ct);
                 return;
             default:
                 throw new InvalidOperationException($"Unknown base artifact delete outcome: {outcome}.");

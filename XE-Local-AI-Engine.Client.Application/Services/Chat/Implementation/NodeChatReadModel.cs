@@ -18,8 +18,8 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
         ArgumentNullException.ThrowIfNull(request);
 
         return request.IncludeArchived
-            ? await ListAllConversationsAsync(request, cancellationToken).ConfigureAwait(false)
-            : await ListActiveConversationsAsync(request, cancellationToken).ConfigureAwait(false);
+            ? await ListAllConversationsAsync(request, cancellationToken)
+            : await ListActiveConversationsAsync(request, cancellationToken);
     }
 
     public Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
@@ -74,25 +74,25 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                                   """;
                 AddParameter(conversationCommand, "$conversation_id", conversationId);
 
-                await OpenIfNeededAsync(conversationCommand.Connection, token).ConfigureAwait(false);
-                await using var conversationReader = await conversationCommand.ExecuteReaderAsync(token).ConfigureAwait(false);
-                if (!await conversationReader.ReadAsync(token).ConfigureAwait(false))
+                await OpenIfNeededAsync(conversationCommand.Connection, token);
+                await using var conversationReader = await conversationCommand.ExecuteReaderAsync(token);
+                if (!await conversationReader.ReadAsync(token))
                 {
                     return null;
                 }
 
                 // Title is stored as an encrypted BLOB; read raw bytes and decrypt via the db-context gateway
                 // (mirrors ReadConversationSummariesAsync in NodeChatPersistenceSql).
-                var titleBytes = await conversationReader.IsDBNullAsync(ordinal: 1, token).ConfigureAwait(false)
+                var titleBytes = await conversationReader.IsDBNullAsync(ordinal: 1, token)
                     ? null
-                    : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 1, token).ConfigureAwait(false);
+                    : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 1, token);
 
                 // compaction_summary is an encrypted BLOB; decrypt via the same db-context gateway used for the title.
-                var compactionSummary = dbContext.DecryptConversationCompactionSummary(await conversationReader.IsDBNullAsync(ordinal: 13, token).ConfigureAwait(false)
+                var compactionSummary = dbContext.DecryptConversationCompactionSummary(await conversationReader.IsDBNullAsync(ordinal: 13, token)
                         ? null
-                        : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 13, token).ConfigureAwait(false),
+                        : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 13, token),
                     conversationId);
-                var compactionCoversToSequence = await conversationReader.IsDBNullAsync(ordinal: 14, token).ConfigureAwait(false)
+                var compactionCoversToSequence = await conversationReader.IsDBNullAsync(ordinal: 14, token)
                     ? (int?)null
                     : conversationReader.GetInt32(14);
 
@@ -105,25 +105,25 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
 
                 var dto = new NodeChatConversationDto(Guid.Parse(conversationReader.GetString(0)),
                     DecryptTitle(titleBytes, dbContext, conversationId),
-                    await conversationReader.IsDBNullAsync(ordinal: 2, token).ConfigureAwait(false) ? null : conversationReader.GetString(2),
+                    await conversationReader.IsDBNullAsync(ordinal: 2, token) ? null : conversationReader.GetString(2),
                     conversationReader.GetInt64(3),
                     conversationReader.GetInt64(4),
                     conversationReader.GetBoolean(5),
-                    await ReadMessagesAsync(dbContext, conversationId, token, omitNonUserPayloadsAtOrBelowSequence).ConfigureAwait(false),
+                    await ReadMessagesAsync(dbContext, conversationId, token, omitNonUserPayloadsAtOrBelowSequence),
                     conversationReader.GetString(6),
                     conversationReader.GetBoolean(7),
                     conversationReader.GetBoolean(8),
-                    await conversationReader.IsDBNullAsync(ordinal: 9, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(9)),
-                    DeserializeSelectedPath(await conversationReader.IsDBNullAsync(ordinal: 10, token).ConfigureAwait(false) ? null : conversationReader.GetString(10)),
-                    await conversationReader.IsDBNullAsync(ordinal: 11, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(11)),
+                    await conversationReader.IsDBNullAsync(ordinal: 9, token) ? null : Guid.Parse(conversationReader.GetString(9)),
+                    DeserializeSelectedPath(await conversationReader.IsDBNullAsync(ordinal: 10, token) ? null : conversationReader.GetString(10)),
+                    await conversationReader.IsDBNullAsync(ordinal: 11, token) ? null : Guid.Parse(conversationReader.GetString(11)),
                     conversationReader.GetBoolean(12),
                     compactionSummary,
                     compactionCoversToSequence,
-                    await conversationReader.IsDBNullAsync(ordinal: 15, token).ConfigureAwait(false) ? null : conversationReader.GetInt64(15));
+                    await conversationReader.IsDBNullAsync(ordinal: 15, token) ? null : conversationReader.GetInt64(15));
 
                 return dto;
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListActiveConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
@@ -144,9 +144,9 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;
-                return await ReadConversationSummariesAsync(command, dbContext, request.Limit, token).ConfigureAwait(false);
+                return await ReadConversationSummariesAsync(command, dbContext, request.Limit, token);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListAllConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
@@ -167,8 +167,8 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;
-                return await ReadConversationSummariesAsync(command, dbContext, request.Limit, token).ConfigureAwait(false);
+                return await ReadConversationSummariesAsync(command, dbContext, request.Limit, token);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

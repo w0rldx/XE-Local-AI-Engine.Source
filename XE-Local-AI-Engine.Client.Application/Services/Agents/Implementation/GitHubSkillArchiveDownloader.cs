@@ -75,11 +75,11 @@ internal sealed partial class GitHubSkillArchiveDownloader
         {
             try
             {
-                return await FetchAsync(uri, cancellationToken).ConfigureAwait(false);
+                return await FetchAsync(uri, cancellationToken);
             }
             catch (Exception exception) when (attempt < MaxAttempts && IsTransient(exception, cancellationToken))
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(500 * (1 << (attempt - 1))), cancellationToken).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(500 * (1 << (attempt - 1))), cancellationToken);
             }
             catch (Exception exception) when (IsTransient(exception, cancellationToken))
             {
@@ -98,7 +98,7 @@ internal sealed partial class GitHubSkillArchiveDownloader
             EnsureAllowedHost(uri);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (IsRedirect(response.StatusCode))
             {
@@ -107,7 +107,7 @@ internal sealed partial class GitHubSkillArchiveDownloader
             }
 
             EnsureSuccess(response.StatusCode);
-            return await ReadCappedAsync(response.Content, _options.MaxArchiveBytes, cancellationToken).ConfigureAwait(false);
+            return await ReadCappedAsync(response.Content, _options.MaxArchiveBytes, cancellationToken);
         }
 
         throw new SkillImportException("The repository download followed too many redirects and was abandoned.");
@@ -169,8 +169,8 @@ internal sealed partial class GitHubSkillArchiveDownloader
     /// </summary>
     private static async Task<byte[]> ReadCappedAsync(HttpContent content, int maxArchiveBytes, CancellationToken cancellationToken)
     {
-        var source = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        await using (source.ConfigureAwait(false))
+        var source = await content.ReadAsStreamAsync(cancellationToken);
+        await using (source)
         {
             using var buffer = new MemoryStream();
 
@@ -186,7 +186,7 @@ internal sealed partial class GitHubSkillArchiveDownloader
                 int read;
                 try
                 {
-                    read = await source.ReadAsync(chunk, idleCts.Token).ConfigureAwait(false);
+                    read = await source.ReadAsync(chunk, idleCts.Token);
                 }
                 catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
                 {
@@ -198,7 +198,7 @@ internal sealed partial class GitHubSkillArchiveDownloader
                     return buffer.ToArray();
                 }
 
-                await buffer.WriteAsync(chunk.AsMemory(start: 0, read), cancellationToken).ConfigureAwait(false);
+                await buffer.WriteAsync(chunk.AsMemory(start: 0, read), cancellationToken);
             }
 
             throw new SkillImportException($"The repository archive is larger than the {maxArchiveBytes / (1024 * 1024)} MiB import limit.");

@@ -48,7 +48,7 @@ internal sealed class BaseArtifactDownloadCoordinator(
 
         try
         {
-            await download.Cancellation.CancelAsync().ConfigureAwait(false);
+            await download.Cancellation.CancelAsync();
             return true;
         }
         catch (ObjectDisposedException)
@@ -84,7 +84,7 @@ internal sealed class BaseArtifactDownloadCoordinator(
     {
         if (_inFlight.TryGetValue(artifactId, out var download) && download.Task is not null)
         {
-            await download.Task.WaitAsync(ct).ConfigureAwait(false);
+            await download.Task.WaitAsync(ct);
         }
     }
 
@@ -117,35 +117,31 @@ internal sealed class BaseArtifactDownloadCoordinator(
                 value.PartCount ?? manifest.Files.Count));
 
             var completed = await _checkpointStore
-                                  .DownloadAsync(manifest, directory, progress, download.Cancellation.Token)
-                                  .ConfigureAwait(false);
+                                  .DownloadAsync(manifest, directory, progress, download.Cancellation.Token);
 
             await UpdateStoreAsync(async (store, ct) => await store.MarkReadyAsync(artifactId,
                                                                        expectedVersion,
                                                                        BaseArtifactManifest.SerializeFiles(completed.Files),
                                                                        completed.TotalBytes,
                                                                        BaseArtifactManifest.SerializeLicense(license),
-                                                                       ct)
-                                                                   .ConfigureAwait(false))
-                .ConfigureAwait(false);
+                                                                       ct));
         }
         catch (OperationCanceledException)
         {
             // Partially transferred files stay on disk on purpose: the .part staging is what makes a retry resume
             // rather than restart, and a cancelled 30 GB checkpoint should not have to be refetched from byte zero.
-            await FailAsync(artifactId, expectedVersion, "The download was cancelled.").ConfigureAwait(false);
+            await FailAsync(artifactId, expectedVersion, "The download was cancelled.");
         }
         catch (BaseCheckpointNotTrainableException exception)
         {
-            await FailAsync(artifactId, expectedVersion, exception.Message).ConfigureAwait(false);
+            await FailAsync(artifactId, expectedVersion, exception.Message);
         }
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "The base checkpoint download for {ArtifactId} failed.", artifactId);
             await FailAsync(artifactId,
                     expectedVersion,
-                    "The base checkpoint download failed. Check the network connection and try again.")
-                .ConfigureAwait(false);
+                    "The base checkpoint download failed. Check the network connection and try again.");
         }
         finally
         {
@@ -157,8 +153,7 @@ internal sealed class BaseArtifactDownloadCoordinator(
     private async Task FailAsync(Guid artifactId, long expectedVersion, string message)
     {
         await UpdateStoreAsync(async (store, ct) =>
-                await store.MarkFailedAsync(artifactId, expectedVersion, message, ct).ConfigureAwait(false))
-            .ConfigureAwait(false);
+                await store.MarkFailedAsync(artifactId, expectedVersion, message, ct));
     }
 
     private async Task UpdateStoreAsync(Func<ITrainingBaseArtifactStore, CancellationToken, Task> update)
@@ -167,7 +162,7 @@ internal sealed class BaseArtifactDownloadCoordinator(
         {
             using var scope = _scopeFactory.CreateScope();
             var store = scope.ServiceProvider.GetRequiredService<ITrainingBaseArtifactStore>();
-            await update(store, CancellationToken.None).ConfigureAwait(false);
+            await update(store, CancellationToken.None);
         }
         catch (Exception exception)
         {

@@ -56,15 +56,15 @@ public sealed class ContainerBridgeRealDaemonTests
     [Test]
     public async Task RealDaemon_AContainerWithItsToken_ReachesTheNodesModelSurfaceThroughTheBridge()
     {
-        await using var box = await NewBoxAsync().ConfigureAwait(false);
+        await using var box = await NewBoxAsync();
 
-        var exitCode = await box.FetchModelsAsync(box.ValidToken).ConfigureAwait(false);
+        var exitCode = await box.FetchModelsAsync(box.ValidToken);
 
         AssertEx.Equal(expected: 0L, exitCode,
             $"A container on an engine-owned network could not reach the bridge at {box.ContainerFacingEndpoint}. "
             + "This is the path an installed application uses to call this node's local model; nothing else proves it. "
-            + $"The container said: {await box.ReadFetchedBodyAsync().ConfigureAwait(false)}");
-        AssertEx.Contains(await box.ReadFetchedBodyAsync().ConfigureAwait(false), ModelName,
+            + $"The container said: {await box.ReadFetchedBodyAsync()}");
+        AssertEx.Contains(await box.ReadFetchedBodyAsync(), ModelName,
             message: "The model list must round-trip to the container unchanged.");
     }
 
@@ -75,12 +75,12 @@ public sealed class ContainerBridgeRealDaemonTests
     [Test]
     public async Task RealDaemon_AContainerWithoutAToken_IsRefusedByTheBridge()
     {
-        await using var box = await NewBoxAsync().ConfigureAwait(false);
+        await using var box = await NewBoxAsync();
 
-        var exitCode = await box.FetchModelsAsync(token: null).ConfigureAwait(false);
+        var exitCode = await box.FetchModelsAsync(token: null);
 
         AssertEx.NotEqual(notExpected: 0L, exitCode, "A container presenting no token must not be served.");
-        AssertEx.False((await box.ReadFetchedBodyAsync().ConfigureAwait(false)).Contains(ModelName, StringComparison.Ordinal),
+        AssertEx.False((await box.ReadFetchedBodyAsync()).Contains(ModelName, StringComparison.Ordinal),
             "A refused container must not receive the model list.");
     }
 
@@ -92,9 +92,9 @@ public sealed class ContainerBridgeRealDaemonTests
     [Test]
     public async Task RealDaemon_AContainerWithAnotherInstancesToken_IsRefusedByTheBridge()
     {
-        await using var box = await NewBoxAsync().ConfigureAwait(false);
+        await using var box = await NewBoxAsync();
 
-        var exitCode = await box.FetchModelsAsync(ContainerBridgeToken.Mint(Guid.NewGuid())).ConfigureAwait(false);
+        var exitCode = await box.FetchModelsAsync(ContainerBridgeToken.Mint(Guid.NewGuid()));
 
         AssertEx.NotEqual(notExpected: 0L, exitCode, "A token this node never issued must not be served.");
     }
@@ -102,8 +102,8 @@ public sealed class ContainerBridgeRealDaemonTests
     private static async Task<BridgeBox> NewBoxAsync()
     {
         RequireOptIn();
-        var options = await DaemonGate.Value.ConfigureAwait(false);
-        return await BridgeBox.StartAsync(options).ConfigureAwait(false);
+        var options = await DaemonGate.Value;
+        return await BridgeBox.StartAsync(options);
     }
 
     private static async Task<ContainerRuntimeOptions> ResolveUsableDaemonAsync()
@@ -116,7 +116,7 @@ public sealed class ContainerBridgeRealDaemonTests
             DockerDaemonIdentity identity;
             try
             {
-                identity = await client.ProbeAsync().ConfigureAwait(false);
+                identity = await client.ProbeAsync();
             }
             catch (DockerRuntimeException exception)
             {
@@ -134,9 +134,9 @@ public sealed class ContainerBridgeRealDaemonTests
                 throw Rootful(endpoint.Display);
             }
 
-            if (!await client.ImageExistsAsync(ContainerRuntimeTestImages.Busybox).ConfigureAwait(false))
+            if (!await client.ImageExistsAsync(ContainerRuntimeTestImages.Busybox))
             {
-                await client.PullImageAsync(ContainerRuntimeTestImages.Busybox, progress: null).ConfigureAwait(false);
+                await client.PullImageAsync(ContainerRuntimeTestImages.Busybox, progress: null);
             }
         }
 
@@ -316,7 +316,7 @@ public sealed class ContainerBridgeRealDaemonTests
 
             var app = builder.Build();
             ContainerBridgePipeline.Map(app, endpoint);
-            await app.StartAsync().ConfigureAwait(false);
+            await app.StartAsync();
 
             return new BridgeBox(options, CreateRuntime(options), app, watcher, endpoint.ContainerFacingEndpoint, validToken);
         }
@@ -329,18 +329,17 @@ public sealed class ContainerBridgeRealDaemonTests
                 : $" --header 'Authorization: Bearer {token}'";
             var url = $"http://{ContainerFacingEndpoint}{ContainerBridgePipeline.ModelsPath}";
 
-            await CreateNetworkAsync().ConfigureAwait(false);
-            var containerId = await Runtime.RunContainerAsync(Specification($"wget -q -O -{header} {url}")).ConfigureAwait(false);
+            await CreateNetworkAsync();
+            var containerId = await Runtime.RunContainerAsync(Specification($"wget -q -O -{header} {url}"));
             _containers.Add(containerId);
             _lastContainerId = containerId;
 
-            await Runtime.StartContainerAsync(containerId).ConfigureAwait(false);
+            await Runtime.StartContainerAsync(containerId);
 
-            var finished = await PollAsync(async () => (await Runtime.InspectAsync(containerId).ConfigureAwait(false)).State,
+            var finished = await PollAsync(async () => (await Runtime.InspectAsync(containerId)).State,
                     static state => !state.Running,
                     DaemonDeadline,
-                    "the fetching container to exit")
-                .ConfigureAwait(false);
+                    "the fetching container to exit");
 
             return finished.ExitCode;
         }
@@ -352,7 +351,7 @@ public sealed class ContainerBridgeRealDaemonTests
             var logs = await Runtime.ReadLogsAsync(containerId, new ContainerLogRequest
             {
                 TailLines = 200
-            }).ConfigureAwait(false);
+            });
             return logs.Text;
         }
 
@@ -362,7 +361,7 @@ public sealed class ContainerBridgeRealDaemonTests
             {
                 try
                 {
-                    await Runtime.RemoveContainerAsync(containerId).ConfigureAwait(false);
+                    await Runtime.RemoveContainerAsync(containerId);
                 }
                 catch (DockerRuntimeException)
                 {
@@ -374,7 +373,7 @@ public sealed class ContainerBridgeRealDaemonTests
             {
                 try
                 {
-                    await Runtime.RemoveNetworkAsync(_networkId).ConfigureAwait(false);
+                    await Runtime.RemoveNetworkAsync(_networkId);
                 }
                 catch (DockerRuntimeException)
                 {
@@ -382,9 +381,9 @@ public sealed class ContainerBridgeRealDaemonTests
                 }
             }
 
-            await Runtime.DisposeAsync().ConfigureAwait(false);
+            await Runtime.DisposeAsync();
             _watcher.Dispose();
-            await _app.DisposeAsync().ConfigureAwait(false);
+            await _app.DisposeAsync();
         }
 
         // Bind :0, read what the kernel handed out, release it, and bind that number for real — the same window
@@ -404,7 +403,7 @@ public sealed class ContainerBridgeRealDaemonTests
             using var deadline = new CancellationTokenSource(timeout);
             while (true)
             {
-                var last = await read().ConfigureAwait(false);
+                var last = await read();
                 if (reached(last))
                 {
                     return last;
@@ -417,7 +416,7 @@ public sealed class ContainerBridgeRealDaemonTests
                 }
 
                 // real-timer: polls the real Docker daemon, which offers no readiness signal; the deadline token bounds it.
-                await Task.Delay(TimeSpan.FromMilliseconds(200), deadline.Token).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(200), deadline.Token);
             }
         }
 
@@ -428,7 +427,7 @@ public sealed class ContainerBridgeRealDaemonTests
                 Name = NetworkName,
                 Labels = Labels,
                 Internal = false
-            }).ConfigureAwait(false);
+            });
         }
 
         private ContainerSpecification Specification(string shellCommand)

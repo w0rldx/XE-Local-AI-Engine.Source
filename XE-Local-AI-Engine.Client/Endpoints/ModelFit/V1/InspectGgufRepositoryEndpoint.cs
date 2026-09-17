@@ -37,7 +37,7 @@ public sealed class InspectGgufRepositoryEndpoint(
         if (string.IsNullOrWhiteSpace(req.RepoId))
         {
             AddError("A repository id is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -45,9 +45,9 @@ public sealed class InspectGgufRepositoryEndpoint(
 
         try
         {
-            var detail = await _discovery.ListRepoFilesAsync(repoId, ct).ConfigureAwait(false);
-            var annotations = await _recommender.AnnotateAsync(detail.Files, ct).ConfigureAwait(false);
-            await Send.OkAsync(detail.ToResponse(annotations), ct).ConfigureAwait(false);
+            var detail = await _discovery.ListRepoFilesAsync(repoId, ct);
+            var annotations = await _recommender.AnnotateAsync(detail.Files, ct);
+            await Send.OkAsync(detail.ToResponse(annotations), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -64,7 +64,7 @@ public sealed class InspectGgufRepositoryEndpoint(
                     RepoId = repoId,
                     Files = []
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
     }
 }

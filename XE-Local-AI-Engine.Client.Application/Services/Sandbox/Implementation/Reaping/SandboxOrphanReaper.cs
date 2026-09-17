@@ -101,7 +101,7 @@ public sealed class SandboxOrphanReaper : IHostedService
         // The whole body is guarded: a reaper failure must NEVER block application start.
         try
         {
-            await ReapAsync(cancellationToken).ConfigureAwait(false);
+            await ReapAsync(cancellationToken);
         }
         catch (Exception exception)
         {
@@ -152,12 +152,12 @@ public sealed class SandboxOrphanReaper : IHostedService
             // identify is the command that generated it.
             if (marker.ScopeUnitName is { } unitName && scopeKiller is not null)
             {
-                await scopeKiller.KillAsync(unitName, cancellationToken).ConfigureAwait(false);
+                await scopeKiller.KillAsync(unitName, cancellationToken);
                 reapedScopes++;
             }
 
             // Gate 2: only signal the group when the leader is still the process we launched.
-            if (await TryReapProcessGroupAsync(marker, cancellationToken).ConfigureAwait(false))
+            if (await TryReapProcessGroupAsync(marker, cancellationToken))
             {
                 reapedGroups++;
             }
@@ -171,7 +171,7 @@ public sealed class SandboxOrphanReaper : IHostedService
             _markerStore.Delete(markerId);
         }
 
-        reapedScopes += await SweepUnreferencedScopesAsync(scopeKiller, liveScopeUnits, cancellationToken).ConfigureAwait(false);
+        reapedScopes += await SweepUnreferencedScopesAsync(scopeKiller, liveScopeUnits, cancellationToken);
 
         if (reapedGroups > 0 || reapedScopes > 0 || deletedJails > 0)
         {
@@ -248,7 +248,7 @@ public sealed class SandboxOrphanReaper : IHostedService
             _logger.LogInformation("Reaping orphaned sandbox scope {Unit}, active for {ActiveFor} and claimed by no live worker.",
                 unit.UnitName,
                 activeFor);
-            await scopeKiller.KillAsync(unit.UnitName, cancellationToken).ConfigureAwait(false);
+            await scopeKiller.KillAsync(unit.UnitName, cancellationToken);
             swept++;
         }
 
@@ -297,7 +297,7 @@ public sealed class SandboxOrphanReaper : IHostedService
         _logger.LogInformation("Reaping orphaned sandbox process group {Pgid} from sandbox {SandboxId}.",
             processGroupId,
             marker.SandboxId);
-        await _killer.KillProcessGroupAsync(processGroupId, cancellationToken).ConfigureAwait(false);
+        await _killer.KillProcessGroupAsync(processGroupId, cancellationToken);
         return true;
     }
 

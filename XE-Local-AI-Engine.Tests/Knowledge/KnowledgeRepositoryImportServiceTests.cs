@@ -28,17 +28,17 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var git = new HostGitRunner(timeoutSeconds: 30);
-        var initialized = await git.RunAsync(_root, AgentHomeGit.Arguments("init"), CancellationToken.None).ConfigureAwait(false);
+        var initialized = await git.RunAsync(_root, AgentHomeGit.Arguments("init"), CancellationToken.None);
         AssertEx.Equal(expected: 0, initialized.ExitCode, initialized.StandardError);
 
         Directory.CreateDirectory(Path.Combine(_root, "src"));
         Directory.CreateDirectory(Path.Combine(_root, "node_modules"));
-        await File.WriteAllTextAsync(Path.Combine(_root, ".gitignore"), "ignored.md\n").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "src", "Widget.cs"), "public sealed class Widget { }").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "# Widget repository").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "ignored.md"), "ignored content").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, ".env"), "SECRET=value").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "node_modules", "package.js"), "generated").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_root, ".gitignore"), "ignored.md\n");
+        await File.WriteAllTextAsync(Path.Combine(_root, "src", "Widget.cs"), "public sealed class Widget { }");
+        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "# Widget repository");
+        await File.WriteAllTextAsync(Path.Combine(_root, "ignored.md"), "ignored content");
+        await File.WriteAllTextAsync(Path.Combine(_root, ".env"), "SECRET=value");
+        await File.WriteAllTextAsync(Path.Combine(_root, "node_modules", "package.js"), "generated");
 
         var selectedFolderId = Guid.NewGuid();
         var repositories = Substitute.For<IDevelopmentRepositoryBindingService>();
@@ -71,7 +71,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
             extractor,
             Options.Create(new KnowledgeBaseOptions()));
 
-        var result = await service.ImportAsync(selectedFolderId, "project-widget", CancellationToken.None).ConfigureAwait(false);
+        var result = await service.ImportAsync(selectedFolderId, "project-widget", CancellationToken.None);
 
         AssertEx.Equal("PROJECT-WIDGET", result.CollectionId);
         AssertEx.Equal(expected: 2, result.AddedDocuments);
@@ -91,9 +91,9 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var git = new HostGitRunner(timeoutSeconds: 30);
-        var initialized = await git.RunAsync(_root, AgentHomeGit.Arguments("init"), CancellationToken.None).ConfigureAwait(false);
+        var initialized = await git.RunAsync(_root, AgentHomeGit.Arguments("init"), CancellationToken.None);
         AssertEx.Equal(expected: 0, initialized.ExitCode, initialized.StandardError);
-        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "# Existing repository").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "# Existing repository");
 
         var documentId = Guid.NewGuid();
         var selectedFolderId = Guid.NewGuid();
@@ -120,7 +120,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
             extractor,
             Options.Create(new KnowledgeBaseOptions()));
 
-        var result = await service.ImportAsync(selectedFolderId, collectionId: null, CancellationToken.None).ConfigureAwait(false);
+        var result = await service.ImportAsync(selectedFolderId, collectionId: null, CancellationToken.None);
 
         AssertEx.Equal(expected: 1, result.DeduplicatedDocuments);
         AssertEx.Equal(expected: 0, result.EnqueuedDocuments);
@@ -130,8 +130,8 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     [Test]
     public async Task ImportAsync_WhenRepositoryPathChanged_RequeuesExistingDocumentWithoutCountingItAsDuplicate()
     {
-        await InitializeRepositoryAsync().ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "changed repository content").ConfigureAwait(false);
+        await InitializeRepositoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "changed repository content");
 
         var existingId = Guid.NewGuid();
         var selectedFolderId = Guid.NewGuid();
@@ -148,7 +148,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
                .Returns(Array.Empty<KnowledgeDocumentSummary>());
         var service = CreateService(repositories, blobStore, dispatcher, catalog, Substitute.For<IKnowledgeDocumentPurgeService>());
 
-        var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None).ConfigureAwait(false);
+        var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None);
 
         AssertEx.Equal(expected: 1, result.UpdatedDocuments);
         AssertEx.Equal(expected: 0, result.DeduplicatedDocuments);
@@ -158,8 +158,8 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     [Test]
     public async Task ImportAsync_AfterCompleteScan_PurgesRepositoryDocumentsWhosePathsDisappeared()
     {
-        await InitializeRepositoryAsync().ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "current repository content").ConfigureAwait(false);
+        await InitializeRepositoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "current repository content");
 
         var removedId = Guid.NewGuid();
         var selectedFolderId = Guid.NewGuid();
@@ -180,7 +180,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         purge.PurgeAsync(removedId, Arg.Any<CancellationToken>()).Returns(true);
         var service = CreateService(repositories, blobStore, new AcceptingDispatcher(), catalog, purge);
 
-        var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None).ConfigureAwait(false);
+        var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None);
 
         AssertEx.Equal(expected: 1, result.RemovedDocuments);
         await catalog.Received(1).ListAsync("REPO",
@@ -194,8 +194,8 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     [Test]
     public async Task ImportAsync_AfterCompleteScan_DoesNotReconcileAnotherRepositoryInTheSameCollection()
     {
-        await InitializeRepositoryAsync().ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "current repository content").ConfigureAwait(false);
+        await InitializeRepositoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "current repository content");
 
         var selectedFolderId = Guid.NewGuid();
         var otherFolderId = Guid.NewGuid();
@@ -213,7 +213,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var purge = Substitute.For<IKnowledgeDocumentPurgeService>();
         var service = CreateService(RepositoryBinding(selectedFolderId), blobStore, new AcceptingDispatcher(), catalog, purge);
 
-        var result = await service.ImportAsync(selectedFolderId, "shared", CancellationToken.None).ConfigureAwait(false);
+        var result = await service.ImportAsync(selectedFolderId, "shared", CancellationToken.None);
 
         AssertEx.Equal(expected: 0, result.RemovedDocuments);
         await catalog.Received(1).ListAsync("SHARED",
@@ -230,8 +230,8 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     [Test]
     public async Task ImportAsync_WhenFileExceedsPerFileLimit_RejectsBeforeBlobStoreAllocation()
     {
-        await InitializeRepositoryAsync().ConfigureAwait(false);
-        await File.WriteAllBytesAsync(Path.Combine(_root, "large.md"), new byte[33]).ConfigureAwait(false);
+        await InitializeRepositoryAsync();
+        await File.WriteAllBytesAsync(Path.Combine(_root, "large.md"), new byte[33]);
 
         var selectedFolderId = Guid.NewGuid();
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
@@ -249,7 +249,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         // A configured bound is the caller's problem, so it carries the rejected type the endpoint maps to 400 —
         // not the bare InvalidOperationException that used to make every I/O failure in here a 400 too.
         var exception = await AssertEx.ThrowsAsync<KnowledgeRepositoryImportRejectedException>(() =>
-            service.ImportAsync(selectedFolderId, "repo", CancellationToken.None)).ConfigureAwait(false);
+            service.ImportAsync(selectedFolderId, "repo", CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "per-file");
         await blobStore.DidNotReceive().AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>());
@@ -258,10 +258,10 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     [Test]
     public async Task ImportAsync_WhenQueueCapacityStopsScan_DoesNotReconcileDeletedPathsFromPartialSnapshot()
     {
-        await InitializeRepositoryAsync().ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "current repository content").ConfigureAwait(false);
+        await InitializeRepositoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(_root, "README.md"), "current repository content");
         // A second file the scan would reach next: the first QueueFull has to stop the loop before it is even stored.
-        await File.WriteAllTextAsync(Path.Combine(_root, "SECOND.md"), "never reached").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_root, "SECOND.md"), "never reached");
 
         var selectedFolderId = Guid.NewGuid();
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
@@ -275,7 +275,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
         var purge = Substitute.For<IKnowledgeDocumentPurgeService>();
         var service = CreateService(RepositoryBinding(selectedFolderId), blobStore, dispatcher, catalog, purge);
 
-        var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None).ConfigureAwait(false);
+        var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None);
 
         AssertEx.True(result.QueueCapacityReached);
         AssertEx.Equal(expected: 0, result.EnqueuedDocuments);
@@ -292,8 +292,8 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     [RunOn(OS.Linux)]
     public async Task ImportAsync_SymbolicLinkSource_IsSkippedWithoutReadingTarget()
     {
-        await InitializeRepositoryAsync().ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_root, "target.bin"), "outside the admitted extension set").ConfigureAwait(false);
+        await InitializeRepositoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(_root, "target.bin"), "outside the admitted extension set");
         File.CreateSymbolicLink(Path.Combine(_root, "linked.md"), Path.Combine(_root, "target.bin"));
 
         var selectedFolderId = Guid.NewGuid();
@@ -307,7 +307,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
             catalog,
             Substitute.For<IKnowledgeDocumentPurgeService>());
 
-        var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None).ConfigureAwait(false);
+        var result = await service.ImportAsync(selectedFolderId, "repo", CancellationToken.None);
 
         AssertEx.Equal(expected: 0, result.AddedDocuments);
         AssertEx.Equal(expected: 2, result.SkippedFiles);
@@ -318,8 +318,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var result = await new HostGitRunner(timeoutSeconds: 30)
-                           .RunAsync(_root, AgentHomeGit.Arguments("init"), CancellationToken.None)
-                           .ConfigureAwait(false);
+                           .RunAsync(_root, AgentHomeGit.Arguments("init"), CancellationToken.None);
         AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
     }
 

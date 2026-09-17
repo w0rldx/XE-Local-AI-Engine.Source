@@ -29,13 +29,13 @@ public sealed class DeleteModelKindEndpoint(
         if (validationError is not null)
         {
             AddError(validationError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         // The validator's pattern rejects whitespace, so the validated (decoded) name is already the persisted key — pass it
         // through unchanged so the key that was validated and the key that is reset are provably identical.
-        var result = await _classificationService.ResetOverrideAsync(decodedModelName!, ct).ConfigureAwait(false);
-        await Send.OkAsync(result.ToKindResponse(), ct).ConfigureAwait(false);
+        var result = await _classificationService.ResetOverrideAsync(decodedModelName!, ct);
+        await Send.OkAsync(result.ToKindResponse(), ct);
     }
 }

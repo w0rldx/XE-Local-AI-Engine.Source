@@ -75,7 +75,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
         foreach (var server in _connections.Values)
         {
-            await DisposeClientSafelyAsync(server).ConfigureAwait(false);
+            await DisposeClientSafelyAsync(server);
         }
 
         _connections.Clear();
@@ -94,10 +94,10 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _refreshGate.WaitAsync(cancellationToken);
         try
         {
-            await RefreshCoreAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshCoreAsync(cancellationToken);
         }
         finally
         {
@@ -111,7 +111,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         await using (var scope = _scopeFactory.CreateAsyncScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IMcpServerStore>();
-            enabled = await store.ListEnabledAsync(cancellationToken).ConfigureAwait(false);
+            enabled = await store.ListEnabledAsync(cancellationToken);
         }
 
         var enabledById = enabled.ToDictionary(static record => record.Id);
@@ -134,7 +134,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             if (!keep)
             {
                 _ = _connections.Remove(id);
-                await DisposeClientSafelyAsync(existing).ConfigureAwait(false);
+                await DisposeClientSafelyAsync(existing);
             }
         }
 
@@ -151,7 +151,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 continue;
             }
 
-            var (connected, error) = await ConnectServerAsync(record, slug, cancellationToken).ConfigureAwait(false);
+            var (connected, error) = await ConnectServerAsync(record, slug, cancellationToken);
             if (connected is not null)
             {
                 _connections[record.Id] = connected;
@@ -191,8 +191,8 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         McpClient? client = null;
         try
         {
-            client = await _clientFactory.CreateAsync(record, timeoutCts.Token).ConfigureAwait(false);
-            var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token).ConfigureAwait(false);
+            client = await _clientFactory.CreateAsync(record, timeoutCts.Token);
+            var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token);
 
             var tools = BuildRegisteredTools(discovered, slug, ResolveToolCategory(record), _maxToolResultCharacters, _maxInvalidToolCalls, TimeSpan.FromSeconds(_options.ToolCallTimeoutSeconds));
             return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), Error: null);
@@ -204,7 +204,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             // secret, and is the whole point of the Sandboxed tier failing closed — an operator who is told only "the
             // connection failed" cannot tell "this node cannot sandbox" from "your server is broken".
             _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier; it will contribute no tools.", record.Id);
-            await DisposePartialClientAsync(client, record.Version, slug).ConfigureAwait(false);
+            await DisposePartialClientAsync(client, record.Version, slug);
             return new ConnectResult(Server: null, ex.Message);
         }
         catch (Exception ex) when (ex is McpException
@@ -225,14 +225,14 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             // (OperationCanceledException without the per-server timeout) is intentionally NOT caught here so it
             // propagates out of the refresh.
             _logger.LogWarning(ex, "MCP server {ServerId} failed to connect or list tools; it will contribute no tools.", record.Id);
-            await DisposePartialClientAsync(client, record.Version, slug).ConfigureAwait(false);
+            await DisposePartialClientAsync(client, record.Version, slug);
             return new ConnectResult(Server: null, Redact(ex.Message));
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             // The per-server timeout fired (not a caller cancel). Treat it like any other isolated failure.
             _logger.LogWarning("MCP server {ServerId} timed out after {TimeoutSeconds}s; it will contribute no tools.", record.Id, _options.ConnectTimeoutSeconds);
-            await DisposePartialClientAsync(client, record.Version, slug).ConfigureAwait(false);
+            await DisposePartialClientAsync(client, record.Version, slug);
             return new ConnectResult(Server: null, "Timed out connecting to the MCP server.");
         }
     }
@@ -241,7 +241,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     {
         if (client is not null)
         {
-            await DisposeClientSafelyAsync(new ConnectedServer(client, version, slug, [])).ConfigureAwait(false);
+            await DisposeClientSafelyAsync(new ConnectedServer(client, version, slug, []));
         }
     }
 
@@ -413,7 +413,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     {
         try
         {
-            await server.Client.DisposeAsync().ConfigureAwait(false);
+            await server.Client.DisposeAsync();
         }
         catch (Exception ex) when (ex is McpException or IOException or InvalidOperationException or ObjectDisposedException)
         {

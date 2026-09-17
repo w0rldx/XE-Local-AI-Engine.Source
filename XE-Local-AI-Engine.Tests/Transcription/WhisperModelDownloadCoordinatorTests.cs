@@ -255,7 +255,7 @@ public sealed class WhisperModelDownloadCoordinatorTests
                 FirstCallReached.TrySetResult();
                 if (Gate is { } gate)
                 {
-                    await gate.Task.WaitAsync(ct).ConfigureAwait(false);
+                    await gate.Task.WaitAsync(ct);
                 }
             }
 

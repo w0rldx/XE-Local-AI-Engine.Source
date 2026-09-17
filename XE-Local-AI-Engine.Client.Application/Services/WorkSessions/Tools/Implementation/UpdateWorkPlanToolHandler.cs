@@ -109,8 +109,7 @@ internal sealed class UpdateWorkPlanToolHandler(
                                         WorkSessionOperationId.For(session.Id, session.StepCount, DescribeBatch(changes)),
                                         AgentWorkSessionTaskOrigin.Agent,
                                         changes),
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                                    cancellationToken);
 
         return new WorkSessionToolOutcome(Describe(changes), result.Sequence, WorkSessionChangeKind.Task);
     }

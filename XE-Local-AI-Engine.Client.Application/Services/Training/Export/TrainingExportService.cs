@@ -105,7 +105,7 @@ public sealed class TrainingExportService(
                 "The Python training runtime is not installed.");
         }
 
-        var (plan, planRefusal) = await BuildPlanAsync(runId, request.Kind, quantization, cancellationToken).ConfigureAwait(false);
+        var (plan, planRefusal) = await BuildPlanAsync(runId, request.Kind, quantization, cancellationToken);
         if (planRefusal is { } refusal)
         {
             return refusal;
@@ -122,7 +122,7 @@ public sealed class TrainingExportService(
         ILlamaServerRuntimeMutationLease? lease = null;
         try
         {
-            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken).ConfigureAwait(false);
+            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
         }
         catch
         {
@@ -147,45 +147,44 @@ public sealed class TrainingExportService(
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        return await store.ListArtifactsAsync(runId, cancellationToken).ConfigureAwait(false);
+        return await store.ListArtifactsAsync(runId, cancellationToken);
     }
 
     public async Task<TrainingArtifactRecord?> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        return await store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        return await store.GetArtifactAsync(artifactId, cancellationToken);
     }
 
     public async Task<TrainedModelSmokeResult> RunSmokeAsync(Guid artifactId, CancellationToken cancellationToken = default)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        var artifact = await store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+        var artifact = await store.GetArtifactAsync(artifactId, cancellationToken)
                        ?? throw new TrainingExportRejectedException("The artifact was not found.");
         if (artifact.CommittedModelName is not null)
         {
             throw new TrainingExportRejectedException("The artifact is already promoted; re-testing it would not change the registry.");
         }
 
-        var view = await ResolveSmokeViewAsync(store, artifact, cancellationToken).ConfigureAwait(false);
+        var view = await ResolveSmokeViewAsync(store, artifact, cancellationToken);
         var activity = _gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export)
                        ?? throw new TrainingExportRejectedException("Training or an export is already running.");
         ILlamaServerRuntimeMutationLease? lease = null;
         try
         {
-            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken).ConfigureAwait(false)
+            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken)
                     ?? throw new TrainingExportRejectedException("A model is loaded. Eject it and try the smoke test again.");
-            var result = await _smokeGate.RunAsync(view, cancellationToken).ConfigureAwait(false);
-            _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, result.State, result.Reason, cancellationToken)
-                           .ConfigureAwait(false);
+            var result = await _smokeGate.RunAsync(view, cancellationToken);
+            _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, result.State, result.Reason, cancellationToken);
             return result;
         }
         finally
         {
             if (lease is not null)
             {
-                await lease.DisposeAsync().ConfigureAwait(false);
+                await lease.DisposeAsync();
             }
 
             activity.Dispose();
@@ -198,8 +197,8 @@ public sealed class TrainingExportService(
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
         // Read before the delete purely to learn the staged path; the STORE still decides the outcome, and an unknown
         // id, a stale version or a promoted artifact all raise from the call below — before anything on disk moves.
-        var artifact = await store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
-        await store.DeleteArtifactAsync(artifactId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        var artifact = await store.GetArtifactAsync(artifactId, cancellationToken);
+        await store.DeleteArtifactAsync(artifactId, expectedVersion, cancellationToken);
         if (artifact is not null)
         {
             DeleteStagedBytes(artifact);
@@ -213,7 +212,7 @@ public sealed class TrainingExportService(
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        var current = await store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+        var current = await store.GetArtifactAsync(artifactId, cancellationToken)
                       ?? throw new TrainingNotFoundException("The training artifact was not found.");
         if (current.Version != expectedVersion)
         {
@@ -221,15 +220,14 @@ public sealed class TrainingExportService(
         }
 
         var discarded = current.DiscardedAtUtc is null
-            ? await store.DiscardArtifactQualityAsync(artifactId, expectedVersion, reason, cancellationToken).ConfigureAwait(false)
+            ? await store.DiscardArtifactQualityAsync(artifactId, expectedVersion, reason, cancellationToken)
             : current;
         if (!discarded.DiscardCleanupPending || !DeleteStagedBytes(discarded))
         {
             return discarded;
         }
 
-        return await store.CompleteArtifactDiscardCleanupAsync(discarded.Id, discarded.Version, CancellationToken.None)
-                          .ConfigureAwait(false);
+        return await store.CompleteArtifactDiscardCleanupAsync(discarded.Id, discarded.Version, CancellationToken.None);
     }
 
     /// <summary>
@@ -243,14 +241,14 @@ public sealed class TrainingExportService(
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        var run = await store.GetAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await store.GetAsync(runId, cancellationToken);
         if (run is null || run.Status != TrainingRunStatus.Succeeded)
         {
             return new PlanOrRefusal(Value: null, new TrainingExportStart(TrainingExportStartOutcome.RunNotExportable,
                 "Only a run that finished successfully can be exported."));
         }
 
-        var artifacts = await store.ListArtifactsAsync(runId, cancellationToken).ConfigureAwait(false);
+        var artifacts = await store.ListArtifactsAsync(runId, cancellationToken);
         if (artifacts.FirstOrDefault(item => item.Kind == TrainingArtifactKind.HfAdapterDir) is not { } adapter
             || !Directory.Exists(adapter.Path))
         {
@@ -296,38 +294,34 @@ public sealed class TrainingExportService(
         TrainingArtifactRecord? artifact = null;
         try
         {
-            await DeleteStaleArtifactsAsync(store, plan).ConfigureAwait(false);
+            await DeleteStaleArtifactsAsync(store, plan);
 
             // Created up front so EVERY outcome — including a merge that never produces a file — is durably visible
             // on the run rather than surviving only as a hub event the operator may not have been watching for.
-            artifact = await store.CreateArtifactAsync(new TrainingArtifactInput(plan.RunId, plan.Kind, plan.OutputPath), CancellationToken.None)
-                                  .ConfigureAwait(false);
+            artifact = await store.CreateArtifactAsync(new TrainingArtifactInput(plan.RunId, plan.Kind, plan.OutputPath), CancellationToken.None);
             Publish(plan.RunId, "preparing", null);
             TrainingRunWorkspace.CreateOwnerOnlyDirectory(_workspace.WorkDirectory(plan.RunId));
-            var scripts = await _convertScripts.EnsureAsync(cancellationToken).ConfigureAwait(false);
-            await ProduceGgufAsync(plan, interpreter, scripts, cancellationToken).ConfigureAwait(false);
+            var scripts = await _convertScripts.EnsureAsync(cancellationToken);
+            await ProduceGgufAsync(plan, interpreter, scripts, cancellationToken);
 
-            var (sha256, sizeBytes) = await ComputeDigestAsync(plan.OutputPath, cancellationToken).ConfigureAwait(false);
-            artifact = await store.SetArtifactDigestAsync(artifact.Id, artifact.Version, sha256, sizeBytes, cancellationToken)
-                                  .ConfigureAwait(false);
+            var (sha256, sizeBytes) = await ComputeDigestAsync(plan.OutputPath, cancellationToken);
+            artifact = await store.SetArtifactDigestAsync(artifact.Id, artifact.Version, sha256, sizeBytes, cancellationToken);
 
             // Preview BEFORE smoke: an architecture llama.cpp has no chat support for would fail the smoke test with
             // a load error that says nothing useful, and the operator would be left guessing why.
             Publish(plan.RunId, "inspecting", null);
-            if (await RejectUnsupportedShapeAsync(plan, cancellationToken).ConfigureAwait(false) is { } rejection)
+            if (await RejectUnsupportedShapeAsync(plan, cancellationToken) is { } rejection)
             {
                 _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, TrainingArtifactSmokeState.Skipped, rejection,
-                                   CancellationToken.None)
-                               .ConfigureAwait(false);
+                                   CancellationToken.None);
                 Publish(plan.RunId, "skipped", rejection);
                 return;
             }
 
             Publish(plan.RunId, "smoke", null);
-            var view = new TrainingArtifactRecordView(plan.OutputPath, await ResolveBaseModelPathAsync(scope, plan, cancellationToken).ConfigureAwait(false));
-            var result = await _smokeGate.RunAsync(view, cancellationToken).ConfigureAwait(false);
-            _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, result.State, result.Reason, CancellationToken.None)
-                           .ConfigureAwait(false);
+            var view = new TrainingArtifactRecordView(plan.OutputPath, await ResolveBaseModelPathAsync(scope, plan, cancellationToken));
+            var result = await _smokeGate.RunAsync(view, cancellationToken);
+            _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, result.State, result.Reason, CancellationToken.None);
             Publish(plan.RunId, result.State == TrainingArtifactSmokeState.Passed ? "ready" : "smokeFailed", result.Reason);
         }
         catch (Exception exception)
@@ -338,12 +332,11 @@ public sealed class TrainingExportService(
             {
                 var current = artifact is null
                     ? null
-                    : await store.GetArtifactAsync(artifact.Id, CancellationToken.None).ConfigureAwait(false);
+                    : await store.GetArtifactAsync(artifact.Id, CancellationToken.None);
                 if (current is not null)
                 {
                     _ = await store.SetArtifactSmokeStateAsync(current.Id, current.Version, TrainingArtifactSmokeState.Failed, reason,
-                                       CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                       CancellationToken.None);
                 }
             }
             catch (Exception recordFailure)
@@ -361,19 +354,19 @@ public sealed class TrainingExportService(
             DeleteBestEffort(Path.Combine(plan.StagedDirectory, MergedCheckpointDirectoryName), directory: true);
             DeleteIntermediateFloatFile(plan);
             _workspace.DeleteWorkDirectory(plan.RunId);
-            await lease.DisposeAsync().ConfigureAwait(false);
+            await lease.DisposeAsync();
             activity.Dispose();
         }
     }
 
     private async Task DeleteStaleArtifactsAsync(ITrainingRunStore store, ExportPlan plan)
     {
-        var artifacts = await store.ListArtifactsAsync(plan.RunId, CancellationToken.None).ConfigureAwait(false);
+        var artifacts = await store.ListArtifactsAsync(plan.RunId, CancellationToken.None);
         foreach (var stale in artifacts.Where(item => item.Kind == plan.Kind
                                                       && item.CommittedModelName is null
                                                       && item.DiscardedAtUtc is null))
         {
-            await store.DeleteArtifactAsync(stale.Id, stale.Version, CancellationToken.None).ConfigureAwait(false);
+            await store.DeleteArtifactAsync(stale.Id, stale.Version, CancellationToken.None);
             DeleteStagedBytes(stale);
         }
     }
@@ -433,14 +426,13 @@ public sealed class TrainingExportService(
                     ],
                     scripts.GgufPyDirectory,
                     "adapter conversion",
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken);
             return;
         }
 
         Publish(plan.RunId, "merging", null);
         var mergedDirectory = Path.Combine(plan.StagedDirectory, MergedCheckpointDirectoryName);
-        var jobPath = await WriteExportJobAsync(plan, cancellationToken).ConfigureAwait(false);
+        var jobPath = await WriteExportJobAsync(plan, cancellationToken);
         var exportScript = Path.Combine(TrainingScripts.ResolveDirectory(), TrainingScripts.ExportScriptName);
         if (!File.Exists(exportScript))
         {
@@ -449,8 +441,7 @@ public sealed class TrainingExportService(
 
         // No gguf-py on the merge step's PYTHONPATH: it runs unsloth, not a llama.cpp script, and widening the
         // subprocess's import path beyond what it needs is how an unrelated shadowing bug gets introduced later.
-        await RunSubprocessAsync(plan, interpreter, [exportScript, "--config", jobPath], ggufPyDirectory: null, "merge", cancellationToken)
-            .ConfigureAwait(false);
+        await RunSubprocessAsync(plan, interpreter, [exportScript, "--config", jobPath], ggufPyDirectory: null, "merge", cancellationToken);
         if (!Directory.Exists(mergedDirectory))
         {
             throw new TrainingExportRejectedException("The merge finished without writing a merged checkpoint.");
@@ -463,8 +454,7 @@ public sealed class TrainingExportService(
                 [scripts.HfToGgufScriptPath, "--outtype", "f16", "--outfile", floatPath, mergedDirectory],
                 scripts.GgufPyDirectory,
                 "GGUF conversion",
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
 
         if (string.Equals(plan.Quantization, TrainingExportQuantizations.Float16, StringComparison.Ordinal))
         {
@@ -473,7 +463,7 @@ public sealed class TrainingExportService(
         }
 
         Publish(plan.RunId, "quantizing", null);
-        await QuantizeAsync(plan, floatPath, cancellationToken).ConfigureAwait(false);
+        await QuantizeAsync(plan, floatPath, cancellationToken);
     }
 
     /// <summary>
@@ -494,8 +484,8 @@ public sealed class TrainingExportService(
 
     private async Task QuantizeAsync(ExportPlan plan, string floatPath, CancellationToken cancellationToken)
     {
-        var variant = await _variantSelector.SelectVariantAsync(cancellationToken).ConfigureAwait(false);
-        var binary = await _binaryManager.EnsureBinaryAsync(variant, cancellationToken).ConfigureAwait(false);
+        var variant = await _variantSelector.SelectVariantAsync(cancellationToken);
+        var binary = await _binaryManager.EnsureBinaryAsync(variant, cancellationToken);
         if (binary.QuantizerExecutablePath is not { } quantizer)
         {
             // Named precisely because the fix is specific: every upstream prebuilt archive omits llama-quantize, so
@@ -505,8 +495,7 @@ public sealed class TrainingExportService(
         }
 
         await RunSubprocessAsync(plan, quantizer, [floatPath, plan.OutputPath, plan.Quantization], ggufPyDirectory: null, "quantization",
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     /// <summary>
@@ -526,11 +515,11 @@ public sealed class TrainingExportService(
             _workspace.WorkDirectory(plan.RunId),
             Guid.NewGuid().ToString("N"),
             ggufPyDirectory));
-        await using var registration = cancellationToken.Register(handle.KillGroup).ConfigureAwait(false);
+        await using var registration = cancellationToken.Register(handle.KillGroup);
 
         string? protocolError = null;
         var tail = new Queue<string>();
-        await foreach (var line in handle.ReadOutputAsync(cancellationToken).ConfigureAwait(false))
+        await foreach (var line in handle.ReadOutputAsync(cancellationToken))
         {
             if (TrainingRunStdioParser.TryParse(line) is { Kind: TrainingStdioEventKind.Error } parsed)
             {
@@ -544,8 +533,8 @@ public sealed class TrainingExportService(
             }
         }
 
-        var exitCode = await handle.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-        await AppendLogAsync(plan.RunId, step, tail).ConfigureAwait(false);
+        var exitCode = await handle.WaitForExitAsync(CancellationToken.None);
+        await AppendLogAsync(plan.RunId, step, tail);
         if (exitCode == 0 && protocolError is null)
         {
             return;
@@ -564,8 +553,7 @@ public sealed class TrainingExportService(
     {
         var inspection = await _inspector.InspectAsync(new GgufImportSource(plan.OutputPath),
                                              GgufImportInspectionMode.InProcessTrainedCommit,
-                                             cancellationToken)
-                                         .ConfigureAwait(false);
+                                             cancellationToken);
         var expected = plan.Kind == TrainingArtifactKind.AdapterGguf ? GgufImportWorkload.LoraAdapter : GgufImportWorkload.CausalChat;
         if (inspection.Workload == expected)
         {
@@ -591,7 +579,7 @@ public sealed class TrainingExportService(
         }
 
         var models = scope.ServiceProvider.GetRequiredService<IGgufModelStore>();
-        return await models.ResolveModelFilePathAsync(baseModel, cancellationToken).ConfigureAwait(false)
+        return await models.ResolveModelFilePathAsync(baseModel, cancellationToken)
                ?? throw new TrainingExportRejectedException("The installed base model this adapter applies to is no longer available.");
     }
 
@@ -609,7 +597,7 @@ public sealed class TrainingExportService(
             return new TrainingArtifactRecordView(artifact.Path, BaseModelFilePath: null);
         }
 
-        var run = await store.GetAsync(artifact.RunId, cancellationToken).ConfigureAwait(false);
+        var run = await store.GetAsync(artifact.RunId, cancellationToken);
         if (run?.LinkedInstalledModelName is not { Length: > 0 } baseModel)
         {
             throw new TrainingExportRejectedException("This run is not linked to an installed model, so its adapter has no base model to be tested against.");
@@ -617,7 +605,7 @@ public sealed class TrainingExportService(
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var models = scope.ServiceProvider.GetRequiredService<IGgufModelStore>();
-        var basePath = await models.ResolveModelFilePathAsync(baseModel, cancellationToken).ConfigureAwait(false)
+        var basePath = await models.ResolveModelFilePathAsync(baseModel, cancellationToken)
                        ?? throw new TrainingExportRejectedException("The installed base model this adapter applies to is no longer available.");
         return new TrainingArtifactRecordView(artifact.Path, basePath);
     }
@@ -632,7 +620,7 @@ public sealed class TrainingExportService(
             OutputDir = plan.StagedDirectory
         };
         var path = Path.Combine(_workspace.WorkDirectory(plan.RunId), "export-job.json");
-        await File.WriteAllBytesAsync(path, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(path, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), cancellationToken);
         return path;
     }
 
@@ -645,7 +633,7 @@ public sealed class TrainingExportService(
 
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
-        var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+        var hash = await SHA256.HashDataAsync(stream, cancellationToken);
         return new FileDigest(Convert.ToHexStringLower(hash), stream.Length);
     }
 
@@ -659,7 +647,7 @@ public sealed class TrainingExportService(
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        await store.AppendLogTailAsync(runId, builder.ToString(), CancellationToken.None).ConfigureAwait(false);
+        await store.AppendLogTailAsync(runId, builder.ToString(), CancellationToken.None);
     }
 
     private void Publish(Guid runId, string phase, string? message) =>

@@ -58,8 +58,7 @@ public sealed class StartProcessCaptureEndpoint(ProcessAudioCaptureCoordinator c
                           {
                               SessionId = req.SessionId,
                               Capturing = true
-                          }, ct)
-                          .ConfigureAwait(false);
+                          }, ct);
                 return;
 
             case StartProcessCaptureOutcome.NotSupported:
@@ -67,7 +66,7 @@ public sealed class StartProcessCaptureEndpoint(ProcessAudioCaptureCoordinator c
                 {
                     Reason = NotSupportedReason,
                     Message = TranscriptionProcessCaptureNotSupportedException.DefaultMessage
-                })).ConfigureAwait(false);
+                }));
                 return;
 
             case StartProcessCaptureOutcome.SessionNotLive:
@@ -75,7 +74,7 @@ public sealed class StartProcessCaptureEndpoint(ProcessAudioCaptureCoordinator c
                 {
                     Reason = SessionNotLiveReason,
                     Message = "The session is not live. Start live capture for it before attaching a process."
-                })).ConfigureAwait(false);
+                }));
                 return;
 
             case StartProcessCaptureOutcome.AlreadyCapturing:
@@ -83,7 +82,7 @@ public sealed class StartProcessCaptureEndpoint(ProcessAudioCaptureCoordinator c
                 {
                     Reason = AlreadyCapturingReason,
                     Message = "This session is already capturing an application. Stop that capture before starting another."
-                })).ConfigureAwait(false);
+                }));
                 return;
 
             default:

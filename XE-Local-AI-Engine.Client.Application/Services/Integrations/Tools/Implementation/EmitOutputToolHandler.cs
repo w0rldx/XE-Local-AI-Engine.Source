@@ -112,15 +112,14 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var session = await scope.ServiceProvider.GetRequiredService<IIntegrationSessionStore>()
-                                 .FindByConversationAsync(conversationId, cancellationToken)
-                                 .ConfigureAwait(false);
+                                 .FindByConversationAsync(conversationId, cancellationToken);
         if (session is null)
         {
             return NotInIntegrationExecution;
         }
 
         var executionStore = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
-        var execution = await executionStore.FindActiveBySessionAsync(session.Id, cancellationToken).ConfigureAwait(false);
+        var execution = await executionStore.FindActiveBySessionAsync(session.Id, cancellationToken);
         if (execution is null)
         {
             return NoRunningExecution;
@@ -180,7 +179,7 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
             return AggregateCapRefusal(delivered);
         }
 
-        return await DeliverAsync(executionStore, execution, session.Id, contentType, payload, detailJson, plaintextBytes, cancellationToken).ConfigureAwait(false);
+        return await DeliverAsync(executionStore, execution, session.Id, contentType, payload, detailJson, plaintextBytes, cancellationToken);
     }
 
     private async Task<string> DeliverAsync(IIntegrationExecutionStore executionStore,
@@ -229,8 +228,7 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
                                                    detailJson,
                                                    occurredAtUtc),
                                                _options.MaxOutputBytesPerExecution,
-                                               cancellationToken)
-                                           .ConfigureAwait(false);
+                                               cancellationToken);
         }
         catch (Exception exception)
         {

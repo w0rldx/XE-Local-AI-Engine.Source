@@ -18,15 +18,15 @@ public sealed class ExternalAppStateObserverTests
     [Test]
     public async Task Observer_WhenAContainerVanished_TransitionsToStoppedUnexpectedlyAndPublishes()
     {
-        await using var harness = await RunningHarnessAsync(TwoServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(TwoServiceManifest());
         using var observer = harness.CreateObserver();
 
-        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[1]).ConfigureAwait(false);
+        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[1]);
         var publishedBefore = harness.Publisher.Events.Count;
 
-        await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.PollOnceAsync(CancellationToken.None);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly, row.Status);
         AssertEx.Equal(ExternalAppFailureCategory.StoppedUnexpectedly, row.FailureCategory);
         AssertEx.Equal(ExternalAppDesiredState.Running, row.DesiredState, "The user still wants this running; only the observation changed.");
@@ -41,14 +41,14 @@ public sealed class ExternalAppStateObserverTests
     [Test]
     public async Task Observer_WhenAContainerIsExitedButStillListed_TransitionsWithinOneTick()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
         using var observer = harness.CreateObserver();
 
         harness.Runtime.ExitState = static _ => Exited(exitCode: 137);
 
-        await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.PollOnceAsync(CancellationToken.None);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly, row.Status);
 
         // The whole sentence, not just the number: the state word and the exit code come from two different members
@@ -65,17 +65,17 @@ public sealed class ExternalAppStateObserverTests
     [Test]
     public async Task Observer_OneTick_MakesExactlyOneListCallAndMutatesNothing()
     {
-        await using var harness = await RunningHarnessAsync(TwoServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(TwoServiceManifest());
         using var observer = harness.CreateObserver();
 
         var listsBefore = harness.Gated.ListDetailedCalls;
         var mutationsBefore = harness.Gated.MutationCalls;
 
-        await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.PollOnceAsync(CancellationToken.None);
 
         AssertEx.Equal(listsBefore + 1, harness.Gated.ListDetailedCalls);
         AssertEx.Equal(mutationsBefore, harness.Gated.MutationCalls);
-        AssertEx.Equal(ExternalAppInstanceStatus.Running, AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(ExternalAppInstanceStatus.Running, AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId)).Status);
     }
 
     /// <summary>
@@ -85,15 +85,15 @@ public sealed class ExternalAppStateObserverTests
     [Test]
     public async Task Observer_WhenTheInstanceGateIsHeld_LeavesTheRowAlone()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
         using var observer = harness.CreateObserver();
 
-        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[0]).ConfigureAwait(false);
-        using var held = AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(harness.InstalledId)).ConfigureAwait(false));
+        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[0]);
+        using var held = AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(harness.InstalledId)));
 
-        await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.PollOnceAsync(CancellationToken.None);
 
-        AssertEx.Equal(ExternalAppInstanceStatus.Running, AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(ExternalAppInstanceStatus.Running, AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId)).Status);
     }
 
     [Test]
@@ -103,10 +103,10 @@ public sealed class ExternalAppStateObserverTests
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, static options => options with
         {
             Enabled = false
-        }).ConfigureAwait(false);
+        });
         using var observer = harness.CreateObserver();
 
-        await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.PollOnceAsync(CancellationToken.None);
 
         AssertEx.Equal(expected: 0, harness.Gated.ListDetailedCalls, "A disabled feature must not reach the daemon at all.");
     }
@@ -118,15 +118,15 @@ public sealed class ExternalAppStateObserverTests
     [Test]
     public async Task Observer_WhenTheRuntimeIsNotReady_WritesNothing()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
         using var observer = harness.CreateObserver();
-        var before = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var before = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         harness.Resolver.Resolution = FakeContainerRuntimeResolver.UnavailableResolution("The daemon stopped answering.");
 
-        await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.PollOnceAsync(CancellationToken.None);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(before.Id).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(before.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Running, row.Status);
         AssertEx.Equal(before.Version, row.Version);
     }
@@ -138,11 +138,11 @@ public sealed class ExternalAppStateObserverTests
     [Test]
     public async Task Observer_WithNoRunningInstance_NeverTouchesTheDaemon()
     {
-        await using var harness = await StoppedHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await StoppedHarnessAsync(SingleServiceManifest());
         using var observer = harness.CreateObserver();
         var listsBefore = harness.Gated.ListDetailedCalls;
 
-        await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.PollOnceAsync(CancellationToken.None);
 
         AssertEx.Equal(listsBefore, harness.Gated.ListDetailedCalls);
     }
@@ -154,24 +154,22 @@ public sealed class ExternalAppStateObserverTests
     [Test]
     public async Task Observer_AsAHostedService_PollsOnceEveryConfiguredInterval()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
         using var observer = harness.CreateObserver();
 
-        await observer.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.StartAsync(CancellationToken.None);
 
         // Advancing before the timer is armed moves the clock past a window nothing was waiting on.
-        await AssertEx.EventuallyAsync(() => harness.Time.ArmedTimerCount > 0, TestBudgets.Contended, "The observer never armed its interval timer.")
-                      .ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => harness.Time.ArmedTimerCount > 0, TestBudgets.Contended, "The observer never armed its interval timer.");
 
-        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[0]).ConfigureAwait(false);
+        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[0]);
         harness.Time.Advance(TimeSpan.FromSeconds(15));
 
         await AssertEx.EventuallyAsync(() => harness.ReadAsync(harness.InstalledId).GetAwaiter().GetResult() is { Status: ExternalAppInstanceStatus.StoppedUnexpectedly },
                           TestBudgets.Contended,
-                          "One interval elapsed and the observer never noticed the missing container.")
-                      .ConfigureAwait(false);
+                          "One interval elapsed and the observer never noticed the missing container.");
 
-        await observer.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.StopAsync(CancellationToken.None);
     }
 
     /// <summary>
@@ -182,22 +180,22 @@ public sealed class ExternalAppStateObserverTests
     public async Task Observer_WhenOneRowsSnapshotCannotBeRead_StillObservesTheOthers()
     {
         var manifest = SingleServiceManifest();
-        await using var harness = await RunningHarnessAsync(manifest).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(manifest);
         using var observer = harness.CreateObserver();
 
         // A second row the observer WILL be able to judge, and which it must reach after the unreadable one.
-        var second = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running).ConfigureAwait(false);
+        var second = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
 
         // Valid JSON that deserialises to nothing: the shape a snapshot written by a build this engine no longer is.
-        await harness.ReplaceManifestSnapshotAsync(harness.InstalledId, "null").ConfigureAwait(false);
+        await harness.ReplaceManifestSnapshotAsync(harness.InstalledId, "null");
 
-        await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        await observer.PollOnceAsync(CancellationToken.None);
 
         AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly,
-            AssertEx.NotNull(await harness.ReadAsync(second.Id).ConfigureAwait(false)).Status,
+            AssertEx.NotNull(await harness.ReadAsync(second.Id)).Status,
             "The tick must carry on past the row it could not judge.");
         AssertEx.Equal(ExternalAppInstanceStatus.Running,
-            AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false)).Status,
+            AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId)).Status,
             "A row nothing could judge keeps the status it had.");
     }
 
@@ -230,27 +228,26 @@ public sealed class ExternalAppStateObserverTests
 
     private static async Task<ExternalAppServiceHarness> RunningHarnessAsync(ApplicationManifest manifest)
     {
-        var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
                                         DisplayName: null,
                                         manifest.ManifestVersion,
                                         manifest.ManifestSha256,
                                         new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true))
-                                    .ConfigureAwait(false);
+                                        AcceptPermissions: true));
 
-        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         harness.InstalledId = admitted.Id;
         return harness;
     }
 
     private static async Task<ExternalAppServiceHarness> StoppedHarnessAsync(ApplicationManifest manifest)
     {
-        var harness = await RunningHarnessAsync(manifest).ConfigureAwait(false);
-        var running = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var harness = await RunningHarnessAsync(manifest);
+        var running = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
-        _ = await harness.Service.StopAsync(running.Id, running.Version).ConfigureAwait(false);
-        _ = await harness.SettleAsync(running.Id, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        _ = await harness.Service.StopAsync(running.Id, running.Version);
+        _ = await harness.SettleAsync(running.Id, ExternalAppInstanceStatus.Stopped);
         return harness;
     }
 }

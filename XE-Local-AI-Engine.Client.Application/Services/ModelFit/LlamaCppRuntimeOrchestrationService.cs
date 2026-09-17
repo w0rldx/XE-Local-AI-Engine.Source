@@ -162,7 +162,7 @@ public sealed class LlamaCppRuntimeOrchestrationService(
             return new LlamaCppRuntimeRemovalOutcome(Removed: false, RunningProcessCount: 0, BuildActive: true);
         }
 
-        await using var mutationLease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
+        await using var mutationLease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(ct);
         if (IsSourceBuildActive(sourceBuildActivity))
         {
             return new LlamaCppRuntimeRemovalOutcome(Removed: false, RunningProcessCount: 0, BuildActive: true);
@@ -174,7 +174,7 @@ public sealed class LlamaCppRuntimeOrchestrationService(
             return new LlamaCppRuntimeRemovalOutcome(Removed: false, runningProcessCount, BuildActive: false);
         }
 
-        await removeAsync(ct).ConfigureAwait(false);
+        await removeAsync(ct);
         return new LlamaCppRuntimeRemovalOutcome(Removed: true, runningProcessCount, BuildActive: false);
     }
 }

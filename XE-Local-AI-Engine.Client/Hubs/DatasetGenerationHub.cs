@@ -40,23 +40,22 @@ public sealed class DatasetGenerationHub(TrainingDatasetService datasets, IDatas
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var dataset = await _datasets.GetAsync(datasetId, cancellationToken).ConfigureAwait(false)
+        var dataset = await _datasets.GetAsync(datasetId, cancellationToken)
                       ?? throw new HubException("The training dataset was not found.");
-        await Groups.AddToGroupAsync(Context.ConnectionId, DatasetGroup(datasetId), cancellationToken).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, DatasetGroup(datasetId), cancellationToken);
 
         var replay = _events.Replay(datasetId, afterSeq);
         if (replay.ResetRequired)
         {
             await Clients.Caller.SendAsync(DatasetGenerationHubEvents.ReplayReset,
                              new DatasetGenerationReplayReset(datasetId, replay.LatestSequence, dataset.Version),
-                             cancellationToken)
-                         .ConfigureAwait(false);
+                             cancellationToken);
             return;
         }
 
         foreach (var generationEvent in replay.Events)
         {
-            await Clients.Caller.SendAsync(DatasetGenerationHubEvents.Event, generationEvent, cancellationToken).ConfigureAwait(false);
+            await Clients.Caller.SendAsync(DatasetGenerationHubEvents.Event, generationEvent, cancellationToken);
         }
     }
 

@@ -67,11 +67,11 @@ public sealed class KeyedCompositeLockDomain
     {
         try
         {
-            return await waiter.Completion.Task.ConfigureAwait(false);
+            return await waiter.Completion.Task;
         }
         finally
         {
-            await waiter.CancellationRegistration.DisposeAsync().ConfigureAwait(false);
+            await waiter.CancellationRegistration.DisposeAsync();
         }
     }
 

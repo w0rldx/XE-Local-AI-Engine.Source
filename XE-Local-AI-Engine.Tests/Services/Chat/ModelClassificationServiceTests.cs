@@ -18,7 +18,7 @@ public sealed class ModelClassificationServiceTests
         var (service, store, ollama) = CreateService();
         StubDetails(ollama, "llama3.1", "completion", "tools");
 
-        var results = await service.ClassifyAsync([new ModelIdentity("llama3.1", "sha256:a")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("llama3.1", "sha256:a")]);
 
         var result = results["llama3.1"];
         AssertEx.Equal(ModelKind.Chat, result.Kind);
@@ -28,39 +28,39 @@ public sealed class ModelClassificationServiceTests
         AssertEx.Contains(result.Capabilities, "tools");
 
         // The detection result was persisted, so a later lookup reflects the cached kind and digest.
-        var cached = AssertEx.NotNull(await store.GetByNameAsync("llama3.1").ConfigureAwait(false), "Detection should persist a row.");
+        var cached = AssertEx.NotNull(await store.GetByNameAsync("llama3.1"), "Detection should persist a row.");
         AssertEx.Equal(ModelKind.Chat, cached.DetectedKind);
         AssertEx.Equal("sha256:a", cached.Digest);
-        await ollama.Received(1).ShowModelDetailsAsync("llama3.1", Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await ollama.Received(1).ShowModelDetailsAsync("llama3.1", Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task ClassifyAsync_WhenCachedWithMatchingDigest_DoesNotProbeAgain()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("phi3", "sha256:same", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("phi3", "sha256:same", ModelKind.Chat, capabilitiesJson: """["completion"]""");
 
-        var results = await service.ClassifyAsync([new ModelIdentity("phi3", "sha256:same")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("phi3", "sha256:same")]);
 
         AssertEx.Equal(ModelKind.Chat, results["phi3"].Kind);
         // Record present with a matching digest is a cache hit — no /api/show call is issued.
-        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task ClassifyAsync_WhenDigestChanged_ReDetects()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("gemma", "sha256:old", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("gemma", "sha256:old", ModelKind.Chat, capabilitiesJson: """["completion"]""");
         StubDetails(ollama, "gemma", "embedding");
 
-        var results = await service.ClassifyAsync([new ModelIdentity("gemma", "sha256:new")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("gemma", "sha256:new")]);
 
         // The digest moved, so the cache is stale and a fresh probe reclassifies the model.
         AssertEx.Equal(ModelKind.Embedding, results["gemma"].Kind);
-        await ollama.Received(1).ShowModelDetailsAsync("gemma", Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await ollama.Received(1).ShowModelDetailsAsync("gemma", Arg.Any<CancellationToken>());
 
-        var cached = AssertEx.NotNull(await store.GetByNameAsync("gemma").ConfigureAwait(false), "Re-detection should persist.");
+        var cached = AssertEx.NotNull(await store.GetByNameAsync("gemma"), "Re-detection should persist.");
         AssertEx.Equal("sha256:new", cached.Digest);
         AssertEx.Equal(ModelKind.Embedding, cached.DetectedKind);
     }
@@ -69,28 +69,28 @@ public sealed class ModelClassificationServiceTests
     public async Task ClassifyAsync_WhenOverrideSet_OverrideWinsOverDetected()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("mistral", "sha256:m", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
-        _ = await store.SetOverrideAsync("mistral", ModelKind.Embedding).ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("mistral", "sha256:m", ModelKind.Chat, capabilitiesJson: """["completion"]""");
+        _ = await store.SetOverrideAsync("mistral", ModelKind.Embedding);
 
-        var results = await service.ClassifyAsync([new ModelIdentity("mistral", "sha256:m")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("mistral", "sha256:m")]);
 
         var result = results["mistral"];
         AssertEx.Equal(ModelKind.Embedding, result.Kind, "The override must win over the detected kind.");
         AssertEx.Equal(ModelKind.Chat, result.DetectedKind, "The detected kind is still surfaced for a reset affordance.");
         AssertEx.True(result.IsOverridden, "An overridden model reports IsOverridden.");
-        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task ClassifyAsync_WhenDetectionThrows_FallsBackToCachedRecordWithoutThrowing()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("llava", "sha256:old", ModelKind.Chat, capabilitiesJson: """["completion","vision"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("llava", "sha256:old", ModelKind.Chat, capabilitiesJson: """["completion","vision"]""");
         ollama.ShowModelDetailsAsync("llava", Arg.Any<CancellationToken>())
               .Returns<OllamaModelDetails>(_ => throw new HttpRequestException("daemon offline"));
 
         // A new digest forces a probe, but the probe fails; the call must not throw and must keep the cached kind.
-        var results = await service.ClassifyAsync([new ModelIdentity("llava", "sha256:new")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("llava", "sha256:new")]);
 
         AssertEx.Equal(ModelKind.Chat, results["llava"].Kind, "An offline probe falls back to the cached classification.");
     }
@@ -102,7 +102,7 @@ public sealed class ModelClassificationServiceTests
         ollama.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
               .Returns<OllamaModelDetails>(_ => throw new HttpRequestException("daemon offline"));
 
-        var results = await service.ClassifyAsync([new ModelIdentity("unseen", "sha256:x")]).ConfigureAwait(false);
+        var results = await service.ClassifyAsync([new ModelIdentity("unseen", "sha256:x")]);
 
         var result = results["unseen"];
         AssertEx.Equal(ModelKind.Unknown, result.Kind, "An unclassifiable, uncached model resolves to Unknown.");
@@ -114,31 +114,31 @@ public sealed class ModelClassificationServiceTests
     public async Task SetOverrideAsync_PersistsOverrideAndReturnsEffectiveKind()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("qwen", "sha256:q", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("qwen", "sha256:q", ModelKind.Chat, capabilitiesJson: """["completion"]""");
 
-        var result = await service.SetOverrideAsync("qwen", ModelKind.Embedding).ConfigureAwait(false);
+        var result = await service.SetOverrideAsync("qwen", ModelKind.Embedding);
 
         AssertEx.Equal(ModelKind.Embedding, result.Kind);
         AssertEx.True(result.IsOverridden, "Setting an override marks the model overridden.");
-        var stored = AssertEx.NotNull(await store.GetByNameAsync("qwen").ConfigureAwait(false), "Override should persist.");
+        var stored = AssertEx.NotNull(await store.GetByNameAsync("qwen"), "Override should persist.");
         AssertEx.Equal(ModelKind.Embedding, stored.OverrideKind);
         // Setting an override never probes the daemon.
-        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task ResetOverrideAsync_ClearsOverrideAndFallsBackToDetected()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("codellama", "sha256:c", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
-        _ = await store.SetOverrideAsync("codellama", ModelKind.Embedding).ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("codellama", "sha256:c", ModelKind.Chat, capabilitiesJson: """["completion"]""");
+        _ = await store.SetOverrideAsync("codellama", ModelKind.Embedding);
 
-        var result = await service.ResetOverrideAsync("codellama").ConfigureAwait(false);
+        var result = await service.ResetOverrideAsync("codellama");
 
         AssertEx.Equal(ModelKind.Chat, result.Kind, "Clearing the override falls back to the detected kind.");
         AssertEx.False(result.IsOverridden, "After reset the model is no longer overridden.");
         // The detected kind was already cached, so no re-probe is needed.
-        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -146,22 +146,22 @@ public sealed class ModelClassificationServiceTests
     {
         var (service, store, ollama) = CreateService();
         // An override-only row (set before the model was ever probed) has Unknown detected and no cached capabilities.
-        _ = await store.SetOverrideAsync("solar", ModelKind.Chat).ConfigureAwait(false);
+        _ = await store.SetOverrideAsync("solar", ModelKind.Chat);
         StubDetails(ollama, "solar", "embedding");
 
         // Reset clears the override and returns the cleared effective kind (Unknown) WITHOUT probing — probing here would
         // cache a null digest and force a redundant immediate re-probe on the next list.
-        var result = await service.ResetOverrideAsync("solar").ConfigureAwait(false);
+        var result = await service.ResetOverrideAsync("solar");
 
         AssertEx.Equal(ModelKind.Unknown, result.Kind, "Reset returns the cleared detected kind (Unknown) without probing.");
         AssertEx.False(result.IsOverridden, "After reset the override is gone.");
-        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await ollama.DidNotReceive().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
 
         // The next list lazily detects with the REAL live digest — exactly one probe across the whole reset+list flow.
-        var listed = await service.ClassifyAsync([new ModelIdentity("solar", "sha256:live")]).ConfigureAwait(false);
+        var listed = await service.ClassifyAsync([new ModelIdentity("solar", "sha256:live")]);
 
         AssertEx.Equal(ModelKind.Embedding, listed["solar"].Kind, "The next list probes and surfaces the real detected kind.");
-        await ollama.Received(1).ShowModelDetailsAsync("solar", Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await ollama.Received(1).ShowModelDetailsAsync("solar", Arg.Any<CancellationToken>());
     }
 
     private static (IModelClassificationService Service, IModelClassificationStore Store, IOllamaModelService Ollama) CreateService()

@@ -56,7 +56,7 @@ public sealed class DownloadRecommendedEmbeddingEndpoint(
     {
         // Already-usable friendly no-op. Which installed model counts as "this node can already embed" is
         // RecommendedEmbeddingModel's own two-step rule (recommended repo first, else any embedding-named model).
-        var existing = await RecommendedEmbeddingModel.ResolveExistingAsync(_modelStore, ct).ConfigureAwait(false);
+        var existing = await RecommendedEmbeddingModel.ResolveExistingAsync(_modelStore, ct);
         if (existing is not null)
         {
             await Send.OkAsync(new DownloadRecommendedEmbeddingResponse
@@ -67,13 +67,13 @@ public sealed class DownloadRecommendedEmbeddingEndpoint(
                     AlreadyInstalled = true,
                     AlreadyInFlight = false
                 },
-                ct).ConfigureAwait(false);
+                ct);
             return;
         }
 
         // Start (or rejoin) the download through the coordinator's detached path — the SAME path an operator-initiated
         // GGUF download uses, so progress/cancel and the model_provider_map write happen through one code path.
-        var ticket = await _downloadCoordinator.StartAsync(RecommendedEmbeddingModel.ToDownloadRequest(), ct).ConfigureAwait(false);
+        var ticket = await _downloadCoordinator.StartAsync(RecommendedEmbeddingModel.ToDownloadRequest(), ct);
 
         await Send.OkAsync(new DownloadRecommendedEmbeddingResponse
             {
@@ -83,6 +83,6 @@ public sealed class DownloadRecommendedEmbeddingEndpoint(
                 AlreadyInstalled = false,
                 AlreadyInFlight = ticket.AlreadyInFlight
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

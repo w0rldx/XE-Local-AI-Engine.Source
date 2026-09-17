@@ -21,7 +21,7 @@ public sealed class IntegrationInvocationServiceTests
         var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
 
-        var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Accepted, result.Outcome);
         AssertEx.True(result.ExecutionId is not null && result.SessionId is not null, "An accepted request must name the row it created.");
@@ -49,7 +49,7 @@ public sealed class IntegrationInvocationServiceTests
         var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
 
-        var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.True(result.ExecutionId is not null);
         var executionId = result.ExecutionId!.Value;
@@ -74,7 +74,7 @@ public sealed class IntegrationInvocationServiceTests
         var allowed = harness.SeedTrigger("allowed");
         harness.RestrictKeyTo(allowed.Id);
 
-        var result = await harness.AcceptAsync(scenario).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(scenario);
 
         AssertEx.Equal(IntegrationAcceptOutcome.TriggerNotFound, result.Outcome);
         AssertEx.Equal("No such trigger.", result.Message);
@@ -89,7 +89,7 @@ public sealed class IntegrationInvocationServiceTests
         var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");
 
-        AssertEx.Equal(IntegrationAcceptOutcome.Accepted, (await harness.AcceptAsync(trigger.Name).ConfigureAwait(false)).Outcome);
+        AssertEx.Equal(IntegrationAcceptOutcome.Accepted, (await harness.AcceptAsync(trigger.Name)).Outcome);
     }
 
     [Test]
@@ -99,7 +99,7 @@ public sealed class IntegrationInvocationServiceTests
         var trigger = harness.SeedTrigger("sensor-feed");
         harness.RevokeKey();
 
-        var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Unauthorized, result.Outcome);
         AssertEx.Empty(harness.Executions.Rows);
@@ -114,7 +114,7 @@ public sealed class IntegrationInvocationServiceTests
         var trigger = harness.SeedTrigger("sensor-feed");
         harness.Executions.RevokedKeyPrefixes.Add(IntegrationInvokeHarness.KeyPrefix);
 
-        var result = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Unauthorized, result.Outcome);
         AssertEx.Empty(harness.Executions.Rows);
@@ -128,9 +128,9 @@ public sealed class IntegrationInvocationServiceTests
         var harness = new IntegrationInvokeHarness();
         var textOnly = harness.SeedTrigger("text-only", acceptedInputKinds: IntegrationInputKinds.Text);
 
-        var empty = await harness.AcceptAsync(textOnly.Name, inputs: []).ConfigureAwait(false);
-        var wrongKind = await harness.AcceptAsync(textOnly.Name, inputs: [Json("""{"a":1}""")]).ConfigureAwait(false);
-        var blank = await harness.AcceptAsync(textOnly.Name, inputs: [Text("   ")]).ConfigureAwait(false);
+        var empty = await harness.AcceptAsync(textOnly.Name, inputs: []);
+        var wrongKind = await harness.AcceptAsync(textOnly.Name, inputs: [Json("""{"a":1}""")]);
+        var blank = await harness.AcceptAsync(textOnly.Name, inputs: [Text("   ")]);
 
         AssertEx.Equal(IntegrationAcceptOutcome.InputsRejected, empty.Outcome);
         AssertEx.Equal(IntegrationAcceptOutcome.InputsRejected, wrongKind.Outcome);
@@ -144,7 +144,7 @@ public sealed class IntegrationInvocationServiceTests
         var harness = new IntegrationInvokeHarness(maxSeedBytes: 64);
         var trigger = harness.SeedTrigger("sensor-feed");
 
-        var result = await harness.AcceptAsync(trigger.Name, inputs: [Text(new string('x', count: 512))]).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name, inputs: [Text(new string('x', count: 512))]);
 
         AssertEx.Equal(IntegrationAcceptOutcome.InputsRejected, result.Outcome);
         AssertEx.Empty(harness.Executions.Rows);
@@ -158,7 +158,7 @@ public sealed class IntegrationInvocationServiceTests
         var harness = new IntegrationInvokeHarness();
         var perInvocation = harness.SeedTrigger("per-invocation");
 
-        var withSession = await harness.AcceptAsync(perInvocation.Name, sessionId: Guid.NewGuid()).ConfigureAwait(false);
+        var withSession = await harness.AcceptAsync(perInvocation.Name, sessionId: Guid.NewGuid());
 
         AssertEx.Equal(IntegrationAcceptOutcome.SessionNotFound, withSession.Outcome);
         AssertEx.Empty(harness.Executions.Rows);
@@ -172,8 +172,8 @@ public sealed class IntegrationInvocationServiceTests
         var requestId = Guid.NewGuid();
         var body = """{"requestId":"x","inputs":[]}"""u8.ToArray();
 
-        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body).ConfigureAwait(false);
-        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body).ConfigureAwait(false);
+        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body);
+        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Duplicate, replay.Outcome);
         AssertEx.Equal(first.ExecutionId, replay.ExecutionId);
@@ -189,8 +189,8 @@ public sealed class IntegrationInvocationServiceTests
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
 
-        _ = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a":1}"""u8.ToArray()).ConfigureAwait(false);
-        var conflict = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a": 1}"""u8.ToArray()).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a":1}"""u8.ToArray());
+        var conflict = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a": 1}"""u8.ToArray());
 
         AssertEx.Equal(IntegrationAcceptOutcome.RequestConflict, conflict.Outcome);
         AssertEx.Null(conflict.ExecutionId, "A conflict tells the caller nothing about the row it collided with.");
@@ -206,9 +206,9 @@ public sealed class IntegrationInvocationServiceTests
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
         var body = """{"a":1}"""u8.ToArray();
-        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body).ConfigureAwait(false);
+        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body);
 
-        var stranger = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, principalId: Guid.NewGuid()).ConfigureAwait(false);
+        var stranger = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, principalId: Guid.NewGuid());
 
         AssertEx.Equal(IntegrationAcceptOutcome.Accepted, stranger.Outcome);
         AssertEx.NotEqual(first.ExecutionId, stranger.ExecutionId);
@@ -224,10 +224,10 @@ public sealed class IntegrationInvocationServiceTests
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
         var body = """{"a":1}"""u8.ToArray();
-        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body).ConfigureAwait(false);
+        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body);
 
         harness.RotateCredential();
-        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, keyPrefix: IntegrationInvokeHarness.RotatedKeyPrefix).ConfigureAwait(false);
+        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, keyPrefix: IntegrationInvokeHarness.RotatedKeyPrefix);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Duplicate, replay.Outcome);
         AssertEx.Equal(first.ExecutionId, replay.ExecutionId);
@@ -240,12 +240,12 @@ public sealed class IntegrationInvocationServiceTests
         var trigger = harness.SeedTrigger("sensor-feed");
         var requestId = Guid.NewGuid();
         var body = """{"a":1}"""u8.ToArray();
-        var winner = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body).ConfigureAwait(false);
+        var winner = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body);
 
         // The loser's pre-check ran before the winner committed; only the index can decide it.
         harness.Executions.HideNextRequestIdLookup = true;
         harness.Executions.FailNextAcceptWithUniqueViolation = true;
-        var loser = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body).ConfigureAwait(false);
+        var loser = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Duplicate, loser.Outcome);
         AssertEx.Equal(winner.ExecutionId, loser.ExecutionId);
@@ -256,10 +256,10 @@ public sealed class IntegrationInvocationServiceTests
     {
         var harness = new IntegrationInvokeHarness(maxQueued: 2, maxQueuedPerPrincipal: 2);
         var trigger = harness.SeedTrigger("sensor-feed");
-        _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
-        _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name);
+        _ = await harness.AcceptAsync(trigger.Name);
 
-        var refused = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var refused = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.Equal(IntegrationAcceptOutcome.QueueFull, refused.Outcome);
         AssertEx.Equal(expected: 2, harness.Executions.Rows.Count, "A refused admission writes nothing at all.");
@@ -271,10 +271,10 @@ public sealed class IntegrationInvocationServiceTests
         // The fairness floor: one noisy integrator must not fill the node-wide queue and starve every other one.
         var harness = new IntegrationInvokeHarness(maxQueued: 8, maxQueuedPerPrincipal: 1);
         var trigger = harness.SeedTrigger("sensor-feed");
-        _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name);
 
-        var noisy = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
-        var other = await harness.AcceptAsync(trigger.Name, principalId: Guid.NewGuid()).ConfigureAwait(false);
+        var noisy = await harness.AcceptAsync(trigger.Name);
+        var other = await harness.AcceptAsync(trigger.Name, principalId: Guid.NewGuid());
 
         AssertEx.Equal(IntegrationAcceptOutcome.QueueFull, noisy.Outcome);
         AssertEx.Equal(IntegrationAcceptOutcome.Accepted, other.Outcome, "A different principal is admitted at the same moment, with node-wide slots free.");
@@ -287,11 +287,11 @@ public sealed class IntegrationInvocationServiceTests
         // will never get one — so the ring would fill with ghosts.
         var harness = new IntegrationInvokeHarness(maxQueued: 1, maxQueuedPerPrincipal: 1, maxTracked: 3);
         var trigger = harness.SeedTrigger("sensor-feed");
-        _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name);
 
         for (var attempt = 0; attempt < 10; attempt++)
         {
-            AssertEx.Equal(IntegrationAcceptOutcome.QueueFull, (await harness.AcceptAsync(trigger.Name).ConfigureAwait(false)).Outcome);
+            AssertEx.Equal(IntegrationAcceptOutcome.QueueFull, (await harness.AcceptAsync(trigger.Name)).Outcome);
         }
 
         AssertEx.Equal(expected: 1, harness.Buffer.TrackedCount, "Only the admitted execution may still hold an entry.");
@@ -304,9 +304,9 @@ public sealed class IntegrationInvocationServiceTests
         // that nothing drains and that the count blocks a slot with forever.
         var harness = new IntegrationInvokeHarness(queueCapacity: 1);
         var trigger = harness.SeedTrigger("sensor-feed");
-        _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name);
 
-        var refused = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var refused = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.Equal(IntegrationAcceptOutcome.QueueFull, refused.Outcome);
         var stranded = harness.Executions.Rows.Single(static row => row.Status == IntegrationExecutionStatus.Failed);
@@ -327,7 +327,7 @@ public sealed class IntegrationInvocationServiceTests
         harness.Persistence.CreateConversationAsync(Arg.Any<NodeChatCreateConversationRequest>(), Arg.Any<CancellationToken>())
                .ThrowsAsync(new InvalidOperationException("disk on fire"));
 
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.AcceptAsync(trigger.Name)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.AcceptAsync(trigger.Name));
 
         var row = harness.Executions.Rows.Single();
         AssertEx.Equal(IntegrationExecutionStatus.Accepted, row.Status);
@@ -352,7 +352,7 @@ public sealed class IntegrationInvocationServiceTests
                        return (NodeChatConversationDto)null!;
                    });
 
-        var result = await harness.AcceptAsync(trigger.Name, cancellationToken: aborted.Token).ConfigureAwait(false);
+        var result = await harness.AcceptAsync(trigger.Name, cancellationToken: aborted.Token);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Accepted, result.Outcome, "Past the commit the work is no longer the caller's to cancel.");
         var executionId = result.ExecutionId!.Value;
@@ -367,10 +367,10 @@ public sealed class IntegrationInvocationServiceTests
         // a refused admission into a 500 and tell the caller nothing.
         var harness = new IntegrationInvokeHarness(queueCapacity: 1);
         var trigger = harness.SeedTrigger("sensor-feed");
-        _ = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name);
         harness.Executions.ThrowOnNextTerminalize = true;
 
-        var refused = await harness.AcceptAsync(trigger.Name).ConfigureAwait(false);
+        var refused = await harness.AcceptAsync(trigger.Name);
 
         AssertEx.Equal(IntegrationAcceptOutcome.QueueFull, refused.Outcome);
         AssertEx.Equal(expected: 2, harness.Executions.Rows.Count, "The row is committed; the failed terminalize leaves it for the restart sweep.");
@@ -388,11 +388,11 @@ public sealed class IntegrationInvocationServiceTests
         var requestId = Guid.NewGuid();
         var body = """{"requestId":"x","inputs":[]}"""u8.ToArray();
 
-        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id).ConfigureAwait(false);
+        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id);
         AssertEx.Equal(IntegrationAcceptOutcome.Accepted, first.Outcome);
 
         // Nothing terminalized the first execution, so the session is busy — exactly the live state of a lost 202.
-        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id).ConfigureAwait(false);
+        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Duplicate, replay.Outcome);
         AssertEx.Equal(first.ExecutionId, replay.ExecutionId);
@@ -408,11 +408,11 @@ public sealed class IntegrationInvocationServiceTests
         var requestId = Guid.NewGuid();
         var body = """{"requestId":"x","inputs":[]}"""u8.ToArray();
 
-        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id).ConfigureAwait(false);
+        var first = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id);
         harness.Executions.Complete(first.ExecutionId!.Value);
-        _ = await harness.Sessions.CloseAsync(session.Id, atUtc: 5).ConfigureAwait(false);
+        _ = await harness.Sessions.CloseAsync(session.Id, atUtc: 5);
 
-        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id).ConfigureAwait(false);
+        var replay = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: body, sessionId: session.Id);
 
         AssertEx.Equal(IntegrationAcceptOutcome.Duplicate, replay.Outcome);
         AssertEx.Equal(first.ExecutionId, replay.ExecutionId);
@@ -428,8 +428,8 @@ public sealed class IntegrationInvocationServiceTests
         var session = harness.SeedSession(trigger.Id);
         var requestId = Guid.NewGuid();
 
-        _ = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a":1}"""u8.ToArray(), sessionId: session.Id).ConfigureAwait(false);
-        var conflict = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a": 1}"""u8.ToArray(), sessionId: session.Id).ConfigureAwait(false);
+        _ = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a":1}"""u8.ToArray(), sessionId: session.Id);
+        var conflict = await harness.AcceptAsync(trigger.Name, requestId: requestId, rawBody: """{"a": 1}"""u8.ToArray(), sessionId: session.Id);
 
         AssertEx.Equal(IntegrationAcceptOutcome.RequestConflict, conflict.Outcome);
         AssertEx.Null(conflict.ExecutionId);
@@ -446,8 +446,8 @@ public sealed class IntegrationInvocationServiceTests
         var excluded = harness.SeedTrigger("excluded-feed");
         harness.RestrictKeyTo(allowed.Id);
 
-        var unauthorized = await harness.AcceptAsync(excluded.Name).ConfigureAwait(false);
-        var unknown = await harness.AcceptAsync("no-such-feed").ConfigureAwait(false);
+        var unauthorized = await harness.AcceptAsync(excluded.Name);
+        var unknown = await harness.AcceptAsync("no-such-feed");
 
         AssertEx.Equal(IntegrationAcceptOutcome.TriggerNotFound, unauthorized.Outcome);
         AssertEx.Equal(IntegrationAcceptOutcome.TriggerNotFound, unknown.Outcome);

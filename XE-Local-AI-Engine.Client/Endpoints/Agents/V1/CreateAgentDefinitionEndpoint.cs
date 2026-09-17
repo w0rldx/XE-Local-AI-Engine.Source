@@ -26,16 +26,16 @@ public sealed class CreateAgentDefinitionEndpoint(IAgentDefinitionService agentD
         if (GenerationProvenance.Validate(req.GenerationMetadata) is { } metadataError)
         {
             AddError(metadataError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var record = await _agentDefinitionService.CreateAsync(req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
+        var record = await _agentDefinitionService.CreateAsync(req.ToInput(_timeProvider.GetUtcNow()), ct);
         await Send.CreatedAtAsync<GetAgentDefinitionEndpoint>(new
             {
                 agentDefinitionId = record.Id
             },
             record.ToResponse(),
-            cancellation: ct).ConfigureAwait(false);
+            cancellation: ct);
     }
 }

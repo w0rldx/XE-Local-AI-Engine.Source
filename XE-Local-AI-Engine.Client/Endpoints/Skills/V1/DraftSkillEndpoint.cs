@@ -44,7 +44,7 @@ public sealed class DraftSkillEndpoint(IConfigDraftService configDraftService)
         if (validationError is not null)
         {
             AddError(validationError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -55,19 +55,18 @@ public sealed class DraftSkillEndpoint(IConfigDraftService configDraftService)
                                    req.ExistingName,
                                    req.ExistingDescription,
                                    req.ExistingContent),
-                               ct)
-                           .ConfigureAwait(false);
+                               ct);
 
         if (result.Draft is not { } draft)
         {
             if (DraftEndpointSupport.ToTypedFailure(result) is { } typedFailure)
             {
-                await Send.ResultAsync(typedFailure).ConfigureAwait(false);
+                await Send.ResultAsync(typedFailure);
                 return;
             }
 
             AddError(result.FailureMessage ?? "The draft request was rejected.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -90,6 +89,6 @@ public sealed class DraftSkillEndpoint(IConfigDraftService configDraftService)
                     DraftContentHash = draft.ContentHash
                 }
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

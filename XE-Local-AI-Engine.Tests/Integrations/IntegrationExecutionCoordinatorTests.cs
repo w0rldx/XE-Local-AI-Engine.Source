@@ -868,7 +868,7 @@ public sealed class IntegrationExecutionCoordinatorTests
         _ = harness.SeedAccepted();
         harness.Executions.ThrowOnEveryList = true;
 
-        _ = await AssertEx.ThrowsAsync<Exception>(() => harness.Coordinator.StartAsync(CancellationToken.None)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<Exception>(() => harness.Coordinator.StartAsync(CancellationToken.None));
     }
 
     [Test]

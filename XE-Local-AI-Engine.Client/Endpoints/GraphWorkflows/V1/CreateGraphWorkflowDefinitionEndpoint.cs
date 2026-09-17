@@ -39,25 +39,25 @@ public sealed class CreateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
 
         if (GraphWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail));
             return;
         }
 
         try
         {
             var graphJson = GraphWorkflowContractMapper.ToGraphJson(req.Graph);
-            var created = await _definitions.CreateAsync(req.Name, req.Description, graphJson, ct).ConfigureAwait(false);
+            var created = await _definitions.CreateAsync(req.Name, req.Description, graphJson, ct);
             await Send.CreatedAtAsync<GetGraphWorkflowDefinitionEndpoint>(new
                 {
                     definitionId = created.Id
                 },
                 created.ToResponse(),
-                cancellation: ct).ConfigureAwait(false);
+                cancellation: ct);
         }
         catch (GraphWorkflowValidationException exception)
         {
             GraphWorkflowValidationErrors.AddTo(this, exception.Result);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }

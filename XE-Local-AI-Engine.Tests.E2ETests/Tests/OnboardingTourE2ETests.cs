@@ -424,7 +424,7 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
 
     private static async IAsyncEnumerable<string> GatedTutorialReplyAsync(Task replyGate)
     {
-        await replyGate.ConfigureAwait(false);
+        await replyGate;
         yield return "Tutorial reply from FakeOllama";
     }
 }

@@ -58,6 +58,6 @@ internal sealed class RunPythonToolHandler : IClientLocalToolHandler
             return "run_python arguments were empty.";
         }
 
-        return await _gateway.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
+        return await _gateway.ExecuteAsync(request, cancellationToken);
     }
 }

@@ -23,12 +23,12 @@ public sealed class RevokeIntegrationApiKeyEndpoint(IIntegrationApiKeyService ap
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        if (!await _apiKeyService.RevokeAsync(Route<Guid>("keyId"), ct).ConfigureAwait(false))
+        if (!await _apiKeyService.RevokeAsync(Route<Guid>("keyId"), ct))
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

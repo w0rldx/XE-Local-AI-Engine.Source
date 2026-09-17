@@ -64,7 +64,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
 
     public async Task<ExternalProviderProbeResult> ProbeAsync(ExternalProviderProbeQuery query, CancellationToken cancellationToken = default)
     {
-        var stored = await ResolveStoredConnectionAsync(query.ConnectionId, cancellationToken).ConfigureAwait(false);
+        var stored = await ResolveStoredConnectionAsync(query.ConnectionId, cancellationToken);
         if (!string.IsNullOrWhiteSpace(query.ConnectionId) && stored is null)
         {
             return new ExternalProviderProbeResult
@@ -95,7 +95,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         var carriedStoredKey = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.ApiKey : null;
         var apiKey = string.IsNullOrWhiteSpace(query.ApiKey) ? carriedStoredKey : query.ApiKey;
 
-        return await SendProbeAsync(baseAddress, apiKey, cancellationToken).ConfigureAwait(false);
+        return await SendProbeAsync(baseAddress, apiKey, cancellationToken);
     }
 
     private async Task<StoredExternalProviderConnection?> ResolveStoredConnectionAsync(string? connectionId, CancellationToken cancellationToken)
@@ -106,7 +106,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         }
 
         var canonicalId = ExternalModelId.CanonicalizeConnectionId(connectionId);
-        var config = await _store.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var config = await _store.LoadAsync(cancellationToken);
         return config.Connections.FirstOrDefault(connection => string.Equals(connection.Id, canonicalId, StringComparison.Ordinal));
     }
 
@@ -143,8 +143,8 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             }
 
-            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
-            return await ReadProbeResponseAsync(response, timeout.Token).ConfigureAwait(false);
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            return await ReadProbeResponseAsync(response, timeout.Token);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -179,7 +179,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
                 : $"The endpoint answered with HTTP {status} and served no model listing. Add model ids by hand.");
         }
 
-        var payload = await ReadBoundedAsync(response, cancellationToken).ConfigureAwait(false);
+        var payload = await ReadBoundedAsync(response, cancellationToken);
         if (payload is null)
         {
             return Answered("The endpoint's model listing was too large to read. Add model ids by hand.");
@@ -197,18 +197,18 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
     /// <summary>Reads at most <see cref="MaxResponseBytes" />, or <see langword="null" /> when the body exceeds it.</summary>
     private static async Task<byte[]?> ReadBoundedAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var buffer = new MemoryStream();
         var chunk = new byte[8192];
         int read;
-        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
+        while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
         {
             if (buffer.Length + read > MaxResponseBytes)
             {
                 return null;
             }
 
-            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
         }
 
         return buffer.ToArray();

@@ -57,8 +57,7 @@ internal sealed class GraphWorkflowPauseExecutor : IGraphWorkflowNodeExecutor
                                nodeRun.Id,
                                GraphWorkflowVersions.Any,
                                GraphWorkflowNodeRunStatus.Running),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
 
         GraphWorkflowStateMachine.EnsureLegal(GraphWorkflowNodeRunStatus.Running, GraphWorkflowNodeRunStatus.WaitingForApproval, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand(run.Id,
@@ -66,8 +65,7 @@ internal sealed class GraphWorkflowPauseExecutor : IGraphWorkflowNodeExecutor
                                GraphWorkflowVersions.Any,
                                GraphWorkflowNodeRunStatus.WaitingForApproval,
                                PendingDecisionKind: GraphWorkflowDecisionKind.Approve),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return 2;
     }
 

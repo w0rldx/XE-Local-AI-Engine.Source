@@ -35,7 +35,7 @@ internal sealed class ModelCatalogCacheStore : IModelCatalogCacheStore, IDisposa
 
     public async Task<StoredModelCatalogCache?> LoadAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (!File.Exists(_cachePath))
@@ -46,7 +46,7 @@ internal sealed class ModelCatalogCacheStore : IModelCatalogCacheStore, IDisposa
             try
             {
                 await using var fileStream = File.OpenRead(_cachePath);
-                return await JsonSerializer.DeserializeAsync<StoredModelCatalogCache>(fileStream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+                return await JsonSerializer.DeserializeAsync<StoredModelCatalogCache>(fileStream, SerializerOptions, cancellationToken);
             }
             catch (JsonException exception)
             {
@@ -69,11 +69,11 @@ internal sealed class ModelCatalogCacheStore : IModelCatalogCacheStore, IDisposa
     {
         ArgumentNullException.ThrowIfNull(cache);
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             await using var fileStream = CreateOwnerOnly(_cachePath);
-            await JsonSerializer.SerializeAsync(fileStream, cache, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            await JsonSerializer.SerializeAsync(fileStream, cache, SerializerOptions, cancellationToken);
         }
         catch (IOException exception)
         {

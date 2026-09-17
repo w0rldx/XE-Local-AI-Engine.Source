@@ -31,10 +31,10 @@ public sealed class RetrieveImageEndpoint(IGeneratedImageStore imageStore)
 
     public override async Task HandleAsync(RetrieveImageRequest req, CancellationToken ct)
     {
-        var content = await _imageStore.OpenReadAsync(req.ImageId, ct).ConfigureAwait(false);
+        var content = await _imageStore.OpenReadAsync(req.ImageId, ct);
         if (content is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -43,6 +43,6 @@ public sealed class RetrieveImageEndpoint(IGeneratedImageStore imageStore)
 
         // fileName is intentionally null so the response is served inline (no Content-Disposition attachment) and no
         // server-side name leaks.
-        await Send.BytesAsync(content.Bytes.ToArray(), fileName: null, contentType: content.MimeType, cancellation: ct).ConfigureAwait(false);
+        await Send.BytesAsync(content.Bytes.ToArray(), fileName: null, contentType: content.MimeType, cancellation: ct);
     }
 }

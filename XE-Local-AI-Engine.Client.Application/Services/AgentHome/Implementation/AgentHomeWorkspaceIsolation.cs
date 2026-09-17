@@ -28,7 +28,7 @@ internal sealed class AgentHomeWorkspaceIsolation : IAgentHomeWorkspaceIsolation
         {
             using var resetCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             resetCts.CancelAfter(RecoveryTimeout);
-            await _provider.ResetDirectoryAsync(handle, AgentHomeGit.WorkspaceSelectedRoot, resetCts.Token).ConfigureAwait(false);
+            await _provider.ResetDirectoryAsync(handle, AgentHomeGit.WorkspaceSelectedRoot, resetCts.Token);
             _leases.ClearPoison(key);
             return AgentHomeWorkspaceClearResult.Reset;
         }
@@ -38,7 +38,7 @@ internal sealed class AgentHomeWorkspaceIsolation : IAgentHomeWorkspaceIsolation
             try
             {
                 using var killCts = new CancellationTokenSource(RecoveryTimeout);
-                await _provider.KillAsync(handle, killCts.Token).ConfigureAwait(false);
+                await _provider.KillAsync(handle, killCts.Token);
                 _leases.ClearPoison(key);
                 return AgentHomeWorkspaceClearResult.SandboxKilled;
             }
@@ -60,8 +60,8 @@ internal sealed class AgentHomeWorkspaceIsolation : IAgentHomeWorkspaceIsolation
         {
             using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             connectCts.CancelAfter(RecoveryTimeout);
-            var handle = await _provider.ConnectAsync(attachKey, connectCts.Token).ConfigureAwait(false);
-            _ = await ClearAsync(handle, key, CancellationToken.None).ConfigureAwait(false);
+            var handle = await _provider.ConnectAsync(attachKey, connectCts.Token);
+            _ = await ClearAsync(handle, key, CancellationToken.None);
         }
         catch (SandboxHandleInvalidException)
         {

@@ -25,8 +25,8 @@ public sealed class ListDevWorkflowDefinitionsEndpoint(DevWorkflowAuthoringServi
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var definitions = await _authoring.ListDefinitionsAsync(req.IncludeArchived, ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListDevWorkflowDefinitionsResponse([.. definitions.Select(DevWorkflowContractMapper.ToResponse)]), ct).ConfigureAwait(false);
+        var definitions = await _authoring.ListDefinitionsAsync(req.IncludeArchived, ct);
+        await Send.OkAsync(new ListDevWorkflowDefinitionsResponse([.. definitions.Select(DevWorkflowContractMapper.ToResponse)]), ct);
     }
 }
 
@@ -64,20 +64,19 @@ public sealed class CreateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringServ
 
         if (DevWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(DevWorkflowRequestSizeLimit.OversizedDetail));
             return;
         }
 
         var graphJson = DevWorkflowContractMapper.ToGraphJson(req.Graph);
         var nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
-        var created = await _authoring.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), req.Name, graphJson, nodeCount), ct)
-                                  .ConfigureAwait(false);
+        var created = await _authoring.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), req.Name, graphJson, nodeCount), ct);
         await Send.CreatedAtAsync<GetDevWorkflowDefinitionEndpoint>(new
             {
                 definitionId = created.Id
             },
             created.ToResponse(),
-            cancellation: ct).ConfigureAwait(false);
+            cancellation: ct);
     }
 }
 
@@ -96,8 +95,8 @@ public sealed class GetDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var definition = await _authoring.GetDefinitionAsync(req.DefinitionId, ct).ConfigureAwait(false);
-        await Send.OkAsync(definition.ToResponse(), ct).ConfigureAwait(false);
+        var definition = await _authoring.GetDefinitionAsync(req.DefinitionId, ct);
+        await Send.OkAsync(definition.ToResponse(), ct);
     }
 }
 
@@ -125,7 +124,7 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringServ
 
         if (DevWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(DevWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(DevWorkflowRequestSizeLimit.OversizedDetail));
             return;
         }
 
@@ -139,9 +138,8 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringServ
             nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
         }
 
-        var updated = await _authoring.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(req.DefinitionId, req.Version, req.Name, graphJson, nodeCount), ct)
-                                  .ConfigureAwait(false);
-        await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+        var updated = await _authoring.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(req.DefinitionId, req.Version, req.Name, graphJson, nodeCount), ct);
+        await Send.OkAsync(updated.ToResponse(), ct);
     }
 }
 
@@ -165,7 +163,7 @@ public sealed class ArchiveDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringSer
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        _ = await _authoring.ArchiveDefinitionAsync(req.DefinitionId, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        _ = await _authoring.ArchiveDefinitionAsync(req.DefinitionId, ct);
+        await Send.NoContentAsync(ct);
     }
 }

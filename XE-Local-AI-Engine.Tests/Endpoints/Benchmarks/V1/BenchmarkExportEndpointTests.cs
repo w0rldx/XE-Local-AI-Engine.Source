@@ -37,7 +37,7 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, Api + path);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -52,8 +52,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}{suffix}");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -72,8 +72,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -164,8 +164,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var root = document.RootElement;
@@ -186,7 +186,7 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         const string prefix = "attachment; filename=\"benchmark-project-";
         const string suffix = ".json\"";
@@ -233,8 +233,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
         var body = Encoding.UTF8.GetString(bytes);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -295,8 +295,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var row = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)[1];
@@ -337,8 +337,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -386,8 +386,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var row = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)[1];
@@ -419,7 +419,7 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var disposition = response.Content.Headers.ContentDisposition;
@@ -442,7 +442,7 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expected: 0, context.Snapshots.Deserialized,
@@ -478,8 +478,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var runs = document.RootElement.GetProperty("runs");
@@ -515,8 +515,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -590,8 +590,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -644,8 +644,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
@@ -672,8 +672,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -697,8 +697,8 @@ public sealed class BenchmarkExportEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         using var document = JsonDocument.Parse(body);
         AssertEx.Equal(expected: 0, document.RootElement.GetProperty("repeatGroups").GetArrayLength());

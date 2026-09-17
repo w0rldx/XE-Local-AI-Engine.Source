@@ -53,7 +53,7 @@ internal sealed class DockerSandboxOrphanSweeper : IHostedService
     {
         try
         {
-            await SweepAsync(cancellationToken).ConfigureAwait(false);
+            await SweepAsync(cancellationToken);
         }
         catch (Exception exception)
         {
@@ -77,14 +77,14 @@ internal sealed class DockerSandboxOrphanSweeper : IHostedService
             return;
         }
 
-        var preflight = await _preflight.InspectAsync(cancellationToken).ConfigureAwait(false);
+        var preflight = await _preflight.InspectAsync(cancellationToken);
         if (!preflight.Ready)
         {
             _logger.LogInformation("Skipping the Development Mode container sweep: the daemon preflight reports {Status}.", preflight.Status);
             return;
         }
 
-        var removed = await provider.SweepOrphanedContainersAsync(cancellationToken).ConfigureAwait(false);
+        var removed = await provider.SweepOrphanedContainersAsync(cancellationToken);
         if (removed > 0)
         {
             _logger.LogInformation("Removed {Removed} orphaned Development Mode container(s) left by a previous run.", removed);

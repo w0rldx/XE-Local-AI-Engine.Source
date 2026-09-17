@@ -33,11 +33,11 @@ public sealed class ImageJobHub(IImageJobCoordinator coordinator) : Hub
     public async Task Subscribe(Guid jobId)
     {
         var ct = Context.ConnectionAborted;
-        await Groups.AddToGroupAsync(Context.ConnectionId, JobGroup(jobId), ct).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, JobGroup(jobId), ct);
 
         foreach (var bufferedEvent in _coordinator.SnapshotBufferedEvents(jobId))
         {
-            await Clients.Caller.SendAsync(bufferedEvent.MethodName, bufferedEvent.Payload, ct).ConfigureAwait(false);
+            await Clients.Caller.SendAsync(bufferedEvent.MethodName, bufferedEvent.Payload, ct);
         }
     }
 

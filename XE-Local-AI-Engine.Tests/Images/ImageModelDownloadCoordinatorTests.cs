@@ -46,8 +46,7 @@ public sealed class ImageModelDownloadCoordinatorTests
     {
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus(modelName) is { Phase: not ImageModelDownloadPhase.Running },
                           Timeout,
-                          $"The download for {modelName} never reached a terminal phase.")
-                      .ConfigureAwait(false);
+                          $"The download for {modelName} never reached a terminal phase.");
 
         return AssertEx.NotNull(coordinator.GetStatus(modelName));
     }
@@ -61,7 +60,7 @@ public sealed class ImageModelDownloadCoordinatorTests
 
         var ticket = coordinator.Start(Request());
 
-        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName).ConfigureAwait(false);
+        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName);
         AssertEx.Equal(ImageModelDownloadPhase.Failed, status.Phase, "A download that cannot find its file must land in Failed, not hang in Running.");
         AssertEx.Equal(sanitized, status.SanitizedError);
     }
@@ -74,7 +73,7 @@ public sealed class ImageModelDownloadCoordinatorTests
 
         var ticket = coordinator.Start(Request());
 
-        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName).ConfigureAwait(false);
+        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName);
         AssertEx.Equal(ImageModelDownloadPhase.Failed, status.Phase);
         var reason = AssertEx.NotNull(status.SanitizedError);
         AssertEx.False(reason.Contains("internal.host", StringComparison.Ordinal), "A transport failure must not surface the raw URL.");
@@ -87,7 +86,7 @@ public sealed class ImageModelDownloadCoordinatorTests
 
         var ticket = coordinator.Start(Request("sd-1.5-fp16"));
 
-        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName).ConfigureAwait(false);
+        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName);
         AssertEx.Equal(ImageModelDownloadPhase.Completed, status.Phase);
         AssertEx.Null(status.SanitizedError);
         AssertEx.Contains(coordinator.ListStatuses(), entry => entry.ModelName == "sd-1.5-fp16");
@@ -106,7 +105,7 @@ public sealed class ImageModelDownloadCoordinatorTests
         AssertEx.True(second.AlreadyInFlight, "A double submit must rejoin the in-flight download, not start a duplicate.");
 
         store.Release();
-        _ = await WaitForTerminalAsync(coordinator, "sd-1.5-fp16").ConfigureAwait(false);
+        _ = await WaitForTerminalAsync(coordinator, "sd-1.5-fp16");
         AssertEx.Equal(expected: 1, store.CallCount, "Only one transfer may have been started.");
     }
 
@@ -120,11 +119,11 @@ public sealed class ImageModelDownloadCoordinatorTests
         var coordinator = Coordinator(store);
 
         var ticket = coordinator.Start(Request("sd-1.5-fp16"));
-        await AssertEx.EventuallyAsync(() => store.IsRunning, Timeout, "The download never started.").ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => store.IsRunning, Timeout, "The download never started.");
 
         AssertEx.True(coordinator.Cancel(ticket.ModelName), "Cancelling an in-flight download must report that it was signalled.");
 
-        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName).ConfigureAwait(false);
+        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName);
         AssertEx.Equal(ImageModelDownloadPhase.Cancelled, status.Phase, "A cancelled download must land in Cancelled, not Failed or Running.");
         AssertEx.True(store.SawCancellation, "The cancellation token handed to the store must be the one Cancel() signals.");
     }
@@ -145,7 +144,7 @@ public sealed class ImageModelDownloadCoordinatorTests
         var coordinator = Coordinator(new CompletingImageModelStore());
 
         var ticket = coordinator.Start(Request("sd-1.5-fp16"));
-        _ = await WaitForTerminalAsync(coordinator, ticket.ModelName).ConfigureAwait(false);
+        _ = await WaitForTerminalAsync(coordinator, ticket.ModelName);
 
         AssertEx.False(coordinator.Cancel(ticket.ModelName), "A finished download has nothing left to cancel.");
     }
@@ -157,14 +156,14 @@ public sealed class ImageModelDownloadCoordinatorTests
         var coordinator = Coordinator(store);
 
         var ticket = coordinator.Start(Request("sd-1.5-fp16"));
-        await AssertEx.EventuallyAsync(() => store.IsRunning, Timeout, "The download never started.").ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => store.IsRunning, Timeout, "The download never started.");
 
         AssertEx.True(coordinator.Cancel(ticket.ModelName));
         // The second call may land before or after the run removed its entry; either answer is fine, but it must never
         // throw on the already-cancelled (or already-disposed) source.
         _ = coordinator.Cancel(ticket.ModelName);
 
-        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName).ConfigureAwait(false);
+        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName);
         AssertEx.Equal(ImageModelDownloadPhase.Cancelled, status.Phase);
         AssertEx.False(coordinator.Cancel(ticket.ModelName), "Once the run has finished, a further cancel reports nothing to stop.");
     }
@@ -181,15 +180,14 @@ public sealed class ImageModelDownloadCoordinatorTests
 
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus(ticket.ModelName)?.PartIndex == 2,
                           Timeout,
-                          "The part index never reached the status registry.")
-                      .ConfigureAwait(false);
+                          "The part index never reached the status registry.");
 
         var status = AssertEx.NotNull(coordinator.GetStatus(ticket.ModelName));
         AssertEx.Equal(expected: 2, status.PartIndex ?? 0);
         AssertEx.Equal(expected: 3, status.PartCount ?? 0);
 
         store.Release();
-        _ = await WaitForTerminalAsync(coordinator, ticket.ModelName).ConfigureAwait(false);
+        _ = await WaitForTerminalAsync(coordinator, ticket.ModelName);
     }
 
     /// <summary>Base store double: every member throws unless the test needs it; only EnsureModelAsync is exercised.</summary>
@@ -262,7 +260,7 @@ public sealed class ImageModelDownloadCoordinatorTests
             _ = _started.TrySetResult();
             try
             {
-                await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
+                await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, ct);
             }
             catch (OperationCanceledException)
             {
@@ -297,7 +295,7 @@ public sealed class ImageModelDownloadCoordinatorTests
                 PartCount = 3
             });
 
-            await _release.Task.ConfigureAwait(false);
+            await _release.Task;
             return Handle(request);
         }
     }
@@ -317,7 +315,7 @@ public sealed class ImageModelDownloadCoordinatorTests
         public override async Task<ImageModelHandle> EnsureModelAsync(ImageModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
         {
             _ = Interlocked.Increment(ref _callCount);
-            await _release.Task.ConfigureAwait(false);
+            await _release.Task;
             return Handle(request);
         }
     }

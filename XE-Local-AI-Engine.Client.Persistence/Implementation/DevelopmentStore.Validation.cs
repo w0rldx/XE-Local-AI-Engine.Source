@@ -10,14 +10,14 @@ public sealed partial class DevelopmentStore
     public async Task<DevelopmentOperationResult> StartValidationAsync(DevelopmentStartValidationCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken);
 
         return await ExecuteOperationAsync(projectId,
             command.OperationId,
             DevelopmentOperationPhases.Completed,
             async () =>
             {
-                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken).ConfigureAwait(false);
+                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken);
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.InProgress)
                 {
@@ -27,7 +27,7 @@ public sealed partial class DevelopmentStore
                 if (await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.TaskId == task.Id
                                                                             && (entity.Status == DevelopmentAttemptStatus.Pending
                                                                                 || entity.Status == DevelopmentAttemptStatus.Running),
-                        cancellationToken).ConfigureAwait(false))
+                        cancellationToken))
                 {
                     throw new DevelopmentInvalidTransitionException("Deterministic validation cannot overlap an active Development attempt.");
                 }
@@ -36,8 +36,7 @@ public sealed partial class DevelopmentStore
                                                     .Where(entity => entity.TaskId == task.Id)
                                                     .OrderByDescending(entity => entity.StartedAtUtc)
                                                     .ThenByDescending(entity => entity.Id)
-                                                    .FirstOrDefaultAsync(cancellationToken)
-                                                    .ConfigureAwait(false);
+                                                    .FirstOrDefaultAsync(cancellationToken);
                 if (latestAttempt is null
                     || latestAttempt.Role != DevelopmentAttemptRole.Coder
                     || latestAttempt.Status != DevelopmentAttemptStatus.Succeeded)
@@ -60,9 +59,9 @@ public sealed partial class DevelopmentStore
                     task.Version,
                     artifactId: null,
                     detailJson: null,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> InvalidateEvidenceAsync(DevelopmentInvalidateEvidenceCommand command,
@@ -70,14 +69,14 @@ public sealed partial class DevelopmentStore
     {
         ArgumentNullException.ThrowIfNull(command);
         EnsureNotBlank(command.SanitizedReason, "sanitizedReason");
-        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken);
 
         return await ExecuteOperationAsync(projectId,
             command.OperationId,
             DevelopmentOperationPhases.Completed,
             async () =>
             {
-                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken).ConfigureAwait(false);
+                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken);
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status is not (DevelopmentTaskStatus.Validation
                     or DevelopmentTaskStatus.InReview
@@ -97,8 +96,7 @@ public sealed partial class DevelopmentStore
                                                  && entity.IsValid
                                                  && (entity.Kind == DevelopmentArtifactKind.ValidationReport
                                                      || entity.Kind == DevelopmentArtifactKind.ReviewReport))
-                                .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
-                                .ConfigureAwait(false);
+                                .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken);
 
                 return await AddEventAsync(projectId,
                     task.Id,
@@ -114,9 +112,9 @@ public sealed partial class DevelopmentStore
                     {
                         reason = command.SanitizedReason
                     }, JsonOptions)),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> FinalizeValidationAsync(DevelopmentFinalizeValidationCommand command,
@@ -138,7 +136,6 @@ public sealed partial class DevelopmentStore
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.Artifact.TaskId
                                                                                             && entity.ProjectId == command.Artifact.ProjectId,
                                                cancellationToken)
-                                           .ConfigureAwait(false)
                            ?? throw new DevelopmentNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.Validation)
@@ -152,7 +149,6 @@ public sealed partial class DevelopmentStore
                                 ?? throw new DevelopmentInvalidTransitionException("A validation artifact must identify its coder attempt.");
                 var attempt = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id,
                                                   cancellationToken)
-                                              .ConfigureAwait(false)
                               ?? throw new DevelopmentInvalidTransitionException("The validation artifact coder attempt was not found on the task.");
                 if (attempt.Role != DevelopmentAttemptRole.Coder || attempt.Status != DevelopmentAttemptStatus.Succeeded)
                 {
@@ -210,8 +206,7 @@ public sealed partial class DevelopmentStore
                                                      && entity.IsValid
                                                      && (entity.Kind == DevelopmentArtifactKind.ValidationReport
                                                          || entity.Kind == DevelopmentArtifactKind.ReviewReport))
-                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken);
                 }
 
                 return await AddEventAsync(command.Artifact.ProjectId,
@@ -230,9 +225,9 @@ public sealed partial class DevelopmentStore
                         {
                             reason = command.SanitizedReason
                         }, JsonOptions)),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> FinalizeReviewAsync(DevelopmentFinalizeReviewCommand command,
@@ -254,7 +249,6 @@ public sealed partial class DevelopmentStore
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.Artifact.TaskId
                                                                                             && entity.ProjectId == command.Artifact.ProjectId,
                                                cancellationToken)
-                                           .ConfigureAwait(false)
                            ?? throw new DevelopmentNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.InReview)
@@ -266,7 +260,6 @@ public sealed partial class DevelopmentStore
                                 ?? throw new DevelopmentInvalidTransitionException("A review artifact must identify its reviewer attempt.");
                 var attempt = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id,
                                                   cancellationToken)
-                                              .ConfigureAwait(false)
                               ?? throw new DevelopmentInvalidTransitionException("The review artifact reviewer attempt was not found on the task.");
                 EnsureVersion(attempt.Version, command.ExpectedAttemptVersion, "attempt");
                 if (attempt.Role != DevelopmentAttemptRole.Reviewer || attempt.Status != DevelopmentAttemptStatus.Running)
@@ -306,8 +299,8 @@ public sealed partial class DevelopmentStore
                         {
                             reason = command.SanitizedReason
                         }, JsonOptions)),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

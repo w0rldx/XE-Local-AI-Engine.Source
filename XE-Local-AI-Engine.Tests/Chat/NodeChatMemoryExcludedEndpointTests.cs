@@ -31,7 +31,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
                 memoryExcluded = true
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -43,7 +43,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
 
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle API", UserId: null, CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle API", UserId: null, CreatedAtUtc: 10));
         AssertEx.False(conversation.MemoryExcluded, "A fresh unbound conversation starts non-temporary.");
 
         // Toggle on via the PATCH endpoint.
@@ -56,16 +56,16 @@ public sealed class NodeChatMemoryExcludedEndpointTests
         };
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.True(document.RootElement.GetProperty("memoryExcluded").GetBoolean(), "The response reflects the toggled flag.");
 
         // Round-trip through the read path proves the column write persisted.
-        var reloaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var reloaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId));
         AssertEx.True(reloaded.MemoryExcluded, "Toggling memory_excluded should round-trip through the read path.");
     }
 
@@ -84,7 +84,7 @@ public sealed class NodeChatMemoryExcludedEndpointTests
         };
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

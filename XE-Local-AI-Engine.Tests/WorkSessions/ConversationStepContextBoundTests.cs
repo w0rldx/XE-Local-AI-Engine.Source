@@ -42,13 +42,13 @@ public sealed class ConversationStepContextBoundTests
                 compaction)
         };
 
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         // Well past a 200-token budget: ~4,000 characters of completed history at roughly four characters per token.
-        await SeedTranscriptAsync(factory.Services, session.ConversationId, turns: 4, contentChars: 1_000).ConfigureAwait(false);
+        await SeedTranscriptAsync(factory.Services, session.ConversationId, turns: 4, contentChars: 1_000);
         var fake = ResolveStream(factory, ref stream);
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
 
         AssertEx.Equal(expected: 1, fake.Requests.Count);
         var forced = compaction.Calls.Where(call => call.ConversationId == session.ConversationId && call.KeepVerbatim is not null).ToList();
@@ -76,13 +76,13 @@ public sealed class ConversationStepContextBoundTests
                 compaction)
         };
 
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        await SeedTranscriptAsync(factory.Services, session.ConversationId, turns: 4, contentChars: 1_000).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await SeedTranscriptAsync(factory.Services, session.ConversationId, turns: 4, contentChars: 1_000);
         var fake = ResolveStream(factory, ref stream);
         compaction.SendsSoFar = () => fake.Requests.Count;
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
 
         AssertEx.Equal(expected: 1, fake.Requests.Count);
         // Only the folds that precede the send are the boundary's. The checkpoint the pause takes afterwards folds the
@@ -111,13 +111,13 @@ public sealed class ConversationStepContextBoundTests
                 compaction)
         };
 
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
-        await SeedTranscriptAsync(factory.Services, session.ConversationId, turns: 4, contentChars: 1_000).ConfigureAwait(false);
-        await SeedPlanAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await SeedTranscriptAsync(factory.Services, session.ConversationId, turns: 4, contentChars: 1_000);
+        await SeedPlanAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
 
         AssertEx.NotEmpty(compaction.Calls.Where(call => call.KeepVerbatim is not null).ToList());
         var sent = fake.Requests[0].Content;
@@ -145,7 +145,7 @@ public sealed class ConversationStepContextBoundTests
                 publisher)
         };
 
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted],
             DuringTurn: (_, _) =>
@@ -155,7 +155,7 @@ public sealed class ConversationStepContextBoundTests
             }));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
 
         AssertEx.Equal(expected: 16_000, seenInsideTurn, "The step's tightened tool-result budget must reach the tool loop.");
         AssertEx.True(ToolResultBudgetScope.Current is null, "The scope must not leak out of the step.");
@@ -177,7 +177,7 @@ public sealed class ConversationStepContextBoundTests
                 publisher)
         };
 
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
         // The message the step cap actually produces: the supervisor seeds a per-step cap tighter than the node-wide
         // ceiling, so the budget throws its step wording, which the classifier forwards verbatim onto the failed row.
@@ -185,12 +185,12 @@ public sealed class ConversationStepContextBoundTests
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
-        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
 
         AssertEx.Equal(expected: 2, fake.Requests.Count, "The next step must still be sent after the cap ends one.");
         AssertEx.Equal(expected: 2, settled.StepCount, "A capped step still counts as a step.");
 
-        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
         AssertEx.Contains(events, entry => entry.EventType == "StepEnded" && entry.Outcome == nameof(ProviderCallBudget));
         AssertEx.Empty(events.Where(entry => entry.EventType == "StepFailed").ToList(), "A spent budget is not a failure.");
     }
@@ -211,14 +211,14 @@ public sealed class ConversationStepContextBoundTests
                 publisher)
         };
 
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: ProviderCallBudget.CeilingExceededMessage));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
 
-        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
         AssertEx.Contains(events, entry => entry.EventType == "StepEnded" && entry.Outcome == nameof(ProviderCallBudget));
         AssertEx.Empty(events.Where(entry => entry.EventType == "StepFailed").ToList(), "A spent budget is not a failure.");
     }
@@ -238,14 +238,14 @@ public sealed class ConversationStepContextBoundTests
                 publisher)
         };
 
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: "The model went away."));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed);
 
-        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
         AssertEx.Contains(events, entry => entry.EventType == "StepFailed");
     }
 
@@ -480,8 +480,8 @@ public sealed class ConversationStepContextBoundTests
         AssertEx.True(TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, correction) < projected,
             "The fixture's budget must straddle the correction, or the pair below proves nothing.");
 
-        var calibrated = await RunBoundAsync(conversation, budget, store).ConfigureAwait(false);
-        var neutral = await RunBoundAsync(conversation, budget, new TokenEstimatorCalibrationStore()).ConfigureAwait(false);
+        var calibrated = await RunBoundAsync(conversation, budget, store);
+        var neutral = await RunBoundAsync(conversation, budget, new TokenEstimatorCalibrationStore());
 
         AssertEx.NotEmpty(calibrated.Calls, "An over-budget projection under the model's observed correction must fold.");
         AssertEx.Empty(neutral.Calls, "The same transcript and budget must NOT fold when nothing has been observed for the model.");
@@ -496,8 +496,8 @@ public sealed class ConversationStepContextBoundTests
         var store = new TokenEstimatorCalibrationStore();
         var projected = ConversationStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
 
-        var atBudget = await RunBoundAsync(conversation, projected, store).ConfigureAwait(false);
-        var overBudget = await RunBoundAsync(conversation, projected - 1, store).ConfigureAwait(false);
+        var atBudget = await RunBoundAsync(conversation, projected, store);
+        var overBudget = await RunBoundAsync(conversation, projected - 1, store);
 
         AssertEx.Empty(atBudget.Calls, "A projection exactly at the budget is not over it.");
         AssertEx.NotEmpty(overBudget.Calls, "A projection one token over the budget must fold.");
@@ -521,8 +521,8 @@ public sealed class ConversationStepContextBoundTests
         AssertEx.True(TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, correction) < projected,
             "The fixture's budget must straddle the upcoming model's correction.");
 
-        var supplied = await RunBoundAsync(conversation, budget, store, UpcomingModel).ConfigureAwait(false);
-        var transcriptDerived = await RunBoundAsync(conversation, budget, store).ConfigureAwait(false);
+        var supplied = await RunBoundAsync(conversation, budget, store, UpcomingModel);
+        var transcriptDerived = await RunBoundAsync(conversation, budget, store);
 
         AssertEx.NotEmpty(supplied.Calls, "The supplied model's observed correction must be the one the budget is tightened by.");
         AssertEx.Empty(transcriptDerived.Calls, "With no supplied model the uncalibrated transcript model applies, and the same budget is not exceeded.");
@@ -543,8 +543,8 @@ public sealed class ConversationStepContextBoundTests
         AssertEx.True(calibrated > uncalibrated, $"The fixture needs the two models to project differently; {calibrated} vs {uncalibrated}.");
 
         // A budget the uncalibrated projection sits exactly at - so only the transcript model's divisor exceeds it.
-        var fallback = await RunBoundAsync(conversation, uncalibrated, store).ConfigureAwait(false);
-        var supplied = await RunBoundAsync(conversation, uncalibrated, store, UpcomingModel).ConfigureAwait(false);
+        var fallback = await RunBoundAsync(conversation, uncalibrated, store);
+        var supplied = await RunBoundAsync(conversation, uncalibrated, store, UpcomingModel);
 
         AssertEx.NotEmpty(fallback.Calls, "A null supplied model must estimate under the transcript's model, whose divisor puts the projection over the budget.");
         AssertEx.Empty(supplied.Calls, "Supplying the upcoming model must override the transcript's, leaving the projection at the budget rather than over it.");
@@ -565,7 +565,7 @@ public sealed class ConversationStepContextBoundTests
             compaction,
             new HeuristicTokenEstimator(store),
             NullLogger<ConversationStepContextBound>.Instance);
-        await sut.ApplyAsync(conversation.ConversationId, budgetTokens, effectiveModel).ConfigureAwait(false);
+        await sut.ApplyAsync(conversation.ConversationId, budgetTokens, effectiveModel);
         return compaction;
     }
 
@@ -612,16 +612,13 @@ public sealed class ConversationStepContextBoundTests
             _ = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId,
                                      Guid.NewGuid(),
                                      new string('u', contentChars),
-                                     CreatedAtUtc: turn))
-                                 .ConfigureAwait(false);
-            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, CreatedAtUtc: turn))
-                                 .ConfigureAwait(false);
+                                     CreatedAtUtc: turn));
+            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, CreatedAtUtc: turn));
             _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(conversationId, messageId, requestId),
                                      NodeChatMessageStatusValues.Completed,
                                      UpdatedAtUtc: turn,
                                      new string('a', contentChars),
-                                     new string('r', contentChars)))
-                                 .ConfigureAwait(false);
+                                     new string('r', contentChars)));
         }
     }
 
@@ -637,15 +634,13 @@ public sealed class ConversationStepContextBoundTests
                            [
                                new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Read the runtime wiki", Status: AgentWorkSessionTaskStatus.Active),
                                new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Still open after folding", Status: AgentWorkSessionTaskStatus.Planned)
-                           ]))
-                       .ConfigureAwait(false);
+                           ]));
         _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
                            Guid.NewGuid(),
                            WorkSessionVersions.Any,
                            Guid.NewGuid(),
                            AgentWorkSessionFindingKind.Finding,
-                           "llama.cpp is the default runtime"))
-                       .ConfigureAwait(false);
+                           "llama.cpp is the default runtime"));
     }
 
     private static NodeChatConversationDto Conversation(IReadOnlyList<NodeChatPersistedMessageDto> messages, string? summary = null, int? coversToSequence = null) =>

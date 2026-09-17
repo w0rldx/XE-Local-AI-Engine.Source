@@ -407,7 +407,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // Another command is already in flight under this execution id; kill the just-started one and reject.
             SandboxProcessTree.TreeKill(process);
-            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process);
             if (markerId is not null)
             {
                 _markerStore.Delete(markerId);
@@ -437,13 +437,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             if (startInfo.RedirectStandardInput && request.StandardInput is not null)
             {
-                await process.StandardInput.WriteAsync(request.StandardInput.AsMemory(), linkedSource.Token).ConfigureAwait(false);
+                await process.StandardInput.WriteAsync(request.StandardInput.AsMemory(), linkedSource.Token);
                 process.StandardInput.Close();
             }
 
             // WaitForExitAsync also waits for the async output pump to drain, so the captured builders are complete
             // once it returns. The linked token unblocks the wait on a cancel/timeout.
-            await process.WaitForExitAsync(linkedSource.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(linkedSource.Token);
 
             return new SandboxCommandResult
             {
@@ -462,7 +462,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // The child wrote past the jail disk ceiling: tree-kill and return the same non-throwing incomplete shape as
             // a timeout, with an explanatory StandardError so the AgentHome run flow can tell the user WHY it stopped.
             SandboxProcessTree.TreeKill(process);
-            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process);
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
@@ -481,7 +481,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // the workload's own descendants alive, and under the isolated mode it left everything alive, because the
             // tree the runtime walks stops at the outer helper.
             SandboxProcessTree.TreeKill(process);
-            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process);
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
@@ -496,7 +496,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // Per-command timeout fired while the caller token stayed un-cancelled: kill the tree and return a
             // non-throwing timed-out result (Completed=false / ExitCode=-1), matching the container/fake timeout shape.
             SandboxProcessTree.TreeKill(process);
-            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process);
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
@@ -511,7 +511,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // A caller cancel tree-kills and propagates OperationCanceledException so AgentHomeService can disambiguate
             // caller-cancel from timeout.
             SandboxProcessTree.TreeKill(process);
-            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process);
             throw;
         }
         finally
@@ -683,7 +683,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = _registry.GetAliveState(handle);
-        await SandboxFileSurveyOperations.CopyIntoAsync(state.JailRoot, request, _maxCopyFileBytes, cancellationToken).ConfigureAwait(false);
+        await SandboxFileSurveyOperations.CopyIntoAsync(state.JailRoot, request, _maxCopyFileBytes, cancellationToken);
     }
 
     public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -700,7 +700,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     public async Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
     {
-        return await ReadFileAsync(handle, sandboxPath, int.MaxValue, cancellationToken).ConfigureAwait(false);
+        return await ReadFileAsync(handle, sandboxPath, int.MaxValue, cancellationToken);
     }
 
     public async Task<string> ReadFileAsync(SandboxHandle handle,
@@ -714,7 +714,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = _registry.GetAliveState(handle);
-        return await SandboxFileSurveyOperations.ReadFileAsync(state.JailRoot, sandboxPath, maxBytes, cancellationToken).ConfigureAwait(false);
+        return await SandboxFileSurveyOperations.ReadFileAsync(state.JailRoot, sandboxPath, maxBytes, cancellationToken);
     }
 
     /// <inheritdoc cref="ISandboxRuntimeProvider.ListFilesAsync" />
@@ -760,7 +760,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = _registry.GetAliveState(handle);
-        await SandboxFileSurveyOperations.CopyOutAsync(state.JailRoot, request, cancellationToken).ConfigureAwait(false);
+        await SandboxFileSurveyOperations.CopyOutAsync(state.JailRoot, request, cancellationToken);
     }
 
     public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default)
@@ -923,7 +923,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             try
             {
                 // Explicitly not propagating: best-effort teardown must finish even when the run was cancelled.
-                await scopeKiller.KillAsync(unitName, CancellationToken.None).ConfigureAwait(false);
+                await scopeKiller.KillAsync(unitName, CancellationToken.None);
             }
             catch (Exception exception)
             {
@@ -939,8 +939,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         try
         {
             // Explicitly not propagating: best-effort teardown must finish even when the run was cancelled.
-            await new LinuxSandboxProcessGroupKiller(_timeProvider).KillProcessGroupAsync(process.Id, CancellationToken.None)
-                                                                   .ConfigureAwait(false);
+            await new LinuxSandboxProcessGroupKiller(_timeProvider).KillProcessGroupAsync(process.Id, CancellationToken.None);
         }
         catch (InvalidOperationException)
         {
@@ -1061,10 +1060,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                             ceiling,
                             occupancy,
                             baseline);
-                        await diskCapSource.CancelAsync().ConfigureAwait(false);
+                        await diskCapSource.CancelAsync();
                         return;
                     }
-                } while (await timer.WaitForNextTickAsync(watchdogSource.Token).ConfigureAwait(false));
+                } while (await timer.WaitForNextTickAsync(watchdogSource.Token));
             }
             catch (OperationCanceledException)
             {
@@ -1171,7 +1170,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             }
 
             SandboxProcessTree.TreeKill(_process);
-            await _provider.TerminateLaunchAsync(_launch, _process).ConfigureAwait(false);
+            await _provider.TerminateLaunchAsync(_launch, _process);
 
             _ = _state.InFlight.TryRemove(_executionId, out _);
             if (_markerId is not null)

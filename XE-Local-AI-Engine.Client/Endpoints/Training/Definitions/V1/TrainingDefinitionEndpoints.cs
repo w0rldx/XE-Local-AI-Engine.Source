@@ -20,11 +20,11 @@ public sealed class ListTrainingDefinitionsEndpoint(IDatasetDefinitionService de
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var records = await _definitions.ListAsync(ct).ConfigureAwait(false);
+        var records = await _definitions.ListAsync(ct);
         await Send.OkAsync(new ListTrainingDefinitionsResponse
         {
             Items = records.Select(record => record.ToResponse()).ToArray()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -41,14 +41,14 @@ public sealed class GetTrainingDefinitionEndpoint(IDatasetDefinitionService defi
 
     public override async Task HandleAsync(GetTrainingDefinitionRequest req, CancellationToken ct)
     {
-        var record = await _definitions.GetAsync(req.DefinitionId, ct).ConfigureAwait(false);
+        var record = await _definitions.GetAsync(req.DefinitionId, ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }
 
@@ -65,12 +65,11 @@ public sealed class CreateTrainingDefinitionEndpoint(IDatasetDefinitionService d
 
     public override async Task HandleAsync(CreateTrainingDefinitionRequest req, CancellationToken ct)
     {
-        var record = await _definitions.CreateAsync(new DatasetDefinitionDraft(req.Name, req.Body), ct).ConfigureAwait(false);
+        var record = await _definitions.CreateAsync(new DatasetDefinitionDraft(req.Name, req.Body), ct);
         await Send.CreatedAtAsync<GetTrainingDefinitionEndpoint>(new
                   {
                       definitionId = record.Id
-                  }, record.ToResponse(), cancellation: ct)
-                  .ConfigureAwait(false);
+                  }, record.ToResponse(), cancellation: ct);
     }
 }
 
@@ -87,9 +86,8 @@ public sealed class UpdateTrainingDefinitionEndpoint(IDatasetDefinitionService d
 
     public override async Task HandleAsync(UpdateTrainingDefinitionRequest req, CancellationToken ct)
     {
-        var record = await _definitions.UpdateAsync(req.DefinitionId, req.ExpectedVersion, new DatasetDefinitionDraft(req.Name, req.Body), ct)
-                                       .ConfigureAwait(false);
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        var record = await _definitions.UpdateAsync(req.DefinitionId, req.ExpectedVersion, new DatasetDefinitionDraft(req.Name, req.Body), ct);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }
 
@@ -106,8 +104,8 @@ public sealed class DeleteTrainingDefinitionEndpoint(IDatasetDefinitionService d
 
     public override async Task HandleAsync(DeleteTrainingDefinitionRequest req, CancellationToken ct)
     {
-        await _definitions.DeleteAsync(req.DefinitionId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _definitions.DeleteAsync(req.DefinitionId, req.ExpectedVersion, ct);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -126,7 +124,7 @@ public sealed class GenerateTrainingDatasetEndpoint(IDatasetGenerationService ge
 
     public override async Task HandleAsync(GenerateTrainingDatasetRequest req, CancellationToken ct)
     {
-        var dataset = await _generation.StartAsync(req.DefinitionId, req.ExpectedVersion, req.Name, ct).ConfigureAwait(false);
-        await Send.ResultAsync(TypedResults.Accepted((string?)null, dataset.ToResponse())).ConfigureAwait(false);
+        var dataset = await _generation.StartAsync(req.DefinitionId, req.ExpectedVersion, req.Name, ct);
+        await Send.ResultAsync(TypedResults.Accepted((string?)null, dataset.ToResponse()));
     }
 }

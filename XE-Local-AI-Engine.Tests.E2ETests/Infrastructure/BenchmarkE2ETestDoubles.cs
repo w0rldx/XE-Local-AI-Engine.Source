@@ -151,7 +151,7 @@ public static class BenchmarkE2ETestDoubles
         public async Task<IReadOnlyList<BenchmarkEligibleAgent>> ListEligibleAgentsAsync(string modelName,
             CancellationToken cancellationToken = default)
         {
-            var definitions = await agentDefinitions.ListAsync(cancellationToken).ConfigureAwait(false);
+            var definitions = await agentDefinitions.ListAsync(cancellationToken);
             return definitions.Where(static definition => definition.Kind == AgentDefinitionKind.Single)
                               .Select(static definition => new BenchmarkEligibleAgent(definition.Id, definition.Name, definition.Version))
                               .ToArray();

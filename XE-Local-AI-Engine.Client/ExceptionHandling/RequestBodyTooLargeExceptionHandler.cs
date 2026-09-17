@@ -40,8 +40,7 @@ public sealed class RequestBodyTooLargeExceptionHandler(ILogger<RequestBodyTooLa
             httpContext.TraceIdentifier);
 
         // The same writer the endpoints' own Content-Length exit uses; only the detail differs between the two.
-        await RequestBodyTooLargeProblem.WriteAsync(httpContext, "The request body is larger than this route accepts.", cancellationToken)
-                                        .ConfigureAwait(false);
+        await RequestBodyTooLargeProblem.WriteAsync(httpContext, "The request body is larger than this route accepts.", cancellationToken);
 
         return true;
     }

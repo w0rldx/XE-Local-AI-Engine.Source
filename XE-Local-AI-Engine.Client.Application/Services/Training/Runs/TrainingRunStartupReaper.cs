@@ -50,7 +50,7 @@ public sealed class TrainingRunStartupReaper(
     {
         try
         {
-            await ReapAsync(cancellationToken).ConfigureAwait(false);
+            await ReapAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -86,12 +86,12 @@ public sealed class TrainingRunStartupReaper(
 
         // Every receipt, unpaged: a live trainer whose run sits behind a page of newer runs is exactly the one that
         // must not be missed. Recovery no longer touches the column, so the read order against it does not matter.
-        foreach (var entry in await store.ListLaunchReceiptsAsync(cancellationToken).ConfigureAwait(false))
+        foreach (var entry in await store.ListLaunchReceiptsAsync(cancellationToken))
         {
-            await ReapOneAsync(store, entry, cancellationToken).ConfigureAwait(false);
+            await ReapOneAsync(store, entry, cancellationToken);
         }
 
-        _ = await store.RecoverOnStartupAsync(cancellationToken).ConfigureAwait(false);
+        _ = await store.RecoverOnStartupAsync(cancellationToken);
     }
 
     /// <summary>
@@ -116,10 +116,10 @@ public sealed class TrainingRunStartupReaper(
             else
             {
                 _logger.LogWarning("Reaping a trainer process group {Pgid} left behind by a previous host process.", receipt.Pgid);
-                await _inspector.KillProcessGroupAsync(receipt.Pgid, cancellationToken).ConfigureAwait(false);
+                await _inspector.KillProcessGroupAsync(receipt.Pgid, cancellationToken);
             }
 
-            await store.SetLaunchReceiptAsync(entry.RunId, launchReceiptJson: null, cancellationToken).ConfigureAwait(false);
+            await store.SetLaunchReceiptAsync(entry.RunId, launchReceiptJson: null, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

@@ -52,9 +52,9 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     /// <inheritdoc />
     public async Task<TranscriptionRuntimeView> GetRuntimeAsync(CancellationToken ct)
     {
-        var settings = await LoadSettingsAsync(ct).ConfigureAwait(false);
-        var managedRuntime = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
-        var recommended = await GetRecommendedModelAsync(ct).ConfigureAwait(false);
+        var settings = await LoadSettingsAsync(ct);
+        var managedRuntime = await _installedRuntimeStore.ReadAsync(ct);
+        var recommended = await GetRecommendedModelAsync(ct);
 
         return new TranscriptionRuntimeView(_options.Enabled,
             _supervisor.GetStatus(),
@@ -83,8 +83,8 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     /// <inheritdoc />
     public async Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct)
     {
-        var settings = await LoadSettingsAsync(ct).ConfigureAwait(false);
-        var recommended = await GetRecommendedModelAsync(ct).ConfigureAwait(false);
+        var settings = await LoadSettingsAsync(ct);
+        var recommended = await GetRecommendedModelAsync(ct);
         return BuildCatalogView(NormalizeSelection(settings.TranscriptionSelectedModelId), recommended.Id);
     }
 
@@ -93,8 +93,8 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     {
         // The EFFECTIVE profile, not the raw hardware one: a node whose GPU runtime has determinately fallen back to
         // CPU must be sized against RAM, or it is recommended a model it cannot actually run at speed.
-        var profile = await _runtimeDeviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct).ConfigureAwait(false);
-        var backend = await _backendSelector.SelectBackendAsync(ct).ConfigureAwait(false);
+        var profile = await _runtimeDeviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
+        var backend = await _backendSelector.SelectBackendAsync(ct);
         return WhisperModelRecommendation.Recommend(profile, backend);
     }
 
@@ -113,22 +113,22 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
         await _settingsStore.UpdateAsync(current => current with
         {
             TranscriptionSelectedModelId = validatedId
-        }, ct).ConfigureAwait(false);
+        }, ct);
 
-        var recommended = await GetRecommendedModelAsync(ct).ConfigureAwait(false);
+        var recommended = await GetRecommendedModelAsync(ct);
         return BuildCatalogView(validatedId, recommended.Id);
     }
 
     /// <inheritdoc />
     public async Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct)
     {
-        var settings = await LoadSettingsAsync(ct).ConfigureAwait(false);
+        var settings = await LoadSettingsAsync(ct);
         if (NormalizeSelection(settings.TranscriptionSelectedModelId) is { } selected)
         {
             return selected;
         }
 
-        return (await GetRecommendedModelAsync(ct).ConfigureAwait(false)).Id;
+        return (await GetRecommendedModelAsync(ct)).Id;
     }
 
     private TranscriptionModelCatalogView BuildCatalogView(string? selectedModelId, string recommendedModelId)
@@ -143,7 +143,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     }
 
     private async Task<StoredNodeSettings> LoadSettingsAsync(CancellationToken ct) =>
-        await _settingsStore.LoadAsync(ct).ConfigureAwait(false) ?? new StoredNodeSettings();
+        await _settingsStore.LoadAsync(ct) ?? new StoredNodeSettings();
 
     /// <summary>
     ///     A stored id that is no longer in the catalogue reads as no selection at all, so a node whose catalogue row

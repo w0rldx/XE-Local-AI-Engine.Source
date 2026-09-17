@@ -23,15 +23,14 @@ public sealed class RequestBodyTooLargeExceptionHandlerTests
         // The exception Kestrel throws, synthesized: message and status are the two members it sets.
         var handled = await handler.TryHandleAsync(context,
                                        new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge),
-                                       CancellationToken.None)
-                                   .ConfigureAwait(false);
+                                       CancellationToken.None);
 
         AssertEx.True(handled);
         AssertEx.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
         AssertEx.Equal(RequestBodyTooLargeProblem.ContentType, context.Response.ContentType, "the host path writes the same header the endpoint path does.");
 
         context.Response.Body.Position = 0;
-        using var document = await JsonDocument.ParseAsync(context.Response.Body).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(context.Response.Body);
         AssertEx.Equal(expected: 413, document.RootElement.GetProperty("status").GetInt32());
         AssertEx.Equal("Request body too large", document.RootElement.GetProperty("title").GetString());
 
@@ -54,7 +53,7 @@ public sealed class RequestBodyTooLargeExceptionHandlerTests
         var context = Context();
         var handler = new RequestBodyTooLargeExceptionHandler(NullLogger<RequestBodyTooLargeExceptionHandler>.Instance);
 
-        var handled = await handler.TryHandleAsync(context, new BadHttpRequestException("refused", statusCode), CancellationToken.None).ConfigureAwait(false);
+        var handled = await handler.TryHandleAsync(context, new BadHttpRequestException("refused", statusCode), CancellationToken.None);
 
         AssertEx.False(handled, $"{because} is not an oversized body.");
         AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode);

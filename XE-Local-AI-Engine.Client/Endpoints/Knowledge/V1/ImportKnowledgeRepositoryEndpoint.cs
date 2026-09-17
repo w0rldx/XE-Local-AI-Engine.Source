@@ -27,7 +27,7 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
     {
         if (!_developmentModeEnabled)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -35,7 +35,7 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var importer = scope.ServiceProvider.GetRequiredService<IKnowledgeRepositoryImportService>();
-            var result = await importer.ImportAsync(req.SelectedFolderId, req.CollectionId, ct).ConfigureAwait(false);
+            var result = await importer.ImportAsync(req.SelectedFolderId, req.CollectionId, ct);
             if (result.QueueCapacityReached)
             {
                 HttpContext.Response.Headers.RetryAfter = "5";
@@ -53,7 +53,7 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
                     SkippedFiles = result.SkippedFiles,
                     QueueCapacityReached = result.QueueCapacityReached
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
         // Only the rejections the CALLER can act on are echoed as 400. A bare InvalidOperationException used to be in
         // this set, which quietly turned every environment failure inside the importer — an unreadable Git index, a
@@ -64,7 +64,7 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
         catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }

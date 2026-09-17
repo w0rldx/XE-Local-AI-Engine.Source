@@ -52,7 +52,7 @@ internal sealed class DevelopmentProfileBackfillService(
             return project;
         }
 
-        var profileJson = await DetectProfileJsonAsync(project, cancellationToken).ConfigureAwait(false);
+        var profileJson = await DetectProfileJsonAsync(project, cancellationToken);
         if (profileJson is null)
         {
             return project;
@@ -60,7 +60,7 @@ internal sealed class DevelopmentProfileBackfillService(
 
         try
         {
-            return await _store.BackfillCommandProfileAsync(project.Id, profileJson, cancellationToken).ConfigureAwait(false);
+            return await _store.BackfillCommandProfileAsync(project.Id, profileJson, cancellationToken);
         }
         catch (DevelopmentConcurrencyException exception)
         {
@@ -73,11 +73,11 @@ internal sealed class DevelopmentProfileBackfillService(
 
     public async Task<int> BackfillAllAsync(CancellationToken cancellationToken = default)
     {
-        var projects = await _store.ListProjectsAsync(cancellationToken).ConfigureAwait(false);
+        var projects = await _store.ListProjectsAsync(cancellationToken);
         var filled = 0;
         foreach (var project in projects.Where(static candidate => string.IsNullOrWhiteSpace(candidate.CommandProfileJson)))
         {
-            var updated = await EnsureAsync(project, cancellationToken).ConfigureAwait(false);
+            var updated = await EnsureAsync(project, cancellationToken);
             if (!string.IsNullOrWhiteSpace(updated.CommandProfileJson))
             {
                 filled++;
@@ -96,7 +96,7 @@ internal sealed class DevelopmentProfileBackfillService(
     {
         try
         {
-            var repository = await _repositoryBindings.ResolveProjectAsync(project.Id, cancellationToken).ConfigureAwait(false);
+            var repository = await _repositoryBindings.ResolveProjectAsync(project.Id, cancellationToken);
             var detected = _profileDetector.Detect(repository.RepositoryRoot);
             var profile = DevelopmentCommandProfileCatalog.Materialize(detected.ProfileId, detected.BuildTarget);
             return Encoding.UTF8.GetString(profile.ToCanonicalUtf8());

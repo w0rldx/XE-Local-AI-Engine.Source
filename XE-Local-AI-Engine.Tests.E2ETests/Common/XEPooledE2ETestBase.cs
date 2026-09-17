@@ -35,7 +35,7 @@ public abstract class XEPooledE2ETestBase : XEE2ETestBase
 
     protected override async Task SignInAsync()
     {
-        var index = await AvailableUserIndexes.Reader.ReadAsync().ConfigureAwait(false);
+        var index = await AvailableUserIndexes.Reader.ReadAsync();
         _leasedUserIndex = index;
         CurrentUserEmail = XENodeE2EWebApplicationFactory.PooledUserEmail(index);
 
@@ -52,7 +52,7 @@ public abstract class XEPooledE2ETestBase : XEE2ETestBase
                     email = CurrentUserEmail,
                     password = XENodeE2EWebApplicationFactory.PooledUserPassword
                 }
-            }).ConfigureAwait(false);
+            });
 
             if (!response.Ok)
             {
@@ -62,18 +62,18 @@ public abstract class XEPooledE2ETestBase : XEE2ETestBase
             await Page.GotoAsync(NodeAppUrl, new PageGotoOptions
             {
                 WaitUntil = WaitUntilState.NetworkIdle
-            }).ConfigureAwait(false);
+            });
 
             // Session-restore (auth/status -> auth/refresh) must have re-minted the access token from the
             // cookie; if it did not, the SPA parks on /login and this waits out rather than failing later
             // inside the test body with an unrelated assertion.
-            await Page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase)).ConfigureAwait(false);
+            await Page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase));
         }
         catch
         {
             // A lease leaked here would permanently shrink the pool and eventually deadlock the group,
             // so release it on the failure path too rather than relying only on the [After(Test)] hook.
-            await ReleasePooledUserAsync().ConfigureAwait(false);
+            await ReleasePooledUserAsync();
 
             throw;
         }
@@ -88,7 +88,7 @@ public abstract class XEPooledE2ETestBase : XEE2ETestBase
         }
 
         _leasedUserIndex = null;
-        await AvailableUserIndexes.Writer.WriteAsync(index).ConfigureAwait(false);
+        await AvailableUserIndexes.Writer.WriteAsync(index);
     }
 
     private static Channel<int> CreateUserIndexChannel()

@@ -70,7 +70,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
 
         // Serialise install + build across all concurrent fixture instances so pnpm never
         // races on the shared React client directory.
-        await BuildLock.WaitAsync().ConfigureAwait(false);
+        await BuildLock.WaitAsync();
         try
         {
             // Install with --frozen-lockfile: non-destructive (does not wipe node_modules),
@@ -78,12 +78,12 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             // One retry handles transient ENOENT / pnpm store contention.
             try
             {
-                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000).ConfigureAwait(false);
+                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000);
             }
             catch (InvalidOperationException)
             {
-                await Task.Delay(2_000).ConfigureAwait(false);
-                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000).ConfigureAwait(false);
+                await Task.Delay(2_000);
+                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000);
             }
 
             // "build:e2e" is a bare `vite build`; the default "build" script prefixes it with tsc --noEmit +
@@ -99,7 +99,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
                     ["VITE_API_URL"] = $"http://127.0.0.1:{Port}",
                     ["VITE_API_VERSION"] = "v1",
                     ["VITE_APP_TITLE"] = "XE E2E"
-                }).ConfigureAwait(false);
+                });
         }
         finally
         {
@@ -217,7 +217,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
         using var cancellationSource = new CancellationTokenSource(timeoutMs);
         try
         {
-            await process.WaitForExitAsync(cancellationSource.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellationSource.Token);
         }
         catch (OperationCanceledException)
         {
@@ -225,8 +225,8 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             throw new TimeoutException($"Process '{fileName} {arguments}' did not complete within {timeoutMs}ms.");
         }
 
-        var standardOutput = await stdOutTask.ConfigureAwait(false);
-        var standardError = await stdErrTask.ConfigureAwait(false);
+        var standardOutput = await stdOutTask;
+        var standardError = await stdErrTask;
 
         if (process.ExitCode != 0)
         {

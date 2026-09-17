@@ -29,9 +29,8 @@ public sealed class CreateEvaluationEndpoint(IEvaluationRunService evaluations) 
         // EvaluationRejectedException reaches the global DomainValidationExceptionHandler as the same 400: its
         // rejections are operator-facing by construction — no installed base model, no completed staged artifact,
         // or a run that held nothing back.
-        var created = await _evaluations.CreateAsync(new CreateEvaluationCommand(req.TrainingRunId, req.Target, req.ModelName, req.ArtifactId), ct)
-                                        .ConfigureAwait(false);
-        await Send.ResultAsync(TypedResults.Accepted((string?)null, created.ToResponse())).ConfigureAwait(false);
+        var created = await _evaluations.CreateAsync(new CreateEvaluationCommand(req.TrainingRunId, req.Target, req.ModelName, req.ArtifactId), ct);
+        await Send.ResultAsync(TypedResults.Accepted((string?)null, created.ToResponse()));
     }
 }
 
@@ -47,14 +46,14 @@ public sealed class GetEvaluationEndpoint(IEvaluationRunService evaluations) : E
 
     public override async Task HandleAsync(EvaluationByIdRequest req, CancellationToken ct)
     {
-        var evaluation = await _evaluations.GetAsync(req.EvaluationId, ct).ConfigureAwait(false);
+        var evaluation = await _evaluations.GetAsync(req.EvaluationId, ct);
         if (evaluation is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(evaluation.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(evaluation.ToResponse(), ct);
     }
 }
 
@@ -70,11 +69,11 @@ public sealed class ListEvaluationsEndpoint(IEvaluationRunService evaluations) :
 
     public override async Task HandleAsync(ListEvaluationsRequest req, CancellationToken ct)
     {
-        var items = await _evaluations.ListAsync(req.TrainingRunId, ct).ConfigureAwait(false);
+        var items = await _evaluations.ListAsync(req.TrainingRunId, ct);
         await Send.OkAsync(new ListEvaluationsResponse
         {
             Items = items.Select(item => item.ToResponse()).ToArray()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -94,8 +93,8 @@ public sealed class ResumeEvaluationEndpoint(IEvaluationRunService evaluations) 
 
     public override async Task HandleAsync(EvaluationByIdRequest req, CancellationToken ct)
     {
-        var resumed = await _evaluations.ResumeAsync(req.EvaluationId, ct).ConfigureAwait(false);
-        await Send.OkAsync(resumed.ToResponse(), ct).ConfigureAwait(false);
+        var resumed = await _evaluations.ResumeAsync(req.EvaluationId, ct);
+        await Send.OkAsync(resumed.ToResponse(), ct);
     }
 }
 
@@ -112,13 +111,13 @@ public sealed class CancelEvaluationEndpoint(IEvaluationRunService evaluations) 
 
     public override async Task HandleAsync(EvaluationByIdRequest req, CancellationToken ct)
     {
-        if (!await _evaluations.CancelAsync(req.EvaluationId, ct).ConfigureAwait(false))
+        if (!await _evaluations.CancelAsync(req.EvaluationId, ct))
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -137,7 +136,7 @@ public sealed class DeleteEvaluationEndpoint(IEvaluationRunService evaluations) 
 
     public override async Task HandleAsync(DeleteEvaluationRequest req, CancellationToken ct)
     {
-        await _evaluations.DeleteAsync(req.EvaluationId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _evaluations.DeleteAsync(req.EvaluationId, req.ExpectedVersion, ct);
+        await Send.NoContentAsync(ct);
     }
 }

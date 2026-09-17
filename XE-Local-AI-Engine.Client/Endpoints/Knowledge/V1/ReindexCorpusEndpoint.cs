@@ -27,11 +27,11 @@ public sealed class ReindexCorpusEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var staleIds = await _catalogService.ResetStaleDocumentsToPendingAsync(ct).ConfigureAwait(false);
+        var staleIds = await _catalogService.ResetStaleDocumentsToPendingAsync(ct);
         var enqueued = 0;
         foreach (var documentId in staleIds)
         {
-            var admission = await _ingestionDispatcher.EnqueueAsync(documentId, ct).ConfigureAwait(false);
+            var admission = await _ingestionDispatcher.EnqueueAsync(documentId, ct);
             if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
             {
                 // The bounded queue filled part-way through a corpus reindex. The documents already reset to Pending but
@@ -47,6 +47,6 @@ public sealed class ReindexCorpusEndpoint(
             {
                 EnqueuedCount = enqueued
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

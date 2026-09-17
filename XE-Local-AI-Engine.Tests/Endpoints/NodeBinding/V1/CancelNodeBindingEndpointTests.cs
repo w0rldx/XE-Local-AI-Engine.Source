@@ -23,7 +23,7 @@ public sealed class CancelNodeBindingEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -37,7 +37,7 @@ public sealed class CancelNodeBindingEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
         factory.AddNonOperatorBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -52,12 +52,12 @@ public sealed class CancelNodeBindingEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CancelNodeBindingResponse>().ConfigureAwait(false));
+        var payload = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CancelNodeBindingResponse>());
         AssertEx.True(payload.Cancelled, "The cancel endpoint reports the request as accepted.");
-        await bindingService.Received(requiredNumberOfCalls: 1).CancelAsync().ConfigureAwait(false);
+        await bindingService.Received(requiredNumberOfCalls: 1).CancelAsync();
     }
 }

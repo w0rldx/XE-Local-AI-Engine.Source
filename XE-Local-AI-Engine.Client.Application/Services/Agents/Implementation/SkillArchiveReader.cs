@@ -107,7 +107,7 @@ internal static class SkillArchiveReader
         var folders = new List<SkillArchiveFolder>(roots.Count);
         foreach (var root in roots)
         {
-            folders.Add(await ReadFolderAsync(entries, root, budget, options, cancellationToken).ConfigureAwait(false));
+            folders.Add(await ReadFolderAsync(entries, root, budget, options, cancellationToken));
         }
 
         return folders.OrderBy(static folder => folder.RootPath, StringComparer.Ordinal).ToList();
@@ -219,13 +219,13 @@ internal static class SkillArchiveReader
                 continue;
             }
 
-            files.Add(new SkillArchiveFile(relative, MediaTypeFor(relative), await ReadTextAsync(entry, budget, options, cancellationToken).ConfigureAwait(false)));
+            files.Add(new SkillArchiveFile(relative, MediaTypeFor(relative), await ReadTextAsync(entry, budget, options, cancellationToken)));
         }
 
         var directoryName = root.Length == 0 ? string.Empty : root.TrimEnd('/').Split('/')[^1];
         return new SkillArchiveFolder(directoryName,
             root,
-            await ReadTextAsync(entries[root + SkillFileName], budget, options, cancellationToken).ConfigureAwait(false),
+            await ReadTextAsync(entries[root + SkillFileName], budget, options, cancellationToken),
             files,
             refusedScripts,
             resourceLimitExceeded);
@@ -256,7 +256,7 @@ internal static class SkillArchiveReader
         SkillImportOptions options,
         CancellationToken cancellationToken)
     {
-        var bytes = await ReadBoundedAsync(entry, options, cancellationToken).ConfigureAwait(false);
+        var bytes = await ReadBoundedAsync(entry, options, cancellationToken);
 
         // CompressedLength is attacker-authored too, but understating it can only make the ratio look worse, so this
         // comparison can over-reject and never under-reject. A zero compressed length with real output is a lie.
@@ -287,7 +287,7 @@ internal static class SkillArchiveReader
 
     private static async Task<byte[]> ReadBoundedAsync(ZipArchiveEntry entry, SkillImportOptions options, CancellationToken cancellationToken)
     {
-        await using var source = await entry.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var source = await entry.OpenAsync(cancellationToken);
 
         // The cap is measured against bytes ACTUALLY INFLATED; entry.Length is never read. Both directions of the
         // header lie are covered, and only one of them is reachable — keep it that way:
@@ -302,7 +302,7 @@ internal static class SkillArchiveReader
         var total = 0;
         while (total < buffer.Length)
         {
-            var read = await source.ReadAsync(buffer.AsMemory(total, buffer.Length - total), cancellationToken).ConfigureAwait(false);
+            var read = await source.ReadAsync(buffer.AsMemory(total, buffer.Length - total), cancellationToken);
             if (read == 0)
             {
                 break;

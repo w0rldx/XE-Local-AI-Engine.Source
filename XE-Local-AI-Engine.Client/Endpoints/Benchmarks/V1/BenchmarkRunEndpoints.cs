@@ -25,14 +25,14 @@ public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService records)
         if (req.Page < 1 || req.PageSize is < 1 or > 200)
         {
             AddError("Page must be positive and pageSize must be between 1 and 200.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct);
         if (project is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
@@ -43,8 +43,7 @@ public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService records)
                                    req.PageSize,
                                    req.ModelContentFingerprint,
                                    req.IncludeUnscored,
-                                   ct)
-                               .ConfigureAwait(false);
+                                   ct);
         await Send.OkAsync(new ListBenchmarkRunsResponse
                   {
                       Items = page.Items.Select(run => run.ToSummary(expectedKldDigest)).ToArray(),
@@ -59,8 +58,7 @@ public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService records)
                           RankedCount = page.RankCohort?.RankedCount ?? 0,
                           TotalScored = page.RankCohort?.TotalScored ?? 0
                       }
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 }
 
@@ -85,7 +83,7 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
         if (string.IsNullOrWhiteSpace(req.ModelName))
         {
             AddError("A primary model is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -95,7 +93,7 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Problem(StatusCodes.Status400BadRequest,
                 BenchmarkErrorCode.InvalidRequest,
-                "The requested KV-cache type is not supported.")).ConfigureAwait(false);
+                "The requested KV-cache type is not supported."));
             return;
         }
 
@@ -110,19 +108,18 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
                                          req.RepeatCount,
                                          req.Warmup,
                                          req.RepeatMode,
-                                         req.AnswerVarianceTemperature), scope: null, ct)
-                                     .ConfigureAwait(false);
-            await Send.ResultAsync(Results.Accepted(value: created[0].ToDetail())).ConfigureAwait(false);
+                                         req.AnswerVarianceTemperature), scope: null, ct);
+            await Send.ResultAsync(Results.Accepted(value: created[0].ToDetail()));
         }
         catch (KeyNotFoundException exception)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception));
         }
         catch (NotSupportedException exception)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Problem(StatusCodes.Status422UnprocessableEntity,
                 BenchmarkErrorCode.UnsupportedSnapshot,
-                exception.Message)).ConfigureAwait(false);
+                exception.Message));
         }
     }
 }
@@ -152,7 +149,7 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService bat
         if (req.Items.Count is 0 or > MaxItems)
         {
             AddError($"A batch must carry between 1 and {MaxItems} items.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -162,8 +159,7 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService bat
                                        req.RepeatCount,
                                        req.Warmup,
                                        req.RepeatMode,
-                                       req.AnswerVarianceTemperature), ct)
-                                   .ConfigureAwait(false);
+                                       req.AnswerVarianceTemperature), ct);
         await Send.OkAsync(new StartBenchmarkRunBatchResponse
                   {
                       ProjectVersion = result.ProjectVersion,
@@ -177,8 +173,7 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService bat
                           })
                       ],
                       Rejected = [.. result.Rejected.Select(ToResponse)]
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 
     private static RejectedBenchmarkRunBatchItemResponse ToResponse(BenchmarkRunBatchRejectedItem item)
@@ -222,17 +217,16 @@ public sealed class GetBenchmarkRunEndpoint(BenchmarkRecordService records)
 
     public override async Task HandleAsync(BenchmarkRunRouteRequest req, CancellationToken ct)
     {
-        var run = await _records.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+        var run = await _records.GetRunAsync(req.RunId, ct);
         if (run is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found.")));
             return;
         }
 
         // A detail response is the only place the verdict is decrypted: a list of runs must not decrypt one blob per row.
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-                  .ConfigureAwait(false);
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }
 
@@ -251,8 +245,8 @@ public sealed class DeleteBenchmarkRunEndpoint(BenchmarkRecordService records)
 
     public override async Task HandleAsync(DeleteBenchmarkRunRequest req, CancellationToken ct)
     {
-        await _records.DeleteRunAsync(req.RunId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _records.DeleteRunAsync(req.RunId, req.ExpectedVersion, ct);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -272,10 +266,9 @@ public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService can
 
     public override async Task HandleAsync(CancelBenchmarkRunRequest req, CancellationToken ct)
     {
-        var run = await _cancellation.CancelAsync(req.RunId, req.ExpectedVersion, req.Target, ct).ConfigureAwait(false);
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-                  .ConfigureAwait(false);
+        var run = await _cancellation.CancelAsync(req.RunId, req.ExpectedVersion, req.Target, ct);
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }
 
@@ -299,14 +292,13 @@ public sealed class ScoreBenchmarkRunEndpoint(BenchmarkRecordService records)
         if (req.Score is not { } score)
         {
             AddError("Score is required and must be between 0 and 100.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var run = await _records.SetUserScoreAsync(req.RunId, score, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-                  .ConfigureAwait(false);
+        var run = await _records.SetUserScoreAsync(req.RunId, score, req.ExpectedVersion, ct);
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }
 
@@ -326,10 +318,9 @@ public sealed class ClearBenchmarkRunScoreEndpoint(BenchmarkRecordService record
 
     public override async Task HandleAsync(ClearBenchmarkRunScoreRequest req, CancellationToken ct)
     {
-        var run = await _records.SetUserScoreAsync(req.RunId, score: null, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-                  .ConfigureAwait(false);
+        var run = await _records.SetUserScoreAsync(req.RunId, score: null, req.ExpectedVersion, ct);
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }
 
@@ -350,11 +341,10 @@ public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService project
 
     public override async Task HandleAsync(RejudgeBenchmarkRunRequest req, CancellationToken ct)
     {
-        _ = await _projects.RejudgeRunAsync(req.RunId, req.ExpectedVersion, req.Force, ct).ConfigureAwait(false);
-        var run = await _records.GetRunAsync(req.RunId, ct).ConfigureAwait(false)
+        _ = await _projects.RejudgeRunAsync(req.RunId, req.ExpectedVersion, req.Force, ct);
+        var run = await _records.GetRunAsync(req.RunId, ct)
                   ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-                  .ConfigureAwait(false);
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct))), ct);
     }
 }

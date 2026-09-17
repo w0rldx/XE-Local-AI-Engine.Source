@@ -24,7 +24,7 @@ public sealed class StartNodeBindingEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -38,7 +38,7 @@ public sealed class StartNodeBindingEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
         factory.AddNonOperatorBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -64,11 +64,11 @@ public sealed class StartNodeBindingEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var session = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<NodeBindingSessionResponse>().ConfigureAwait(false));
+        var session = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<NodeBindingSessionResponse>());
         AssertEx.Equal("device-code-1", session.DeviceCode);
         AssertEx.Equal("USER-CODE", session.UserCode);
         AssertEx.Equal("https://central.example.test/device?code=USER-CODE", session.VerificationUriComplete);
@@ -90,10 +90,10 @@ public sealed class StartNodeBindingEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync();
         AssertEx.Contains(body, "Central Platform rejected the binding request", StringComparison.Ordinal);
     }
 }

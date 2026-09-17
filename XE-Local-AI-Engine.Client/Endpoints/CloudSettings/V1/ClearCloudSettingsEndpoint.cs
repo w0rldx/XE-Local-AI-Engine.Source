@@ -23,16 +23,16 @@ public sealed class ClearCloudSettingsEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await _cloudCredentialStore.ClearAsync(ct).ConfigureAwait(false);
-        await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(CloudSettingsResponse.Empty, ct).ConfigureAwait(false);
+        await _cloudCredentialStore.ClearAsync(ct);
+        await TryReportCapabilitiesAsync(ct);
+        await Send.OkAsync(CloudSettingsResponse.Empty, ct);
     }
 
     private async Task TryReportCapabilitiesAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await _capabilityReporter.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
+            await _capabilityReporter.ReportToApiAsync(cancellationToken);
         }
         catch (Exception exception)
         {

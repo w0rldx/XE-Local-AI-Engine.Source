@@ -25,27 +25,27 @@ public sealed class NodeAuthEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        var initialStatus = await client.GetFromJsonAsync<AuthStatusResponse>("/api/local/v1/auth/status").ConfigureAwait(false);
+        var initialStatus = await client.GetFromJsonAsync<AuthStatusResponse>("/api/local/v1/auth/status");
         AssertEx.True(AssertEx.NotNull(initialStatus).SetupRequired);
 
-        using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
+        using var setupResponse = await SetupAsync(client);
         AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
 
-        using var loginResponse = await LoginAsync(client).ConfigureAwait(false);
+        using var loginResponse = await LoginAsync(client);
         AssertEx.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
-        var loginToken = await ReadTokenAsync(loginResponse).ConfigureAwait(false);
+        var loginToken = await ReadTokenAsync(loginResponse);
         var loginRefreshCookie = GetRefreshCookie(loginResponse);
 
         using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/auth/me");
         meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loginToken.AccessToken);
-        using var meResponse = await client.SendAsync(meRequest).ConfigureAwait(false);
+        using var meResponse = await client.SendAsync(meRequest);
         AssertEx.Equal(HttpStatusCode.OK, meResponse.StatusCode);
 
         using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
         refreshRequest.Headers.Add("Cookie", loginRefreshCookie);
-        using var refreshResponse = await client.SendAsync(refreshRequest).ConfigureAwait(false);
+        using var refreshResponse = await client.SendAsync(refreshRequest);
         AssertEx.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
-        var refreshedToken = await ReadTokenAsync(refreshResponse).ConfigureAwait(false);
+        var refreshedToken = await ReadTokenAsync(refreshResponse);
         var rotatedRefreshCookie = GetRefreshCookie(refreshResponse);
 
         AssertEx.NotEqual(loginToken.AccessToken, refreshedToken.AccessToken);
@@ -54,7 +54,7 @@ public sealed class NodeAuthEndpointTests
         using var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/logout");
         logoutRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", refreshedToken.AccessToken);
         logoutRequest.Headers.Add("Cookie", rotatedRefreshCookie);
-        using var logoutResponse = await client.SendAsync(logoutRequest).ConfigureAwait(false);
+        using var logoutResponse = await client.SendAsync(logoutRequest);
         AssertEx.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
         AssertRefreshCookieCleared(logoutResponse);
     }
@@ -65,19 +65,19 @@ public sealed class NodeAuthEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
+        using var setupResponse = await SetupAsync(client);
         AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
-        using var loginResponse = await LoginAsync(client).ConfigureAwait(false);
+        using var loginResponse = await LoginAsync(client);
         var originalRefreshCookie = GetRefreshCookie(loginResponse);
 
         using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
         refreshRequest.Headers.Add("Cookie", originalRefreshCookie);
-        using var refreshResponse = await client.SendAsync(refreshRequest).ConfigureAwait(false);
+        using var refreshResponse = await client.SendAsync(refreshRequest);
         AssertEx.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
 
         using var replayRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
         replayRequest.Headers.Add("Cookie", originalRefreshCookie);
-        using var replayResponse = await client.SendAsync(replayRequest).ConfigureAwait(false);
+        using var replayResponse = await client.SendAsync(replayRequest);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, replayResponse.StatusCode);
         AssertRefreshCookieCleared(replayResponse);
@@ -89,7 +89,7 @@ public sealed class NodeAuthEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsync("/api/local/v1/auth/refresh", content: null).ConfigureAwait(false);
+        using var response = await client.PostAsync("/api/local/v1/auth/refresh", content: null);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertRefreshCookieCleared(response);
@@ -101,10 +101,10 @@ public sealed class NodeAuthEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
+        using var setupResponse = await SetupAsync(client);
         AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
 
-        using var duplicateSetupResponse = await SetupAsync(client, "other@example.test").ConfigureAwait(false);
+        using var duplicateSetupResponse = await SetupAsync(client, "other@example.test");
 
         AssertEx.Equal(HttpStatusCode.Conflict, duplicateSetupResponse.StatusCode);
     }
@@ -117,7 +117,7 @@ public sealed class NodeAuthEndpointTests
         using var secondClient = factory.CreateClient();
 
         var responses = await Task.WhenAll(SetupAsync(firstClient, "first@example.test"),
-            SetupAsync(secondClient, "second@example.test")).ConfigureAwait(false);
+            SetupAsync(secondClient, "second@example.test"));
 
         try
         {
@@ -139,14 +139,14 @@ public sealed class NodeAuthEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
+        using var setupResponse = await SetupAsync(client);
         AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
 
         using var response = await client.PostAsJsonAsync("/api/local/v1/auth/login",
             new
             {
                 password = "wrong-password"
-            }).ConfigureAwait(false);
+            });
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertRefreshCookieCleared(response);
@@ -161,17 +161,17 @@ public sealed class NodeAuthEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
+        using var setupResponse = await SetupAsync(client);
         AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
 
         using var response = await client.PostAsJsonAsync("/api/local/v1/auth/login",
             new
             {
                 password = Password
-            }).ConfigureAwait(false);
+            });
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var token = await ReadTokenAsync(response).ConfigureAwait(false);
+        var token = await ReadTokenAsync(response);
         AssertEx.NotEmpty(token.AccessToken);
     }
 
@@ -181,10 +181,10 @@ public sealed class NodeAuthEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
+        using var setupResponse = await SetupAsync(client);
         AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
 
-        var stored = await factory.Services.GetRequiredService<INodeSettingsStore>().LoadAsync().ConfigureAwait(false);
+        var stored = await factory.Services.GetRequiredService<INodeSettingsStore>().LoadAsync();
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
     }
 
@@ -203,12 +203,12 @@ public sealed class NodeAuthEndpointTests
             var seam = new CancelTheFirstWriteSettingsStore(store);
             await using var factory = CreateFactory(seam);
 
-            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => RunSetupAsync(factory)).ConfigureAwait(false);
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => RunSetupAsync(factory));
 
             AssertEx.Equal(expected: 1, seam.CancelledWrites, "The seam must have interrupted exactly the profile write.");
-            AssertEx.True(await SetupRequiredAsync(factory).ConfigureAwait(false),
+            AssertEx.True(await SetupRequiredAsync(factory),
                 "A cancelled setup must roll the identity transaction back, leaving no administrator.");
-            var stored = await store.LoadAsync().ConfigureAwait(false);
+            var stored = await store.LoadAsync();
             AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
         }
         finally
@@ -230,13 +230,13 @@ public sealed class NodeAuthEndpointTests
             var seam = new CancelTheFirstWriteSettingsStore(store);
             await using var factory = CreateFactory(seam);
 
-            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => RunSetupAsync(factory)).ConfigureAwait(false);
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => RunSetupAsync(factory));
 
-            var retry = await RunSetupAsync(factory).ConfigureAwait(false);
+            var retry = await RunSetupAsync(factory);
 
             AssertEx.True(retry.Succeeded, "The retried setup must succeed once the seam stops interrupting.");
-            AssertEx.False(await SetupRequiredAsync(factory).ConfigureAwait(false));
-            var stored = await store.LoadAsync().ConfigureAwait(false);
+            AssertEx.False(await SetupRequiredAsync(factory));
+            var stored = await store.LoadAsync();
             AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
         }
         finally
@@ -253,16 +253,14 @@ public sealed class NodeAuthEndpointTests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
-                          .SetupAsync(Email, Password, CancellationToken.None)
-                          .ConfigureAwait(false);
+                          .SetupAsync(Email, Password, CancellationToken.None);
     }
 
     private static async Task<bool> SetupRequiredAsync(TestServerWebAppFactory factory)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var status = await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
-                                .GetStatusAsync(new ClaimsPrincipal(), CancellationToken.None)
-                                .ConfigureAwait(false);
+                                .GetStatusAsync(new ClaimsPrincipal(), CancellationToken.None);
         return status.SetupRequired;
     }
 
@@ -299,7 +297,7 @@ public sealed class NodeAuthEndpointTests
 
     private static async Task<AuthTokenResponse> ReadTokenAsync(HttpResponseMessage response)
     {
-        var token = await response.Content.ReadFromJsonAsync<AuthTokenResponse>().ConfigureAwait(false);
+        var token = await response.Content.ReadFromJsonAsync<AuthTokenResponse>();
         return AssertEx.NotNull(token);
     }
 
@@ -361,7 +359,7 @@ public sealed class NodeAuthEndpointTests
         public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate,
             CancellationToken cancellationToken = default)
         {
-            var persisted = await inner.UpdateAsync(mutate, cancellationToken).ConfigureAwait(false);
+            var persisted = await inner.UpdateAsync(mutate, cancellationToken);
             if (CancelledWrites > 0)
             {
                 return persisted;

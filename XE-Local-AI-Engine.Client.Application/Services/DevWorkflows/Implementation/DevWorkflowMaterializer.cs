@@ -82,12 +82,12 @@ internal sealed class DevWorkflowMaterializer
             // survives the fix loop re-running this node — a second expansion is v2, and the first one's children are
             // still the run's.
             var operationId = DevWorkflowOperationId.For(run.Id, producer.NodeKey, MaterializationAttempt, "materialize");
-            if (await store.FindOperationEventTypeAsync(run.Id, operationId, cancellationToken).ConfigureAwait(false) is not null)
+            if (await store.FindOperationEventTypeAsync(run.Id, operationId, cancellationToken) is not null)
             {
                 continue;
             }
 
-            return await ExpandAsync(store, graph, run, node, materialization, producer, nodeRuns, operationId, cancellationToken).ConfigureAwait(false);
+            return await ExpandAsync(store, graph, run, node, materialization, producer, nodeRuns, operationId, cancellationToken);
         }
 
         return 0;
@@ -103,21 +103,21 @@ internal sealed class DevWorkflowMaterializer
         Guid operationId,
         CancellationToken cancellationToken)
     {
-        var package = await ReadPackageAsync(store, run, materialization, producer, cancellationToken).ConfigureAwait(false);
+        var package = await ReadPackageAsync(store, run, materialization, producer, cancellationToken);
         if (package.Error is { } unreadable)
         {
-            return await RejectAsync(store, graph, run, producer, nodeRuns, unreadable, cancellationToken).ConfigureAwait(false);
+            return await RejectAsync(store, graph, run, producer, nodeRuns, unreadable, cancellationToken);
         }
 
         var tasks = package.Tasks;
         if (Reject(graph, materialization, tasks, nodeRuns.Count, _options.MaxNodeRunsPerRun) is { } rejected)
         {
-            return await RejectAsync(store, graph, run, producer, nodeRuns, rejected, cancellationToken).ConfigureAwait(false);
+            return await RejectAsync(store, graph, run, producer, nodeRuns, rejected, cancellationToken);
         }
 
         if (tasks.Count == 0)
         {
-            return await NothingToDoAsync(store, graph, run, materialization, producer, package.ArtifactId, operationId, cancellationToken).ConfigureAwait(false);
+            return await NothingToDoAsync(store, graph, run, materialization, producer, package.ArtifactId, operationId, cancellationToken);
         }
 
         var expansion = Compose(graph, run.GraphJson, node, materialization, tasks);
@@ -134,7 +134,7 @@ internal sealed class DevWorkflowMaterializer
 
         // Read once for this expansion, after the decision to expand has been made: every clone's resolution comes off
         // the same list, and a tick that expands nothing never touches the table at all.
-        var enabledRuleSets = await store.ListEnabledRuleSetsAsync(cancellationToken).ConfigureAwait(false);
+        var enabledRuleSets = await store.ListEnabledRuleSetsAsync(cancellationToken);
         _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(run.Id,
                                DevWorkflowVersions.Any,
                                operationId,
@@ -157,8 +157,7 @@ internal sealed class DevWorkflowMaterializer
                                expansion.GraphJson,
                                producer.Id,
                                producerRoute),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return expansion.Clones.Count;
     }
 
@@ -197,8 +196,7 @@ internal sealed class DevWorkflowMaterializer
                                       DevWorkflowFailureClasses.Configuration,
                                       reason),
                                   JsonOptions)),
-                          cancellationToken)
-                      .ConfigureAwait(false);
+                          cancellationToken);
 
     /// <summary>
     ///     The newest task package this node produced, parsed — or the sentence an operator and the next attempt are
@@ -220,7 +218,7 @@ internal sealed class DevWorkflowMaterializer
         DevWorkflowNodeRunSnapshot producer,
         CancellationToken cancellationToken)
     {
-        var artifacts = await store.ListArtifactsAsync(run.Id, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var artifacts = await store.ListArtifactsAsync(run.Id, sinceSequence: 0, cancellationToken);
         var artifact = artifacts.Where(entry => string.Equals(entry.ProducingNodeKey, producer.NodeKey, StringComparison.Ordinal)
                                                 && entry.Kind == materialization.ArtifactKind
                                                 && entry is { IsValid: true, IsLatest: true })
@@ -230,7 +228,7 @@ internal sealed class DevWorkflowMaterializer
             return TaskPackage.Rejected($"Node '{producer.NodeKey}' decomposes the work, but produced no {materialization.ArtifactKind} artifact to decompose it from.");
         }
 
-        var read = await _blobs.ReadAsync(run.Id, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken).ConfigureAwait(false);
+        var read = await _blobs.ReadAsync(run.Id, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken);
         if (read.Status != DevWorkflowArtifactReadStatus.Found)
         {
             return TaskPackage.Rejected($"The {materialization.ArtifactKind} artifact '{artifact.Name}' did not read back ({read.Status}), so there is nothing to decompose.");
@@ -602,8 +600,7 @@ internal sealed class DevWorkflowMaterializer
                                            run.GraphRevision,
                                            RevisionBumped: false),
                                        JsonOptions)),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
             return 1;
         }
 
@@ -637,8 +634,7 @@ internal sealed class DevWorkflowMaterializer
                                            JsonOptions)))
                                ],
                                GraphJson: null),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return checks.Count;
     }
 

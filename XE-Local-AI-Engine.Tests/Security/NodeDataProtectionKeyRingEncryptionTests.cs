@@ -72,7 +72,7 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
         {
             _ = provider.Key.Span[0];
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
     }
 
     [Test]
@@ -122,7 +122,7 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
         {
             _ = decryptor.Decrypt(encrypted.EncryptedElement);
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
         AssertEx.True(thrown.InnerException is AuthenticationTagMismatchException,
             "The distinctive key-ring decryption failure must wrap the underlying authentication-tag mismatch.");
     }
@@ -157,7 +157,7 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
                 using var wrongServices = BuildDataProtectionServices(ringDirectory, wrongKek);
                 _ = wrongServices.GetRequiredService<IDataProtectionProvider>().CreateProtector("be02-tests").Protect("forces-resolution");
                 return Task.CompletedTask;
-            }).ConfigureAwait(false);
+            });
 
             AssertEx.True(ChainContains(thrown, static ex => ex is InvalidOperationException && ex.Message.Contains("Refusing to regenerate", StringComparison.Ordinal)),
                 "The fail-closed resolver must be the cause of the failure (refusing to regenerate the ring).");
@@ -199,7 +199,7 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
             // master-key element is gone.
             var keyFiles = Directory.GetFiles(ringDirectory, "key-*.xml");
             AssertEx.False(keyFiles.Length == 0, "Data Protection should have persisted at least one key file.");
-            var keyXml = await File.ReadAllTextAsync(keyFiles[0]).ConfigureAwait(false);
+            var keyXml = await File.ReadAllTextAsync(keyFiles[0]);
             AssertEx.True(keyXml.Contains(nameof(NodeDataProtectionKeyRingDecryptor), StringComparison.Ordinal),
                 "The persisted key must record the BE-02 decryptor, proving it was wrapped at rest.");
             AssertEx.False(keyXml.Contains("<masterKey", StringComparison.Ordinal),
@@ -235,7 +235,7 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
                 protectedPayload = protector.Protect(payload);
             }
 
-            var legacyKeyXml = await File.ReadAllTextAsync(Directory.GetFiles(ringDirectory, "key-*.xml")[0]).ConfigureAwait(false);
+            var legacyKeyXml = await File.ReadAllTextAsync(Directory.GetFiles(ringDirectory, "key-*.xml")[0]);
             AssertEx.True(legacyKeyXml.Contains("<masterKey", StringComparison.Ordinal),
                 "The legacy ring must genuinely contain a plaintext masterKey element for this test to be meaningful.");
 

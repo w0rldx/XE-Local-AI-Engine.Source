@@ -24,15 +24,15 @@ public sealed class DevelopmentRestartRecoveryTests
     [Arguments(DevelopmentInterruptionBoundary.DuringReadTool)]
     public async Task RecoverAsync_WhenInterruptedBeforeMutation_CreatesReplacementWithoutReplay(DevelopmentInterruptionBoundary boundary)
     {
-        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
-        var interrupted = await harness.StartAndInterruptAsync(boundary).ConfigureAwait(false);
-        var beforeRecovery = await harness.CaptureWorkspaceAsync().ConfigureAwait(false);
+        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync();
+        var interrupted = await harness.StartAndInterruptAsync(boundary);
+        var beforeRecovery = await harness.CaptureWorkspaceAsync();
         var originalArtifactIds = harness.Artifacts.Select(artifact => artifact.Id).ToArray();
         var readExecutions = harness.ReadToolExecutions;
 
-        var recovery = await harness.RecoverAsync().ConfigureAwait(false);
-        var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id).ConfigureAwait(false);
-        var afterReplacement = await harness.CaptureWorkspaceAsync().ConfigureAwait(false);
+        var recovery = await harness.RecoverAsync();
+        var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id);
+        var afterReplacement = await harness.CaptureWorkspaceAsync();
 
         AssertEx.Equal(DevelopmentAttemptStatus.Interrupted, interrupted.Status);
         AssertEx.Equal(interrupted.Id, replacement.PredecessorAttemptId);
@@ -45,19 +45,19 @@ public sealed class DevelopmentRestartRecoveryTests
         AssertEx.Equal(readExecutions, harness.ReadToolExecutions);
         AssertEx.Equal(expected: 0, harness.WriteCommandExecutions);
         AssertEx.Equal(expected: 0, harness.ValidationCommandExecutions);
-        AssertEx.Equal(harness.ProtectedBranchCommit, await harness.ReadProtectedBranchCommitAsync().ConfigureAwait(false));
+        AssertEx.Equal(harness.ProtectedBranchCommit, await harness.ReadProtectedBranchCommitAsync());
     }
 
     [Test]
     public async Task RecoverAsync_WhenInterruptedAfterWorkspaceWrite_PreservesDiffAndDoesNotReplayCommand()
     {
-        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
-        var interrupted = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.AfterWorkspaceWriteBeforeToolResult).ConfigureAwait(false);
-        var interruptedSubject = await harness.CaptureWorkspaceAsync().ConfigureAwait(false);
+        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync();
+        var interrupted = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.AfterWorkspaceWriteBeforeToolResult);
+        var interruptedSubject = await harness.CaptureWorkspaceAsync();
 
-        var recovery = await harness.RecoverAsync().ConfigureAwait(false);
-        var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id).ConfigureAwait(false);
-        var replacementSubject = await harness.CaptureWorkspaceAsync().ConfigureAwait(false);
+        var recovery = await harness.RecoverAsync();
+        var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id);
+        var replacementSubject = await harness.CaptureWorkspaceAsync();
 
         AssertEx.Equal(expected: 1, harness.WriteCommandExecutions);
         AssertEx.True(interruptedSubject.ChangedFiles.Contains("tracked.txt"), "The interrupted write must remain visible in the Git worktree.");
@@ -67,18 +67,18 @@ public sealed class DevelopmentRestartRecoveryTests
         AssertEx.True(recovery.ReplacementAllowed);
         AssertEx.False(harness.Artifacts.Any(artifact => artifact.Kind == DevelopmentArtifactKind.CommandResult),
             "A crash before tool-result persistence must not fabricate command evidence.");
-        AssertEx.Equal(harness.ProtectedBranchCommit, await harness.ReadProtectedBranchCommitAsync().ConfigureAwait(false));
+        AssertEx.Equal(harness.ProtectedBranchCommit, await harness.ReadProtectedBranchCommitAsync());
     }
 
     [Test]
     public async Task RecoverAsync_WhenInterruptedAfterValidationArtifact_PreservesEvidenceWithoutRerunningValidation()
     {
-        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
-        var interrupted = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.AfterValidationArtifactBeforeTerminalization).ConfigureAwait(false);
+        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync();
+        var interrupted = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.AfterValidationArtifactBeforeTerminalization);
         var validation = harness.Artifacts.Single(artifact => artifact.Kind == DevelopmentArtifactKind.ValidationReport);
 
-        var recovery = await harness.RecoverAsync().ConfigureAwait(false);
-        var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id).ConfigureAwait(false);
+        var recovery = await harness.RecoverAsync();
+        var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id);
 
         AssertEx.True(validation.IsValid);
         AssertEx.Equal(expected: 1, harness.ValidationCommandExecutions);
@@ -91,13 +91,13 @@ public sealed class DevelopmentRestartRecoveryTests
     [Test]
     public async Task RecoverAsync_WhenWorkspaceSubjectChanges_InvalidatesValidationAndReviewEvidence()
     {
-        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
-        var interrupted = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.AfterValidationArtifactBeforeTerminalization).ConfigureAwait(false);
-        await harness.AttachReviewEvidenceAsync(interrupted.Id).ConfigureAwait(false);
-        await harness.MutateWorkspaceOutsideCoordinatorAsync("base\noperator mutation\n").ConfigureAwait(false);
+        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync();
+        var interrupted = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.AfterValidationArtifactBeforeTerminalization);
+        await harness.AttachReviewEvidenceAsync(interrupted.Id);
+        await harness.MutateWorkspaceOutsideCoordinatorAsync("base\noperator mutation\n");
 
-        var recovery = await harness.RecoverAsync().ConfigureAwait(false);
-        var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id).ConfigureAwait(false);
+        var recovery = await harness.RecoverAsync();
+        var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id);
 
         var approvalEvidence = harness.Artifacts.Where(artifact => artifact.Kind is DevelopmentArtifactKind.ValidationReport or DevelopmentArtifactKind.ReviewReport).ToArray();
         AssertEx.Equal(expected: 2, approvalEvidence.Length);
@@ -112,12 +112,12 @@ public sealed class DevelopmentRestartRecoveryTests
     [Test]
     public async Task RecoverAsync_WhenBaseCommitCannotBeReconciled_BlocksReplacement()
     {
-        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
-        var interrupted = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.AfterValidationArtifactBeforeTerminalization).ConfigureAwait(false);
-        await harness.CommitWorkspaceMutationOutsideCoordinatorAsync("unexpected committed mutation\n").ConfigureAwait(false);
+        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync();
+        var interrupted = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.AfterValidationArtifactBeforeTerminalization);
+        await harness.CommitWorkspaceMutationOutsideCoordinatorAsync("unexpected committed mutation\n");
 
-        var recovery = await harness.RecoverAsync().ConfigureAwait(false);
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.CreateReplacementAttemptAsync(interrupted.Id)).ConfigureAwait(false);
+        var recovery = await harness.RecoverAsync();
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.CreateReplacementAttemptAsync(interrupted.Id));
 
         AssertEx.False(recovery.ReplacementAllowed);
         AssertEx.True(harness.Task.IsBlocked);
@@ -125,14 +125,14 @@ public sealed class DevelopmentRestartRecoveryTests
         AssertEx.ContainsSingle(harness.Events, item => item.EventType == "RecoveryBlockedUnreconciledBase");
         AssertEx.False(harness.Artifacts.Single(artifact => artifact.Kind == DevelopmentArtifactKind.ValidationReport).IsValid);
         AssertEx.Equal(expected: 1, harness.ValidationCommandExecutions);
-        AssertEx.Equal(harness.ProtectedBranchCommit, await harness.ReadProtectedBranchCommitAsync().ConfigureAwait(false));
+        AssertEx.Equal(harness.ProtectedBranchCommit, await harness.ReadProtectedBranchCommitAsync());
     }
 
     [Test]
     public async Task RecoverAsync_WhenRepeated_IsIdempotentAndLeavesTerminalStatusesUnchanged()
     {
-        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
-        var running = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.BeforeFirstToken).ConfigureAwait(false);
+        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync();
+        var running = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.BeforeFirstToken);
         var artifactCount = harness.Artifacts.Count;
         var pending = harness.SeedAttempt(DevelopmentAttemptStatus.Pending);
         var succeeded = harness.SeedAttempt(DevelopmentAttemptStatus.Succeeded);
@@ -140,8 +140,8 @@ public sealed class DevelopmentRestartRecoveryTests
         var interrupted = harness.SeedAttempt(DevelopmentAttemptStatus.Interrupted);
         var cancelled = harness.SeedAttempt(DevelopmentAttemptStatus.Cancelled);
 
-        var first = await harness.RecoverAsync().ConfigureAwait(false);
-        var second = await harness.RecoverAsync().ConfigureAwait(false);
+        var first = await harness.RecoverAsync();
+        var second = await harness.RecoverAsync();
 
         AssertEx.Equal(expected: 1, first.InterruptedAttempts);
         AssertEx.Equal(expected: 0, second.InterruptedAttempts);
@@ -158,11 +158,11 @@ public sealed class DevelopmentRestartRecoveryTests
     [Test]
     public async Task RecoverAsync_WhenConcurrent_InterruptsAttemptExactlyOnce()
     {
-        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
-        var running = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.DuringReadTool).ConfigureAwait(false);
+        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync();
+        var running = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.DuringReadTool);
         var artifactCount = harness.Artifacts.Count;
 
-        var recoveries = await Task.WhenAll(harness.RecoverAsync(), harness.RecoverAsync()).ConfigureAwait(false);
+        var recoveries = await Task.WhenAll(harness.RecoverAsync(), harness.RecoverAsync());
 
         AssertEx.Equal(expected: 1, recoveries.Sum(recovery => recovery.InterruptedAttempts));
         AssertEx.Equal(DevelopmentAttemptStatus.Interrupted, running.Status);

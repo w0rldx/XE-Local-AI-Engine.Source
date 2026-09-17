@@ -22,7 +22,7 @@ public sealed class RevokeLocalModelProxyApiKeyEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await LocalModelProxyApiKeyRequests.AnonymousAsync(client, HttpMethod.Delete).ConfigureAwait(false);
+        using var response = await LocalModelProxyApiKeyRequests.AnonymousAsync(client, HttpMethod.Delete);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -32,7 +32,7 @@ public sealed class RevokeLocalModelProxyApiKeyEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await LocalModelProxyApiKeyRequests.AsNonOperatorAsync(Factory, client, HttpMethod.Delete).ConfigureAwait(false);
+        using var response = await LocalModelProxyApiKeyRequests.AsNonOperatorAsync(Factory, client, HttpMethod.Delete);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -42,19 +42,19 @@ public sealed class RevokeLocalModelProxyApiKeyEndpointTests
     {
         using var client = Factory.CreateClient();
 
-        using var minted = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Post).ConfigureAwait(false);
+        using var minted = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Post);
         AssertEx.Equal(HttpStatusCode.OK, minted.StatusCode);
 
-        using var revoked = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Delete).ConfigureAwait(false);
+        using var revoked = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Delete);
         AssertEx.Equal(HttpStatusCode.NoContent, revoked.StatusCode);
 
-        using var status = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Get).ConfigureAwait(false);
-        var statusView = AssertEx.NotNull(await status.Content.ReadFromJsonAsync<LocalModelProxyApiKeyStatusResponse>().ConfigureAwait(false));
+        using var status = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Get);
+        var statusView = AssertEx.NotNull(await status.Content.ReadFromJsonAsync<LocalModelProxyApiKeyStatusResponse>());
         AssertEx.False(statusView.Configured, "A revoked node authenticates nobody on the proxy surface.");
         AssertEx.Null(statusView.ApiKey);
 
         // The second revoke has nothing to remove, so it must say so rather than report a phantom success.
-        using var again = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Delete).ConfigureAwait(false);
+        using var again = await LocalModelProxyApiKeyRequests.AsOperatorAsync(Factory, client, HttpMethod.Delete);
         AssertEx.Equal(HttpStatusCode.NotFound, again.StatusCode);
     }
 }

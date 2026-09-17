@@ -64,7 +64,7 @@ public sealed class RetrievalCapacityBenchmarkTests : IDisposable
     [NotInParallel]
     public async Task SmokeProfile_RealFtsVectorFusionAndHydration_ReportsCorrectnessAndCapacityMetrics()
     {
-        var report = await RunAsync(RetrievalCapacityProfile.Parse("smoke")).ConfigureAwait(false);
+        var report = await RunAsync(RetrievalCapacityProfile.Parse("smoke"));
 
         AssertEx.Equal(expected: 256, report.Profile.ChunkCount);
         AssertEx.Equal(expected: 10, report.Query.QueryCount);
@@ -101,7 +101,7 @@ public sealed class RetrievalCapacityBenchmarkTests : IDisposable
         }
 
         var profile = RetrievalCapacityProfile.Parse(profileName);
-        var report = await RunAsync(profile).ConfigureAwait(false);
+        var report = await RunAsync(profile);
         Console.WriteLine(report.Summarize());
 
         var reportPath = Environment.GetEnvironmentVariable(ReportVariable);
@@ -130,8 +130,7 @@ public sealed class RetrievalCapacityBenchmarkTests : IDisposable
                                                    _keyHolder,
                                                    profile,
                                                    target,
-                                                   CancellationToken.None)
-                                               .ConfigureAwait(false);
+                                                   CancellationToken.None);
     }
 
     private static double ParseP95Target()

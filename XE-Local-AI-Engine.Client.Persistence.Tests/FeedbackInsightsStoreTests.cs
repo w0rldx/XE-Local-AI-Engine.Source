@@ -247,7 +247,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         // A feedback row FKs to its message (FK enforcement is on for this context), so the rated message must exist
         // first — mirroring production, where the assistant placeholder precedes the feedback upsert. The per-message
         // agent id (not the conversation's) is what attribution keys on, so each rated message carries it explicitly.
-        await InsertMessageAsync(connection, messageId, conversationId, createdAtUtc, agentDefinitionId).ConfigureAwait(false);
+        await InsertMessageAsync(connection, messageId, conversationId, createdAtUtc, agentDefinitionId);
 
         await using var command = connection.CreateCommand();
         command.CommandText = """

@@ -60,21 +60,21 @@ public sealed class UploadTranscriptionAudioEndpoint(ITranscriptionService sessi
         // refused after the whole file has been streamed to disk — the client waits out a pointless transfer, and the
         // node writes and deletes a file it was never going to use. The outcome mapping below keeps the same answer
         // for the race where the session disappears between this read and the transcription.
-        if (await _sessions.GetSessionAsync(req.SessionId, ct).ConfigureAwait(false) is null)
+        if (await _sessions.GetSessionAsync(req.SessionId, ct) is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         // The enumerator is held across the copy on purpose: a multipart section can only be read while it is the
         // reader's current one, so the second file part can only be detected AFTER the first has been consumed.
         var sections = FormFileSectionsAsync(ct).GetAsyncEnumerator(ct);
-        await using (sections.ConfigureAwait(false))
+        await using (sections)
         {
             FileMultipartSection? section;
             try
             {
-                section = await NextFileSectionAsync(sections).ConfigureAwait(false);
+                section = await NextFileSectionAsync(sections);
             }
             catch (Exception exception) when (IsMalformedBody(exception))
             {
@@ -87,11 +87,11 @@ public sealed class UploadTranscriptionAudioEndpoint(ITranscriptionService sessi
             if (section is null)
             {
                 AddError("A file is required.");
-                await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                await Send.ErrorsAsync(cancellation: ct);
                 return;
             }
 
-            await TranscribeSectionAsync(req, section, sections, ct).ConfigureAwait(false);
+            await TranscribeSectionAsync(req, section, sections, ct);
         }
     }
 
@@ -111,31 +111,31 @@ public sealed class UploadTranscriptionAudioEndpoint(ITranscriptionService sessi
         if (safeName is null)
         {
             AddError("The file name is invalid.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        await using var slot = await _sessions.BeginUploadAsync(req.SessionId, Path.GetExtension(safeName), ct).ConfigureAwait(false);
+        await using var slot = await _sessions.BeginUploadAsync(req.SessionId, Path.GetExtension(safeName), ct);
 
         try
         {
             // The cap is enforced WHILE the body is read: a streamed upload declares no length beforehand, and a cap
             // checked afterwards has already let every byte reach the disk.
-            _ = await slot.CopyFromAsync(section.FileStream ?? section.Section.Body, _maxUploadBytes, ct).ConfigureAwait(false);
+            _ = await slot.CopyFromAsync(section.FileStream ?? section.Section.Body, _maxUploadBytes, ct);
 
             // Reading past the first file answers a question the caller never gets told otherwise: a form carrying two
             // files would have had exactly one of them transcribed, silently, with the second discarded.
-            if (await NextFileSectionAsync(sections).ConfigureAwait(false) is not null)
+            if (await NextFileSectionAsync(sections) is not null)
             {
                 AddError("Exactly one file is accepted.");
-                await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                await Send.ErrorsAsync(cancellation: ct);
                 return;
             }
         }
         catch (TranscriptionUploadTooLargeException exception)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
         catch (Exception exception) when (IsMalformedBody(exception))
@@ -145,20 +145,20 @@ public sealed class UploadTranscriptionAudioEndpoint(ITranscriptionService sessi
             // await using, so the partial audio goes either way. A write failure on the engine's own temp file lands in
             // this arm too, which is the accepted cost of not answering 500 for a truncated upload.
             AddError("The uploaded file could not be read.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var result = await _sessions.TranscribeFileAsync(slot, ct).ConfigureAwait(false);
+        var result = await _sessions.TranscribeFileAsync(slot, ct);
         if (result.Outcome == TranscribeFileOutcome.UnsupportedContainer)
         {
-            await SendUnsupportedContainerAsync(result).ConfigureAwait(false);
+            await SendUnsupportedContainerAsync(result);
             return;
         }
 
         if (result.Outcome == TranscribeFileOutcome.SessionNotFound)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -166,20 +166,20 @@ public sealed class UploadTranscriptionAudioEndpoint(ITranscriptionService sessi
         // Completed, Cancelled or Failed with a sanitized reason. Answering 200 with that row is what lets one client
         // render every ending the same way, instead of translating a status code back into a session state. The
         // fallback pair carries the one refusal that writes nothing to the row ("already-transcribing").
-        var session = result.Session ?? await _sessions.GetSessionAsync(req.SessionId, ct).ConfigureAwait(false);
+        var session = result.Session ?? await _sessions.GetSessionAsync(req.SessionId, ct);
         if (session is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(session.ToResponse(result.ErrorCode, result.ErrorMessage), ct).ConfigureAwait(false);
+        await Send.OkAsync(session.ToResponse(result.ErrorCode, result.ErrorMessage), ct);
     }
 
     /// <summary>Advances to the next FILE section, skipping the nulls the reader yields for every other part.</summary>
     private static async Task<FileMultipartSection?> NextFileSectionAsync(IAsyncEnumerator<FileMultipartSection?> sections)
     {
-        while (await sections.MoveNextAsync().ConfigureAwait(false))
+        while (await sections.MoveNextAsync())
         {
             if (sections.Current is not null)
             {

@@ -30,8 +30,8 @@ public sealed class ExternalModelDetailsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, "/api/local/v1/models/ext%3Alocal-box%2Fqwen3/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = JsonSerializer.Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync().ConfigureAwait(false), JsonOptions)!;
+        using var response = await client.SendAsync(request);
+        var details = JsonSerializer.Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync(), JsonOptions)!;
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("ext:local-box/qwen3", details.ModelName);
@@ -52,8 +52,8 @@ public sealed class ExternalModelDetailsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, "/api/local/v1/models/ext%3Alocal-box%2Fqwen3/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = JsonSerializer.Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync().ConfigureAwait(false), JsonOptions)!;
+        using var response = await client.SendAsync(request);
+        var details = JsonSerializer.Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync(), JsonOptions)!;
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Null(details.MaxContextTokens);
@@ -66,7 +66,7 @@ public sealed class ExternalModelDetailsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, "/api/local/v1/models/ext%3Agone%2Fqwen3/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // A stale selection is a clean 404, exactly like a GGUF whose map row outlived its file.
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);

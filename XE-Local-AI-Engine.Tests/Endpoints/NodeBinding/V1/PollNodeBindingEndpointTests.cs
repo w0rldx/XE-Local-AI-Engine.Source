@@ -28,7 +28,7 @@ public sealed class PollNodeBindingEndpointTests
         {
             Content = JsonContent.Create(PollRequest())
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -45,7 +45,7 @@ public sealed class PollNodeBindingEndpointTests
             Content = JsonContent.Create(PollRequest())
         };
         factory.AddNonOperatorBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -69,11 +69,11 @@ public sealed class PollNodeBindingEndpointTests
             Content = JsonContent.Create(PollRequest())
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var poll = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<PollNodeBindingSessionResponse>().ConfigureAwait(false));
+        var poll = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<PollNodeBindingSessionResponse>());
         AssertEx.Equal("approved", poll.Status);
         AssertEx.Equal(7, poll.IntervalSeconds);
     }
@@ -93,12 +93,12 @@ public sealed class PollNodeBindingEndpointTests
             Content = JsonContent.Create(PollRequest())
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // The endpoint distinguishes "the operator cancelled" from "the caller disconnected": only the former is
         // reported as a normal 200 terminal state.
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var poll = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<PollNodeBindingSessionResponse>().ConfigureAwait(false));
+        var poll = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<PollNodeBindingSessionResponse>());
         AssertEx.Equal("cancelled", poll.Status);
         AssertEx.Equal(3, poll.IntervalSeconds, "A cancelled poll must echo the request's interval back.");
     }
@@ -118,10 +118,10 @@ public sealed class PollNodeBindingEndpointTests
             Content = JsonContent.Create(PollRequest())
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync();
         AssertEx.Contains(body, "unknown binding status", StringComparison.Ordinal);
     }
 

@@ -432,7 +432,7 @@ public sealed class WorkerShutdownDrainServiceTests
                 return true;
             }
 
-            var result = await _completionGate.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            var result = await _completionGate.Task.WaitAsync(timeout, cancellationToken);
             operations.Add("active-invocations-drained");
             ActiveInvocationCountValue = 0;
             return result;
@@ -577,7 +577,7 @@ public sealed class WorkerShutdownDrainServiceTests
             if (BlockUntilCancelled)
             {
                 // Model a hub disconnect that never completes on its own — only the drain's end-to-end deadline unblocks it.
-                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(Timeout.Infinite, cancellationToken);
             }
         }
 
@@ -684,7 +684,7 @@ public sealed class WorkerShutdownDrainServiceTests
             if (BlockUntilCancelled)
             {
                 // Model a dead-letter resend that never completes on its own — only the drain deadline unblocks it.
-                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(Timeout.Infinite, cancellationToken);
             }
         }
 

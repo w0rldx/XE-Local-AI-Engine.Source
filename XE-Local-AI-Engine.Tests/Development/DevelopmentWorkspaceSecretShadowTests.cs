@@ -55,8 +55,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         var (session, _) = await PrepareAsync(sandbox,
                 ".env",
                 "certs/server.pem",
-                "deploy/.npmrc")
-            .ConfigureAwait(false);
+                "deploy/.npmrc");
 
         var shadows = sandbox.Created[0].Mounts!
                              .Where(static mount => mount.TargetIsWorkspaceRelative)
@@ -93,7 +92,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         {
             var onDisk = Path.Combine(session.HostWorktreePath, path.Replace('/', Path.DirectorySeparatorChar));
             AssertEx.True(File.Exists(onDisk), onDisk);
-            AssertEx.Equal(SecretContent, await File.ReadAllTextAsync(onDisk).ConfigureAwait(false));
+            AssertEx.Equal(SecretContent, await File.ReadAllTextAsync(onDisk));
         }
     }
 
@@ -109,9 +108,9 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
                                            | SandboxProviderCapabilities.SupportsReadOnlyMounts
                                            | SandboxProviderCapabilities.SupportsKill);
 
-        var (session, _) = await PrepareAsync(sandbox, ".env").ConfigureAwait(false);
+        var (session, _) = await PrepareAsync(sandbox, ".env");
 
-        var status = await ReadGitOutputAsync(session.HostWorktreePath, "status", "--porcelain").ConfigureAwait(false);
+        var status = await ReadGitOutputAsync(session.HostWorktreePath, "status", "--porcelain");
         AssertEx.Equal(string.Empty, status, "the shadow must leave the worktree byte-identical to its base commit.");
     }
 
@@ -126,7 +125,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         var sandbox = new RecordingSandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
                                            | SandboxProviderCapabilities.SupportsKill);
 
-        var (_, sink) = await PrepareAsync(sandbox, ".env", "certs/server.pem").ConfigureAwait(false);
+        var (_, sink) = await PrepareAsync(sandbox, ".env", "certs/server.pem");
 
         AssertEx.Empty(sandbox.Created[0].Mounts!.Where(static mount => mount.ReadOnly));
         AssertEx.Equal(expected: 1, sink.Recorded.Count);
@@ -146,15 +145,14 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         var shadowing = new RecordingSandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
                                              | SandboxProviderCapabilities.SupportsReadOnlyMounts
                                              | SandboxProviderCapabilities.SupportsKill);
-        var refused = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => PrepareAsync(shadowing, many))
-                                    .ConfigureAwait(false);
+        var refused = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => PrepareAsync(shadowing, many));
         AssertEx.Contains(refused.Message, "33 committed files", StringComparison.Ordinal);
 
         // And the same repository still prepares on a backend that shadows nothing, because there is no mount list to
         // bound there — detection alone is unbounded work the engine can afford.
         var detectionOnly = new RecordingSandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
                                                  | SandboxProviderCapabilities.SupportsKill);
-        var (_, sink) = await PrepareAsync(detectionOnly, many).ConfigureAwait(false);
+        var (_, sink) = await PrepareAsync(detectionOnly, many);
         AssertEx.Equal(expected: 1, sink.Recorded.Count);
         AssertEx.Equal(expected: 33, sink.Recorded[0].Paths.Count);
     }
@@ -170,7 +168,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
                                            | SandboxProviderCapabilities.SupportsReadOnlyMounts
                                            | SandboxProviderCapabilities.SupportsKill);
 
-        var (_, sink) = await PrepareAsync(sandbox).ConfigureAwait(false);
+        var (_, sink) = await PrepareAsync(sandbox);
 
         AssertEx.Empty(sandbox.Created[0].Mounts!.Where(static mount => mount.TargetIsWorkspaceRelative));
         AssertEx.Empty(sink.Recorded);
@@ -187,7 +185,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
                                            | SandboxProviderCapabilities.SupportsReadOnlyMounts
                                            | SandboxProviderCapabilities.SupportsKill);
 
-        var (_, sink) = await PrepareAsync(sandbox, committed: [], untracked: [".env"]).ConfigureAwait(false);
+        var (_, sink) = await PrepareAsync(sandbox, committed: [], untracked: [".env"]);
 
         AssertEx.Empty(sandbox.Created[0].Mounts!.Where(static mount => mount.TargetIsWorkspaceRelative));
         AssertEx.Empty(sink.Recorded);
@@ -203,25 +201,25 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-secret@example.invalid").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Secret Test").ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-secret@example.invalid");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Secret Test");
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
         foreach (var path in committed)
         {
             var full = Path.Combine(repository, path.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            await File.WriteAllTextAsync(full, SecretContent).ConfigureAwait(false);
+            await File.WriteAllTextAsync(full, SecretContent);
         }
 
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".").ConfigureAwait(false);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
 
         foreach (var path in untracked)
         {
             var full = Path.Combine(repository, path.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            await File.WriteAllTextAsync(full, SecretContent).ConfigureAwait(false);
+            await File.WriteAllTextAsync(full, SecretContent);
         }
 
         var data = Path.Combine(_root, "d-" + Guid.NewGuid().ToString("N")[..8]);
@@ -235,8 +233,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
             TimeProvider.System,
             sink);
         var session = await provider.PrepareAsync(snapshot,
-                                        new DevelopmentRepositoryBinding(snapshot.ProjectId, snapshot.SelectedFolderId!.Value, "repository", repository, identity))
-                                    .ConfigureAwait(false);
+                                        new DevelopmentRepositoryBinding(snapshot.ProjectId, snapshot.SelectedFolderId!.Value, "repository", repository, identity));
         return (session, sink);
     }
 
@@ -261,9 +258,9 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         };
         process.Start();
         var error = process.StandardError.ReadToEndAsync();
-        var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        AssertEx.Equal(expected: 0, process.ExitCode, await error.ConfigureAwait(false));
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        AssertEx.Equal(expected: 0, process.ExitCode, await error);
         return output.Trim();
     }
 

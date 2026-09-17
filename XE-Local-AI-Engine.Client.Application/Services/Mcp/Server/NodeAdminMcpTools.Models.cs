@@ -43,7 +43,7 @@ public sealed partial class NodeAdminMcpTools
                         FileName = NullIfWhiteSpace(file_name),
                         Quant = NullIfWhiteSpace(quant),
                         Revision = NullIfWhiteSpace(revision)
-                    }, cancellationToken).ConfigureAwait(false);
+                    }, cancellationToken);
                     return new McpModelPullStartResponse(ticket.AlreadyInFlight ? "already_in_flight" : "accepted",
                         ticket.ModelName,
                         ticket.OperationId == Guid.Empty ? null : ticket.OperationId.ToString("D"));
@@ -61,7 +61,7 @@ public sealed partial class NodeAdminMcpTools
                         exception.Message);
                 }
             },
-            static response => response.FailureCode is not null).ConfigureAwait(false);
+            static response => response.FailureCode is not null);
     }
 
     [McpServerTool(Name = "get_model_pull")]
@@ -116,9 +116,9 @@ public sealed partial class NodeAdminMcpTools
     {
         return await InvokeAuditedAsync("delete_model", AuditArguments(("model_name", model_name)), async () =>
         {
-            var result = await _localModelAdministrationService.DeleteAsync(model_name, cancellationToken).ConfigureAwait(false);
+            var result = await _localModelAdministrationService.DeleteAsync(model_name, cancellationToken);
             return new McpModelDeleteResponse(result.Deleted, result.ModelName, result.FailureCode, result.DisplayMessage);
-        }, static response => !response.Deleted).ConfigureAwait(false);
+        }, static response => !response.Deleted);
     }
 
     [McpServerTool(Name = "set_default_model")]
@@ -131,12 +131,12 @@ public sealed partial class NodeAdminMcpTools
         {
             var result = await _localModelAdministrationService.SelectDefaultAsync(model_name,
                 LocalModelSelectionPolicy.InstalledLocalOnly,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             return new McpDefaultModelResponse(result.Succeeded,
                 result.SelectedModelName,
                 result.PreviousModelName,
                 result.FailureCode,
                 result.DisplayMessage);
-        }, static response => !response.Updated).ConfigureAwait(false);
+        }, static response => !response.Updated);
     }
 }

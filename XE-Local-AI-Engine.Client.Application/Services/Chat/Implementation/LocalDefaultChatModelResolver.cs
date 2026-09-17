@@ -34,7 +34,7 @@ public sealed class LocalDefaultChatModelResolver(
 
     public async Task<string?> ResolveAsync(string? persistedDefault, CancellationToken cancellationToken = default)
     {
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
 
         var named = installed
                     .Where(static descriptor => !string.IsNullOrWhiteSpace(descriptor.ModelName))
@@ -47,7 +47,7 @@ public sealed class LocalDefaultChatModelResolver(
         // Read the persisted classifications for all installed GGUFs in one DB round-trip.
         // A missing row means unknown/unprobed → eligible. We exclude ONLY when the effective
         // kind (OverrideKind ?? DetectedKind) is explicitly a non-chat kind (Embedding or Reranker).
-        var records = await _modelClassificationStore.ListAsync(cancellationToken).ConfigureAwait(false);
+        var records = await _modelClassificationStore.ListAsync(cancellationToken);
         var classificationIndex = records.ToDictionary(static r => r.ModelName, static r => r, StringComparer.OrdinalIgnoreCase);
 
         var chatModels = named

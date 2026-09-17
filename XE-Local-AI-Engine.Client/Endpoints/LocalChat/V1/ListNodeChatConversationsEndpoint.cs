@@ -24,12 +24,12 @@ public sealed class ListNodeChatConversationsEndpoint(INodeChatPersistenceServic
     public override async Task HandleAsync(ListNodeChatConversationsRequest req, CancellationToken ct)
     {
         var summaries = await _chatPersistence.ListConversationsAsync(new NodeChatListConversationsRequest(req.IncludeArchived, req.Limit),
-            ct).ConfigureAwait(false);
+            ct);
 
         await Send.OkAsync(new ListNodeChatConversationsResponse
         {
             Items = summaries.Select(static summary => summary.ToResponse()).ToArray(),
             MaxMessageSizeKb = _securityOptions.Value.MaxMessageSizeKb
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

@@ -36,15 +36,14 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task CreateProject_WithInitialItems_WritesProjectJudgeAndItemsInOneTransaction()
     {
-        var (context, store) = await CreateStoreAsync("create-with-items.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("create-with-items.sqlite");
         await using var scope = context;
 
         var project = await store.CreateProjectAsync(NewProject(),
                                      new BenchmarkJudgePolicyChangeInput(PolicyBytes, PolicyHash),
-                                     [Item("first"), Item("second")])
-                                 .ConfigureAwait(false);
+                                     [Item("first"), Item("second")]);
 
-        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var items = await store.ListTaskItemsAsync(project.Id);
         AssertEx.Equal(expected: 2, items.Count);
         AssertEx.Equal(expected: 0, items[0].Index);
         AssertEx.Equal(expected: 1, items[1].Index);
@@ -60,7 +59,7 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task CreateProject_WhenAnItemIsRejected_RollsBackTheProject()
     {
-        var (context, store) = await CreateStoreAsync("create-items-rollback.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("create-items-rollback.sqlite");
         await using var scope = context;
         var input = NewProject();
 
@@ -78,11 +77,10 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
                                           Id = duplicate
                                       }
                                   ]),
-                              "An item insert that cannot succeed must take the project creation down with it.")
-                          .ConfigureAwait(false);
+                              "An item insert that cannot succeed must take the project creation down with it.");
 
         context.ChangeTracker.Clear();
-        AssertEx.Null(await store.GetProjectAsync(input.Id).ConfigureAwait(false), "No project may survive a failed item insert.");
+        AssertEx.Null(await store.GetProjectAsync(input.Id), "No project may survive a failed item insert.");
     }
 
     /// <summary>
@@ -92,25 +90,25 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task GetOrCreateItems_OnALegacyProject_MaterializesItemZeroFromTheCoreTaskAndIsIdempotent()
     {
-        var (context, store) = await CreateStoreAsync("legacy-backfill.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("legacy-backfill.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
-        AssertEx.Empty(await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false));
+        var project = await store.CreateProjectAsync(NewProject());
+        AssertEx.Empty(await store.ListTaskItemsAsync(project.Id));
 
-        var first = await store.GetOrCreateItemsAsync(project.Id).ConfigureAwait(false);
+        var first = await store.GetOrCreateItemsAsync(project.Id);
 
         AssertEx.Equal(expected: 1, first.Count);
         AssertEx.Equal(expected: 0, first[0].Index);
         AssertEx.Equal(BenchmarkTaskItemKinds.Prompt, first[0].Kind);
         AssertEx.True(first[0].PromptJson.Span.SequenceEqual(project.CoreTaskJson.Span), "Item 0 asks exactly what the project's core task asked.");
 
-        var second = await store.GetOrCreateItemsAsync(project.Id).ConfigureAwait(false);
+        var second = await store.GetOrCreateItemsAsync(project.Id);
         AssertEx.Equal(expected: 1, second.Count);
         AssertEx.Equal(first[0].Id, second[0].Id, "The backfill is idempotent — a second touch reads, it does not write.");
 
         // Materializing item 0 changes nothing about what the project asks, so the hash every historical run is
         // compared against must not move: doing so would unrank a whole project's history for a bookkeeping write.
-        AssertEx.Null(AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false)).TaskItemSetHash,
+        AssertEx.Null(AssertEx.NotNull(await store.GetProjectAsync(project.Id)).TaskItemSetHash,
             "The lazy backfill must leave the set hash null.");
     }
 
@@ -122,37 +120,37 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task TaskItemSetHash_MovesOnAddAndDelete_AndIsUnchangedByAReorder()
     {
-        var (context, store) = await CreateStoreAsync("set-hash.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("set-hash.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first"), Item("second")]).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first"), Item("second")]);
         var afterCreate = AssertEx.NotNull(project.TaskItemSetHash);
 
-        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
-        _ = await store.ReorderTaskItemsAsync(project.Id, [items[1].Id, items[0].Id]).ConfigureAwait(false);
-        var reordered = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var items = await store.ListTaskItemsAsync(project.Id);
+        _ = await store.ReorderTaskItemsAsync(project.Id, [items[1].Id, items[0].Id]);
+        var reordered = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         AssertEx.Equal(afterCreate, reordered.TaskItemSetHash, "A reorder asks the same questions, so the set hash must not move.");
-        var reorderedItems = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var reorderedItems = await store.ListTaskItemsAsync(project.Id);
         AssertEx.Equal(items[1].Id, reorderedItems[0].Id, "The reorder still has to renumber the items.");
         AssertEx.Equal(expected: 1, reorderedItems[0].Revision, "A reorder is not an edit: no revision moves.");
 
-        var added = await store.CreateTaskItemAsync(project.Id, reordered.Version, Item("third")).ConfigureAwait(false);
-        var afterAdd = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var added = await store.CreateTaskItemAsync(project.Id, reordered.Version, Item("third"));
+        var afterAdd = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         AssertEx.True(!string.Equals(afterCreate, afterAdd.TaskItemSetHash, StringComparison.Ordinal), "Adding a question changes what the project asks.");
 
-        await store.DeleteTaskItemAsync(project.Id, added.Id, added.Version).ConfigureAwait(false);
-        var afterDelete = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        await store.DeleteTaskItemAsync(project.Id, added.Id, added.Version);
+        var afterDelete = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         AssertEx.Equal(afterCreate, afterDelete.TaskItemSetHash, "Deleting exactly what was added returns the project to the set it had.");
     }
 
     [Test]
     public async Task UpdateTaskItem_BumpsTheRevisionAndRecomputesTheInputHash()
     {
-        var (context, store) = await CreateStoreAsync("update-item.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("update-item.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]).ConfigureAwait(false);
-        var item = (await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false))[0];
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]);
+        var item = (await store.ListTaskItemsAsync(project.Id))[0];
 
-        var updated = await store.UpdateTaskItemAsync(project.Id, item.Id, item.Version, Item("first edited")).ConfigureAwait(false);
+        var updated = await store.UpdateTaskItemAsync(project.Id, item.Id, item.Version, Item("first edited"));
 
         AssertEx.Equal(expected: 2, updated.Revision);
         AssertEx.True(!string.Equals(item.InputHash, updated.InputHash, StringComparison.Ordinal), "An edited item is a different question.");
@@ -165,40 +163,36 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
                                            Item("first edited") with
                                            {
                                                ReferenceAnswerJson = Encoding.UTF8.GetBytes("expected")
-                                           })
-                                       .ConfigureAwait(false);
+                                           });
         AssertEx.True(!string.Equals(updated.InputHash, withReference.InputHash, StringComparison.Ordinal),
             "A reference answer participates in the input hash.");
 
         _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateTaskItemAsync(project.Id, item.Id, updated.Version, Item("stale")),
-                              "The item's version is the write's compare-and-swap target.")
-                          .ConfigureAwait(false);
+                              "The item's version is the write's compare-and-swap target.");
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.UpdateTaskItemAsync(project.Id, item.Id, withReference.Version, Item("first edited") with
                               {
                                   Kind = BenchmarkTaskItemKinds.Niah
                               }),
-                              "A kind change under a stable id is a different item wearing the old identity.")
-                          .ConfigureAwait(false);
+                              "A kind change under a stable id is a different item wearing the old identity.");
     }
 
     [Test]
     public async Task DeleteTaskItem_RefusesTheLastLeaf_AndTakesAGeneratorsChildrenWithIt()
     {
-        var (context, store) = await CreateStoreAsync("delete-item.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("delete-item.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("only")]).ConfigureAwait(false);
-        var only = (await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false))[0];
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("only")]);
+        var only = (await store.ListTaskItemsAsync(project.Id))[0];
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.DeleteTaskItemAsync(project.Id, only.Id, only.Version),
-                              "A benchmark project always asks at least one question.")
-                          .ConfigureAwait(false);
+                              "A benchmark project always asks at least one question.");
 
-        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         var generator = await store.CreateTaskItemAsync(project.Id, current.Version, Item("generator") with
         {
             Kind = BenchmarkTaskItemKinds.Niah
-        }).ConfigureAwait(false);
-        current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        });
+        current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
         _ = await store.CreateTaskItemAsync(project.Id,
                            current.Version,
                            Item("case") with
@@ -206,14 +200,13 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
                                Kind = BenchmarkTaskItemKinds.NiahCase,
                                ParentItemId = generator.Id,
                                CountsTowardScore = false
-                           })
-                       .ConfigureAwait(false);
+                           });
 
         // Foreign keys are off on this connection, so the delete order IS the referential integrity — a child left
         // behind would point at a generator that no longer exists and nothing would complain.
-        await store.DeleteTaskItemAsync(project.Id, generator.Id, generator.Version).ConfigureAwait(false);
+        await store.DeleteTaskItemAsync(project.Id, generator.Id, generator.Version);
 
-        var remaining = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var remaining = await store.ListTaskItemsAsync(project.Id);
         AssertEx.Equal(expected: 1, remaining.Count, "The generator and its case go together.");
         AssertEx.Equal(only.Id, remaining[0].Id);
     }
@@ -225,24 +218,23 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task ItemSetChange_ResetsTheRankCohort_AndAReorderDoesNot()
     {
-        var (context, store) = await CreateStoreAsync("cohort-reset.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("cohort-reset.sqlite");
         await using var scope = context;
         var project = await store.CreateProjectAsync(NewProject(),
                                      new BenchmarkJudgePolicyChangeInput(PolicyBytes, PolicyHash),
-                                     [Item("first"), Item("second")])
-                                 .ConfigureAwait(false);
-        var generation = AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id).ConfigureAwait(false)).CohortGeneration;
+                                     [Item("first"), Item("second")]);
+        var generation = AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id)).CohortGeneration;
 
-        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
-        _ = await store.ReorderTaskItemsAsync(project.Id, [items[1].Id, items[0].Id]).ConfigureAwait(false);
+        var items = await store.ListTaskItemsAsync(project.Id);
+        _ = await store.ReorderTaskItemsAsync(project.Id, [items[1].Id, items[0].Id]);
         AssertEx.Equal(generation,
-            AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id).ConfigureAwait(false)).CohortGeneration,
+            AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id)).CohortGeneration,
             "A reorder must not reset a cohort: nothing about what was asked changed.");
 
-        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        _ = await store.CreateTaskItemAsync(project.Id, current.Version, Item("third")).ConfigureAwait(false);
+        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        _ = await store.CreateTaskItemAsync(project.Id, current.Version, Item("third"));
         AssertEx.Equal(generation + 1,
-            AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id).ConfigureAwait(false)).CohortGeneration,
+            AssertEx.NotNull(await store.GetCurrentJudgePolicyRevisionAsync(project.Id)).CohortGeneration,
             "Adding an item resets the cohort, exactly as a policy activation does.");
     }
 
@@ -253,18 +245,16 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task TaskItemWrites_AreRefusedWhileTheProjectHasLiveWork()
     {
-        var (context, store) = await CreateStoreAsync("active-work.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("active-work.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]).ConfigureAwait(false);
-        var item = (await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false))[0];
-        var afterFreeze = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]);
+        var item = (await store.ListTaskItemsAsync(project.Id))[0];
+        var afterFreeze = await store.StartRunAsync(NewRun(project));
 
-        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.CreateTaskItemAsync(project.Id, current.Version, Item("second")))
-                          .ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateTaskItemAsync(project.Id, item.Id, item.Version, Item("edited")))
-                          .ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.DeleteTaskItemAsync(project.Id, item.Id, item.Version)).ConfigureAwait(false);
+        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.CreateTaskItemAsync(project.Id, current.Version, Item("second")));
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateTaskItemAsync(project.Id, item.Id, item.Version, Item("edited")));
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.DeleteTaskItemAsync(project.Id, item.Id, item.Version));
         AssertEx.NotNull(afterFreeze, "The freeze is what made the project busy.");
     }
 
@@ -275,21 +265,21 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task StartRun_StampsASingletonCellAndTheProjectsSetHash()
     {
-        var (context, store) = await CreateStoreAsync("run-stamps.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("run-stamps.sqlite");
         await using var scope = context;
-        var withItems = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]).ConfigureAwait(false);
-        var run = await store.StartRunAsync(NewRun(withItems)).ConfigureAwait(false);
+        var withItems = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]);
+        var run = await store.StartRunAsync(NewRun(withItems));
 
-        var stored = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false);
+        var stored = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id);
         AssertEx.Equal("cell:" + run.Id.ToString("D"), stored.CellKey, "A run that is a cell of one derives its key from its own id.");
         AssertEx.Equal(AssertEx.NotNull(withItems.TaskItemSetHash), stored.TaskItemSetHash);
         AssertEx.Equal("v1:legacy", stored.TaskInputHash, "The per-item stamp lands when the freeze fans out over items.");
 
         // A project with no items at all — the shape every project had before this migration — stamps the legacy
         // constant on both axes, which is what it is also compared against.
-        var legacy = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
-        var legacyRun = await store.StartRunAsync(NewRun(legacy)).ConfigureAwait(false);
-        var storedLegacy = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == legacyRun.Id).ConfigureAwait(false);
+        var legacy = await store.CreateProjectAsync(NewProject());
+        var legacyRun = await store.StartRunAsync(NewRun(legacy));
+        var storedLegacy = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == legacyRun.Id);
         AssertEx.Equal("v1:legacy", storedLegacy.TaskItemSetHash);
         AssertEx.Equal("v1:legacy", storedLegacy.TaskInputHash);
     }
@@ -301,18 +291,18 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task UpdateProject_ChangingTheCoreTask_KeepsTheFirstItemInSync()
     {
-        var (context, store) = await CreateStoreAsync("core-task-sync.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("core-task-sync.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first"), Item("second")]).ConfigureAwait(false);
-        var before = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first"), Item("second")]);
+        var before = await store.ListTaskItemsAsync(project.Id);
 
         var edited = NewProject(project.Id) with
         {
             CoreTaskJson = Encoding.UTF8.GetBytes("a different question")
         };
-        var updated = await store.UpdateProjectAsync(project.Id, project.Version, edited).ConfigureAwait(false);
+        var updated = await store.UpdateProjectAsync(project.Id, project.Version, edited);
 
-        var after = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var after = await store.ListTaskItemsAsync(project.Id);
         AssertEx.Equal("a different question", Encoding.UTF8.GetString(after[0].PromptJson.Span));
         AssertEx.Equal(expected: 2, after[0].Revision, "A rewritten prompt is a new revision of that item.");
         AssertEx.True(!string.Equals(before[0].InputHash, after[0].InputHash, StringComparison.Ordinal));
@@ -324,32 +314,29 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var renamed = await store.UpdateProjectAsync(project.Id, updated.Version, edited with
         {
             Name = "Renamed"
-        }).ConfigureAwait(false);
-        AssertEx.Equal(expected: 2, (await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false))[0].Revision);
+        });
+        AssertEx.Equal(expected: 2, (await store.ListTaskItemsAsync(project.Id))[0].Revision);
         AssertEx.Equal(AssertEx.NotNull(updated.TaskItemSetHash), AssertEx.NotNull(renamed.TaskItemSetHash));
     }
 
     [Test]
     public async Task TaskItemWrites_RejectAnEmptyPromptAndAnUnknownKind()
     {
-        var (context, store) = await CreateStoreAsync("item-validation.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("item-validation.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]).ConfigureAwait(false);
-        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]);
+        var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, new BenchmarkTaskItemInput(ReadOnlyMemory<byte>.Empty)))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, new BenchmarkTaskItemInput(ReadOnlyMemory<byte>.Empty)));
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, Item("x") with
                           {
                               Kind = "invented"
-                          }))
-                          .ConfigureAwait(false);
+                          }));
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, Item("x") with
                               {
                                   ParentItemId = Guid.NewGuid()
                               }),
-                              "A parent from another project is not a parent.")
-                          .ConfigureAwait(false);
+                              "A parent from another project is not a parent.");
     }
 
     /// <summary>
@@ -361,12 +348,11 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     [Test]
     public async Task DeleteProject_LeavesNoProjectScopedRowsBehind()
     {
-        var (context, store) = await CreateStoreAsync("delete-project-orphans.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("delete-project-orphans.sqlite");
         await using var scope = context;
         var project = await store.CreateProjectAsync(NewProject(),
                                      new BenchmarkJudgePolicyChangeInput(PolicyBytes, PolicyHash),
-                                     [Item("first"), Item("second")])
-                                 .ConfigureAwait(false);
+                                     [Item("first"), Item("second")]);
         _ = context.BenchmarkPairwiseFits.Add(new BenchmarkPairwiseFit
         {
             Id = Guid.NewGuid(),
@@ -384,19 +370,19 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
             CreatedAtUtc = 1,
             Version = 1
         });
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        await store.DeleteProjectAsync(project.Id, project.Version).ConfigureAwait(false);
+        await store.DeleteProjectAsync(project.Id, project.Version);
 
         context.ChangeTracker.Clear();
-        AssertEx.Equal(expected: 0, await context.BenchmarkTaskItems.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false),
+        AssertEx.Equal(expected: 0, await context.BenchmarkTaskItems.CountAsync(entity => entity.ProjectId == project.Id),
             "The items hold encrypted prompts and expected answers; a deleted project must not leave them behind.");
-        AssertEx.Equal(expected: 0, await context.BenchmarkPairwiseFits.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await context.BenchmarkJudgePolicyRevisions.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await context.BenchmarkComparisons.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false));
-        AssertEx.Equal(expected: 0, await context.BenchmarkRuns.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false));
-        AssertEx.Null(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await context.BenchmarkPairwiseFits.CountAsync(entity => entity.ProjectId == project.Id));
+        AssertEx.Equal(expected: 0, await context.BenchmarkJudgePolicyRevisions.CountAsync(entity => entity.ProjectId == project.Id));
+        AssertEx.Equal(expected: 0, await context.BenchmarkComparisons.CountAsync(entity => entity.ProjectId == project.Id));
+        AssertEx.Equal(expected: 0, await context.BenchmarkRuns.CountAsync(entity => entity.ProjectId == project.Id));
+        AssertEx.Null(await store.GetProjectAsync(project.Id));
     }
 
     private static BenchmarkTaskItemInput Item(string prompt) =>
@@ -413,8 +399,8 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     {
         _ = Directory.CreateDirectory(_rootPath);
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
-        _ = await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureDeletedAsync();
+        _ = await context.Database.EnsureCreatedAsync();
         return (context, new BenchmarkStore(context, TimeProvider.System));
     }
 }

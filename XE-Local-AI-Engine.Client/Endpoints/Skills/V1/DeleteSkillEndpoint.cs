@@ -18,13 +18,13 @@ public sealed class DeleteSkillEndpoint(IAgentSkillService agentSkillService)
 
     public override async Task HandleAsync(DeleteSkillRequest req, CancellationToken ct)
     {
-        var deleted = await _agentSkillService.DeleteAsync(req.SkillId, ct).ConfigureAwait(false);
+        var deleted = await _agentSkillService.DeleteAsync(req.SkillId, ct);
         if (!deleted)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

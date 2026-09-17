@@ -68,14 +68,14 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         }
 
         return hasModel
-            ? await ResolveBareModelAsync(request, cancellationToken).ConfigureAwait(false)
-            : await ResolveSavedAgentAsync(request, cancellationToken).ConfigureAwait(false);
+            ? await ResolveBareModelAsync(request, cancellationToken)
+            : await ResolveSavedAgentAsync(request, cancellationToken);
     }
 
     private async Task<McpExecutionBindingResolution> ResolveBareModelAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)
     {
         var modelId = request.ModelId!;
-        if (!await _ggufModelStore.ExistsAsync(modelId, cancellationToken).ConfigureAwait(false))
+        if (!await _ggufModelStore.ExistsAsync(modelId, cancellationToken))
         {
             return Reject(McpExecutionFailureCodes.ModelNotAvailable, "Cannot run: the requested local model is not available.");
         }
@@ -99,7 +99,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
     private async Task<McpExecutionBindingResolution> ResolveSavedAgentAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)
     {
-        var definition = await _agentDefinitionService.GetByKeyAsync(request.AgentKey!, cancellationToken).ConfigureAwait(false);
+        var definition = await _agentDefinitionService.GetByKeyAsync(request.AgentKey!, cancellationToken);
         if (definition is null)
         {
             return Reject(McpExecutionFailureCodes.AgentNotFound, "Cannot run: the requested saved agent was not found.");
@@ -112,19 +112,18 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
         var modelId = definition.ModelProfile ?? request.ModelOverrideId;
         if (string.IsNullOrWhiteSpace(modelId)
-            || !await _ggufModelStore.ExistsAsync(modelId, cancellationToken).ConfigureAwait(false))
+            || !await _ggufModelStore.ExistsAsync(modelId, cancellationToken))
         {
             return Reject(McpExecutionFailureCodes.ModelNotAvailable, "Cannot run: the agent's local model is not available.");
         }
 
-        var capabilities = await _modelCapabilityResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false);
+        var capabilities = await _modelCapabilityResolver.ResolveAsync(modelId, cancellationToken);
         var (supportsThinking, supportsTools, _) = capabilities;
         var resolved = await _agentDefinitionResolver.ResolveAsync(definition.Id,
                                                          modelId,
                                                          supportsTools: supportsTools,
                                                          honorModelProfile: !string.IsNullOrWhiteSpace(definition.ModelProfile),
-                                                         cancellationToken: cancellationToken)
-                                                     .ConfigureAwait(false);
+                                                         cancellationToken: cancellationToken);
         if (resolved is null || resolved.AgentDefinitionVersion != definition.Version)
         {
             return Reject(McpExecutionFailureCodes.AgentConfigChanged, "Cannot run: the saved agent configuration changed while it was being resolved.");

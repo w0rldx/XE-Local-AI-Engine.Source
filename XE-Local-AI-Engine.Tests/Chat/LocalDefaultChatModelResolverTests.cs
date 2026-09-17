@@ -28,7 +28,7 @@ public sealed class LocalDefaultChatModelResolverTests
     {
         var resolver = CreateResolver();
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: "qwen3.5:0.8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: "qwen3.5:0.8b");
 
         AssertEx.Null(resolved);
     }
@@ -41,7 +41,7 @@ public sealed class LocalDefaultChatModelResolverTests
         var resolver = CreateResolver(Gguf("alpha:Q4_K_M", DateTimeOffset.UnixEpoch),
             Gguf("BravO:Q8_0", DateTimeOffset.UnixEpoch.AddDays(5)));
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: "bravo:Q8_0").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: "bravo:Q8_0");
 
         AssertEx.Equal("BravO:Q8_0", resolved);
     }
@@ -54,7 +54,7 @@ public sealed class LocalDefaultChatModelResolverTests
         var resolver = CreateResolver(Gguf("older:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1)),
             Gguf("newer:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)));
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: "qwen3.5:0.8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: "qwen3.5:0.8b");
 
         AssertEx.Equal("newer:Q4_K_M", resolved);
     }
@@ -66,7 +66,7 @@ public sealed class LocalDefaultChatModelResolverTests
         var resolver = CreateResolver(Gguf("zeta:Q4_K_M", DateTimeOffset.UnixEpoch),
             Gguf("alpha:Q4_K_M", DateTimeOffset.UnixEpoch));
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Equal("alpha:Q4_K_M", resolved);
     }
@@ -80,7 +80,7 @@ public sealed class LocalDefaultChatModelResolverTests
         LocalModelDescriptor[] oneGguf = [Gguf("phi-4:Q4_K_M", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver(noRows, oneGguf);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Equal("phi-4:Q4_K_M", resolved);
     }
@@ -101,7 +101,7 @@ public sealed class LocalDefaultChatModelResolverTests
         ];
         var resolver = CreateResolver(classifications, installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Equal("chat-model:Q4_K_M", resolved);
     }
@@ -117,7 +117,7 @@ public sealed class LocalDefaultChatModelResolverTests
         LocalModelDescriptor[] installed = [Gguf("misclassified:Q4_K_M", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver(classifications, installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Null(resolved);
     }
@@ -133,7 +133,7 @@ public sealed class LocalDefaultChatModelResolverTests
         LocalModelDescriptor[] installed = [Gguf("corrected:Q4_K_M", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver(classifications, installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Equal("corrected:Q4_K_M", resolved);
     }
@@ -148,7 +148,7 @@ public sealed class LocalDefaultChatModelResolverTests
         LocalModelDescriptor[] installed = [Gguf("embed-only:Q4_K_M", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver(classifications, installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Null(resolved);
     }
@@ -165,7 +165,7 @@ public sealed class LocalDefaultChatModelResolverTests
         ];
         var resolver = CreateResolver([], installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Equal("qwen2.5:Q4_K_M", resolved);
     }
@@ -176,7 +176,7 @@ public sealed class LocalDefaultChatModelResolverTests
         LocalModelDescriptor[] installed = [Gguf("mxbai-embed-large:Q8_0", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver([], installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Null(resolved);
     }
@@ -197,7 +197,7 @@ public sealed class LocalDefaultChatModelResolverTests
         ];
         var resolver = CreateResolver(classifications, installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Equal("chat-model:Q4_K_M", resolved);
     }
@@ -214,7 +214,7 @@ public sealed class LocalDefaultChatModelResolverTests
         ];
         var resolver = CreateResolver([], installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Equal("qwen2.5:Q4_K_M", resolved);
     }
@@ -225,7 +225,7 @@ public sealed class LocalDefaultChatModelResolverTests
         LocalModelDescriptor[] installed = [Gguf("bge-reranker-large:Q8_0", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver([], installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Null(resolved);
     }
@@ -241,7 +241,7 @@ public sealed class LocalDefaultChatModelResolverTests
         LocalModelDescriptor[] installed = [Gguf("nomic-embed-chat:Q4_K_M", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver(classifications, installed);
 
-        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(persistedDefault: null);
 
         AssertEx.Equal("nomic-embed-chat:Q4_K_M", resolved);
     }

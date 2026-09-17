@@ -40,7 +40,7 @@ internal static class DesktopPortStore
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
 
-        var port = await TryReadPersistedPortAsync(dataDirectory, cancellationToken).ConfigureAwait(false);
+        var port = await TryReadPersistedPortAsync(dataDirectory, cancellationToken);
         if (port is null)
         {
             return DesktopLaunch.LoopbackBindUrl;
@@ -118,7 +118,7 @@ internal static class DesktopPortStore
     }
 
     internal static async Task<ReadyInfo?> ReadReadyAsync(string dataDirectory, CancellationToken cancellationToken = default) =>
-        (await ReadReadyEvidenceAsync(dataDirectory, cancellationToken).ConfigureAwait(false)).Info;
+        (await ReadReadyEvidenceAsync(dataDirectory, cancellationToken)).Info;
 
     internal static async Task<ReadyEvidence> ReadReadyEvidenceAsync(string dataDirectory, CancellationToken cancellationToken = default)
     {
@@ -127,7 +127,7 @@ internal static class DesktopPortStore
         try
         {
             await using var stream = File.OpenRead(path);
-            var parsed = await JsonSerializer.DeserializeAsync<ReadyInfo>(stream, JsonSerializerOptions.Web, cancellationToken).ConfigureAwait(false);
+            var parsed = await JsonSerializer.DeserializeAsync<ReadyInfo>(stream, JsonSerializerOptions.Web, cancellationToken);
             return TryValidateReadyInfo(parsed, dataDirectory, out var validated)
                 ? new ReadyEvidence(ReadyEvidenceState.Valid, validated)
                 : new ReadyEvidence(ReadyEvidenceState.Invalid, Info: null);
@@ -244,7 +244,7 @@ internal static class DesktopPortStore
                 return null;
             }
 
-            content = await File.ReadAllTextAsync(portFilePath, cancellationToken).ConfigureAwait(false);
+            content = await File.ReadAllTextAsync(portFilePath, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

@@ -48,7 +48,7 @@ public sealed class ExternalAppEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new ExternalAppEventPublisher(hubContext);
 
-        await publisher.PublishAsync(instanceId, sequence: 7, kind, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        await publisher.PublishAsync(instanceId, sequence: 7, kind, ExternalAppInstanceStatus.Running);
 
         await proxy.Received(1)
                    .SendCoreAsync(ExternalAppHubEvents.Changed,
@@ -79,8 +79,7 @@ public sealed class ExternalAppEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new ExternalAppEventPublisher(hubContext);
 
-        await publisher.PublishAsync(instanceId, sequence: 42, ExternalAppInstanceEventKind.StartRequested, ExternalAppInstanceStatus.Starting)
-                       .ConfigureAwait(false);
+        await publisher.PublishAsync(instanceId, sequence: 42, ExternalAppInstanceEventKind.StartRequested, ExternalAppInstanceStatus.Starting);
 
         await proxy.Received(1)
                    .SendCoreAsync("externalAppChanged",
@@ -103,8 +102,7 @@ public sealed class ExternalAppEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new ExternalAppEventPublisher(hubContext);
 
-        await publisher.PublishAsync(instanceId, sequence: 1, ExternalAppInstanceEventKind.Started, ExternalAppInstanceStatus.Running)
-                       .ConfigureAwait(false);
+        await publisher.PublishAsync(instanceId, sequence: 1, ExternalAppInstanceEventKind.Started, ExternalAppInstanceStatus.Running);
 
         _ = clients.Received(1).Group($"external-app-{instanceId:N}");
         AssertEx.Equal(expected: 1, clients.ReceivedCalls().Count());
@@ -123,8 +121,7 @@ public sealed class ExternalAppEventPublisherTests
         _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() => publisher.PublishAsync(Guid.NewGuid(),
                               sequence: 1,
                               (ExternalAppInstanceEventKind)99,
-                              ExternalAppInstanceStatus.Running))
-                          .ConfigureAwait(false);
+                              ExternalAppInstanceStatus.Running));
     }
 
     /// <summary>
@@ -153,7 +150,7 @@ public sealed class ExternalAppEventPublisherTests
         hubContext.Clients.Returns(clients);
         var publisher = new ExternalAppEventPublisher(hubContext);
 
-        await publisher.PublishPullProgressAsync(instanceId, "web", layerCount: 9, completedLayers: 3, bytes: 4_096L).ConfigureAwait(false);
+        await publisher.PublishPullProgressAsync(instanceId, "web", layerCount: 9, completedLayers: 3, bytes: 4_096L);
 
         await proxy.Received(1)
                    .SendCoreAsync("externalAppPullProgress",

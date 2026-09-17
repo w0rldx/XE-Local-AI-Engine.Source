@@ -31,13 +31,13 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
         var single = CreateDefinition(kind: AgentDefinitionKind.Single, modelProfile: ToolCapableModel);
 
-        var resolution = await resolver.ResolveAsync(single, ToolCapableModel).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(single, ToolCapableModel);
 
         AssertEx.True(resolution.Orchestration is null, "A single-agent definition must never resolve to an orchestration.");
         // NOT a degradation: a Single-kind agent never asked for orchestration, so it must raise no operator notice.
         AssertEx.Equal(OrchestrationDegradationReason.None, resolution.Reason);
         AssertEx.Null(resolution.DegradationNotice);
-        await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -46,7 +46,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out _, OfferTool("GetCurrentTime"));
         var orchestrator = CreateDefinition(kind: AgentDefinitionKind.Orchestrator, modelProfile: ToolCapableModel, topologyJson: null);
 
-        var resolution = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(orchestrator, ToolCapableModel);
 
         AssertEx.True(resolution.Orchestration is null, "An orchestrator with no topology must degrade to single-agent (null).");
         AssertEx.Equal(OrchestrationDegradationReason.TopologyInvalid, resolution.Reason);
@@ -59,7 +59,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out _, OfferTool("GetCurrentTime"));
         var orchestrator = CreateDefinition(kind: AgentDefinitionKind.Orchestrator, modelProfile: ToolCapableModel, topologyJson: "{ not json");
 
-        var resolution = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(orchestrator, ToolCapableModel);
 
         AssertEx.True(resolution.Orchestration is null, "An invalid topology must degrade to single-agent (null).");
         AssertEx.Equal(OrchestrationDegradationReason.TopologyInvalid, resolution.Reason);
@@ -74,7 +74,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
 
-        var resolution = await resolver.ResolveAsync(orchestrator, IncapableModel).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(orchestrator, IncapableModel);
 
         AssertEx.True(resolution.Orchestration is null, "An incapable orchestrator model must degrade the whole orchestration to single-agent.");
         AssertEx.Equal(OrchestrationDegradationReason.ModelNotToolCapable, resolution.Reason);
@@ -97,7 +97,7 @@ public sealed class OrchestrationResolverTests
         SeedParticipants(store, specialistA, specialistB);
         store.GetByIdAsync(triageId, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
 
-        var resolution = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(orchestrator, ToolCapableModel);
 
         AssertEx.True(resolution.Orchestration is null, "A topology whose triage no longer exists must degrade to single-agent.");
         AssertEx.Equal(OrchestrationDegradationReason.TriageMissing, resolution.Reason);
@@ -113,7 +113,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, incapableSpecialist);
 
-        var resolution = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(orchestrator, ToolCapableModel);
 
         AssertEx.True(resolution.Orchestration is null, "Fewer than two capable participants must degrade to single-agent.");
         AssertEx.Equal(OrchestrationDegradationReason.TooFewCapableParticipants, resolution.Reason);
@@ -130,7 +130,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(triage.Id.ToString("D"), resolved!.Spec.TriageParticipantKey);
@@ -182,7 +182,7 @@ public sealed class OrchestrationResolverTests
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, thinkingModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, thinkingModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var triageSpec = resolved!.Spec.Participants.Single(participant => participant.Key == triage.Id.ToString("D"));
@@ -197,7 +197,7 @@ public sealed class OrchestrationResolverTests
         // Effective-model knowledge-tool locality gate: the turn's active model is LOCAL, but a participant pins a
         // CLOUD model. That participant's knowledge tools must be gated on ITS OWN effective model's locality, resolved
         // per participant.
-        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false).ConfigureAwait(false);
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false);
 
         AssertEx.NotNull(resolved);
         var localTriage = resolved!.Spec.Participants.Single(participant => participant.Name == "Triage");
@@ -210,7 +210,7 @@ public sealed class OrchestrationResolverTests
     [Test]
     public async Task ResolveAsync_WhenParticipantPinnedToCloudModel_AndOperatorOptedIn_OffersKnowledgeTools()
     {
-        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: true).ConfigureAwait(false);
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: true);
 
         AssertEx.NotNull(resolved);
         var cloudSpecialist = resolved!.Spec.Participants.Single(participant => participant.Name == "Specialist");
@@ -222,7 +222,7 @@ public sealed class OrchestrationResolverTests
     {
         // Blocker 1: the caller gates the SHARED orchestration seed's attachment content on this aggregate (a cloud
         // participant taints the whole shared seed), and names the cloud model in the withheld notice.
-        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false).ConfigureAwait(false);
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false);
 
         AssertEx.NotNull(resolved);
         AssertEx.True(resolved!.AnyParticipantIsCloud, "a cloud-pinned participant must make the aggregate cloud-reaching");
@@ -238,7 +238,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         AssertEx.False(resolved!.AnyParticipantIsCloud, "an all-local orchestration must not be flagged cloud-reaching");
@@ -288,7 +288,7 @@ public sealed class OrchestrationResolverTests
         SeedParticipants(store, triage, specialist);
 
         // Active turn model is LOCAL (ToolCapableModel).
-        return (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        return (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
     }
 
     [Test]
@@ -307,7 +307,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("Calculate"));
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
@@ -329,7 +329,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
@@ -361,7 +361,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
@@ -389,7 +389,7 @@ public sealed class OrchestrationResolverTests
             OfferTool("mcp__x__y", requiresApproval: false, ToolCategory.Network));
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
@@ -410,7 +410,7 @@ public sealed class OrchestrationResolverTests
                          EnabledAction(specialist.Id, "Stay terse.", priority: 1)
                      ]));
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
@@ -429,13 +429,13 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
         AssertEx.Equal("Instructions for Specialist", specialistSpec.Instructions);
         // A disabled participant playbook must not query the store at all.
-        await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -457,7 +457,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([highPriority, lowPriority, ignored]));
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel, "run the tests").ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel, "run the tests")).Orchestration;
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 1, ranker.CallCount);
@@ -496,7 +496,7 @@ public sealed class OrchestrationResolverTests
         SeedParticipants(store, triage, specialist);
         store.GetByIdAsync(ghost.Id, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 1, resolved!.Spec.Edges.Count);
@@ -519,7 +519,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 8, resolved!.Spec.MaxTurnsPerAgent);
@@ -537,7 +537,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolverWithScaffold(out var store, scaffold, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
@@ -562,7 +562,7 @@ public sealed class OrchestrationResolverTests
                          EnabledAction(specialist.Id, "Stay terse.", priority: 1)
                      ]));
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
@@ -581,7 +581,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolverWithScaffold(out var store, scaffold, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
 
-        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false)).Orchestration;
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));

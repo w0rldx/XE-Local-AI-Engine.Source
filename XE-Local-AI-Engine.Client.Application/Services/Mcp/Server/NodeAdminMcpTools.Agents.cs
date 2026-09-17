@@ -17,11 +17,11 @@ public sealed partial class NodeAdminMcpTools
     {
         return await InvokeAuditedAsync("get_agent", AuditArguments(("agent_id", agent_id)), async () =>
         {
-            var record = await _agentDefinitionService.GetByKeyAsync(agent_id, cancellationToken).ConfigureAwait(false);
+            var record = await _agentDefinitionService.GetByKeyAsync(agent_id, cancellationToken);
             return record is null
                 ? AgentNotFound()
                 : new McpAgentResponse("ok", McpAgentDefinition.FromRecord(record));
-        }, static response => response.FailureCode is not null).ConfigureAwait(false);
+        }, static response => response.FailureCode is not null);
     }
 
     [McpServerTool(Name = "create_agent")]
@@ -76,7 +76,7 @@ public sealed partial class NodeAdminMcpTools
                 disable_base_scaffold,
                 generation_metadata,
                 cancellationToken),
-            static response => response.FailureCode is not null).ConfigureAwait(false);
+            static response => response.FailureCode is not null);
 #pragma warning restore IDE1006
 
     [McpServerTool(Name = "update_agent")]
@@ -118,7 +118,7 @@ public sealed partial class NodeAdminMcpTools
             ("agent_id", agent_id));
         return await InvokeAuditedAsync("update_agent", arguments, async () =>
         {
-            var existing = await _agentDefinitionService.GetByKeyAsync(agent_id, cancellationToken).ConfigureAwait(false);
+            var existing = await _agentDefinitionService.GetByKeyAsync(agent_id, cancellationToken);
             if (existing is null)
             {
                 return AgentNotFound();
@@ -140,8 +140,8 @@ public sealed partial class NodeAdminMcpTools
                 memory_extraction_enabled,
                 disable_base_scaffold,
                 generation_metadata,
-                cancellationToken).ConfigureAwait(false);
-        }, static response => response.FailureCode is not null).ConfigureAwait(false);
+                cancellationToken);
+        }, static response => response.FailureCode is not null);
     }
 #pragma warning restore IDE1006
 
@@ -153,16 +153,16 @@ public sealed partial class NodeAdminMcpTools
     {
         return await InvokeAuditedAsync("delete_agent", AuditArguments(("agent_id", agent_id)), async () =>
         {
-            var existing = await _agentDefinitionService.GetByKeyAsync(agent_id, cancellationToken).ConfigureAwait(false);
+            var existing = await _agentDefinitionService.GetByKeyAsync(agent_id, cancellationToken);
             if (existing is null)
             {
                 return new McpAgentDeleteResponse(false, McpAdminToolFailureCodes.AgentNotFound, "Agent not found.");
             }
 
-            var deleted = await _agentDefinitionService.DeleteAsync(existing.Id, cancellationToken).ConfigureAwait(false);
+            var deleted = await _agentDefinitionService.DeleteAsync(existing.Id, cancellationToken);
             return deleted
                 ? new McpAgentDeleteResponse(true)
                 : new McpAgentDeleteResponse(false, McpAdminToolFailureCodes.AgentNotFound, "Agent not found.");
-        }, static response => !response.Deleted).ConfigureAwait(false);
+        }, static response => !response.Deleted);
     }
 }

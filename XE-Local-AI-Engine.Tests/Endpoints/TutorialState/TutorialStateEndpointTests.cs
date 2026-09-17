@@ -30,14 +30,14 @@ public sealed class TutorialStateEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        await SeedAdminUserAsync(factory).ConfigureAwait(false);
+        await SeedAdminUserAsync(factory);
 
         // Upsert the first tour key.
-        await SaveAsync(factory, client, key: "main-app-v1", status: "completed").ConfigureAwait(false);
+        await SaveAsync(factory, client, key: "main-app-v1", status: "completed");
         // Upsert a SECOND, distinct key — merge must keep the first one rather than replacing the whole array.
-        await SaveAsync(factory, client, key: "settings-flow-v1", status: "skipped").ConfigureAwait(false);
+        await SaveAsync(factory, client, key: "settings-flow-v1", status: "skipped");
 
-        var state = await GetAsync(factory, client).ConfigureAwait(false);
+        var state = await GetAsync(factory, client);
 
         AssertEx.Equal(expected: 2, state.Entries.Count);
 
@@ -54,12 +54,12 @@ public sealed class TutorialStateEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        await SeedAdminUserAsync(factory).ConfigureAwait(false);
+        await SeedAdminUserAsync(factory);
 
-        await SaveAsync(factory, client, key: "main-app-v1", status: "skipped").ConfigureAwait(false);
-        await SaveAsync(factory, client, key: "main-app-v1", status: "completed").ConfigureAwait(false);
+        await SaveAsync(factory, client, key: "main-app-v1", status: "skipped");
+        await SaveAsync(factory, client, key: "main-app-v1", status: "completed");
 
-        var state = await GetAsync(factory, client).ConfigureAwait(false);
+        var state = await GetAsync(factory, client);
 
         AssertEx.Equal(expected: 1, state.Entries.Count);
         AssertEx.Equal("completed", state.Entries[0].Status);
@@ -71,12 +71,12 @@ public sealed class TutorialStateEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        await SeedAdminUserAsync(factory).ConfigureAwait(false);
+        await SeedAdminUserAsync(factory);
 
-        await SaveAsync(factory, client, key: "main-app-v1", status: "completed").ConfigureAwait(false);
-        await SaveAsync(factory, client, key: "main-app-v1", status: "skipped").ConfigureAwait(false);
+        await SaveAsync(factory, client, key: "main-app-v1", status: "completed");
+        await SaveAsync(factory, client, key: "main-app-v1", status: "skipped");
 
-        var state = await GetAsync(factory, client).ConfigureAwait(false);
+        var state = await GetAsync(factory, client);
 
         AssertEx.Equal(expected: 1, state.Entries.Count);
         AssertEx.Equal("completed", state.Entries[0].Status);
@@ -88,15 +88,15 @@ public sealed class TutorialStateEndpointTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        await SeedAdminUserAsync(factory).ConfigureAwait(false);
+        await SeedAdminUserAsync(factory);
 
         const int entryCount = 8;
         await Parallel.ForEachAsync(Enumerable.Range(start: 0, entryCount), async (index, _) =>
         {
-            await SaveAsync(factory, client, key: $"tutorial-{index}", status: "completed").ConfigureAwait(false);
-        }).ConfigureAwait(false);
+            await SaveAsync(factory, client, key: $"tutorial-{index}", status: "completed");
+        });
 
-        var state = await GetAsync(factory, client).ConfigureAwait(false);
+        var state = await GetAsync(factory, client);
 
         AssertEx.Equal(entryCount, state.Entries.Count);
         for (var index = 0; index < entryCount; index++)
@@ -122,7 +122,7 @@ public sealed class TutorialStateEndpointTests
         };
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -135,7 +135,7 @@ public sealed class TutorialStateEndpointTests
         using var scope = factory.Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
 
-        var existing = await userManager.FindByIdAsync("node-admin-test").ConfigureAwait(false);
+        var existing = await userManager.FindByIdAsync("node-admin-test");
         if (existing is not null)
         {
             return;
@@ -149,13 +149,13 @@ public sealed class TutorialStateEndpointTests
             SetupCompleted = true
         };
 
-        var result = await userManager.CreateAsync(user).ConfigureAwait(false);
+        var result = await userManager.CreateAsync(user);
         AssertEx.True(result.Succeeded);
 
         // CreateAsync rotates the security stamp to a random value; pin it to the fixed stamp the synthetic bearer token
         // carries (TestServerWebAppFactory.CreateNodeAccessToken) so the JWT validator's fail-closed stamp check matches.
         user.SecurityStamp = TestServerWebAppFactory.NodeAdminTestSecurityStamp;
-        var stampResult = await userManager.UpdateAsync(user).ConfigureAwait(false);
+        var stampResult = await userManager.UpdateAsync(user);
         AssertEx.True(stampResult.Succeeded);
     }
 
@@ -172,7 +172,7 @@ public sealed class TutorialStateEndpointTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
@@ -182,11 +182,11 @@ public sealed class TutorialStateEndpointTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<TutorialStateResponseDto>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<TutorialStateResponseDto>(stream, JsonOptions));
     }
 
     // Local wire shapes for deserialization — the endpoint DTOs are internal to the Client project's V1 namespace, so

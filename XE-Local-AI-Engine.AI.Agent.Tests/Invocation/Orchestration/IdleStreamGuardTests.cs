@@ -28,7 +28,7 @@ public sealed class IdleStreamGuardTests
 
         async Task Consume()
         {
-            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(provider.CreateEnumerator, context).ConfigureAwait(false))
+            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(provider.CreateEnumerator, context))
             {
                 collected.Add(evt);
             }
@@ -68,7 +68,7 @@ public sealed class IdleStreamGuardTests
 
         async Task Consume()
         {
-            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(provider.CreateEnumerator, context).ConfigureAwait(false))
+            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(provider.CreateEnumerator, context))
             {
                 collected.Add(evt);
             }
@@ -101,7 +101,7 @@ public sealed class IdleStreamGuardTests
 
         async Task Consume()
         {
-            await foreach (var _ in IdleStreamGuard.GuardAsync<int>(provider.CreateEnumerator, context).ConfigureAwait(false))
+            await foreach (var _ in IdleStreamGuard.GuardAsync<int>(provider.CreateEnumerator, context))
             {
                 // Cancel the outer token once the run is under way (the first event has been pulled).
                 await outerCts.CancelAsync();
@@ -129,7 +129,7 @@ public sealed class IdleStreamGuardTests
 
         async Task Consume()
         {
-            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(_ => new HangingDisposeEnumerator(), context).ConfigureAwait(false))
+            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(_ => new HangingDisposeEnumerator(), context))
             {
                 collected.Add(evt);
             }
@@ -190,7 +190,7 @@ public sealed class IdleStreamGuardTests
         {
             // Every MoveNextAsync completes synchronously, so this stream never reaches the async race — the fast path's
             // cancellation check is the only thing that can stop it.
-            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(_ => new SynchronousBufferedEnumerator(500), context).ConfigureAwait(false))
+            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(_ => new SynchronousBufferedEnumerator(500), context))
             {
                 collected.Add(evt);
                 if (collected.Count == 3)
@@ -224,7 +224,7 @@ public sealed class IdleStreamGuardTests
 
         async Task Consume()
         {
-            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(_ => new SynchronousBufferedEnumerator(500), context).ConfigureAwait(false))
+            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(_ => new SynchronousBufferedEnumerator(500), context))
             {
                 collected.Add(evt);
                 if (collected.Count == 3)
@@ -309,12 +309,12 @@ public sealed class IdleStreamGuardTests
                     if (cooperative)
                     {
                         // Respect the bound token: the guard cancelling it unblocks this pull promptly.
-                        await Task.Delay(Timeout.InfiniteTimeSpan, token).ConfigureAwait(false);
+                        await Task.Delay(Timeout.InfiniteTimeSpan, token);
                     }
                     else
                     {
                         // Ignore the token entirely: only the test's release unblocks it.
-                        _ = await release.ConfigureAwait(false);
+                        _ = await release;
                     }
 
                     Current = 2;
@@ -346,7 +346,7 @@ public sealed class IdleStreamGuardTests
 
         public async ValueTask DisposeAsync()
         {
-            await _neverCompletes.Task.ConfigureAwait(false);
+            await _neverCompletes.Task;
         }
     }
 
@@ -356,7 +356,7 @@ public sealed class IdleStreamGuardTests
 
         public async ValueTask DisposeAsync()
         {
-            await _neverCompletes.Task.ConfigureAwait(false);
+            await _neverCompletes.Task;
         }
     }
 

@@ -18,7 +18,7 @@ public sealed class DevelopmentPersistenceTests : IDisposable
     [Test]
     public async Task Model_ContainsExactlyTheApprovedDevelopmentTablesAndRequiredUniqueIndexes()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
@@ -58,32 +58,30 @@ public sealed class DevelopmentPersistenceTests : IDisposable
     [Test]
     public async Task EventDetailsAndTheOperationLedgerAreWrittenInCamelCase()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
 
         var operationId = Guid.NewGuid();
         var blocked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                      operationId,
                                      DevelopmentTaskStatus.Blocked,
                                      ExpectedTaskVersion: 1,
-                                     "The repository is not connected."))
-                                 .ConfigureAwait(false);
+                                     "The repository is not connected."));
 
         var written = await dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.OperationId == operationId)
-                                     .SingleAsync()
-                                     .ConfigureAwait(false);
+                                     .SingleAsync();
         AssertEx.Equal("""{"reason":"The repository is not connected."}""", Encoding.UTF8.GetString(written.DetailJson!));
         var ledger = Encoding.UTF8.GetString(written.ResultMetadataJson!);
         AssertEx.True(ledger.Contains("\"projectId\":", StringComparison.Ordinal) && ledger.Contains("\"status\":\"Blocked\"", StringComparison.Ordinal),
             $"the ledger is written in the same casing the replay read expects: {ledger}");
 
         // And the replay read still finds it, which is the half a re-casing can silently break.
-        var replay = AssertEx.NotNull(await store.FindOperationAsync(seed.ProjectId, operationId, DevelopmentOperationPhases.Completed).ConfigureAwait(false));
+        var replay = AssertEx.NotNull(await store.FindOperationAsync(seed.ProjectId, operationId, DevelopmentOperationPhases.Completed));
         AssertEx.Equal(blocked.Version, replay.Version);
         AssertEx.Equal(nameof(DevelopmentTaskStatus.Blocked), replay.Status);
     }
@@ -97,7 +95,7 @@ public sealed class DevelopmentPersistenceTests : IDisposable
     [Test]
     public async Task AttemptCommandProfile_IsFrozenAtCreationAndInheritedByTheReviewerOfThatCoderAttempt()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
@@ -109,12 +107,11 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         {
             CommandProfileJson = ProfileAtAttemptTime
         };
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.Ready,
-                           ExpectedTaskVersion: 1))
-                       .ConfigureAwait(false);
+                           ExpectedTaskVersion: 1));
 
         var coderAttemptId = Guid.NewGuid();
         var coder = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
@@ -123,28 +120,26 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                                    DevelopmentAttemptRole.Coder,
                                    "local-model",
                                    "local",
-                                   ExpectedTaskVersion: 2))
-                               .ConfigureAwait(false);
+                                   ExpectedTaskVersion: 2));
 
         AssertEx.Equal(ProfileAtAttemptTime,
-            (await store.GetExecutionSnapshotAsync(coderAttemptId).ConfigureAwait(false)).CommandProfileJson,
+            (await store.GetExecutionSnapshotAsync(coderAttemptId)).CommandProfileJson,
             "A new attempt must snapshot the project's profile as it stands at creation.");
 
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(coderAttemptId,
                            Guid.NewGuid(),
                            DevelopmentAttemptStatus.Succeeded,
-                           ExpectedAttemptVersion: coder.Version))
-                       .ConfigureAwait(false);
+                           ExpectedAttemptVersion: coder.Version));
 
         // The profile edit. There is no operator-facing edit path yet; this is the write one would perform, and it is
         // the exact event that made the project row stop being a safe stand-in for the attempt's profile.
-        var project = await dbContext.DevelopmentProjects.SingleAsync(entity => entity.Id == seed.ProjectId).ConfigureAwait(false);
+        var project = await dbContext.DevelopmentProjects.SingleAsync(entity => entity.Id == seed.ProjectId);
         project.CommandProfileJson = ProfileAfterEdit;
         project.Version++;
-        _ = await dbContext.SaveChangesAsync().ConfigureAwait(false);
+        _ = await dbContext.SaveChangesAsync();
 
         AssertEx.Equal(ProfileAtAttemptTime,
-            (await store.GetExecutionSnapshotAsync(coderAttemptId).ConfigureAwait(false)).CommandProfileJson,
+            (await store.GetExecutionSnapshotAsync(coderAttemptId)).CommandProfileJson,
             "Editing the project's profile must not retroactively change what a historical attempt ran under.");
 
         // InProgress reaches InReview only through Validation; the transition table has no direct edge.
@@ -152,19 +147,16 @@ public sealed class DevelopmentPersistenceTests : IDisposable
             await dbContext.DevelopmentTasks.AsNoTracking()
                            .Where(entity => entity.Id == seed.TaskId)
                            .Select(entity => entity.Version)
-                           .SingleAsync()
-                           .ConfigureAwait(false);
+                           .SingleAsync();
 
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.Validation,
-                           await TaskVersionAsync().ConfigureAwait(false)))
-                       .ConfigureAwait(false);
+                           await TaskVersionAsync()));
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.InReview,
-                           await TaskVersionAsync().ConfigureAwait(false)))
-                       .ConfigureAwait(false);
+                           await TaskVersionAsync()));
 
         var reviewerAttemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
@@ -173,11 +165,10 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                            DevelopmentAttemptRole.Reviewer,
                            "local-model",
                            "local",
-                           await TaskVersionAsync().ConfigureAwait(false)))
-                       .ConfigureAwait(false);
+                           await TaskVersionAsync()));
 
         AssertEx.Equal(ProfileAtAttemptTime,
-            (await store.GetExecutionSnapshotAsync(reviewerAttemptId).ConfigureAwait(false)).CommandProfileJson,
+            (await store.GetExecutionSnapshotAsync(reviewerAttemptId)).CommandProfileJson,
             "A reviewer must review under the profile the coder attempt ran, not one edited in since.");
     }
 
@@ -188,7 +179,7 @@ public sealed class DevelopmentPersistenceTests : IDisposable
     [Test]
     public async Task AttemptCommandProfile_FallsBackToTheProjectWhenTheAttemptPredatesTheColumn()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
@@ -198,12 +189,11 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         {
             CommandProfileJson = ProjectProfile
         };
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.Ready,
-                           ExpectedTaskVersion: 1))
-                       .ConfigureAwait(false);
+                           ExpectedTaskVersion: 1));
 
         var attemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
@@ -212,23 +202,22 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           ExpectedTaskVersion: 2))
-                       .ConfigureAwait(false);
+                           ExpectedTaskVersion: 2));
 
         // Reproduce a row written before the column existed.
-        var attempt = await dbContext.DevelopmentAttempts.SingleAsync(entity => entity.Id == attemptId).ConfigureAwait(false);
+        var attempt = await dbContext.DevelopmentAttempts.SingleAsync(entity => entity.Id == attemptId);
         attempt.CommandProfileJson = null;
-        _ = await dbContext.SaveChangesAsync().ConfigureAwait(false);
+        _ = await dbContext.SaveChangesAsync();
 
         AssertEx.Equal(ProjectProfile,
-            (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).CommandProfileJson,
+            (await store.GetExecutionSnapshotAsync(attemptId)).CommandProfileJson,
             "An attempt with no snapshot must resolve the project's profile, exactly as it did before this column.");
     }
 
     [Test]
     public async Task Operations_AreIdempotentOrderedAndRejectStaleVersionsAndSecondActiveAttempt()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var acknowledgedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -241,28 +230,25 @@ public sealed class DevelopmentPersistenceTests : IDisposable
             MaxDurationSeconds = 90
         };
 
-        var created = await store.CreateProjectAsync(seed).ConfigureAwait(false);
-        var replay = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        var created = await store.CreateProjectAsync(seed);
+        var replay = await store.CreateProjectAsync(seed);
         AssertEx.Equal(created, replay, "The same operation key must reconstruct the original result.");
 
         var readyOperation = Guid.NewGuid();
         var ready = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                    readyOperation,
                                    DevelopmentTaskStatus.Ready,
-                                   ExpectedTaskVersion: 1))
-                               .ConfigureAwait(false);
+                                   ExpectedTaskVersion: 1));
         var readyReplay = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                          readyOperation,
                                          DevelopmentTaskStatus.Ready,
-                                         ExpectedTaskVersion: 1))
-                                     .ConfigureAwait(false);
+                                         ExpectedTaskVersion: 1));
         AssertEx.Equal(ready, readyReplay);
 
         await AssertEx.ThrowsAsync<DevelopmentConcurrencyException>(() => store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                           Guid.NewGuid(),
                           DevelopmentTaskStatus.InProgress,
-                          ExpectedTaskVersion: 1)))
-                      .ConfigureAwait(false);
+                          ExpectedTaskVersion: 1)));
 
         var attemptId = Guid.NewGuid();
         var firstAttempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
@@ -271,10 +257,9 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                                           DevelopmentAttemptRole.Coder,
                                           "local-model",
                                           "local",
-                                          ExpectedTaskVersion: 2))
-                                      .ConfigureAwait(false);
+                                          ExpectedTaskVersion: 2));
         AssertEx.Equal(DevelopmentAttemptStatus.Running.ToString(), firstAttempt.Status);
-        var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
+        var snapshot = await store.GetExecutionSnapshotAsync(attemptId);
         AssertEx.Equal(seed.RepositoryIdentityHash, snapshot.RepositoryIdentityHash);
         AssertEx.Equal(seed.BaseBranch, snapshot.BaseBranch);
         AssertEx.True(snapshot.TrustedRepositoryAcknowledged);
@@ -290,10 +275,9 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                           DevelopmentAttemptRole.Coder,
                           "local-model",
                           "local",
-                          ExpectedTaskVersion: 3)))
-                      .ConfigureAwait(false);
+                          ExpectedTaskVersion: 3)));
 
-        var events = await store.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);
+        var events = await store.ListEventsAsync(seed.ProjectId);
         AssertEx.Equal(expected: 3, events.Count);
         AssertEx.True(events.Select(item => item.Sequence).SequenceEqual([1L, 2L, 3L]));
     }

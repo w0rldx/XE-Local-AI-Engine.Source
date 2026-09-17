@@ -33,10 +33,10 @@ public sealed class DownloadRecommendedRerankerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>().ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>();
         AssertEx.NotNull(body);
 
         // The download is driven through the coordinator with the code-grounded recommended descriptor.
@@ -61,10 +61,10 @@ public sealed class DownloadRecommendedRerankerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>().ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>();
         AssertEx.NotNull(body);
 
         // Already present: re-downloading would be wasted bytes, so the coordinator is never touched.
@@ -87,10 +87,10 @@ public sealed class DownloadRecommendedRerankerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>().ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>();
         AssertEx.NotNull(body);
 
         AssertEx.Equal(1, coordinator.StartCalls.Count);
@@ -107,10 +107,10 @@ public sealed class DownloadRecommendedRerankerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>().ConfigureAwait(false);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>();
         AssertEx.NotNull(body);
 
         AssertEx.Equal(1, coordinator.StartCalls.Count);
@@ -127,7 +127,7 @@ public sealed class DownloadRecommendedRerankerEndpointTests
         using var client = factory.CreateClient();
 
         // No node bearer token → the operator policy rejects before any download starts.
-        using var response = await client.PostAsync(DownloadRoute, content: null).ConfigureAwait(false);
+        using var response = await client.PostAsync(DownloadRoute, content: null);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertEx.Empty(coordinator.StartCalls);
@@ -145,7 +145,7 @@ public sealed class DownloadRecommendedRerankerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal(1, coordinator.StartCalls.Count);
@@ -163,7 +163,7 @@ public sealed class DownloadRecommendedRerankerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

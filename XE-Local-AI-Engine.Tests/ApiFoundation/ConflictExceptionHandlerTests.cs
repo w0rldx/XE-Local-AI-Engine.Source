@@ -36,7 +36,7 @@ public sealed class ConflictExceptionHandlerTests
     {
         var exception = new WorkSessionInvalidTransitionException("A work session can only be started while it is Draft or Paused; this one is Running.");
 
-        var body = await HandleAsync(exception).ConfigureAwait(false);
+        var body = await HandleAsync(exception);
 
         AssertEx.Equal("WorkSessionInvalidTransition", body.ConflictType);
         AssertEx.Equal("Conflict", body.Title);
@@ -55,7 +55,7 @@ public sealed class ConflictExceptionHandlerTests
     {
         var exception = new DevWorkflowGateAlreadyDecidedException("Node run 'review' was already decided Approve.", DevWorkflowDecisionKind.Approve);
 
-        var body = await HandleAsync(exception).ConfigureAwait(false);
+        var body = await HandleAsync(exception);
 
         AssertEx.Equal("DevWorkflowGateAlreadyDecided", body.ConflictType);
         AssertEx.Equal(expected: 409, body.Status);
@@ -79,7 +79,7 @@ public sealed class ConflictExceptionHandlerTests
             ? new GraphWorkflowRunConflictException("This run is already Failed, so there is nothing to cancel.")
             : new GraphWorkflowInvalidTransitionException("The graph workflow run version is stale (expected 3, current 4).");
 
-        var body = await HandleAsync(exception).ConfigureAwait(false);
+        var body = await HandleAsync(exception);
 
         AssertEx.Equal("GraphWorkflowRunConflict", body.ConflictType, "both reach a client as one instruction: re-read the run.");
         AssertEx.Equal(expected: 409, body.Status);
@@ -97,7 +97,7 @@ public sealed class ConflictExceptionHandlerTests
         var exception = new GraphWorkflowGateAlreadyDecidedException("Node run 'review' is Succeeded, so there is nothing to decide on it. It was answered Reject.",
             GraphWorkflowDecisionKind.Reject);
 
-        var body = await HandleAsync(exception).ConfigureAwait(false);
+        var body = await HandleAsync(exception);
 
         AssertEx.Equal("GraphWorkflowGateAlreadyDecided", body.ConflictType);
         AssertEx.Equal(expected: 409, body.Status);
@@ -121,7 +121,7 @@ public sealed class ConflictExceptionHandlerTests
         };
         var handler = new ConflictExceptionHandler(NullLogger<ConflictExceptionHandler>.Instance);
 
-        AssertEx.False(await handler.TryHandleAsync(context, new InvalidOperationException("something else"), CancellationToken.None).ConfigureAwait(false));
+        AssertEx.False(await handler.TryHandleAsync(context, new InvalidOperationException("something else"), CancellationToken.None));
     }
 
     /// <summary>The handler over a bare context, so the assertion is about the switch and the envelope rather than a route.</summary>
@@ -137,12 +137,12 @@ public sealed class ConflictExceptionHandlerTests
         };
         var handler = new ConflictExceptionHandler(NullLogger<ConflictExceptionHandler>.Instance);
 
-        AssertEx.True(await handler.TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(await handler.TryHandleAsync(context, exception, CancellationToken.None));
         AssertEx.Equal(expected: 409, context.Response.StatusCode);
         AssertEx.Contains(context.Response.ContentType, "problem+json", StringComparison.OrdinalIgnoreCase);
 
         context.Response.Body.Position = 0;
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ConflictProblemBody>(context.Response.Body, JsonOptions).ConfigureAwait(false));
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<ConflictProblemBody>(context.Response.Body, JsonOptions));
     }
 
     private sealed record ConflictProblemBody(

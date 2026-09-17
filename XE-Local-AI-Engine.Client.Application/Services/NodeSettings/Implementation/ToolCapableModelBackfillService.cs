@@ -34,7 +34,7 @@ internal sealed class ToolCapableModelBackfillService : BackgroundService
 
         try
         {
-            _ = await _registrar.BackfillInstalledAsync(stoppingToken).ConfigureAwait(false);
+            _ = await _registrar.BackfillInstalledAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

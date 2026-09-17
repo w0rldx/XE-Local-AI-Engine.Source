@@ -25,19 +25,19 @@ public sealed class StartGgufImportEndpoint(IGgufImportTransactionCoordinator co
             || string.IsNullOrWhiteSpace(req.Quantization))
         {
             AddError("The source, preview token, model base name, and quantization are required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var ticket = await _coordinator.StartAsync(new StartGgufImportCommand(req.SourcePath,
             req.PreviewToken,
             req.ModelBaseName,
-            req.Quantization), ct).ConfigureAwait(false);
+            req.Quantization), ct);
         await Send.ResultAsync(Results.Accepted(value: new GgufAcquisitionTicketResponse
         {
             OperationId = ticket.OperationId,
             OperationKind = ticket.OperationKind,
             ModelName = ticket.ModelName
-        })).ConfigureAwait(false);
+        }));
     }
 }

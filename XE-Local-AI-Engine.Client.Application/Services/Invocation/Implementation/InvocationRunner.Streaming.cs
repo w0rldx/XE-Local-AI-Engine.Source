@@ -232,7 +232,7 @@ public sealed partial class InvocationRunner
             stream.ReasoningSequence++;
             stream.ReasoningBuilder.Append(thinkingChunk);
 
-            await Dispatcher.ReportInvocationThinkingChunkAsync(_package.InvocationId, thinkingChunk).ConfigureAwait(false);
+            await Dispatcher.ReportInvocationThinkingChunkAsync(_package.InvocationId, thinkingChunk);
 
             if (_sendEncrypted)
             {
@@ -243,7 +243,7 @@ public sealed partial class InvocationRunner
                         thinkingBytes!,
                         stream.ReasoningSequence,
                         EncryptedChunkEnvelopeV1.ReasoningKind),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             }
             else if (_sendPlain)
             {
@@ -251,7 +251,7 @@ public sealed partial class InvocationRunner
                     thinkingChunk,
                     isComplete: false,
                     stream.ReasoningSequence,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             }
         }
 
@@ -274,7 +274,7 @@ public sealed partial class InvocationRunner
 
             stream.ResponseBuilder.Append(textChunk);
 
-            await Dispatcher.ReportInvocationStreamChunkAsync(_package.InvocationId, textChunk).ConfigureAwait(false);
+            await Dispatcher.ReportInvocationStreamChunkAsync(_package.InvocationId, textChunk);
 
             if (_sendEncrypted)
             {
@@ -284,7 +284,7 @@ public sealed partial class InvocationRunner
                         _context.EpochKey.Span,
                         textBytes!,
                         stream.Sequence),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             }
             else if (_sendPlain)
             {
@@ -292,7 +292,7 @@ public sealed partial class InvocationRunner
                     textChunk,
                     isComplete: false,
                     stream.Sequence,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             }
         }
     }

@@ -38,7 +38,7 @@ public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger model
         if (!string.IsNullOrWhiteSpace(req.UseCase) && !ModelFitRequestValidator.AllowedUseCases.Contains(req.UseCase))
         {
             AddError("Use case is not supported.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -47,7 +47,7 @@ public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger model
         if (req.Limit is { } limit && limit is < ModelFitRequestValidator.MinLimit or > ModelFitRequestValidator.MaxLimit)
         {
             AddError("Limit is out of range.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -57,17 +57,16 @@ public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger model
         if (req.CtxTarget is { } ctxTarget && ctxTarget < MinCtxTarget)
         {
             AddError("Context target is out of range.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         await _modelFitRefreshTrigger
-              .TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, req.QuantOverride, req.CtxTarget, ct)
-              .ConfigureAwait(false);
+              .TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, req.QuantOverride, req.CtxTarget, ct);
         await Send.OkAsync(new RefreshRecommendationsResponse
             {
                 ScheduledJobId = req.ScheduledJobId
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

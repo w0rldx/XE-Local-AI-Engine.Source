@@ -18,30 +18,30 @@ public sealed class AgentSkillServiceTests
 
         // Uppercase + space is not a MAF-safe kebab-case skill name.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("Bad Name", "desc", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("Bad Name", "desc", "body")));
 
         // Leading, trailing AND consecutive dashes are all rejected. The consecutive case is the regression: the
         // superseded ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ regex accepted "foo--bar", which MAF rejects, so the skill
         // persisted here and then threw ArgumentException when built into an AgentInlineSkill.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("-leading", "desc", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("-leading", "desc", "body")));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("trailing-", "desc", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("trailing-", "desc", "body")));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("foo--bar", "desc", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("foo--bar", "desc", "body")));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("UPPER", "desc", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("UPPER", "desc", "body")));
 
         // Blank body is rejected.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", "desc", "   "))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "   ")));
 
         // Blank description is rejected.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", "  ", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", "  ", "body")));
 
         // None of the rejected inputs reached the store.
-        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
 
     // The defect this guards was a silent divergence: our validator and MAF's disagreed, so a name could pass here and
@@ -72,7 +72,7 @@ public sealed class AgentSkillServiceTests
         var serviceAccepted = true;
         try
         {
-            await service.CreateAsync(new AgentSkillInput(candidate, "desc", "body")).ConfigureAwait(false);
+            await service.CreateAsync(new AgentSkillInput(candidate, "desc", "body"));
         }
         catch (AgentSkillValidationException)
         {
@@ -102,28 +102,28 @@ public sealed class AgentSkillServiceTests
         var service = new AgentSkillService(store);
 
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", License: new string(c: 'a', count: 201)))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", License: new string(c: 'a', count: 201))));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", Compatibility: new string(c: 'a', count: 501)))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", Compatibility: new string(c: 'a', count: 501))));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", AllowedTools: new string(c: 'a', count: 1025)))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", "body", AllowedTools: new string(c: 'a', count: 1025))));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("good-name", "desc", "body",
-                Metadata: Enumerable.Range(start: 0, count: 33).ToDictionary(index => $"k{index}", _ => "v")))).ConfigureAwait(false);
+                Metadata: Enumerable.Range(start: 0, count: 33).ToDictionary(index => $"k{index}", _ => "v"))));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("good-name", "desc", "body",
                 Metadata: new Dictionary<string, string>
                 {
                     [new string(c: 'k', count: 65)] = "v"
-                }))).ConfigureAwait(false);
+                })));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput("good-name", "desc", "body",
                 Metadata: new Dictionary<string, string>
                 {
                     ["k"] = new string(c: 'v', count: 513)
-                }))).ConfigureAwait(false);
+                })));
 
-        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
 
     // Compatibility is capped at MAF's own MaxCompatibilityLength, so anything we accept must survive construction of
@@ -146,13 +146,13 @@ public sealed class AgentSkillServiceTests
         var service = new AgentSkillService(store);
 
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput(new string(c: 'a', count: 65), "desc", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput(new string(c: 'a', count: 65), "desc", "body")));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", new string(c: 'a', count: 1025), "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", new string(c: 'a', count: 1025), "body")));
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", "desc", new string(c: 'a', count: 20001)))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", new string(c: 'a', count: 20001))));
 
-        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -167,9 +167,9 @@ public sealed class AgentSkillServiceTests
 
         // Same name, different casing — NOCASE uniqueness must reject it.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("KUBERNETES-DEBUG", "desc", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("KUBERNETES-DEBUG", "desc", "body")));
 
-        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -181,10 +181,10 @@ public sealed class AgentSkillServiceTests
         store.CreateAsync(input, Arg.Any<CancellationToken>()).Returns(Task.FromResult(stored));
         var service = new AgentSkillService(store);
 
-        var result = await service.CreateAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAsync(input);
 
         AssertEx.Equal(stored.Id, result.Id);
-        await store.Received(1).CreateAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).CreateAsync(input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -200,10 +200,10 @@ public sealed class AgentSkillServiceTests
         var service = new AgentSkillService(store);
 
         // Re-saving the same skill with its own (unchanged) name must NOT trip the NOCASE-uniqueness guard.
-        var result = await service.UpdateAsync(id, input).ConfigureAwait(false);
+        var result = await service.UpdateAsync(id, input);
 
         AssertEx.NotNull(result);
-        await store.Received(1).UpdateAsync(id, input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).UpdateAsync(id, input, Arg.Any<CancellationToken>());
     }
 
     private static IAgentSkillStore CreateEmptyStore()

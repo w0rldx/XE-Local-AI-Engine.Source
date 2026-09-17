@@ -42,7 +42,7 @@ public sealed class GraphWorkflowToolsEndpointTests
         using var client = Host.Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, Tools);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, "the tool list must require the operator token.");
     }
@@ -54,7 +54,7 @@ public sealed class GraphWorkflowToolsEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Get, Tools);
         Host.Factory.AddNonOperatorBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode, "the tool list is operator-only, so an authenticated non-operator is refused.");
     }
@@ -76,7 +76,7 @@ public sealed class GraphWorkflowToolsEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Get, Tools);
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, "a disabled node must answer 404 for the whole family, never 500.");
     }
@@ -84,8 +84,8 @@ public sealed class GraphWorkflowToolsEndpointTests
     [Test]
     public async Task ListTools_ReturnsExactlyTheInvocableSet_WithAParseableSchemaEach()
     {
-        using var response = await SendAsync().ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync();
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, body);
         using var document = JsonDocument.Parse(body);
@@ -114,6 +114,6 @@ public sealed class GraphWorkflowToolsEndpointTests
         using var client = Host.Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, Tools);
         Host.Factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 }

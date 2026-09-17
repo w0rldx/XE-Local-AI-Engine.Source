@@ -29,12 +29,11 @@ public sealed class EntraAuthCodeRedeemer : IEntraAuthCodeRedeemer
         ArgumentException.ThrowIfNullOrWhiteSpace(redirectUri);
 
         var app = EntraAuthCodeConfidentialClientFactory.Build(connection.EntraTenantId!, connection.EntraClientId!, connection.EntraClientSecret!, redirectUri);
-        await EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(app, _dataDirectory, _logger).ConfigureAwait(false);
+        await EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(app, _dataDirectory, _logger);
 
         var result = await app.AcquireTokenByAuthorizationCode([connection.EntraTokenScope!], authorizationCode)
                               .WithPkceCodeVerifier(codeVerifier)
-                              .ExecuteAsync(cancellationToken)
-                              .ConfigureAwait(false);
+                              .ExecuteAsync(cancellationToken);
 
         return new EntraAuthCodeRedemptionResult(app, result.Account);
     }

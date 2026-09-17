@@ -50,7 +50,7 @@ public sealed class WorkSessionOfferProjectionTests
     {
         var provider = CreateProvider("qwen3:8b");
 
-        var offered = await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false).ConfigureAwait(false);
+        var offered = await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false);
 
         foreach (var name in WorkSessionToolDefinitions.ToolNames)
         {

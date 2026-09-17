@@ -44,7 +44,7 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
             providerName = context.ProviderName
         };
 
-        await AppendLineAsync(EventsFile(), record, cancellationToken).ConfigureAwait(false);
+        await AppendLineAsync(EventsFile(), record, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -65,7 +65,7 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
             detail
         };
 
-        await AppendLineAsync(EventsFile(), record, cancellationToken).ConfigureAwait(false);
+        await AppendLineAsync(EventsFile(), record, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -92,7 +92,7 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
             record.ErrorClass
         };
 
-        await AppendLineAsync(CommandsFile(), envelope, cancellationToken).ConfigureAwait(false);
+        await AppendLineAsync(CommandsFile(), envelope, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -120,7 +120,7 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
             record.ErrorClass
         };
 
-        await AppendLineAsync(ToolCallsFile(), envelope, cancellationToken).ConfigureAwait(false);
+        await AppendLineAsync(ToolCallsFile(), envelope, cancellationToken);
     }
 
     private AgentHomeRunLogContext RequireContext()
@@ -146,6 +146,6 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
     private static async Task AppendLineAsync<T>(string filePath, T record, CancellationToken cancellationToken)
     {
         var line = JsonSerializer.Serialize(record, LogJsonOptions) + Environment.NewLine;
-        await File.AppendAllTextAsync(filePath, line, cancellationToken).ConfigureAwait(false);
+        await File.AppendAllTextAsync(filePath, line, cancellationToken);
     }
 }

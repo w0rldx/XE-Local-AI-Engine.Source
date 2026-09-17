@@ -19,13 +19,13 @@ public sealed class IntegrationEntityConfigurationTests
     public async Task TriggerName_IsUniquePerNode()
     {
         using var fixture = new IntegrationTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         _ = context.IntegrationTriggers.Add(IntegrationTestFixture.Trigger());
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
 
         _ = context.IntegrationTriggers.Add(IntegrationTestFixture.Trigger());
-        var failure = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync()).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
         _ = AssertEx.NotNull(failure.InnerException as SqliteException, "The trigger name is the external contract, so a duplicate must be refused by the database.");
     }
 
@@ -33,7 +33,7 @@ public sealed class IntegrationEntityConfigurationTests
     public async Task RequestId_IsUniquePerPrincipalAndNotGlobally()
     {
         using var fixture = new IntegrationTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var trigger = IntegrationTestFixture.Trigger();
         var principal = Guid.NewGuid();
@@ -44,11 +44,11 @@ public sealed class IntegrationEntityConfigurationTests
         _ = context.IntegrationTriggers.Add(trigger);
         _ = context.IntegrationSessions.Add(session);
         _ = context.IntegrationExecutions.Add(IntegrationTestFixture.Execution(trigger.Id, session.Id, principal, requestId: requestId));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
 
         // Same principal, same request id: the dedup key, so the second row must be refused.
         _ = context.IntegrationExecutions.Add(IntegrationTestFixture.Execution(trigger.Id, session.Id, principal, requestId: requestId));
-        var failure = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync()).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
         _ = AssertEx.NotNull(failure.InnerException as SqliteException);
         context.ChangeTracker.Clear();
 
@@ -57,16 +57,16 @@ public sealed class IntegrationEntityConfigurationTests
         var otherSession = IntegrationTestFixture.Session(trigger.Id, otherPrincipal);
         _ = context.IntegrationSessions.Add(otherSession);
         _ = context.IntegrationExecutions.Add(IntegrationTestFixture.Execution(trigger.Id, otherSession.Id, otherPrincipal, requestId: requestId));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
 
-        AssertEx.Equal(expected: 2L, await fixture.RawTableCountAsync("integration_executions").ConfigureAwait(false));
+        AssertEx.Equal(expected: 2L, await fixture.RawTableCountAsync("integration_executions"));
     }
 
     [Test]
     public async Task EventSequence_IsUniquePerExecution()
     {
         using var fixture = new IntegrationTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var trigger = IntegrationTestFixture.Trigger();
         var principal = Guid.NewGuid();
@@ -77,10 +77,10 @@ public sealed class IntegrationEntityConfigurationTests
         _ = context.IntegrationSessions.Add(session);
         _ = context.IntegrationExecutions.Add(execution);
         _ = context.IntegrationExecutionEvents.Add(IntegrationTestFixture.Event(execution.Id, sequence: 1, "execution.accepted"));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
 
         _ = context.IntegrationExecutionEvents.Add(IntegrationTestFixture.Event(execution.Id, sequence: 1, "execution.started"));
-        var failure = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync()).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
         _ = AssertEx.NotNull(failure.InnerException as SqliteException,
             "A duplicate (execution_id, sequence) means a caller minted a sequence it never reserved — a bug, not a race to swallow.");
     }
@@ -93,7 +93,7 @@ public sealed class IntegrationEntityConfigurationTests
         Guid victimEventId;
         Guid attackerEventId;
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var trigger = IntegrationTestFixture.Trigger();
             var principal = Guid.NewGuid();
@@ -108,7 +108,7 @@ public sealed class IntegrationEntityConfigurationTests
             var victimEvent = IntegrationTestFixture.Event(victimExecution.Id, sequence: 1, "external.output", payload);
             var attackerEvent = IntegrationTestFixture.Event(attackerExecution.Id, sequence: 1, "external.output", """{"reading":0}"""u8.ToArray());
             context.IntegrationExecutionEvents.AddRange(victimEvent, attackerEvent);
-            _ = await context.SaveChangesAsync().ConfigureAwait(false);
+            _ = await context.SaveChangesAsync();
 
             victimEventId = victimEvent.Id;
             attackerEventId = attackerEvent.Id;
@@ -116,15 +116,13 @@ public sealed class IntegrationEntityConfigurationTests
 
         await using (var readContext = fixture.CreateContext())
         {
-            var read = AssertEx.NotNull(await readContext.IntegrationExecutionEvents.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == victimEventId)
-                                                         .ConfigureAwait(false));
+            var read = AssertEx.NotNull(await readContext.IntegrationExecutionEvents.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == victimEventId));
             AssertEx.Equal("""{"reading":42}""", Encoding.UTF8.GetString(AssertEx.NotNull(read.DetailJson)),
                 "The materialization interceptor must decrypt detail_json, or every reader gets ciphertext.");
         }
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT detail_json FROM integration_execution_events WHERE id = $id;",
-                                                       command => command.Parameters.AddWithValue("$id", victimEventId))
-                                                   .ConfigureAwait(false)) as byte[];
+                                                       command => command.Parameters.AddWithValue("$id", victimEventId))) as byte[];
         AssertEx.False(AssertEx.NotNull(stored).AsSpan().IndexOf(payload) >= 0, "The payload must not survive as plaintext in the file.");
 
         // Re-parent the ciphertext onto another execution's event row: the AAD binds the owning execution, so the copy
@@ -134,8 +132,7 @@ public sealed class IntegrationEntityConfigurationTests
                          {
                              command.Parameters.AddWithValue("$payload", stored!);
                              command.Parameters.AddWithValue("$id", attackerEventId);
-                         })
-                     .ConfigureAwait(false);
+                         });
 
         await using (var attackContext = fixture.CreateContext())
         {
@@ -152,26 +149,24 @@ public sealed class IntegrationEntityConfigurationTests
         Guid victimKeyId;
         Guid attackerKeyId;
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var victim = IntegrationTestFixture.ApiKey("xeint_aaaaaaaa", keyHash: digest);
             var attacker = IntegrationTestFixture.ApiKey("xeint_bbbbbbbb", keyHash: SHA256.HashData("other"u8.ToArray()));
             context.IntegrationApiKeys.AddRange(victim, attacker);
-            _ = await context.SaveChangesAsync().ConfigureAwait(false);
+            _ = await context.SaveChangesAsync();
             victimKeyId = victim.Id;
             attackerKeyId = attacker.Id;
         }
 
         await using (var readContext = fixture.CreateContext())
         {
-            var read = AssertEx.NotNull(await readContext.IntegrationApiKeys.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == victimKeyId)
-                                                         .ConfigureAwait(false));
+            var read = AssertEx.NotNull(await readContext.IntegrationApiKeys.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == victimKeyId));
             AssertEx.True(read.KeyHash.AsSpan().SequenceEqual(digest), "A required encrypted column must read back as its plaintext digest.");
         }
 
         var stored = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT key_hash FROM integration_api_keys WHERE id = $id;",
-                                                       command => command.Parameters.AddWithValue("$id", victimKeyId))
-                                                   .ConfigureAwait(false)) as byte[];
+                                                       command => command.Parameters.AddWithValue("$id", victimKeyId))) as byte[];
         AssertEx.False(AssertEx.NotNull(stored).AsSpan().IndexOf(digest.AsSpan()) >= 0,
             "The digest is sealed at rest: a database-file WRITER must not be able to read it out and substitute a preimage they know.");
 
@@ -180,8 +175,7 @@ public sealed class IntegrationEntityConfigurationTests
                          {
                              command.Parameters.AddWithValue("$payload", stored!);
                              command.Parameters.AddWithValue("$id", attackerKeyId);
-                         })
-                     .ConfigureAwait(false);
+                         });
 
         await using (var attackContext = fixture.CreateContext())
         {
@@ -196,20 +190,20 @@ public sealed class IntegrationEntityConfigurationTests
         using var fixture = new IntegrationTestFixture();
         var trigger = IntegrationTestFixture.Trigger();
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             _ = context.IntegrationTriggers.Add(trigger);
-            _ = await context.SaveChangesAsync().ConfigureAwait(false);
+            _ = await context.SaveChangesAsync();
         }
 
         AssertEx.Equal(expected: 3L,
-            Convert.ToInt64(await fixture.RawScalarAsync("SELECT accepted_input_kinds FROM integration_triggers;").ConfigureAwait(false),
+            Convert.ToInt64(await fixture.RawScalarAsync("SELECT accepted_input_kinds FROM integration_triggers;"),
                 CultureInfo.InvariantCulture),
             "A [Flags] combination is stored as an int; a string conversion would write \"Text, Json\", whose text depends on declaration order.");
 
         await using (var readContext = fixture.CreateContext())
         {
-            var read = AssertEx.NotNull(await readContext.IntegrationTriggers.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == trigger.Id).ConfigureAwait(false));
+            var read = AssertEx.NotNull(await readContext.IntegrationTriggers.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == trigger.Id));
             AssertEx.Equal(IntegrationInputKinds.Text | IntegrationInputKinds.Json, read.AcceptedInputKinds);
         }
     }

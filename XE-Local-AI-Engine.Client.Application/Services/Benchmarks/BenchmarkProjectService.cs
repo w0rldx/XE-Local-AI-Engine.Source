@@ -66,7 +66,7 @@ public sealed class BenchmarkProjectService(
 
     public async Task<BenchmarkProjectRecord> CreateAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken = default)
     {
-        var (input, policy) = await ValidateAsync(draft, cancellationToken).ConfigureAwait(false);
+        var (input, policy) = await ValidateAsync(draft, cancellationToken);
 
         // Project, judge AND item 0 in one store call, so a failure between them cannot persist a project with
         // judging off — or with no question to ask — that the operator could only retry into a duplicate. Every
@@ -74,8 +74,7 @@ public sealed class BenchmarkProjectService(
         return await _benchmarkStore.CreateProjectAsync(input,
                                         ToPolicyChange(policy),
                                         [new BenchmarkTaskItemInput(input.CoreTaskJson)],
-                                        cancellationToken)
-                                    .ConfigureAwait(false);
+                                        cancellationToken);
     }
 
     public async Task<BenchmarkProjectRecord> UpdateAsync(Guid projectId,
@@ -86,12 +85,12 @@ public sealed class BenchmarkProjectService(
         var (input, policy) = await ValidateAsync(draft with
         {
             Id = projectId
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
 
         // This route changes the rubric too, so it owes the item overrides the same check the judge-only route makes.
         if (policy is not null)
         {
-            await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken).ConfigureAwait(false);
+            await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken);
         }
 
         // An unfrozen project edits its judge exactly the way a frozen one does — get-or-create plus repoint, never an
@@ -101,8 +100,7 @@ public sealed class BenchmarkProjectService(
                                         expectedVersion,
                                         input,
                                         ToPolicyChange(policy) ?? BenchmarkJudgePolicyChangeInput.Disabled,
-                                        cancellationToken)
-                                    .ConfigureAwait(false);
+                                        cancellationToken);
     }
 
     public async Task<BenchmarkProjectFidelityChange> UpdateFidelityAsync(Guid projectId,
@@ -119,11 +117,9 @@ public sealed class BenchmarkProjectService(
                                                   settings.KldEnabled,
                                                   settings.Chunks,
                                                   baseModelName,
-                                                  await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)
-                                                      .ConfigureAwait(false)),
+                                                  await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)),
                                               measureExisting,
-                                              cancellationToken)
-                                          .ConfigureAwait(false);
+                                              cancellationToken);
         if (change.EnqueuedRunIds.Count > 0)
         {
             _queueSignal?.Wake();
@@ -138,20 +134,20 @@ public sealed class BenchmarkProjectService(
         bool confirmRejudge,
         CancellationToken cancellationToken = default)
     {
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
         if (project.Version != expectedVersion)
         {
             throw new BenchmarkConflictException("VersionConflict");
         }
 
-        var current = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var current = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
 
         // Changing the judge invalidates every score already given under the old one. The operator confirms that
         // explicitly rather than discovering a silently re-scored project.
         //
         // Both answers are given BEFORE the policy is built, because building it takes the VERIFYING model lease,
         // which re-hashes every member file: a 22 GB judge made this refusal take 57 s to say no.
-        if (draft is not null && !confirmRejudge && await _benchmarkStore.CountRunsAsync(projectId, cancellationToken).ConfigureAwait(false) > 0)
+        if (draft is not null && !confirmRejudge && await _benchmarkStore.CountRunsAsync(projectId, cancellationToken) > 0)
         {
             if (MatchesCurrentPolicy(draft, current))
             {
@@ -161,7 +157,7 @@ public sealed class BenchmarkProjectService(
             throw new BenchmarkConflictException("RejudgeRequired");
         }
 
-        var policy = draft is null ? null : await BuildPolicyAsync(draft, cancellationToken).ConfigureAwait(false);
+        var policy = draft is null ? null : await BuildPolicyAsync(draft, cancellationToken);
         if (policy is null)
         {
             if (current is null)
@@ -169,8 +165,8 @@ public sealed class BenchmarkProjectService(
                 return new BenchmarkJudgePolicyChange(project, [], null);
             }
 
-            await _benchmarkStore.DisableJudgePolicyAsync(projectId, expectedVersion, cancellationToken).ConfigureAwait(false);
-            return new BenchmarkJudgePolicyChange(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), [], null);
+            await _benchmarkStore.DisableJudgePolicyAsync(projectId, expectedVersion, cancellationToken);
+            return new BenchmarkJudgePolicyChange(await RequireProjectAsync(projectId, cancellationToken), [], null);
         }
 
         var hash = BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(policy);
@@ -179,16 +175,14 @@ public sealed class BenchmarkProjectService(
             return new BenchmarkJudgePolicyChange(project, [], current.CohortGeneration);
         }
 
-        await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken).ConfigureAwait(false);
+        await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken);
         var activation = await _benchmarkStore.ActivateJudgePolicyAsync(projectId,
                                                   expectedVersion,
                                                   new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializePolicy(policy)),
                                                   hash,
-                                                  await BuildCohortSeedAsync(policy, expectedRevisionId: null, cancellationToken).ConfigureAwait(false),
-                                                  cancellationToken)
-                                              .ConfigureAwait(false);
-        return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation, cancellationToken)
-            .ConfigureAwait(false);
+                                                  await BuildCohortSeedAsync(policy, expectedRevisionId: null, cancellationToken),
+                                                  cancellationToken);
+        return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken), activation, cancellationToken);
     }
 
     public async Task<BenchmarkJudgeAttemptRecord> RejudgeRunAsync(Guid runId,
@@ -196,20 +190,19 @@ public sealed class BenchmarkProjectService(
         bool force,
         CancellationToken cancellationToken = default)
     {
-        var run = await _benchmarkStore.GetRunAsync(runId, cancellationToken).ConfigureAwait(false)
+        var run = await _benchmarkStore.GetRunAsync(runId, cancellationToken)
                   ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
-        var revision = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(run.ProjectId, cancellationToken).ConfigureAwait(false)
+        var revision = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(run.ProjectId, cancellationToken)
                        ?? throw new BenchmarkConflictException("JudgeDisabled");
         var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
-        var resolved = await TryResolveRuntimeAsync(policy, cancellationToken).ConfigureAwait(false);
+        var resolved = await TryResolveRuntimeAsync(policy, cancellationToken);
         var attempt = await _benchmarkStore.EnqueueJudgeAttemptAsync(new BenchmarkEnqueueJudgeAttemptCommand(runId,
                                                expectedRunVersion,
                                                revision.Id,
                                                resolved.RuntimeJson,
                                                resolved.UnresolvedReason,
                                                force,
-                                               resolved.Intent), cancellationToken)
-                                           .ConfigureAwait(false);
+                                               resolved.Intent), cancellationToken);
         _queueSignal?.Wake();
         return attempt;
     }
@@ -220,16 +213,14 @@ public sealed class BenchmarkProjectService(
     {
         // The runtime is resolved BEFORE the store call so the reset and every attempt land in one transaction. The
         // revision it was resolved for is carried along: a project that moved on meanwhile rolls the whole thing back.
-        var revision = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false)
+        var revision = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken)
                        ?? throw new BenchmarkConflictException("JudgeDisabled");
         var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
         var activation = await _benchmarkStore.BeginProjectRejudgeAsync(projectId,
                                                   expectedProjectVersion,
-                                                  await BuildCohortSeedAsync(policy, revision.Id, cancellationToken).ConfigureAwait(false),
-                                                  cancellationToken)
-                                              .ConfigureAwait(false);
-        return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation, cancellationToken)
-            .ConfigureAwait(false);
+                                                  await BuildCohortSeedAsync(policy, revision.Id, cancellationToken),
+                                                  cancellationToken);
+        return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken), activation, cancellationToken);
     }
 
     internal static string DecodeCoreTask(ReadOnlySpan<byte> payload)
@@ -266,7 +257,7 @@ public sealed class BenchmarkProjectService(
             return new BenchmarkJudgeAttemptSeed(expectedRevisionId, SeedPointwiseAttempts: false);
         }
 
-        var resolved = await TryResolveRuntimeAsync(policy, cancellationToken).ConfigureAwait(false);
+        var resolved = await TryResolveRuntimeAsync(policy, cancellationToken);
         return new BenchmarkJudgeAttemptSeed(expectedRevisionId, resolved.RuntimeJson, resolved.UnresolvedReason, resolved.Intent);
     }
 
@@ -279,7 +270,7 @@ public sealed class BenchmarkProjectService(
         // seed its comparisons now, not at the next primary success or the next restart. A no-op in pointwise mode.
         if (_pairwisePlanner is not null)
         {
-            _ = await _pairwisePlanner.EnsurePairsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+            _ = await _pairwisePlanner.EnsurePairsAsync(project.Id, cancellationToken);
         }
 
         if (activation.SucceededRunIds.Count > 0)
@@ -304,7 +295,7 @@ public sealed class BenchmarkProjectService(
     {
         try
         {
-            var resolution = await _judgeRuntimeResolver.ResolveAsync(policy, cancellationToken).ConfigureAwait(false);
+            var resolution = await _judgeRuntimeResolver.ResolveAsync(policy, cancellationToken);
             return new ResolvedJudgeRuntime(new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializeRuntime(resolution.Runtime)),
                 null,
                 resolution.Intent);
@@ -319,7 +310,7 @@ public sealed class BenchmarkProjectService(
     }
 
     private async Task<BenchmarkProjectRecord> RequireProjectAsync(Guid projectId, CancellationToken cancellationToken) =>
-        await _benchmarkStore.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false)
+        await _benchmarkStore.GetProjectAsync(projectId, cancellationToken)
         ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
 
     private async Task<(BenchmarkProjectInput Input, BenchmarkJudgePolicyV1? Policy)> ValidateAsync(BenchmarkProjectDraft draft,
@@ -335,7 +326,7 @@ public sealed class BenchmarkProjectService(
         ValidateOutputBudget(draft.MaxOutputTokens, draft.ContextTokens);
         ValidateReasoningBudget(draft.ReasoningBudgetTokens, draft.MaxOutputTokens, draft.ContextTokens);
         ValidateInvocationTimeout(draft.InvocationTimeoutSeconds);
-        var definition = await _agentDefinitionStore.GetByIdAsync(draft.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var definition = await _agentDefinitionStore.GetByIdAsync(draft.AgentDefinitionId, cancellationToken);
         if (definition is null || definition.Kind != AgentDefinitionKind.Single)
         {
             throw new BenchmarkValidationException("An existing Single agent definition is required.");
@@ -344,9 +335,8 @@ public sealed class BenchmarkProjectService(
         var baseFingerprint = await ResolveKldBaseFingerprintAsync(draft.FidelityKldEnabled,
                 draft.FidelityChunks,
                 NormalizeModelName(draft.FidelityKldBaseModelName),
-                cancellationToken)
-            .ConfigureAwait(false);
-        var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken).ConfigureAwait(false);
+                cancellationToken);
+        var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken);
         return (new BenchmarkProjectInput(draft.Id,
                 draft.Name.Trim(),
                 JsonSerializer.SerializeToUtf8Bytes(draft.CoreTask),
@@ -391,7 +381,7 @@ public sealed class BenchmarkProjectService(
             return null;
         }
 
-        var models = await _catalog.ListEligibleModelsAsync(contextTokens: null, cancellationToken).ConfigureAwait(false);
+        var models = await _catalog.ListEligibleModelsAsync(contextTokens: null, cancellationToken);
         return models.FirstOrDefault(model => string.Equals(model.ModelName, baseModelName, StringComparison.Ordinal))?.ModelContentFingerprint
                ?? throw new BenchmarkValidationException("The KL-divergence base model is not an eligible local model.");
     }
@@ -471,7 +461,7 @@ public sealed class BenchmarkProjectService(
     /// </summary>
     private async Task EnsureItemOverridesFitAsync(Guid projectId, BenchmarkJudgeRubricV1 rubric, CancellationToken cancellationToken)
     {
-        foreach (var item in await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false))
+        foreach (var item in await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken))
         {
             if (item.VerifierConfigJson is not { IsEmpty: false } config)
             {
@@ -503,7 +493,7 @@ public sealed class BenchmarkProjectService(
         ValidateContext(draft.ContextTokens, "judge");
         try
         {
-            await using var lease = await _installedModels.AcquireAsync(modelName, cancellationToken).ConfigureAwait(false);
+            await using var lease = await _installedModels.AcquireAsync(modelName, cancellationToken);
             BenchmarkModelEligibility.ValidateJudge(lease.Snapshot);
             var policy = new BenchmarkJudgePolicyV1(BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
                 draft.ContextTokens,

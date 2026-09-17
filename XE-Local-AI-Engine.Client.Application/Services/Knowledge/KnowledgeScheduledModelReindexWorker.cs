@@ -35,11 +35,11 @@ public sealed class KnowledgeScheduledModelReindexWorker : BackgroundService
         }
 
         using var timer = new PeriodicTimer(_interval);
-        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+        while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
-                await ReconcileOnceAsync(stoppingToken).ConfigureAwait(false);
+                await ReconcileOnceAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -57,10 +57,10 @@ public sealed class KnowledgeScheduledModelReindexWorker : BackgroundService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
-        var stale = await catalog.ResetStaleDocumentsToPendingAsync(cancellationToken).ConfigureAwait(false);
+        var stale = await catalog.ResetStaleDocumentsToPendingAsync(cancellationToken);
         foreach (var documentId in stale)
         {
-            if (await _dispatcher.EnqueueAsync(documentId, cancellationToken).ConfigureAwait(false)
+            if (await _dispatcher.EnqueueAsync(documentId, cancellationToken)
                 == KnowledgeIngestionEnqueueResult.QueueFull)
             {
                 break;

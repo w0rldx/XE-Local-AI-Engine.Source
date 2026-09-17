@@ -120,8 +120,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
         // A real conversation, because a session owns one and the delete path sweeps it. Nothing here sends a turn on it.
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
-                                      .CreateConversationAsync(new NodeChatCreateConversationRequest(title, UserId: null, CreatedAtUtc: 0), cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .CreateConversationAsync(new NodeChatCreateConversationRequest(title, UserId: null, CreatedAtUtc: 0), cancellationToken);
         var created = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
                                  .CreateAsync(new CreateWorkSessionCommand(Guid.NewGuid(),
                                          conversation.ConversationId,
@@ -129,8 +128,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
                                          AgentWorkSessionKind.Workflow,
                                          title,
                                          objective),
-                                     cancellationToken)
-                                 .ConfigureAwait(false);
+                                     cancellationToken);
         lock (_gate)
         {
             _created.Add(created.Id);
@@ -174,11 +172,11 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
         Record("delete", sessionId);
         if (OnDeleting is { } observe)
         {
-            await observe(sessionId).ConfigureAwait(false);
+            await observe(sessionId);
         }
 
         await using var scope = _scopes.CreateAsyncScope();
-        _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().DeleteAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().DeleteAsync(sessionId, cancellationToken);
     }
 
     /// <summary>What "the agent finished" looks like from the runtime's side: the session lands on a terminal status.</summary>
@@ -195,15 +193,14 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
         await using var scope = _scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, target), cancellationToken)
-                               .ConfigureAwait(false);
+        var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, target), cancellationToken);
         return ToDetail(moved);
     }
 
     private async Task<WorkSessionDetail> ReadAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        return ToDetail(await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId, cancellationToken).ConfigureAwait(false));
+        return ToDetail(await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId, cancellationToken));
     }
 
     /// <summary>The step budget is the node's option in production; nothing here reads it, so the default stands in.</summary>

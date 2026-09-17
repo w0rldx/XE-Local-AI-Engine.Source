@@ -26,7 +26,7 @@ internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore st
             throw new SelectedFolderValidationException($"The host path for alias '{alias}' must be an absolute, traversal-free path.");
         }
 
-        var existing = await _store.GetByAliasAsync(alias, cancellationToken).ConfigureAwait(false);
+        var existing = await _store.GetByAliasAsync(alias, cancellationToken);
         if (existing is not null)
         {
             throw new SelectedFolderConflictException($"A selected folder with alias '{alias}' is already registered.");
@@ -34,7 +34,7 @@ internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore st
 
         try
         {
-            var record = await _store.AddAsync(alias, registration.HostPath, registration.Mode, cancellationToken).ConfigureAwait(false);
+            var record = await _store.AddAsync(alias, registration.HostPath, registration.Mode, cancellationToken);
             _logger.LogInformation("Registered selected folder {FolderId} with alias {Alias}.", record.Id, record.Alias);
             return new SelectedFolderReference(record.Id.ToString(), record.Alias);
         }
@@ -48,7 +48,7 @@ internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore st
 
     public async Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
     {
-        var records = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var records = await _store.ListAsync(cancellationToken);
         return records.Select(record => new SelectedFolderReference(record.Id.ToString(), record.Alias)).ToArray();
     }
 
@@ -61,7 +61,7 @@ internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore st
             throw new SelectedFolderValidationException($"Selected-folder id '{id}' is not a valid identifier.");
         }
 
-        var record = await _store.GetByIdAsync(folderId, cancellationToken).ConfigureAwait(false);
+        var record = await _store.GetByIdAsync(folderId, cancellationToken);
         if (record is null)
         {
             throw new SelectedFolderNotFoundException($"No selected folder is registered with id '{id}'.");

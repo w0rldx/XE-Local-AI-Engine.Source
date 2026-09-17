@@ -167,11 +167,11 @@ public sealed class LocalChatHub(
         CancellationToken cancellationToken)
     {
         IDisposable? attachment = null;
-        await using var registration = cancellationToken.Register(() => attachment?.Dispose()).ConfigureAwait(false);
+        await using var registration = cancellationToken.Register(() => attachment?.Dispose());
 
         try
         {
-            await foreach (var streamEvent in TranslateDomainRejections(source, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            await foreach (var streamEvent in TranslateDomainRejections(source, cancellationToken).WithCancellation(cancellationToken))
             {
                 if (attachment is null)
                 {
@@ -224,14 +224,14 @@ public sealed class LocalChatHub(
         CancellationToken cancellationToken)
     {
         var enumerator = source.GetAsyncEnumerator(cancellationToken);
-        await using (enumerator.ConfigureAwait(false))
+        await using (enumerator)
         {
             while (true)
             {
                 bool hasNext;
                 try
                 {
-                    hasNext = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                    hasNext = await enumerator.MoveNextAsync();
                 }
                 catch (NodeChatReadOnlyConversationException exception)
                 {

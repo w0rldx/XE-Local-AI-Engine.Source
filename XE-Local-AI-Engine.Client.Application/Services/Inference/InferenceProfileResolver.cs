@@ -53,13 +53,13 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
             return ResolvedLaunchArguments.Explore();
         }
 
-        var machineKey = await _machineKeyProvider.GetMachineKeyAsync(ct).ConfigureAwait(false);
+        var machineKey = await _machineKeyProvider.GetMachineKeyAsync(ct);
         var backendToken = InferenceBackends.FromVariant(backend);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IInferenceProfileStore>();
 
-        var record = await store.GetByKeyAsync(machineKey, modelName, (int)role, backendToken, ct).ConfigureAwait(false);
+        var record = await store.GetByKeyAsync(machineKey, modelName, (int)role, backendToken, ct);
         if (record is null)
         {
             return ResolvedLaunchArguments.Explore();
@@ -74,9 +74,9 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
                 return ResolvedLaunchArguments.Explore();
 
             case InferenceProfileStatus.Frozen:
-                if (await _invalidationEvaluator.IsStaleAsync(record, ct).ConfigureAwait(false))
+                if (await _invalidationEvaluator.IsStaleAsync(record, ct))
                 {
-                    await store.MarkStaleAsync(record.Id, ct).ConfigureAwait(false);
+                    await store.MarkStaleAsync(record.Id, ct);
                     return ResolvedLaunchArguments.Explore();
                 }
 

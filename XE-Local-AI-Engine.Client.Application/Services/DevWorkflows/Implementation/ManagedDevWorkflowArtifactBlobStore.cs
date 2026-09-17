@@ -32,7 +32,7 @@ public sealed class ManagedDevWorkflowArtifactBlobStore : IDevWorkflowArtifactBl
         ReadOnlyMemory<byte> content,
         CancellationToken cancellationToken = default)
     {
-        var written = await _blobs.WriteAsync(runId, artifactId, content, cancellationToken).ConfigureAwait(false);
+        var written = await _blobs.WriteAsync(runId, artifactId, content, cancellationToken);
         return new DevWorkflowArtifactBlobWriteResult(written.OpaqueReference, written.ContentHash, written.ByteCount);
     }
 
@@ -42,7 +42,7 @@ public sealed class ManagedDevWorkflowArtifactBlobStore : IDevWorkflowArtifactBl
         long expectedByteCount,
         CancellationToken cancellationToken = default)
     {
-        var read = await _blobs.ReadAsync(runId, artifactId, expectedHash, expectedByteCount, cancellationToken).ConfigureAwait(false);
+        var read = await _blobs.ReadAsync(runId, artifactId, expectedHash, expectedByteCount, cancellationToken);
         return new DevWorkflowArtifactBlobReadResult(Map(read.Status), read.Content);
     }
 

@@ -58,11 +58,11 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
 
         try
         {
-            await RunIterationAsync(stoppingToken).ConfigureAwait(false);
+            await RunIterationAsync(stoppingToken);
             using var timer = new PeriodicTimer(SettingsPollInterval, _timeProvider);
-            while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+            while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                await RunIterationAsync(stoppingToken).ConfigureAwait(false);
+                await RunIterationAsync(stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -77,7 +77,7 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
         string? attemptedModelName = null;
         try
         {
-            var enabled = await _runtimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken).ConfigureAwait(false);
+            var enabled = await _runtimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken);
             if (!enabled)
             {
                 ResetCadence();
@@ -109,7 +109,7 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
                 return;
             }
 
-            var modelName = await _runtimeSettings.GetKeepModelWarmModelNameAsync(cancellationToken).ConfigureAwait(false);
+            var modelName = await _runtimeSettings.GetKeepModelWarmModelNameAsync(cancellationToken);
             attemptedModelName = modelName;
             if (string.IsNullOrWhiteSpace(modelName))
             {
@@ -125,7 +125,7 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
             }
 
             _missingModelWarningLogged = false;
-            var interval = await _runtimeSettings.GetKeepModelWarmIntervalAsync(cancellationToken).ConfigureAwait(false);
+            var interval = await _runtimeSettings.GetKeepModelWarmIntervalAsync(cancellationToken);
             interval = NormalizeInterval(interval);
             var effectiveInterval = ResolveEffectiveInterval(interval);
             if (effectiveInterval is null)
@@ -147,8 +147,8 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
             _lastWarmModelName = modelName;
             _lastWarmAttemptTimestamp = now;
 
-            var provider = await _providerResolver.ResolveProviderForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
-            await provider.WarmModelAsync(modelName, cancellationToken).ConfigureAwait(false);
+            var provider = await _providerResolver.ResolveProviderForModelAsync(modelName, cancellationToken);
+            await provider.WarmModelAsync(modelName, cancellationToken);
             ResetFailureLogging();
             _logger.LogDebug("Keep model warm refreshed model {ModelName} through provider {ProviderName}.", modelName, provider.ProviderName);
         }

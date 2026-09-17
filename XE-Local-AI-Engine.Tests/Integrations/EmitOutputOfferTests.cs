@@ -41,10 +41,10 @@ public sealed class EmitOutputOfferTests
     {
         var provider = IntegrationToolOfferFactory.Create();
 
-        var offered = await provider.GetOfferedToolsAsync(Model, isCloudModel: false).ConfigureAwait(false);
-        var profile = await provider.GetOfferedToolsForProfileAsync(Model, isCloudModel: false).ConfigureAwait(false);
-        var names = await provider.GetKnownToolNamesAsync().ConfigureAwait(false);
-        var catalog = await provider.GetKnownToolsAsync().ConfigureAwait(false);
+        var offered = await provider.GetOfferedToolsAsync(Model, isCloudModel: false);
+        var profile = await provider.GetOfferedToolsForProfileAsync(Model, isCloudModel: false);
+        var names = await provider.GetKnownToolNamesAsync();
+        var catalog = await provider.GetKnownToolsAsync();
 
         AssertEx.False(offered.Any(tool => tool.Name == ToolName));
         AssertEx.False(profile.Any(tool => tool.Name == ToolName));

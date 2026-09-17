@@ -35,7 +35,7 @@ public sealed class ApplyAppUpdateEndpoint(
         // the JSON response is complete, so the client reliably enters restart polling. An apply failure throws
         // AppUpdateException, whose contractually sanitized message (no local path or feed URL) the global
         // DomainValidationExceptionHandler writes as the 400.
-        var applying = await _updateService.ApplyAsync(ct).ConfigureAwait(false);
+        var applying = await _updateService.ApplyAsync(ct);
         if (applying)
         {
             _shutdownCoordinator.StopAfterResponseCompleted(HttpContext.Response);
@@ -45,6 +45,6 @@ public sealed class ApplyAppUpdateEndpoint(
             {
                 Applying = applying
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

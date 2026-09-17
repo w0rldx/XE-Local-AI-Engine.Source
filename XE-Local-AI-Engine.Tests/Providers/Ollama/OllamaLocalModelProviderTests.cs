@@ -297,7 +297,7 @@ public sealed class OllamaLocalModelProviderTests
             OllamaClient.Dispose();
             // The factory owns the shared HttpClient; disposing the per-model/base clients above does not.
             _factory.Dispose();
-            await Server.DisposeAsync().ConfigureAwait(false);
+            await Server.DisposeAsync();
         }
     }
 }

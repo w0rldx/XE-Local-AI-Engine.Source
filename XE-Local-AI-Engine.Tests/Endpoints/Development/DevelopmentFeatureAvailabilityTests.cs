@@ -14,7 +14,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/api/local/v1/development/projects").ConfigureAwait(false);
+        using var response = await client.GetAsync("/api/local/v1/development/projects");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -27,7 +27,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/projects");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -47,7 +47,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
         request.Headers.Add("Origin", "http://localhost");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -65,8 +65,8 @@ public sealed class DevelopmentFeatureAvailabilityTests
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/capability");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var expected = enabled ? "\"enabled\":true" : "\"enabled\":false";
@@ -90,7 +90,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
             using var disabledClient = disabledFactory.CreateClient();
             using var disabledRequest = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/projects");
             disabledFactory.AddNodeBearerToken(disabledRequest);
-            using var disabledResponse = await disabledClient.SendAsync(disabledRequest).ConfigureAwait(false);
+            using var disabledResponse = await disabledClient.SendAsync(disabledRequest);
             AssertEx.Equal(HttpStatusCode.NotFound, disabledResponse.StatusCode);
         }
 
@@ -102,7 +102,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/projects");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -118,7 +118,7 @@ public sealed class DevelopmentFeatureAvailabilityTests
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/projects");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

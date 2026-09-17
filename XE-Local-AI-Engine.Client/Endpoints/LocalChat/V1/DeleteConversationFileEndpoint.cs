@@ -22,13 +22,13 @@ public sealed class DeleteConversationFileEndpoint(IConversationUploadedFileStor
 
     public override async Task HandleAsync(DeleteConversationUploadRequest req, CancellationToken ct)
     {
-        var removed = await _fileStore.DeleteAsync(req.ConversationId, req.FileId, ct).ConfigureAwait(false);
+        var removed = await _fileStore.DeleteAsync(req.ConversationId, req.FileId, ct);
         if (!removed)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

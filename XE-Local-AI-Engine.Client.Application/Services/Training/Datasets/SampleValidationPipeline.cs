@@ -76,7 +76,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
 
         if (record.DemonstratesToolCall)
         {
-            healthy &= await ValidateToolCallAsync(record, context, parts, layers, cancellationToken).ConfigureAwait(false);
+            healthy &= await ValidateToolCallAsync(record, context, parts, layers, cancellationToken);
         }
         else
         {
@@ -103,7 +103,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
                 });
         }
 
-        healthy &= await RunCriticAsync(record, context, layers, cancellationToken).ConfigureAwait(false);
+        healthy &= await RunCriticAsync(record, context, layers, cancellationToken);
 
         // Decision #9: a schema-valid turn that failed a later layer is retained as negative training data, not dropped.
         var label = healthy ? context.RequestedLabel : TrainingSampleLabel.Bad;
@@ -145,8 +145,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
 
         // Layer 4 — execution through the policy-aware headless seam. It runs even when the arguments failed: the
         // outcome (usually a mock miss) is still recorded, so the sample carries the whole picture.
-        var outcome = await _executor.ExecuteAsync(toolName, record.ToolArgumentsJson, context.Definition.TeacherModelName, cancellationToken)
-                                     .ConfigureAwait(false);
+        var outcome = await _executor.ExecuteAsync(toolName, record.ToolArgumentsJson, context.Definition.TeacherModelName, cancellationToken);
         var executed = outcome.Kind is HeadlessToolOutcomeKind.Executed or HeadlessToolOutcomeKind.Mocked;
         layers.Add(new SampleValidationLayerResultV1("execution", executed, ExecutionScoredBy(outcome.Kind), outcome.Reason));
 
@@ -197,8 +196,7 @@ public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, ISt
                                           CriticSchema,
                                           Temperature: 0f,
                                           Seed: null),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                      cancellationToken);
         if (!result.Success)
         {
             layers.Add(new SampleValidationLayerResultV1("critic", Passed: false, "critic:judge", result.FailureReason));

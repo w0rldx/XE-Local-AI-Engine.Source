@@ -32,14 +32,14 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
     public async Task ExecuteAsync_SweepsRowsOlderThanRetentionWindow_KeepsRecent()
     {
         var agentId = Guid.NewGuid();
-        await using var provider = await BuildProviderAsync("retention-sweep.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("retention-sweep.sqlite");
 
         // A clearly-expired row (epoch 0 = far older than RetentionDays) and a fresh one (now).
         Guid freshLogId;
         await using (var seedScope = provider.CreateAsyncScope())
         {
-            _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L).ConfigureAwait(false);
-            freshLogId = await SeedRowAsync(seedScope.ServiceProvider, agentId, NowMs()).ConfigureAwait(false);
+            _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L);
+            freshLogId = await SeedRowAsync(seedScope.ServiceProvider, agentId, NowMs());
         }
 
         using var service = CreateService(provider, new AgentExecutionLogRetentionOptions
@@ -49,7 +49,7 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
             SweepInterval = TimeSpan.FromMilliseconds(50)
         });
 
-        await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await service.StartAsync(CancellationToken.None);
         await AssertEx.EventuallyAsync(() =>
             {
                 using var scope = provider.CreateScope();
@@ -57,12 +57,12 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
                 return store.ListByAgentAsync(agentId, limit: 10).GetAwaiter().GetResult().Count == 1;
             },
             TimeSpan.FromSeconds(5),
-            "The retention sweep should delete the expired row and keep the fresh one.").ConfigureAwait(false);
-        await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            "The retention sweep should delete the expired row and keep the fresh one.");
+        await service.StopAsync(CancellationToken.None);
 
         using var verifyScope = provider.CreateScope();
         var verifyStore = verifyScope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-        var remaining = await verifyStore.ListByAgentAsync(agentId, limit: 10).ConfigureAwait(false);
+        var remaining = await verifyStore.ListByAgentAsync(agentId, limit: 10);
         AssertEx.Equal(expected: 1, remaining.Count);
         AssertEx.Equal(freshLogId, remaining[0].Id);
     }
@@ -71,12 +71,12 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
     public async Task ExecuteAsync_SweepsOnceAtStartup_BeforeTheFirstInterval()
     {
         var agentId = Guid.NewGuid();
-        await using var provider = await BuildProviderAsync("retention-startup-sweep.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("retention-startup-sweep.sqlite");
 
         await using (var seedScope = provider.CreateAsyncScope())
         {
             // An expired row present at startup.
-            _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L).ConfigureAwait(false);
+            _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L);
         }
 
         // A one-hour interval the test never waits out: any deletion must come from the startup sweep, not a periodic tick.
@@ -87,7 +87,7 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
             SweepInterval = TimeSpan.FromHours(1)
         });
 
-        await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await service.StartAsync(CancellationToken.None);
         await AssertEx.EventuallyAsync(() =>
             {
                 using var scope = provider.CreateScope();
@@ -95,20 +95,20 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
                 return store.ListByAgentAsync(agentId, limit: 10).GetAwaiter().GetResult().Count == 0;
             },
             TimeSpan.FromSeconds(5),
-            "The startup sweep should delete the expired row before the first periodic interval.").ConfigureAwait(false);
-        await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            "The startup sweep should delete the expired row before the first periodic interval.");
+        await service.StopAsync(CancellationToken.None);
     }
 
     [Test]
     public async Task ExecuteAsync_WhenDisabled_DoesNotSweep()
     {
         var agentId = Guid.NewGuid();
-        await using var provider = await BuildProviderAsync("retention-disabled.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("retention-disabled.sqlite");
 
         await using (var seedScope = provider.CreateAsyncScope())
         {
             // An expired row that a disabled sweep must leave untouched.
-            _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L).ConfigureAwait(false);
+            _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L);
         }
 
         using var service = CreateService(provider, new AgentExecutionLogRetentionOptions
@@ -117,20 +117,20 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
             SweepInterval = TimeSpan.FromMilliseconds(50)
         });
 
-        await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await service.StartAsync(CancellationToken.None);
         // A disabled sweeper returns from ExecuteAsync immediately without arming the timer. Await that completion
         // signal deterministically (rather than sleeping) to prove the background loop ran to completion — so any
         // regression that swept while disabled would have already run before the row-count assertion below.
         if (service.ExecuteTask is { } executeTask)
         {
-            await executeTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await executeTask.WaitAsync(TimeSpan.FromSeconds(5));
         }
 
-        await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await service.StopAsync(CancellationToken.None);
 
         using var scope = provider.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-        var rows = await store.ListByAgentAsync(agentId, limit: 10).ConfigureAwait(false);
+        var rows = await store.ListByAgentAsync(agentId, limit: 10);
         AssertEx.Equal(expected: 1, rows.Count);
     }
 
@@ -148,8 +148,7 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         // makes the row's age controllable without touching raw SQL.
         var dbContext = scopeProvider.GetRequiredService<NodeChatDbContext>();
         var store = new AgentExecutionLogStore(dbContext, new FixedTimeProvider(createdAtUtc));
-        var added = await store.AddAsync(new AgentExecutionLogInput(agentId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 1L, Success: true))
-                               .ConfigureAwait(false);
+        var added = await store.AddAsync(new AgentExecutionLogInput(agentId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 1L, Success: true));
         return added.Id;
     }
 
@@ -171,8 +170,8 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }

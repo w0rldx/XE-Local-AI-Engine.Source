@@ -43,7 +43,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // The operation id IS the run id. A start has no run row to key idempotency against yet, and inventing a second
         // identifier to correlate them would be a table nobody reads: a replayed start finds the run it created and
         // answers with it, while a genuinely second start of the same work item is refused by the live-run rule below.
-        if (await TryReadAsync(operationId, cancellationToken).ConfigureAwait(false) is { } replayed)
+        if (await TryReadAsync(operationId, cancellationToken) is { } replayed)
         {
             // A replay has to be a replay of THIS request. A reused operation id naming a different work item or
             // definition is a caller bug, and answering it with another run's detail would hand out a run they never
@@ -55,11 +55,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
             // Signalled, not merely composed: a replay is what a caller sends when it never saw the first answer, and
             // the run it is asking about may still be waiting for its first tick.
-            return await SignalAndComposeAsync(replayed.Id, cancellationToken).ConfigureAwait(false);
+            return await SignalAndComposeAsync(replayed.Id, cancellationToken);
         }
 
-        var workItem = await _store.GetWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
-        var definition = await _store.GetDefinitionAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        var workItem = await _store.GetWorkItemAsync(workItemId, cancellationToken);
+        var definition = await _store.GetDefinitionAsync(definitionId, cancellationToken);
         if (definition.Archived)
         {
             throw new DevWorkflowValidationException($"Definition '{definition.Name}' is archived, so no new run can start from it.");
@@ -72,7 +72,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
         // Read once for the whole run: every seed's policy resolution is decided from this one list, so two nodes of the
         // same run can never disagree about which rule sets were live when it started.
-        var enabledRuleSets = await _store.ListEnabledRuleSetsAsync(cancellationToken).ConfigureAwait(false);
+        var enabledRuleSets = await _store.ListEnabledRuleSetsAsync(cancellationToken);
 
         // ONE call. The seeds carry the caller's inputs, which have no other home, so a run row that committed without
         // them would be a durable workflow quietly running a different request from the one that was asked.
@@ -83,10 +83,9 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                                       definition.GraphHash,
                                       definition.GraphJson,
                                       DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun, enabledRuleSets)),
-                                  cancellationToken)
-                              .ConfigureAwait(false);
+                                  cancellationToken);
 
-        return await SignalAndComposeAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        return await SignalAndComposeAsync(run.Id, cancellationToken);
     }
 
     public Task<DevWorkflowRunDetail> CancelAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
@@ -100,7 +99,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // Ahead of the status check below for the same reason it runs ahead of the transition table in CommandAsync: a
         // resume that committed and was then retried is a replay, and by then the run it resumed is legitimately
         // Running — the one status this method refuses.
-        if (await TryReplayAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken).ConfigureAwait(false) is { } replayed)
+        if (await TryReplayAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken) is { } replayed)
         {
             return replayed;
         }
@@ -108,24 +107,24 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // Checked here rather than left to the transition table, which lets a run go back to Running from a human wait
         // BECAUSE the dispatcher's recomputation does exactly that. Only a paused run is one an operator can resume,
         // and answering "resumed" to a run that never stopped would be a lie about what the command did.
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await _store.GetRunAsync(runId, cancellationToken);
         if (run.Status != DevWorkflowRunStatus.Paused)
         {
             throw new DevWorkflowInvalidTransitionException($"This run is {run.Status}, so there is nothing to resume.");
         }
 
-        return await CommandAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken).ConfigureAwait(false);
+        return await CommandAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken);
     }
 
     public async Task DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default)
     {
         // Reads the item first so an unknown id answers "not found" rather than "deleted nothing".
-        _ = await _store.GetWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
+        _ = await _store.GetWorkItemAsync(workItemId, cancellationToken);
 
         // Rows first, and everything external after. The live-run guard lives inside this transaction, so a delete
         // refused because a run started mid-flight cannot have destroyed that run's transcripts on the way to the
         // refusal — and the ids come back from the commit, so there is no page for a caller to walk or forget.
-        var deleted = await _store.DeleteWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
+        var deleted = await _store.DeleteWorkItemAsync(workItemId, cancellationToken);
 
         // Past this line the request's token is DELIBERATELY dropped. The rows that named these sessions and these
         // bytes have already committed, so a cancellation here undoes nothing — it only stops the cleanup partway, and
@@ -140,7 +139,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         {
             try
             {
-                await _sessions.DeleteAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
+                await _sessions.DeleteAsync(sessionId, CancellationToken.None);
             }
             catch (Exception exception)
             {
@@ -164,7 +163,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     }
 
     public async Task<DevWorkflowRunDetail> GetAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken), cancellationToken);
 
     public async Task<DevWorkflowDecisionResult> DecideAsync(Guid runId,
         Guid nodeRunId,
@@ -175,8 +174,8 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         string? decidedBySubject,
         CancellationToken cancellationToken = default)
     {
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
-        if (await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } recorded)
+        var run = await _store.GetRunAsync(runId, cancellationToken);
+        if (await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken) is { } recorded)
         {
             // A repeated POST answers with the decision it already recorded, not with a conflict about the node run
             // having since moved on because of it — but only if it IS the same act. A reused operation id naming a
@@ -189,10 +188,10 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
             // Comment and payload are deliberately NOT compared: they are the free text around the act rather than the
             // act itself, and a client re-sending its request with a trimmed comment has still taken one decision.
-            return new DevWorkflowDecisionResult(await ComposeAsync(run, cancellationToken).ConfigureAwait(false), recorded);
+            return new DevWorkflowDecisionResult(await ComposeAsync(run, cancellationToken), recorded);
         }
 
-        var nodeRun = await _store.GetNodeRunAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
+        var nodeRun = await _store.GetNodeRunAsync(nodeRunId, cancellationToken);
         if (nodeRun.RunId != runId)
         {
             throw new DevWorkflowNotFoundException($"Node run '{nodeRunId}' does not belong to run '{runId}'.");
@@ -203,7 +202,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
             // A node run that moved BECAUSE it was already answered is a different refusal from one that was never
             // waiting: the second click on a settled gate gets told what stands, rather than only that it failed. The
             // operation id cannot say this — a new one is a new human act, which is exactly the case being refused.
-            var standing = (await _store.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false))
+            var standing = (await _store.ListDecisionsAsync(runId, cancellationToken))
                 .LastOrDefault(decision => decision.NodeRunId == nodeRunId && decision.Attempt == nodeRun.Attempt);
             throw standing is not null
                 ? new DevWorkflowGateAlreadyDecidedException($"Node run '{nodeRun.NodeKey}' was already decided {standing.Decision}.", standing.Decision)
@@ -227,7 +226,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
             // This is the fast path and the friendly message, NOT the authority: it reads a count that several blocked
             // node runs answered in the same tick window would each read as unspent. The budget therefore travels on
             // the command and is admitted inside the transaction that records the decision, where the count is true.
-            var spent = (await _store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false)).Sum(static row => row.Attempt - 1);
+            var spent = (await _store.ListNodeRunsAsync(runId, cancellationToken)).Sum(static row => row.Attempt - 1);
             if (spent >= _options.MaxTotalAttempts)
             {
                 throw new DevWorkflowInvalidTransitionException($"This run has already spent {spent} re-attempts, which is as many re-attempts as this run "
@@ -250,11 +249,10 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                                 // the recording transaction, so the write re-checks the pair rather than trusting it.
                                 nodeRun.Attempt,
                                 nodeRun.Status),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+                            cancellationToken);
 
-        var detail = await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
-        var settled = await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false)
+        var detail = await SignalAndComposeAsync(runId, cancellationToken);
+        var settled = await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken)
                       ?? throw new DevWorkflowNotFoundException($"The decision recorded on run '{runId}' could not be read back.");
         return new DevWorkflowDecisionResult(detail, settled);
     }
@@ -270,17 +268,16 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     /// </summary>
     private async Task<DevWorkflowRunDetail> CommandAsync(Guid runId, Guid operationId, DevWorkflowRunStatus target, CancellationToken cancellationToken)
     {
-        if (await TryReplayAsync(runId, operationId, target, cancellationToken).ConfigureAwait(false) is { } replayed)
+        if (await TryReplayAsync(runId, operationId, target, cancellationToken) is { } replayed)
         {
             return replayed;
         }
 
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var run = await _store.GetRunAsync(runId, cancellationToken);
         DevWorkflowStateMachine.EnsureLegal(run.Status, target);
 
-        _ = await _store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(runId, DevWorkflowVersions.Any, target, operationId), cancellationToken)
-                        .ConfigureAwait(false);
-        return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
+        _ = await _store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(runId, DevWorkflowVersions.Any, target, operationId), cancellationToken);
+        return await SignalAndComposeAsync(runId, cancellationToken);
     }
 
     /// <summary>
@@ -305,7 +302,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         DevWorkflowRunStatus target,
         CancellationToken cancellationToken)
     {
-        if (await _store.FindOperationEventTypeAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is not { } recorded)
+        if (await _store.FindOperationEventTypeAsync(runId, operationId, cancellationToken) is not { } recorded)
         {
             return null;
         }
@@ -316,7 +313,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
             throw new DevWorkflowInvalidTransitionException($"Operation '{operationId}' already recorded '{recorded}' on this run, so it cannot also record '{expected}'.");
         }
 
-        return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
+        return await SignalAndComposeAsync(runId, cancellationToken);
     }
 
     /// <summary>
@@ -345,12 +342,12 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     private async Task<DevWorkflowRunDetail> SignalAndComposeAsync(Guid runId, CancellationToken cancellationToken)
     {
         _signal.Signal(runId);
-        return await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        return await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken), cancellationToken);
     }
 
     private async Task<DevWorkflowRunDetail> ComposeAsync(DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
-        var nodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        var nodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken);
         return new DevWorkflowRunDetail(run,
             nodeRuns,
             nodeRuns.Count(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked),
@@ -368,7 +365,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     {
         try
         {
-            return await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+            return await _store.GetRunAsync(runId, cancellationToken);
         }
         catch (DevWorkflowNotFoundException)
         {

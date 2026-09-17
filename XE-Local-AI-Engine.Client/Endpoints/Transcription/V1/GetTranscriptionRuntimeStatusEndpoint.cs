@@ -24,7 +24,7 @@ public sealed class GetTranscriptionRuntimeStatusEndpoint(ITranscriptionRuntimeS
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var view = await _runtimeService.GetRuntimeAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(view.ToResponse(), ct).ConfigureAwait(false);
+        var view = await _runtimeService.GetRuntimeAsync(ct);
+        await Send.OkAsync(view.ToResponse(), ct);
     }
 }

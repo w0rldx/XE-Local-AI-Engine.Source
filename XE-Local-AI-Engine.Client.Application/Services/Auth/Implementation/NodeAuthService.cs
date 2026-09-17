@@ -48,8 +48,7 @@ public sealed class NodeAuthService : INodeAuthService
 
         var hasAdminUser = await _dbContext.Users
                                            .AsNoTracking()
-                                           .AnyAsync(user => user.SetupCompleted, cancellationToken)
-                                           .ConfigureAwait(false);
+                                           .AnyAsync(user => user.SetupCompleted, cancellationToken);
 
         return new NodeAuthStatus(!hasAdminUser, principal.Identity?.IsAuthenticated == true);
     }
@@ -59,21 +58,20 @@ public sealed class NodeAuthService : INodeAuthService
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
-        await SetupLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await SetupLock.WaitAsync(cancellationToken);
         try
         {
-            if (await HasCompletedSetupAsync(cancellationToken).ConfigureAwait(false))
+            if (await HasCompletedSetupAsync(cancellationToken))
             {
                 return new NodeSetupResult(Succeeded: false, AlreadyInitialized: true, []);
             }
 
             await using var transaction = await _dbContext.Database
-                                                          .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
-                                                          .ConfigureAwait(false);
+                                                          .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
-            if (await HasCompletedSetupAsync(cancellationToken).ConfigureAwait(false))
+            if (await HasCompletedSetupAsync(cancellationToken))
             {
-                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.RollbackAsync(cancellationToken);
                 return new NodeSetupResult(Succeeded: false, AlreadyInitialized: true, []);
             }
 
@@ -86,17 +84,17 @@ public sealed class NodeAuthService : INodeAuthService
                 CreatedAtUtc = _timeProvider.GetUtcNow().UtcDateTime
             };
 
-            var createResult = await _userManager.CreateAsync(user, password).ConfigureAwait(false);
+            var createResult = await _userManager.CreateAsync(user, password);
             if (!createResult.Succeeded)
             {
-                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.RollbackAsync(cancellationToken);
                 return new NodeSetupResult(Succeeded: false, AlreadyInitialized: false, ToErrorList(createResult));
             }
 
-            var roleResult = await _userManager.AddToRoleAsync(user, NodeAuthorizationPolicies.AdminRole).ConfigureAwait(false);
+            var roleResult = await _userManager.AddToRoleAsync(user, NodeAuthorizationPolicies.AdminRole);
             if (!roleResult.Succeeded)
             {
-                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.RollbackAsync(cancellationToken);
                 return new NodeSetupResult(Succeeded: false, AlreadyInitialized: false, ToErrorList(roleResult));
             }
 
@@ -114,9 +112,9 @@ public sealed class NodeAuthService : INodeAuthService
                         ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfilePending
                     }
                     : latest,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             _logger.LogInformation("Node admin user created during first-run setup.");
             return new NodeSetupResult(Succeeded: true, AlreadyInitialized: false, []);
         }
@@ -130,14 +128,14 @@ public sealed class NodeAuthService : INodeAuthService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
-        var user = await ResolveLoginUserAsync(email, cancellationToken).ConfigureAwait(false);
+        var user = await ResolveLoginUserAsync(email, cancellationToken);
         if (user is null)
         {
             _logger.LogWarning("Node login failed: no matching user.");
             return FailedTokenResult();
         }
 
-        var signInResult = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true).ConfigureAwait(false);
+        var signInResult = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
         if (!signInResult.Succeeded)
         {
             _logger.LogWarning("Node login failed for user {UserId}: {Reason}.", user.Id, GetSignInFailureReason(signInResult));
@@ -147,11 +145,11 @@ public sealed class NodeAuthService : INodeAuthService
             // waiting is the fix. This tells a caller that an email exists once five attempts have been spent, which
             // is accepted on a loopback-only node whose login is additionally capped at 10 requests/minute per IP.
             return signInResult.IsLockedOut
-                ? FailedTokenResult(await GetLockoutRetryAfterSecondsAsync(user).ConfigureAwait(false))
+                ? FailedTokenResult(await GetLockoutRetryAfterSecondsAsync(user))
                 : FailedTokenResult();
         }
 
-        return await CreateTokenResultAsync(user, cancellationToken).ConfigureAwait(false);
+        return await CreateTokenResultAsync(user, cancellationToken);
     }
 
     public async Task<NodeAuthTokenResult> RefreshAsync(string? refreshToken, CancellationToken cancellationToken)
@@ -163,46 +161,44 @@ public sealed class NodeAuthService : INodeAuthService
 
         var refreshTokenHash = _tokenService.HashRefreshToken(refreshToken);
         await using var transaction = await _dbContext.Database
-                                                      .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
-                                                      .ConfigureAwait(false);
+                                                      .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
         var storedToken = await _dbContext.RefreshTokens
-                                          .SingleOrDefaultAsync(token => token.TokenHash == refreshTokenHash, cancellationToken)
-                                          .ConfigureAwait(false);
+                                          .SingleOrDefaultAsync(token => token.TokenHash == refreshTokenHash, cancellationToken);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         if (storedToken is null || storedToken.RevokedAtUtc is not null || storedToken.ExpiresAtUtc <= now)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.RollbackAsync(cancellationToken);
             _logger.LogWarning("Node refresh failed: missing, revoked, or expired refresh token.");
             return FailedTokenResult();
         }
 
-        var user = await _userManager.FindByIdAsync(storedToken.UserId).ConfigureAwait(false);
+        var user = await _userManager.FindByIdAsync(storedToken.UserId);
         if (user is null)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.RollbackAsync(cancellationToken);
             _logger.LogWarning("Node refresh failed: user {UserId} not found.", storedToken.UserId);
             return FailedTokenResult();
         }
 
         storedToken.RevokedAtUtc = now;
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var result = await CreateTokenResultAsync(user, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var result = await CreateTokenResultAsync(user, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return result;
     }
 
     public async Task RevokeRefreshTokensAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
     {
-        var user = await _userManager.GetUserAsync(principal).ConfigureAwait(false);
+        var user = await _userManager.GetUserAsync(principal);
         if (user is null)
         {
             return;
         }
 
-        await RevokeActiveTokensAsync(user.Id, cancellationToken).ConfigureAwait(false);
+        await RevokeActiveTokensAsync(user.Id, cancellationToken);
     }
 
     public async Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken)
@@ -210,19 +206,19 @@ public sealed class NodeAuthService : INodeAuthService
         ArgumentException.ThrowIfNullOrWhiteSpace(currentPassword);
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
 
-        var user = await _userManager.GetUserAsync(principal).ConfigureAwait(false);
+        var user = await _userManager.GetUserAsync(principal);
         if (user is null)
         {
             return new NodePasswordChangeResult(Succeeded: false, ["The current session is invalid."]);
         }
 
-        var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword).ConfigureAwait(false);
+        var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
         if (!result.Succeeded)
         {
             return new NodePasswordChangeResult(Succeeded: false, ToErrorList(result));
         }
 
-        await RevokeActiveTokensAsync(user.Id, cancellationToken).ConfigureAwait(false);
+        await RevokeActiveTokensAsync(user.Id, cancellationToken);
         return new NodePasswordChangeResult(Succeeded: true, []);
     }
 
@@ -232,7 +228,7 @@ public sealed class NodeAuthService : INodeAuthService
 
         // No email on a recovery reset: resolve the single completed-setup admin, exactly as login does when the UI omits
         // the email (single-user model). Nothing to reset if first-run setup never happened.
-        var user = await ResolveLoginUserAsync(email: null, cancellationToken).ConfigureAwait(false);
+        var user = await ResolveLoginUserAsync(email: null, cancellationToken);
         if (user is null)
         {
             return new NodePasswordChangeResult(Succeeded: false,
@@ -243,30 +239,29 @@ public sealed class NodeAuthService : INodeAuthService
         // and no reset-token provider is registered). Wrap both in a serializable transaction — mirroring SetupAsync — so a
         // policy-rejected new password rolls back and never leaves the account in the passwordless intermediate state.
         await using var transaction = await _dbContext.Database
-                                                      .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
-                                                      .ConfigureAwait(false);
+                                                      .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
-        var removeResult = await _userManager.RemovePasswordAsync(user).ConfigureAwait(false);
+        var removeResult = await _userManager.RemovePasswordAsync(user);
         if (!removeResult.Succeeded)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.RollbackAsync(cancellationToken);
             return new NodePasswordChangeResult(Succeeded: false, ToErrorList(removeResult));
         }
 
-        var addResult = await _userManager.AddPasswordAsync(user, newPassword).ConfigureAwait(false);
+        var addResult = await _userManager.AddPasswordAsync(user, newPassword);
         if (!addResult.Succeeded)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.RollbackAsync(cancellationToken);
             return new NodePasswordChangeResult(Succeeded: false, ToErrorList(addResult));
         }
 
         // A forgotten password is often preceded by failed attempts that tripped the 5-strike lockout; clear it so the
         // operator can sign in immediately with the new password.
-        await _userManager.ResetAccessFailedCountAsync(user).ConfigureAwait(false);
-        await _userManager.SetLockoutEndDateAsync(user, lockoutEnd: null).ConfigureAwait(false);
+        await _userManager.ResetAccessFailedCountAsync(user);
+        await _userManager.SetLockoutEndDateAsync(user, lockoutEnd: null);
 
-        await RevokeActiveTokensAsync(user.Id, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await RevokeActiveTokensAsync(user.Id, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         _logger.LogWarning("Node admin password reset for user {UserId}; refresh tokens revoked and the rotated security "
                            + "stamp invalidates existing access tokens.", user.Id);
@@ -275,25 +270,25 @@ public sealed class NodeAuthService : INodeAuthService
 
     public async Task<NodeCurrentUser?> GetCurrentUserAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
     {
-        var user = await _userManager.GetUserAsync(principal).ConfigureAwait(false);
+        var user = await _userManager.GetUserAsync(principal);
         if (user is null)
         {
             return null;
         }
 
-        var roles = await _userManager.GetRolesAsync(user).ConfigureAwait(false);
+        var roles = await _userManager.GetRolesAsync(user);
         return new NodeCurrentUser(user.UserName ?? user.Email ?? user.Id, roles.ToArray());
     }
 
     private async Task<NodeAuthTokenResult> CreateTokenResultAsync(NodeUser user, CancellationToken cancellationToken)
     {
-        var roles = await _userManager.GetRolesAsync(user).ConfigureAwait(false);
+        var roles = await _userManager.GetRolesAsync(user);
         var (accessToken, accessTokenExpiresAtUtc) = _tokenService.CreateAccessToken(user, roles);
         var refreshToken = _tokenService.CreateRefreshTokenRaw();
         var refreshTokenExpiresAtUtc = _timeProvider.GetUtcNow().AddDays(_options.Value.RefreshTokenDays).UtcDateTime;
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        await RevokeActiveTokensAsync(user.Id, cancellationToken).ConfigureAwait(false);
+        await RevokeActiveTokensAsync(user.Id, cancellationToken);
         _dbContext.RefreshTokens.Add(new NodeRefreshToken
         {
             UserId = user.Id,
@@ -301,7 +296,7 @@ public sealed class NodeAuthService : INodeAuthService
             ExpiresAtUtc = refreshTokenExpiresAtUtc,
             CreatedAtUtc = now
         });
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         return new NodeAuthTokenResult(Succeeded: true, accessToken, accessTokenExpiresAtUtc, refreshToken, refreshTokenExpiresAtUtc);
     }
@@ -311,8 +306,7 @@ public sealed class NodeAuthService : INodeAuthService
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var activeTokens = await _dbContext.RefreshTokens
                                            .Where(token => token.UserId == userId && token.RevokedAtUtc == null)
-                                           .ToListAsync(cancellationToken)
-                                           .ConfigureAwait(false);
+                                           .ToListAsync(cancellationToken);
 
         foreach (var token in activeTokens)
         {
@@ -321,7 +315,7 @@ public sealed class NodeAuthService : INodeAuthService
 
         if (activeTokens.Count > 0)
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 
@@ -329,12 +323,11 @@ public sealed class NodeAuthService : INodeAuthService
     {
         if (!string.IsNullOrWhiteSpace(email))
         {
-            return await _userManager.FindByEmailAsync(email.Trim()).ConfigureAwait(false);
+            return await _userManager.FindByEmailAsync(email.Trim());
         }
 
         return await _dbContext.Users
-                               .SingleOrDefaultAsync(user => user.SetupCompleted, cancellationToken)
-                               .ConfigureAwait(false);
+                               .SingleOrDefaultAsync(user => user.SetupCompleted, cancellationToken);
     }
 
     private Task<bool> HasCompletedSetupAsync(CancellationToken cancellationToken)
@@ -350,7 +343,7 @@ public sealed class NodeAuthService : INodeAuthService
     /// </summary>
     private async Task<int> GetLockoutRetryAfterSecondsAsync(NodeUser user)
     {
-        var lockoutEnd = await _userManager.GetLockoutEndDateAsync(user).ConfigureAwait(false);
+        var lockoutEnd = await _userManager.GetLockoutEndDateAsync(user);
         var now = _timeProvider.GetUtcNow();
         var remainingSeconds = Math.Ceiling(((lockoutEnd ?? now) - now).TotalSeconds);
 

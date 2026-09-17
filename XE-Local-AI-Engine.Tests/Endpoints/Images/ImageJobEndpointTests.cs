@@ -50,7 +50,7 @@ public sealed class ImageJobEndpointTests
                 });
             }
 
-            using var response = await client.SendAsync(request).ConfigureAwait(false);
+            using var response = await client.SendAsync(request);
             AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require the operator token.");
         }
     }
@@ -83,10 +83,10 @@ public sealed class ImageJobEndpointTests
         };
         factory.AddNodeBearerToken(createRequest);
 
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
         AssertEx.Equal(HttpStatusCode.OK, createResponse.StatusCode);
 
-        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var jobId = created.GetProperty("id").GetGuid();
         AssertEx.NotEqual(Guid.Empty, jobId);
         AssertEx.Equal("Queued", created.GetProperty("status").GetString());
@@ -94,10 +94,10 @@ public sealed class ImageJobEndpointTests
 
         using var getRequest = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/images/jobs/{jobId}");
         factory.AddNodeBearerToken(getRequest);
-        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        using var getResponse = await client.SendAsync(getRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
-        var fetched = await getResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var fetched = await getResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         AssertEx.Equal(jobId, fetched.GetProperty("id").GetGuid());
         AssertEx.Equal("stable-diffusion-1.5", fetched.GetProperty("modelName").GetString());
     }
@@ -130,10 +130,10 @@ public sealed class ImageJobEndpointTests
         };
         factory.AddNodeBearerToken(createRequest);
 
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
         AssertEx.Equal(HttpStatusCode.OK, createResponse.StatusCode);
 
-        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         // The response seed is a JSON string equal to the exact value sent — never a rounded number.
         AssertEx.Equal(JsonValueKind.String, created.GetProperty("seed").ValueKind);
         AssertEx.Equal(largeSeed, created.GetProperty("seed").GetString());
@@ -166,7 +166,7 @@ public sealed class ImageJobEndpointTests
         };
         factory.AddNodeBearerToken(createRequest);
 
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
 
         AssertEx.Equal(HttpStatusCode.OK, createResponse.StatusCode);
         AssertEx.Equal(expected: -1L, coordinator.LastInput!.Seed);
@@ -197,7 +197,7 @@ public sealed class ImageJobEndpointTests
         };
         factory.AddNodeBearerToken(createRequest);
 
-        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        using var createResponse = await client.SendAsync(createRequest);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, createResponse.StatusCode);
         AssertEx.Null(coordinator.LastInput);
@@ -222,7 +222,7 @@ public sealed class ImageJobEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs/{Guid.NewGuid()}/cancel");
         factory.AddNodeBearerToken(request);
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, "Body-less cancel POST must not return 415.");
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, "An unknown job on body-less cancel must report 404 (authorized + bound).");

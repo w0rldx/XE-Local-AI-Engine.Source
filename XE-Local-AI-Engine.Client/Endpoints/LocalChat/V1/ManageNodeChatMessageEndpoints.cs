@@ -31,22 +31,22 @@ public sealed class BranchNodeChatConversationEndpoint(
 
     public override async Task HandleAsync(BranchNodeChatConversationRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         // A selected-revision entry that fails integrity validation (not a conversation member / wrong group) throws
         // NodeChatInvalidBranchSelectionException, which the global DomainValidationExceptionHandler answers with a
         // 400 — fail closed rather than branching a path the caller did not actually specify.
         var branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest(req.ConversationId, req.MessageId, createdAtUtc, req.SelectedRevisions),
-            ct).ConfigureAwait(false);
+            ct);
 
         if (branched is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(branched.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(branched.ToResponse(), ct);
     }
 }
 
@@ -72,7 +72,7 @@ public sealed class CreateNodeChatMessageRevisionEndpoint(
 
     public override async Task HandleAsync(ListNodeChatMessageRevisionsRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var variant = await _chatPersistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(req.ConversationId,
@@ -80,16 +80,16 @@ public sealed class CreateNodeChatMessageRevisionEndpoint(
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 createdAtUtc),
-            ct).ConfigureAwait(false);
+            ct);
 
         if (variant is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        var variants = await _chatPersistence.ListMessageVariantsAsync(req.ConversationId, variant.Variant.MessageId, ct).ConfigureAwait(false);
-        await Send.OkAsync(BuildResponse(variant.OriginalMessageId, variant.VariantGroupId, variants), ct).ConfigureAwait(false);
+        var variants = await _chatPersistence.ListMessageVariantsAsync(req.ConversationId, variant.Variant.MessageId, ct);
+        await Send.OkAsync(BuildResponse(variant.OriginalMessageId, variant.VariantGroupId, variants), ct);
     }
 
     internal static NodeChatMessageRevisionsResponse BuildResponse(Guid messageId, Guid? variantGroupId, IReadOnlyList<NodeChatPersistedMessageDto> variants)
@@ -115,15 +115,15 @@ public sealed class ListNodeChatMessageRevisionsEndpoint(INodeChatPersistenceSer
 
     public override async Task HandleAsync(ListNodeChatMessageRevisionsRequest req, CancellationToken ct)
     {
-        var variants = await _chatPersistence.ListMessageVariantsAsync(req.ConversationId, req.MessageId, ct).ConfigureAwait(false);
+        var variants = await _chatPersistence.ListMessageVariantsAsync(req.ConversationId, req.MessageId, ct);
         if (variants.Count == 0)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         var variantGroupId = variants[0].VariantGroupId;
-        await Send.OkAsync(CreateNodeChatMessageRevisionEndpoint.BuildResponse(req.MessageId, variantGroupId, variants), ct).ConfigureAwait(false);
+        await Send.OkAsync(CreateNodeChatMessageRevisionEndpoint.BuildResponse(req.MessageId, variantGroupId, variants), ct);
     }
 }
 
@@ -149,7 +149,7 @@ public sealed class SetNodeChatMessageFeedbackEndpoint(
 
     public override async Task HandleAsync(SetNodeChatMessageFeedbackRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var feedback = await _chatPersistence.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(req.ConversationId,
@@ -157,9 +157,9 @@ public sealed class SetNodeChatMessageFeedbackEndpoint(
                 req.Rating,
                 req.Comment,
                 updatedAtUtc),
-            ct).ConfigureAwait(false);
+            ct);
 
-        await Send.OkAsync(feedback.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(feedback.ToResponse(), ct);
     }
 }
 
@@ -187,19 +187,19 @@ public sealed class SetNodeChatSelectedPathEndpoint(
 
     public override async Task HandleAsync(SetNodeChatSelectedPathRequest req, CancellationToken ct)
     {
-        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var persisted = await _chatPersistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(req.ConversationId,
                 req.SelectedPath,
                 updatedAtUtc),
-            ct).ConfigureAwait(false);
+            ct);
 
         await Send.OkAsync(new NodeChatSelectedPathResponse
         {
             ConversationId = req.ConversationId,
             SelectedPath = persisted
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }
 
@@ -215,13 +215,13 @@ public sealed class GetNodeChatMessageFeedbackEndpoint(INodeChatPersistenceServi
 
     public override async Task HandleAsync(GetNodeChatMessageFeedbackRequest req, CancellationToken ct)
     {
-        var feedback = await _chatPersistence.GetMessageFeedbackAsync(req.ConversationId, req.MessageId, ct).ConfigureAwait(false);
+        var feedback = await _chatPersistence.GetMessageFeedbackAsync(req.ConversationId, req.MessageId, ct);
         if (feedback is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(feedback.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(feedback.ToResponse(), ct);
     }
 }

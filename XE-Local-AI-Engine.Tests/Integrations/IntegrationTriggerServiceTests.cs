@@ -27,7 +27,7 @@ public sealed class IntegrationTriggerServiceTests
         var harness = new Harness();
         var agentId = harness.SeedAgent();
 
-        var result = await harness.Service.CreateAsync(Input(" Sensor-Feed ", agentId, displayName: "  Sensor feed  ", description: "   ")).ConfigureAwait(false);
+        var result = await harness.Service.CreateAsync(Input(" Sensor-Feed ", agentId, displayName: "  Sensor feed  ", description: "   "));
 
         AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
         var trigger = AssertEx.NotNull(result.Trigger);
@@ -41,9 +41,9 @@ public sealed class IntegrationTriggerServiceTests
     {
         var harness = new Harness();
         var agentId = harness.SeedAgent();
-        _ = await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false);
+        _ = await harness.Service.CreateAsync(Input("sensor-feed", agentId));
 
-        var result = await harness.Service.CreateAsync(Input("SENSOR-FEED", agentId)).ConfigureAwait(false);
+        var result = await harness.Service.CreateAsync(Input("SENSOR-FEED", agentId));
 
         AssertEx.Equal(IntegrationTriggerOutcome.NameConflict, result.Outcome);
         AssertEx.Equal(expected: 1, harness.Triggers.Rows.Count);
@@ -56,10 +56,10 @@ public sealed class IntegrationTriggerServiceTests
         // loser must learn it lost as a 409 rather than as a 500.
         var harness = new Harness();
         var agentId = harness.SeedAgent();
-        _ = await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false);
+        _ = await harness.Service.CreateAsync(Input("sensor-feed", agentId));
         harness.Triggers.HideNextNameLookup = true;
 
-        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false);
+        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId));
 
         AssertEx.Equal(IntegrationTriggerOutcome.NameConflict, result.Outcome);
         AssertEx.Equal(expected: 1, harness.Triggers.Rows.Count);
@@ -70,7 +70,7 @@ public sealed class IntegrationTriggerServiceTests
     {
         var harness = new Harness();
 
-        var result = await harness.Service.CreateAsync(Input("sensor-feed", Guid.NewGuid())).ConfigureAwait(false);
+        var result = await harness.Service.CreateAsync(Input("sensor-feed", Guid.NewGuid()));
 
         AssertEx.Equal(IntegrationTriggerOutcome.AgentMissing, result.Outcome);
         AssertEx.Contains(result.Message, "no longer exists");
@@ -86,7 +86,7 @@ public sealed class IntegrationTriggerServiceTests
         var harness = new Harness();
         var agentId = harness.SeedAgent(kind: AgentDefinitionKind.Orchestrator);
 
-        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false);
+        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId));
 
         AssertEx.Equal(IntegrationTriggerOutcome.TargetKindRejected, result.Outcome);
         AssertEx.Contains(result.Message, "Orchestrator");
@@ -99,7 +99,7 @@ public sealed class IntegrationTriggerServiceTests
         var harness = new Harness();
         var single = harness.SeedAgent();
         var orchestrator = harness.SeedAgent(kind: AgentDefinitionKind.Orchestrator);
-        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", single)).ConfigureAwait(false)).Trigger);
+        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", single))).Trigger);
 
         var result = await harness.Service.UpdateAsync(created.Id, new IntegrationTriggerUpdateInput(created.Version,
             "Sensor feed",
@@ -107,7 +107,7 @@ public sealed class IntegrationTriggerServiceTests
             Enabled: true,
             orchestrator,
             IntegrationSessionPolicy.PerInvocation,
-            IntegrationInputKinds.Text)).ConfigureAwait(false);
+            IntegrationInputKinds.Text));
 
         AssertEx.Equal(IntegrationTriggerOutcome.TargetKindRejected, result.Outcome);
         AssertEx.Equal(single, harness.Triggers.Rows.Single().TargetAgentDefinitionId, "A rejected update leaves the stored target untouched.");
@@ -128,7 +128,7 @@ public sealed class IntegrationTriggerServiceTests
         var harness = new Harness();
         var agentId = harness.SeedAgent(category);
 
-        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId, sessionPolicy: IntegrationSessionPolicy.CallerManaged)).ConfigureAwait(false);
+        var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId, sessionPolicy: IntegrationSessionPolicy.CallerManaged));
 
         AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
         AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, harness.Triggers.Rows.Single().SessionPolicy);
@@ -141,7 +141,7 @@ public sealed class IntegrationTriggerServiceTests
     {
         var harness = new Harness();
         var agentId = harness.SeedAgent();
-        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false)).Trigger);
+        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
 
         var result = await harness.Service.UpdateAsync(created.Id,
                                       new IntegrationTriggerUpdateInput(created.Version,
@@ -150,8 +150,7 @@ public sealed class IntegrationTriggerServiceTests
                                           Enabled: false,
                                           agentId,
                                           IntegrationSessionPolicy.PerInvocation,
-                                          IntegrationInputKinds.Text))
-                                  .ConfigureAwait(false);
+                                          IntegrationInputKinds.Text));
 
         AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
         var updated = AssertEx.NotNull(result.Trigger);
@@ -167,7 +166,7 @@ public sealed class IntegrationTriggerServiceTests
     {
         var harness = new Harness();
         var agentId = harness.SeedAgent();
-        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false)).Trigger);
+        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
 
         var result = await harness.Service.UpdateAsync(created.Id,
                                       new IntegrationTriggerUpdateInput(created.Version + 7,
@@ -176,8 +175,7 @@ public sealed class IntegrationTriggerServiceTests
                                           Enabled: true,
                                           agentId,
                                           IntegrationSessionPolicy.PerInvocation,
-                                          IntegrationInputKinds.Text))
-                                  .ConfigureAwait(false);
+                                          IntegrationInputKinds.Text));
 
         AssertEx.Equal(IntegrationTriggerOutcome.VersionConflict, result.Outcome);
     }
@@ -194,8 +192,7 @@ public sealed class IntegrationTriggerServiceTests
                                           Enabled: true,
                                           Guid.NewGuid(),
                                           IntegrationSessionPolicy.PerInvocation,
-                                          IntegrationInputKinds.Text))
-                                  .ConfigureAwait(false);
+                                          IntegrationInputKinds.Text));
 
         AssertEx.Equal(IntegrationTriggerOutcome.NotFound, result.Outcome);
     }
@@ -206,7 +203,7 @@ public sealed class IntegrationTriggerServiceTests
         // The update half of R6-1: switching a live trigger onto a caller-managed session is an ordinary edit now.
         var harness = new Harness();
         var agentId = harness.SeedAgent(ToolCategory.WriteExecute);
-        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false)).Trigger);
+        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
 
         var result = await harness.Service.UpdateAsync(created.Id,
                                       new IntegrationTriggerUpdateInput(created.Version,
@@ -215,8 +212,7 @@ public sealed class IntegrationTriggerServiceTests
                                           Enabled: true,
                                           agentId,
                                           IntegrationSessionPolicy.CallerManaged,
-                                          IntegrationInputKinds.Text))
-                                  .ConfigureAwait(false);
+                                          IntegrationInputKinds.Text));
 
         AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
         AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, harness.Triggers.Rows.Single().SessionPolicy);
@@ -227,13 +223,13 @@ public sealed class IntegrationTriggerServiceTests
     {
         var harness = new Harness();
         var agentId = harness.SeedAgent();
-        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId)).ConfigureAwait(false)).Trigger);
+        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
 
-        AssertEx.Equal(created.Id, AssertEx.NotNull(await harness.Service.GetAsync(created.Id).ConfigureAwait(false)).Id);
-        AssertEx.Equal(expected: 1, (await harness.Service.ListAsync().ConfigureAwait(false)).Count);
-        AssertEx.True(await harness.Service.DeleteAsync(created.Id).ConfigureAwait(false));
-        AssertEx.False(await harness.Service.DeleteAsync(created.Id).ConfigureAwait(false));
-        AssertEx.Null(await harness.Service.GetAsync(created.Id).ConfigureAwait(false));
+        AssertEx.Equal(created.Id, AssertEx.NotNull(await harness.Service.GetAsync(created.Id)).Id);
+        AssertEx.Equal(expected: 1, (await harness.Service.ListAsync()).Count);
+        AssertEx.True(await harness.Service.DeleteAsync(created.Id));
+        AssertEx.False(await harness.Service.DeleteAsync(created.Id));
+        AssertEx.Null(await harness.Service.GetAsync(created.Id));
     }
 
     private static IntegrationTriggerCreateInput Input(string name,

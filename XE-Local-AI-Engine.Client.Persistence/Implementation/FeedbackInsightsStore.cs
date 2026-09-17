@@ -28,19 +28,18 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
                                         .AsNoTracking()
                                         .Where(agent => agent.Id == agentDefinitionId)
                                         .Select(agent => agent.Name)
-                                        .FirstOrDefaultAsync(cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .FirstOrDefaultAsync(cancellationToken);
         if (agentName is null)
         {
             return null;
         }
 
         var connection = _dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
-        var (upCount, downCount) = await ReadOverallAsync(connection, agentDefinitionId, cancellationToken).ConfigureAwait(false);
-        var byTool = await ReadByToolAsync(connection, agentDefinitionId, cancellationToken).ConfigureAwait(false);
-        var exemplars = await ReadExemplarsAsync(connection, agentDefinitionId, exemplarCap, cancellationToken).ConfigureAwait(false);
+        var (upCount, downCount) = await ReadOverallAsync(connection, agentDefinitionId, cancellationToken);
+        var byTool = await ReadByToolAsync(connection, agentDefinitionId, cancellationToken);
+        var exemplars = await ReadExemplarsAsync(connection, agentDefinitionId, exemplarCap, cancellationToken);
 
         return new AgentFeedbackAggregate(agentDefinitionId, agentName, upCount, downCount, byTool, exemplars);
     }
@@ -60,8 +59,8 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
 
         var up = 0;
         var down = 0;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             var rating = reader.GetString(0);
             var count = reader.GetInt32(1);
@@ -93,8 +92,8 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
         AddParameter(command, "$agent_id", agentDefinitionId);
 
         var byTool = new Dictionary<string, VoteCounts>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             var toolName = reader.GetString(0);
             var rating = reader.GetString(1);
@@ -136,8 +135,8 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
         AddParameter(command, "$cap", exemplarCap);
 
         var exemplars = new List<FeedbackExemplar>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             exemplars.Add(new FeedbackExemplar(reader.GetString(0),
                 reader.GetString(1),

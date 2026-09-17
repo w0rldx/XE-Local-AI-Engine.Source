@@ -73,7 +73,7 @@ public sealed class ModelFitEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(RecommendationsLatestRoute()).ConfigureAwait(false);
+        using var response = await client.GetAsync(RecommendationsLatestRoute());
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -92,7 +92,7 @@ public sealed class ModelFitEndpointTests
             })
         };
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -103,7 +103,7 @@ public sealed class ModelFitEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(HardwareProfileRoute()).ConfigureAwait(false);
+        using var response = await client.GetAsync(HardwareProfileRoute());
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -114,7 +114,7 @@ public sealed class ModelFitEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(HfTokenRoute()).ConfigureAwait(false);
+        using var response = await client.GetAsync(HfTokenRoute());
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -127,11 +127,11 @@ public sealed class ModelFitEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{RecommendationsLatestRoute()}?useCase=coding");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // Cache-miss is an explicit empty state, never a 404.
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.True(doc.RootElement.TryGetProperty("hasCache", out var hasCache), "Latest response must carry a hasCache flag.");
         AssertEx.False(hasCache.GetBoolean(), "An empty DB is a cache-miss → hasCache:false.");
@@ -147,10 +147,10 @@ public sealed class ModelFitEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RecommendationsLatestRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
 
         // The sanitized recommendation response must never expose any raw output / stderr / diagnostics keys, nor the
         // dropped approved-image / provider coupling.
@@ -177,10 +177,10 @@ public sealed class ModelFitEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         AssertEx.True(payload.Length > 0, "Validation error response must have a non-empty body.");
     }
 
@@ -199,7 +199,7 @@ public sealed class ModelFitEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // The ctxTarget floor is validated BEFORE the template guard, so an out-of-range value 400s on its own.
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -213,10 +213,10 @@ public sealed class ModelFitEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, HardwareProfileRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.True(doc.RootElement.TryGetProperty("totalRamBytes", out _), "Hardware profile must carry totalRamBytes.");
         AssertEx.True(doc.RootElement.TryGetProperty("gpuVendor", out _), "Hardware profile must carry gpuVendor.");
@@ -236,10 +236,10 @@ public sealed class ModelFitEndpointTests
         // No network in the test host → discovery fails → the endpoint degrades to an OK-empty list (never a 500).
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{GgufBrowseRoute()}?query=qwen&limit=5");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.True(doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array,
             "Browse response must wrap results in an 'items' array.");
@@ -251,7 +251,7 @@ public sealed class ModelFitEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync($"{GgufInspectRoute()}?repoId=org/some-GGUF").ConfigureAwait(false);
+        using var response = await client.GetAsync($"{GgufInspectRoute()}?repoId=org/some-GGUF");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -265,10 +265,10 @@ public sealed class ModelFitEndpointTests
         // No network in the test host → inspection fails → the endpoint degrades to an OK-empty file list (never a 500).
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{GgufInspectRoute()}?repoId=unsloth/gemma-3-12b-it-GGUF");
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.True(doc.RootElement.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array,
             "Inspect response must wrap files in a 'files' array.");
@@ -283,7 +283,7 @@ public sealed class ModelFitEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, GgufInspectRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -296,10 +296,10 @@ public sealed class ModelFitEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, RunningRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.True(doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array,
             "Running response must wrap results in an 'items' array.");
@@ -319,7 +319,7 @@ public sealed class ModelFitEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -332,10 +332,10 @@ public sealed class ModelFitEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, HfTokenRoute());
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         AssertEx.True(doc.RootElement.TryGetProperty("hasToken", out _), "Token status must carry a hasToken flag.");
         AssertEx.False(json.Contains("token\":\"", StringComparison.OrdinalIgnoreCase), "Token status must never embed a token value.");
@@ -359,9 +359,9 @@ public sealed class ModelFitEndpointTests
                })
         {
             factory.AddNodeBearerToken(setRequest);
-            using var setResponse = await client.SendAsync(setRequest).ConfigureAwait(false);
+            using var setResponse = await client.SendAsync(setRequest);
 
-            var setJson = await setResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var setJson = await setResponse.Content.ReadAsStringAsync();
             var diagnosticJson = setJson.Replace(secret, "[REDACTED]", StringComparison.Ordinal);
             AssertEx.Equal(HttpStatusCode.OK, setResponse.StatusCode, $"Unexpected set-token response: {diagnosticJson}");
             AssertEx.False(setJson.Contains(secret, StringComparison.Ordinal), "Set-token response must NEVER echo the token value.");
@@ -373,10 +373,10 @@ public sealed class ModelFitEndpointTests
         using (var statusRequest = new HttpRequestMessage(HttpMethod.Get, HfTokenRoute()))
         {
             factory.AddNodeBearerToken(statusRequest);
-            using var statusResponse = await client.SendAsync(statusRequest).ConfigureAwait(false);
+            using var statusResponse = await client.SendAsync(statusRequest);
 
             AssertEx.Equal(HttpStatusCode.OK, statusResponse.StatusCode);
-            var statusJson = await statusResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var statusJson = await statusResponse.Content.ReadAsStringAsync();
             AssertEx.False(statusJson.Contains(secret, StringComparison.Ordinal), "Token status must NEVER return the stored token value.");
             using var statusDoc = JsonDocument.Parse(statusJson);
             AssertEx.True(statusDoc.RootElement.GetProperty("hasToken").GetBoolean(), "Token status must report the stored token as present.");

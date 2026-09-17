@@ -25,10 +25,10 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_CreatesTheItemTableItsIndexesAndTheIdentityStamps()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-up.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-up.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("benchmark_task_items").ConfigureAwait(false), "M1 must create benchmark_task_items.");
-        var itemColumns = await probe.ColumnsAsync("benchmark_task_items").ConfigureAwait(false);
+        AssertEx.True(await probe.TableExistsAsync("benchmark_task_items"), "M1 must create benchmark_task_items.");
+        var itemColumns = await probe.ColumnsAsync("benchmark_task_items");
         AssertEx.True(itemColumns.IsSupersetOf(new[]
             {
                 "id",
@@ -49,13 +49,12 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
             }),
             "A case is an ordinary item, so it needs a parent pointer, its own revision and its own input hash.");
 
-        AssertEx.True(await probe.IndexExistsAsync("benchmark_task_items", "ux_benchmark_task_items_project_index", unique: true, "project_id", "index")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("benchmark_task_items", "ux_benchmark_task_items_project_index", unique: true, "project_id", "index"),
             "The unique (project, index) index is what makes the legacy item-0 backfill a constraint violation under a race rather than a duplicate.");
-        AssertEx.True(await probe.IndexExistsAsync("benchmark_task_items", "ix_benchmark_task_items_parent", unique: false, "parent_item_id").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("benchmark_task_items", "ix_benchmark_task_items_parent", unique: false, "parent_item_id"),
             "Re-expanding a generator has to find its children.");
 
-        var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("benchmark_runs");
         AssertEx.True(runColumns.IsSupersetOf(new[]
             {
                 "task_item_id",
@@ -66,12 +65,12 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
             }),
             "All four identity stamps land in this migration, so the freeze slice needs no second one.");
 
-        var projectColumns = await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false);
+        var projectColumns = await probe.ColumnsAsync("benchmark_projects");
         AssertEx.True(projectColumns.Contains("task_item_set_hash"), "The project carries the set hash every run copies at freeze.");
 
-        AssertEx.Equal("'v1:legacy'", await probe.ColumnDefaultAsync("benchmark_runs", "task_input_hash").ConfigureAwait(false),
+        AssertEx.Equal("'v1:legacy'", await probe.ColumnDefaultAsync("benchmark_runs", "task_input_hash"),
             "The legacy constant is the DEFAULT precisely so the column can be NOT NULL over existing rows.");
-        AssertEx.Equal("'v1:legacy'", await probe.ColumnDefaultAsync("benchmark_runs", "task_item_set_hash").ConfigureAwait(false),
+        AssertEx.Equal("'v1:legacy'", await probe.ColumnDefaultAsync("benchmark_runs", "task_item_set_hash"),
             "Both hash axes take the same constant, and both are compared against it.");
     }
 
@@ -83,20 +82,20 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_BackfillsEveryExistingRunToItsOwnSingletonCellAndTheLegacyHashes()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-backfill.sqlite", PreTaskItemsMigrationId).ConfigureAwait(false);
-        await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-backfill.sqlite", PreTaskItemsMigrationId);
+        await SeedProjectAndRunsAsync(probe);
 
-        await probe.MigrateToAsync(targetMigration: null).ConfigureAwait(false);
+        await probe.MigrateToAsync(targetMigration: null);
 
-        var first = await ScalarStringAsync(probe, "SELECT cell_key FROM benchmark_runs WHERE id = $id;", RunId).ConfigureAwait(false);
-        var second = await ScalarStringAsync(probe, "SELECT cell_key FROM benchmark_runs WHERE id = $id;", SecondRunId).ConfigureAwait(false);
+        var first = await ScalarStringAsync(probe, "SELECT cell_key FROM benchmark_runs WHERE id = $id;", RunId);
+        var second = await ScalarStringAsync(probe, "SELECT cell_key FROM benchmark_runs WHERE id = $id;", SecondRunId);
         AssertEx.True(first.StartsWith("run:", StringComparison.Ordinal), $"A legacy run's cell is derived from its own id; got '{first}'.");
         AssertEx.True(!string.Equals(first, second, StringComparison.Ordinal), "Two legacy runs of one project must never share a cell.");
 
-        AssertEx.Equal(LegacyHash, await ScalarStringAsync(probe, "SELECT task_input_hash FROM benchmark_runs WHERE id = $id;", RunId).ConfigureAwait(false));
-        AssertEx.Equal(LegacyHash, await ScalarStringAsync(probe, "SELECT task_item_set_hash FROM benchmark_runs WHERE id = $id;", RunId).ConfigureAwait(false));
+        AssertEx.Equal(LegacyHash, await ScalarStringAsync(probe, "SELECT task_input_hash FROM benchmark_runs WHERE id = $id;", RunId));
+        AssertEx.Equal(LegacyHash, await ScalarStringAsync(probe, "SELECT task_item_set_hash FROM benchmark_runs WHERE id = $id;", RunId));
 
-        var empty = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs WHERE cell_key IS NULL OR cell_key = '';").ConfigureAwait(false);
+        var empty = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs WHERE cell_key IS NULL OR cell_key = '';");
         AssertEx.True(empty[0] == 0, "No run may leave this migration without a cell.");
     }
 
@@ -108,58 +107,52 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_ExistingSingleTaskProject_IsUnchangedAndGetsNoItemRow()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-identical.sqlite", PreTaskItemsMigrationId).ConfigureAwait(false);
-        await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-identical.sqlite", PreTaskItemsMigrationId);
+        await SeedProjectAndRunsAsync(probe);
         var beforeProject = await ScalarStringAsync(probe, "SELECT hex(core_task_json) || '|' || name || '|' || context_tokens || '|' || version FROM benchmark_projects WHERE id = $id;",
-                ProjectId)
-            .ConfigureAwait(false);
+                ProjectId);
         var beforeRun = await ScalarStringAsync(probe,
                 "SELECT hex(runtime_snapshot_json) || '|' || primary_model_name || '|' || primary_status || '|' || version FROM benchmark_runs WHERE id = $id;",
-                RunId)
-            .ConfigureAwait(false);
+                RunId);
 
-        await probe.MigrateToAsync(targetMigration: null).ConfigureAwait(false);
+        await probe.MigrateToAsync(targetMigration: null);
 
         AssertEx.Equal(beforeProject,
-            await ScalarStringAsync(probe, "SELECT hex(core_task_json) || '|' || name || '|' || context_tokens || '|' || version FROM benchmark_projects WHERE id = $id;", ProjectId)
-                .ConfigureAwait(false),
+            await ScalarStringAsync(probe, "SELECT hex(core_task_json) || '|' || name || '|' || context_tokens || '|' || version FROM benchmark_projects WHERE id = $id;", ProjectId),
             "The migration must not touch what the project asks, nor its version.");
         AssertEx.Equal(beforeRun,
             await ScalarStringAsync(probe,
                     "SELECT hex(runtime_snapshot_json) || '|' || primary_model_name || '|' || primary_status || '|' || version FROM benchmark_runs WHERE id = $id;",
-                    RunId)
-                .ConfigureAwait(false),
+                    RunId),
             "A frozen run replays from bytes that this migration must leave alone.");
 
-        var items = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_task_items;").ConfigureAwait(false);
+        var items = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_task_items;");
         AssertEx.True(items[0] == 0,
             "No ENCRYPTED backfill is possible here: a migration has no node key, and prompt_json is AAD-bound to its own item id. Item 0 is materialized by the store.");
 
-        var unstamped = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs WHERE task_item_id IS NOT NULL OR task_item_index IS NOT NULL;").ConfigureAwait(false);
+        var unstamped = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs WHERE task_item_id IS NOT NULL OR task_item_index IS NOT NULL;");
         AssertEx.True(unstamped[0] == 0, "A pre-suite run names no item; it is read as item 0 rather than claiming one.");
 
         var alone = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs WHERE cell_key = (SELECT cell_key FROM benchmark_runs WHERE id = $id);",
-                                   command => command.Parameters.AddWithValue("$id", RunId))
-                               .ConfigureAwait(false);
+                                   command => command.Parameters.AddWithValue("$id", RunId));
         AssertEx.True(alone[0] == 1, "A legacy run's cell holds exactly itself, so its cell mean is its own score.");
 
         AssertEx.Null(await probe.ScalarAsync("SELECT task_item_set_hash FROM benchmark_projects WHERE id = $id;",
-                                     command => command.Parameters.AddWithValue("$id", ProjectId))
-                                 .ConfigureAwait(false) as string,
+                                     command => command.Parameters.AddWithValue("$id", ProjectId)) as string,
             "The project's set hash stays null until its first item write.");
     }
 
     [Test]
     public async Task Migrate_WhenRolledBack_DropsEverythingItAddedAndLeavesTheP2SchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-down.sqlite").ConfigureAwait(false);
-        await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-down.sqlite");
+        await SeedProjectAndRunsAsync(probe);
 
-        await probe.MigrateToAsync(PreTaskItemsMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(PreTaskItemsMigrationId);
 
-        AssertEx.False(await probe.TableExistsAsync("benchmark_task_items").ConfigureAwait(false), "Rollback must drop benchmark_task_items.");
+        AssertEx.False(await probe.TableExistsAsync("benchmark_task_items"), "Rollback must drop benchmark_task_items.");
 
-        var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
+        var runColumns = await probe.ColumnsAsync("benchmark_runs");
         AssertEx.False(runColumns.Contains("cell_key"), "Rollback must drop the identity stamps.");
         AssertEx.False(runColumns.Contains("task_input_hash"));
         AssertEx.False(runColumns.Contains("task_item_set_hash"));
@@ -170,38 +163,36 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
         // column added by a DIFFERENT branch's migration can vanish with it.
         AssertEx.True(runColumns.Contains("perplexity_mean"), "Rollback must leave the existing fidelity projection intact.");
         AssertEx.True(runColumns.Contains("repeat_mode"), "Rollback must leave the preceding migrations' columns intact.");
-        AssertEx.False((await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false)).Contains("task_item_set_hash"));
-        AssertEx.True((await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false)).Contains("fidelity_kld_base_fingerprint"),
+        AssertEx.False((await probe.ColumnsAsync("benchmark_projects")).Contains("task_item_set_hash"));
+        AssertEx.True((await probe.ColumnsAsync("benchmark_projects")).Contains("fidelity_kld_base_fingerprint"),
             "Rollback must leave the existing project fidelity columns intact.");
 
-        var runs = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs;").ConfigureAwait(false);
+        var runs = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs;");
         AssertEx.True(runs[0] == 2, "Rollback must not lose rows.");
     }
 
     [Test]
     public async Task Migrate_KindCheck_AcceptsTheWholeVocabularyAndRejectsAnythingElse()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-kind.sqlite").ConfigureAwait(false);
-        await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-kind.sqlite");
+        await SeedProjectAndRunsAsync(probe);
 
-        await InsertItemAsync(probe, index: 0, kind: "prompt").ConfigureAwait(false);
-        await InsertItemAsync(probe, index: 1, kind: "niah").ConfigureAwait(false);
-        await InsertItemAsync(probe, index: 2, kind: "niahCase").ConfigureAwait(false);
+        await InsertItemAsync(probe, index: 0, kind: "prompt");
+        await InsertItemAsync(probe, index: 1, kind: "niah");
+        await InsertItemAsync(probe, index: 2, kind: "niahCase");
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertItemAsync(probe, index: 3, kind: "whatever"),
-                              "A kind outside the vocabulary must be refused by the schema, not only by the store.")
-                          .ConfigureAwait(false);
+                              "A kind outside the vocabulary must be refused by the schema, not only by the store.");
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertItemAsync(probe, index: 0, kind: "prompt"),
-                              "Two items of one project cannot share an index.")
-                          .ConfigureAwait(false);
+                              "Two items of one project cannot share an index.");
     }
 
     [Test]
     public async Task Migrate_RecordsThisMigrationInTheChatChain()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-applied.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-applied.sqlite");
 
-        var applied = await probe.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
+        var applied = await probe.AppliedMigrationsAsync(identityContext: false);
         AssertEx.True(applied.Contains(TaskItemsMigrationId), "The task-item migration must be part of the chat chain a fresh box applies.");
     }
 
@@ -220,7 +211,7 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
 
     private static async Task<string> ScalarStringAsync(MigrationSchemaProbe probe, string sql, Guid id)
     {
-        var value = await probe.ScalarAsync(sql, command => command.Parameters.AddWithValue("$id", id)).ConfigureAwait(false);
+        var value = await probe.ScalarAsync(sql, command => command.Parameters.AddWithValue("$id", id));
         return AssertEx.NotNull(Convert.ToString(value, CultureInfo.InvariantCulture), "The probed row must exist.");
     }
 

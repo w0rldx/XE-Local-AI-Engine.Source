@@ -231,12 +231,12 @@ public sealed class TranscriptionUploadSlot : IAsyncDisposable
         try
         {
             var destination = new FileStream(SourcePath, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferBytes, useAsync: true);
-            await using (destination.ConfigureAwait(false))
+            await using (destination)
             {
                 long written = 0;
                 while (true)
                 {
-                    var read = await source.ReadAsync(buffer.AsMemory(0, CopyBufferBytes), cancellationToken).ConfigureAwait(false);
+                    var read = await source.ReadAsync(buffer.AsMemory(0, CopyBufferBytes), cancellationToken);
                     if (read == 0)
                     {
                         return written;
@@ -250,7 +250,7 @@ public sealed class TranscriptionUploadSlot : IAsyncDisposable
                         throw new TranscriptionUploadTooLargeException($"The uploaded audio exceeds the maximum of {maxBytes} bytes.");
                     }
 
-                    await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
                 }
             }
         }

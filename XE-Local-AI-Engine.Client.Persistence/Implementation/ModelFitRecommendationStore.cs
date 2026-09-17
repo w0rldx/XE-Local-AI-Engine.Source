@@ -16,12 +16,11 @@ public sealed class ModelFitRecommendationStore(NodeChatDbContext dbContext) : I
     {
         ArgumentNullException.ThrowIfNull(recommendations);
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         _ = await _dbContext.ModelFitRecommendations
                             .Where(recommendation => recommendation.SnapshotId == snapshotId)
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
+                            .ExecuteDeleteAsync(cancellationToken);
 
         var entities = recommendations
                        .Select(input => new ModelFitRecommendation
@@ -47,11 +46,11 @@ public sealed class ModelFitRecommendationStore(NodeChatDbContext dbContext) : I
 
         if (entities.Length > 0)
         {
-            await _dbContext.ModelFitRecommendations.AddRangeAsync(entities, cancellationToken).ConfigureAwait(false);
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.ModelFitRecommendations.AddRangeAsync(entities, cancellationToken);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
 
         return entities.Length;
     }
@@ -62,8 +61,7 @@ public sealed class ModelFitRecommendationStore(NodeChatDbContext dbContext) : I
                                        .AsNoTracking()
                                        .Where(recommendation => recommendation.SnapshotId == snapshotId)
                                        .OrderBy(recommendation => recommendation.Rank)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

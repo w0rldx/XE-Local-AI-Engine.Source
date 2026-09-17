@@ -58,7 +58,7 @@ internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         }
 
         var presented = header[BearerPrefix.Length..].Trim();
-        var validation = await _apiKeyService.ValidateAsync(presented, Context.RequestAborted).ConfigureAwait(false);
+        var validation = await _apiKeyService.ValidateAsync(presented, Context.RequestAborted);
         if (validation is null)
         {
             // Deliberately uniform: never distinguish "no key generated" from "wrong key" to a caller.

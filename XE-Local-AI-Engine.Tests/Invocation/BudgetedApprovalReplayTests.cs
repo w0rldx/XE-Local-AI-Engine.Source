@@ -494,7 +494,7 @@ public sealed class BudgetedApprovalReplayTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken)
         {
-            var response = await responseTask.ConfigureAwait(false);
+            var response = await responseTask;
             foreach (var message in response.Messages)
             {
                 cancellationToken.ThrowIfCancellationRequested();

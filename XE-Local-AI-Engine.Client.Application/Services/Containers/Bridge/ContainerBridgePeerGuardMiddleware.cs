@@ -54,7 +54,7 @@ public sealed class ContainerBridgePeerGuardMiddleware : IMiddleware
             // opinion about it. The whole local endpoint decides, not the port alone: a node whose loopback listener
             // carries the bridge's port must not have its own requests judged by this guard. (Such a node opens no
             // bridge at all — this is the second half of that answer, and the reason the two must agree.)
-            await next(context).ConfigureAwait(false);
+            await next(context);
             return;
         }
 
@@ -81,11 +81,11 @@ public sealed class ContainerBridgePeerGuardMiddleware : IMiddleware
 
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             context.Response.ContentType = MediaTypeNames.Application.Json;
-            await context.Response.WriteAsync(ForbiddenBody, context.RequestAborted).ConfigureAwait(false);
+            await context.Response.WriteAsync(ForbiddenBody, context.RequestAborted);
             return;
         }
 
-        await next(context).ConfigureAwait(false);
+        await next(context);
     }
 
     /// <summary>

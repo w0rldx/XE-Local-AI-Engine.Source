@@ -30,19 +30,19 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-provider-map-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreModelProviderMapMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreModelProviderMapMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "model_provider_map").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "model_provider_map"),
             "Migration should create the model_provider_map table.");
 
-        var columns = await GetColumnsAsync(connection).ConfigureAwait(false);
+        var columns = await GetColumnsAsync(connection);
         AssertEx.True(columns.SetEquals(new[]
         {
             "model_name",
@@ -51,7 +51,7 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
             "updated_at_utc"
         }), "model_provider_map should expose the mapped columns.");
 
-        AssertEx.True(await ModelNameUsesNoCaseCollationAsync(connection).ConfigureAwait(false),
+        AssertEx.True(await ModelNameUsesNoCaseCollationAsync(connection),
             "model_provider_map.model_name should use NOCASE collation.");
     }
 
@@ -60,16 +60,16 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-provider-map-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreModelProviderMapMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreModelProviderMapMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False(await TableExistsAsync(connection, "model_provider_map").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "model_provider_map"),
             "Rollback should drop the model_provider_map table.");
     }
 
@@ -78,33 +78,32 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-provider-map-revision.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRevisionMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRevisionMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.ExecuteSqlRawAsync("INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc) VALUES ('legacy-model', 'ollama', 7);")
-                         .ConfigureAwait(false);
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.ExecuteSqlRawAsync("INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc) VALUES ('legacy-model', 'ollama', 7);");
+            await context.Database.MigrateAsync();
         }
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             await using var command = connection.CreateCommand();
             command.CommandText = "SELECT revision FROM model_provider_map WHERE model_name = 'legacy-model';";
-            AssertEx.Equal("legacy", await command.ExecuteScalarAsync().ConfigureAwait(false) as string);
+            AssertEx.Equal("legacy", await command.ExecuteScalarAsync() as string);
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreRevisionMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreRevisionMigrationId);
         }
 
-        await using var rolledBack = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnsAsync(rolledBack).ConfigureAwait(false);
+        await using var rolledBack = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnsAsync(rolledBack);
         AssertEx.False(columns.Contains("revision"), "Rollback should remove only the revision column.");
         await using var providerCommand = rolledBack.CreateCommand();
         providerCommand.CommandText = "SELECT provider_name FROM model_provider_map WHERE model_name = 'legacy-model';";
-        AssertEx.Equal("ollama", await providerCommand.ExecuteScalarAsync().ConfigureAwait(false) as string);
+        AssertEx.Equal("ollama", await providerCommand.ExecuteScalarAsync() as string);
     }
 
     private NodeChatDbContext CreateContext(string databasePath)
@@ -115,7 +114,7 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -124,14 +123,14 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlySet<string>> GetColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM model_provider_map LIMIT 0;";
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -144,7 +143,7 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
         // caller-supplied SQL.
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'model_provider_map';";
-        var sql = await command.ExecuteScalarAsync().ConfigureAwait(false) as string;
+        var sql = await command.ExecuteScalarAsync() as string;
         return sql is not null
                && sql.Contains("model_name", StringComparison.Ordinal)
                && sql.Contains("NOCASE", StringComparison.OrdinalIgnoreCase);

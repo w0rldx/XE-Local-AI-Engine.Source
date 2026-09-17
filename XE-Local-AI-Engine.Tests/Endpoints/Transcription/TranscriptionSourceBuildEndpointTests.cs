@@ -35,7 +35,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build", OfficialCudaBody);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await ReadJsonAsync(response);
@@ -54,7 +54,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build", OfficialCudaBody);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(build.StartCalled, "A Linux node must reach the build service.");
@@ -79,7 +79,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build", OfficialCudaBody);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         if (!OperatingSystem.IsLinux())
         {
@@ -109,7 +109,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build", OfficialCudaBody);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         if (OperatingSystem.IsLinux())
@@ -138,7 +138,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
                 repository = "https://gitlab.com/someone/whisper.cpp",
                 acknowledgeCustomSourceRisk = true
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.False(build.StartCalled, "An invalid repository must be rejected before the build service is reached.");
@@ -161,7 +161,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
                 repository = "https://github.com/someone/whisper.cpp",
                 acknowledgeCustomSourceRisk = false
             });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.False(build.StartCalled, "Building unacknowledged third-party code must never reach the service.");
@@ -237,7 +237,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         {
             accepted = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(build.CancelCalled);
@@ -262,7 +262,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         {
             accepted = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await ReadJsonAsync(response);
@@ -285,7 +285,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         {
             accepted = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -306,7 +306,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
         {
             accepted = true
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await ReadJsonAsync(response);
@@ -347,12 +347,12 @@ public sealed class TranscriptionSourceBuildEndpointTests
         using var client = factory.CreateClient();
 
         using var forbidden = Request(method, route, factory.AddNonOperatorBearerToken);
-        using var forbiddenResponse = await client.SendAsync(forbidden).ConfigureAwait(false);
+        using var forbiddenResponse = await client.SendAsync(forbidden);
         AssertEx.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode,
             $"'{route}' must refuse an authenticated non-operator.");
 
         using var allowed = Request(method, route, factory.AddNodeBearerToken);
-        using var allowedResponse = await client.SendAsync(allowed).ConfigureAwait(false);
+        using var allowedResponse = await client.SendAsync(allowed);
         AssertEx.NotEqual(HttpStatusCode.Forbidden, allowedResponse.StatusCode, $"'{route}' must admit an operator.");
     }
 
@@ -408,14 +408,14 @@ public sealed class TranscriptionSourceBuildEndpointTests
     private static async Task<JsonElement> GetJsonAsync(TestServerWebAppFactory factory, HttpClient client, string uri)
     {
         using var request = Authorized(factory, HttpMethod.Get, uri);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         return await ReadJsonAsync(response);
     }
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
     {
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<JsonElement>(payload, JsonOptions);
     }
 

@@ -110,8 +110,8 @@ public sealed class ApiToolCallBridge
                     Description = $"Tool '{toolName}' requested with parameters: {parameters}"
                 };
 
-                await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
-                await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
+                await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken);
+                await dispatcher.ReportApprovalRequestedAsync(approvalPayload);
 
                 // Surface the pending approval on the LOCAL chat stream. This API-tool path emits its
                 // tool-call-requested lifecycle only AFTER approval, so the browser has no card yet — the CallId is the
@@ -123,12 +123,12 @@ public sealed class ApiToolCallBridge
                     CallId = requestId,
                     ToolName = toolName,
                     Description = approvalPayload.Description
-                }).ConfigureAwait(false);
+                });
 
                 using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
 
-                var approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+                var approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token);
                 if (!approved)
                 {
                     throw new WorkerToolCallException(toolName, "Tool call was rejected by the user.");
@@ -136,8 +136,8 @@ public sealed class ApiToolCallBridge
             }
 
             await sender.SendToolCallRequestAsync(payload,
-                cancellationToken).ConfigureAwait(false);
-            await dispatcher.ReportToolCallRequestedAsync(payload).ConfigureAwait(false);
+                cancellationToken);
+            await dispatcher.ReportToolCallRequestedAsync(payload);
             await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
                 InvocationId = invocationId,
@@ -146,7 +146,7 @@ public sealed class ApiToolCallBridge
                 Phase = ToolCallLifecyclePhase.Requested,
                 Arguments = parameters,
                 RequiresApproval = requiresApproval
-            }).ConfigureAwait(false);
+            });
             requestedLifecycleEmitted = true;
 
             // The tool-RESULT wait honours the active package's ToolCallTimeoutSeconds (falling back to the node-global
@@ -156,7 +156,7 @@ public sealed class ApiToolCallBridge
             using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCancellationTokenSource.CancelAfter(ResolveToolResultTimeout(invocationId));
 
-            var result = await resultCompletion.Task.WaitAsync(timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            var result = await resultCompletion.Task.WaitAsync(timeoutCancellationTokenSource.Token);
             var isError = !string.IsNullOrWhiteSpace(result.Error);
 
             await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
@@ -167,7 +167,7 @@ public sealed class ApiToolCallBridge
                 Phase = ToolCallLifecyclePhase.Completed,
                 Result = isError ? result.Error : result.Result,
                 IsError = isError
-            }).ConfigureAwait(false);
+            });
 
             if (isError)
             {
@@ -178,13 +178,13 @@ public sealed class ApiToolCallBridge
         }
         catch (TimeoutException timeoutException)
         {
-            await TryEmitTimeoutCompletedLifecycleAsync(dispatcher, requestedLifecycleEmitted, invocationId, requestId, toolName, timeoutException.Message).ConfigureAwait(false);
+            await TryEmitTimeoutCompletedLifecycleAsync(dispatcher, requestedLifecycleEmitted, invocationId, requestId, toolName, timeoutException.Message);
             throw new WorkerToolCallException(toolName, timeoutException.Message, timeoutException);
         }
         catch (OperationCanceledException operationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             const string TimeoutReason = "Tool call timed out waiting for a result.";
-            await TryEmitTimeoutCompletedLifecycleAsync(dispatcher, requestedLifecycleEmitted, invocationId, requestId, toolName, TimeoutReason).ConfigureAwait(false);
+            await TryEmitTimeoutCompletedLifecycleAsync(dispatcher, requestedLifecycleEmitted, invocationId, requestId, toolName, TimeoutReason);
             throw new WorkerToolCallException(toolName, TimeoutReason, operationCanceledException);
         }
         finally
@@ -256,6 +256,6 @@ public sealed class ApiToolCallBridge
             Phase = ToolCallLifecyclePhase.Completed,
             Result = error,
             IsError = true
-        }).ConfigureAwait(false);
+        });
     }
 }

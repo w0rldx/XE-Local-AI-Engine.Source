@@ -23,7 +23,7 @@ public sealed class UpdateCustomToolEndpointTests
         using var response = await CustomToolEndpointPayloads.SendAnonymousAsync(client,
             HttpMethod.Put,
             $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}",
-            CustomToolEndpointPayloads.HttpFetchDefinition("update_anon")).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("update_anon"));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -37,7 +37,7 @@ public sealed class UpdateCustomToolEndpointTests
             client,
             HttpMethod.Put,
             $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}",
-            CustomToolEndpointPayloads.HttpFetchDefinition("update_viewer")).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("update_viewer"));
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -51,7 +51,7 @@ public sealed class UpdateCustomToolEndpointTests
             client,
             HttpMethod.Put,
             $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}",
-            CustomToolEndpointPayloads.HttpFetchDefinition("update_missing")).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("update_missing"));
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -60,13 +60,13 @@ public sealed class UpdateCustomToolEndpointTests
     public async Task Update_WhenAcknowledgementMissing_Returns400()
     {
         using var client = Factory.CreateClient();
-        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "update_unacked").ConfigureAwait(false);
+        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "update_unacked");
 
         using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Put,
             $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}",
-            CustomToolEndpointPayloads.HttpFetchDefinition("update_unacked", acknowledged: false)).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("update_unacked", acknowledged: false));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -75,18 +75,18 @@ public sealed class UpdateCustomToolEndpointTests
     public async Task Update_WhenContentChanged_Returns200WithBumpedVersion()
     {
         using var client = Factory.CreateClient();
-        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "update_probe").ConfigureAwait(false);
-        var before = await ReadVersionAsync(client, toolId).ConfigureAwait(false);
+        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "update_probe");
+        var before = await ReadVersionAsync(client, toolId);
 
         using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Put,
             $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}",
-            CustomToolEndpointPayloads.HttpFetchDefinition("update_probe", urlTemplate: "https://api.example.com/other")).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("update_probe", urlTemplate: "https://api.example.com/other"));
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var after = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json).ConfigureAwait(false));
+        var after = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
         AssertEx.Equal(toolId, after.Id);
         AssertEx.Equal("https://api.example.com/other", AssertEx.NotNull(after.Http).UrlTemplate);
         AssertEx.Equal(before + 1, after.Version, "A replacement that changes the model-visible config must bump the version.");
@@ -96,8 +96,8 @@ public sealed class UpdateCustomToolEndpointTests
     public async Task Update_WhenOnlyEnabledToggled_Returns200WithoutBumpingVersion()
     {
         using var client = Factory.CreateClient();
-        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "update_toggle").ConfigureAwait(false);
-        var before = await ReadVersionAsync(client, toolId).ConfigureAwait(false);
+        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "update_toggle");
+        var before = await ReadVersionAsync(client, toolId);
 
         // Enabled gates membership in the offered set, not what the model sees, so toggling it alone is not a content
         // change — the version must hold. Agents pin tool versions, so a spurious bump invalidates them for nothing.
@@ -105,11 +105,11 @@ public sealed class UpdateCustomToolEndpointTests
             client,
             HttpMethod.Put,
             $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}",
-            CustomToolEndpointPayloads.HttpFetchDefinition("update_toggle", enabled: false)).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("update_toggle", enabled: false));
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var after = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json).ConfigureAwait(false));
+        var after = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
         AssertEx.False(after.Enabled, "The toggle itself must still be applied.");
         AssertEx.Equal(before, after.Version, "Toggling Enabled alone must not bump the version.");
     }
@@ -119,9 +119,9 @@ public sealed class UpdateCustomToolEndpointTests
         using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}");
 
-        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json).ConfigureAwait(false));
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
         return view.Version;
     }
 }

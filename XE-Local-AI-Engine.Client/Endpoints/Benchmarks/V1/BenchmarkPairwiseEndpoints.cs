@@ -28,14 +28,14 @@ public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService reco
     public override async Task HandleAsync(ListBenchmarkComparisonsRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
-        var cohort = await _records.GetPairwiseCohortAsync(req.ProjectId, ct).ConfigureAwait(false);
-        var fit = await _records.GetActivePairwiseFitAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var cohort = await _records.GetPairwiseCohortAsync(req.ProjectId, ct);
+        var fit = await _records.GetActivePairwiseFitAsync(req.ProjectId, ct);
         await Send.OkAsync(new ListBenchmarkComparisonsResponse
                   {
                       CohortGeneration = cohort.CohortGeneration,
@@ -63,8 +63,7 @@ public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService reco
                           })
                       ],
                       Fit = ToResponse(fit, cohort)
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 
     private static BenchmarkPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit, BenchmarkPairwiseCohortState cohort)
@@ -127,13 +126,13 @@ public sealed class GetBenchmarkPairwiseEstimateEndpoint(BenchmarkRecordService 
     public override async Task HandleAsync(GetBenchmarkPairwiseEstimateRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
         {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
             return;
         }
 
-        var estimate = await _planner.EstimateAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var estimate = await _planner.EstimateAsync(req.ProjectId, ct);
         await Send.OkAsync(new GetBenchmarkPairwiseEstimateResponse
                   {
                       EligibleRuns = estimate.EligibleRuns,
@@ -143,7 +142,6 @@ public sealed class GetBenchmarkPairwiseEstimateEndpoint(BenchmarkRecordService 
                       EstimatedSeconds = estimate.EstimatedSeconds,
                       Warn = estimate.Warn,
                       MaximumRuns = BenchmarkPairwisePolicy.MaximumRuns
-                  }, ct)
-                  .ConfigureAwait(false);
+                  }, ct);
     }
 }

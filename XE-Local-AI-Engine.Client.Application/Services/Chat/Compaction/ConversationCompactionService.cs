@@ -41,7 +41,7 @@ internal sealed class ConversationCompactionService(
         int? recentMessagesToKeepVerbatim,
         CancellationToken cancellationToken = default)
     {
-        var conversation = await _persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        var conversation = await _persistence.GetConversationAsync(conversationId, cancellationToken);
         if (conversation is null)
         {
             return new ConversationCompactionResult(ConversationCompactionOutcome.ConversationNotFound);
@@ -100,9 +100,9 @@ internal sealed class ConversationCompactionService(
         // returns the requested model iff it is a local GGUF chat model, otherwise it falls back to an installed local
         // default — so a cloud selection (or an unknown/stale id) transparently degrades to a node-local model and
         // conversation content never leaves the machine. A blank request falls back to the node's configured default.
-        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
         var preferred = string.IsNullOrWhiteSpace(requestedModel) ? nodeSettings.DefaultModelName : requestedModel;
-        var model = await _localDefaultChatModelResolver.ResolveAsync(preferred, cancellationToken).ConfigureAwait(false);
+        var model = await _localDefaultChatModelResolver.ResolveAsync(preferred, cancellationToken);
         if (string.IsNullOrWhiteSpace(model))
         {
             _logger.LogInformation("Compaction skipped for conversation {ConversationId}: no installed local chat model to summarize with.", conversationId);
@@ -117,12 +117,11 @@ internal sealed class ConversationCompactionService(
         // A miss resolves NOT-capable, which sends no thinking fields — the safe direction. Resolved here rather than
         // inside the summarizer because IModelCapabilityResolver is scoped and the summarizer is a singleton, so
         // injecting it there would capture a scoped dependency.
-        var capabilities = await _modelCapabilityResolver.ResolveAsync(model, cancellationToken).ConfigureAwait(false);
+        var capabilities = await _modelCapabilityResolver.ResolveAsync(model, cancellationToken);
 
         var summary = await _summarizer
                             .SummarizeAsync(new ConversationSummarizerInput(conversation.CompactionSummary, toFold, model, capabilities.SupportsThinking),
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                                cancellationToken);
         if (string.IsNullOrWhiteSpace(summary))
         {
             return new ConversationCompactionResult(ConversationCompactionOutcome.SummarizerReturnedNothing);
@@ -134,8 +133,7 @@ internal sealed class ConversationCompactionService(
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         await _persistence
-              .SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversationId, summary, cutoffSequence, now), cancellationToken)
-              .ConfigureAwait(false);
+              .SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest(conversationId, summary, cutoffSequence, now), cancellationToken);
 
         _logger.LogInformation("Compacted conversation {ConversationId}: folded {Folded} message(s) up to sequence {Cutoff} into the synopsis.",
             conversationId,

@@ -29,10 +29,10 @@ public sealed class AnalyzePlaybookEndpoint(IPlaybookAnalysisService analysisSer
 
     public override async Task HandleAsync(AnalyzePlaybookRequest req, CancellationToken ct)
     {
-        var outcome = await _analysisService.AnalyzeAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
+        var outcome = await _analysisService.AnalyzeAsync(req.AgentDefinitionId, ct);
         if (!outcome.AgentExists)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -40,6 +40,6 @@ public sealed class AnalyzePlaybookEndpoint(IPlaybookAnalysisService analysisSer
             {
                 Items = [.. outcome.CreatedSuggestions.Select(static record => record.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

@@ -34,15 +34,15 @@ public sealed class GraphWorkflowToolLaneTests
         const string tool = "probe_dispatch";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
         harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Parks: true));
-        var runId = await DispatchedToolRunAsync(harness, tool).ConfigureAwait(false);
+        var runId = await DispatchedToolRunAsync(harness, tool);
 
-        var call = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        var call = await harness.ReadNodeRunAsync(runId, "call");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, call.Status, "the call holds its slot, so the row may honestly say so.");
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId),
             "node.queued, node.started",
             message: "the queue is on the log even when the slot was free a line later.");
 
-        AssertEx.Equal(expected: 0, await ReDispatchAsync(harness, runId, "call").ConfigureAwait(false), "a row already being driven has nothing to write.");
+        AssertEx.Equal(expected: 0, await ReDispatchAsync(harness, runId, "call"), "a row already being driven has nothing to write.");
         AssertEx.Equal(expected: 1, harness.Tools.CallCountFor(tool), "and nothing to invoke a second time.");
     }
 
@@ -59,16 +59,15 @@ public sealed class GraphWorkflowToolLaneTests
         harness.Tools.Script(slow, new GraphWorkflowScriptedTool(Parks: true));
         harness.Tools.Declare(quick);
 
-        var parked = await DispatchedToolRunAsync(harness, slow).ConfigureAwait(false);
+        var parked = await DispatchedToolRunAsync(harness, slow);
 
-        var other = await harness.StartRunAsync(Graph(quick)).ConfigureAwait(false);
+        var other = await harness.StartRunAsync(Graph(quick));
         await harness.AdvanceUntilAsync(other,
-                         async () => (await harness.ReadRunAsync(other).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Completed,
-                         "the second run never completed while the first one's call was parked.")
-                     .ConfigureAwait(false);
+                         async () => (await harness.ReadRunAsync(other)).Status == GraphWorkflowRunStatus.Completed,
+                         "the second run never completed while the first one's call was parked.");
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(parked, "call").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(parked, "call")).Status,
             "and the parked call was still parked the whole time, so the second run really did overtake it.");
     }
 
@@ -91,22 +90,21 @@ public sealed class GraphWorkflowToolLaneTests
         harness.Tools.Script(blocking, new GraphWorkflowScriptedTool(Blocks: true));
 
         // The dispatch tick RETURNING is the assertion: started inline, it comes back only once the block has ended.
-        var blocked = await DispatchedToolRunAsync(harness, blocking).ConfigureAwait(false);
+        var blocked = await DispatchedToolRunAsync(harness, blocking);
 
         AssertEx.Equal(expected: 1, harness.Tools.CallCountFor(blocking), "the call started, exactly once.");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Running,
-            (await harness.ReadNodeRunAsync(blocked, "call").ConfigureAwait(false)).Status,
+            (await harness.ReadNodeRunAsync(blocked, "call")).Status,
             "and the row says so while that call's thread is still blocked.");
 
         // Released straight away rather than after a second run's worth of ticks: the block holds a thread-pool
         // thread, and every tool call in the process now needs one for its own continuation.
         harness.Tools.ReleaseAll();
         await harness.AdvanceUntilAsync(blocked,
-                         async () => (await harness.ReadRunAsync(blocked).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Completed,
-                         "the released call never settled its own run.")
-                     .ConfigureAwait(false);
+                         async () => (await harness.ReadRunAsync(blocked)).Status == GraphWorkflowRunStatus.Completed,
+                         "the released call never settled its own run.");
 
-        var call = await harness.ReadNodeRunAsync(blocked, "call").ConfigureAwait(false);
+        var call = await harness.ReadNodeRunAsync(blocked, "call");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, call.Status);
 
         // The falsifier, and it has to be the ATTEMPT rather than the answer: a call started inside the tick sits out
@@ -128,9 +126,9 @@ public sealed class GraphWorkflowToolLaneTests
         const string tool = "probe_settle";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
         harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Parks: true));
-        var runId = await DispatchedToolRunAsync(harness, tool).ConfigureAwait(false);
+        var runId = await DispatchedToolRunAsync(harness, tool);
 
-        var call = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        var call = await harness.ReadNodeRunAsync(runId, "call");
         var executor = Executor(harness);
         AssertEx.True(executor.IsInFlight(call.Id));
 
@@ -139,12 +137,11 @@ public sealed class GraphWorkflowToolLaneTests
         // Nothing has ticked, and nothing but a poll consumes an entry — so however far the work has got, it is still
         // this lane's to settle.
         AssertEx.True(executor.IsInFlight(call.Id), "the entry is the poll's to give up, not the work's.");
-        AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false)).Status);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "call")).Status);
 
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false)).Status == GraphWorkflowNodeRunStatus.Succeeded,
-                         "the released call never settled.")
-                     .ConfigureAwait(false);
+                         async () => (await harness.ReadNodeRunAsync(runId, "call")).Status == GraphWorkflowNodeRunStatus.Succeeded,
+                         "the released call never settled.");
 
         AssertEx.False(executor.IsInFlight(call.Id), "and once the settle committed, the entry is gone.");
     }
@@ -160,19 +157,18 @@ public sealed class GraphWorkflowToolLaneTests
         const string tool = "probe_stopped_lane";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
         harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Parks: true));
-        var runId = await DispatchedToolRunAsync(harness, tool).ConfigureAwait(false);
+        var runId = await DispatchedToolRunAsync(harness, tool);
 
-        var call = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        var call = await harness.ReadNodeRunAsync(runId, "call");
         var executor = Executor(harness);
-        AssertEx.True(await executor.StopAsync(call.Id).ConfigureAwait(false), "the first ask is the one that actually cancels.");
-        AssertEx.False(await executor.StopAsync(call.Id).ConfigureAwait(false), "and the repeat is not work, which is what keeps a drain from spinning.");
+        AssertEx.True(await executor.StopAsync(call.Id), "the first ask is the one that actually cancels.");
+        AssertEx.False(await executor.StopAsync(call.Id), "and the repeat is not work, which is what keeps a drain from spinning.");
 
         await harness.AdvanceUntilAsync(runId,
-                         async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false)).Status),
-                         "the stopped call never settled.")
-                     .ConfigureAwait(false);
+                         async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadNodeRunAsync(runId, "call")).Status),
+                         "the stopped call never settled.");
 
-        var settled = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        var settled = await harness.ReadNodeRunAsync(runId, "call");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Cancelled, settled.Status, "a call that was asked to stop was cancelled, not failed.");
         AssertEx.Equal(GraphWorkflowFailureClass.Cancelled, settled.FailureClass);
     }
@@ -189,23 +185,22 @@ public sealed class GraphWorkflowToolLaneTests
         const string tool = "probe_faulting";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
         harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Throws: true));
-        var runId = await harness.StartRunAsync(Graph(tool)).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(Graph(tool));
 
         // Every tick here goes through AdvanceOnceAsync, which does NOT swallow: a rethrowing row fails this outright
         // rather than spinning.
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Failed,
-                         "the faulted call never settled its run.")
-                     .ConfigureAwait(false);
+                         async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Failed,
+                         "the faulted call never settled its run.");
 
-        var retried = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).First(static entry => entry.EventType == "node.retried");
+        var retried = (await harness.ReadEventsAsync(runId)).First(static entry => entry.EventType == "node.retried");
         AssertEx.Contains(retried.DetailJson, "NodeFailed", message: "a fault is the retryable class, settled at the failing write like any other.");
 
-        var call = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        var call = await harness.ReadNodeRunAsync(runId, "call");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, call.Status);
         AssertEx.Equal(expected: 3, harness.Tools.CallCountFor(tool), "each attempt faulted and each was settled, rather than one fault being re-read forever.");
         AssertEx.False(Executor(harness).IsInFlight(call.Id), "the entry was consumed, so no later poll re-reads the fault.");
-        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId).ConfigureAwait(false), "and a further tick neither writes nor throws.");
+        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(runId), "and a further tick neither writes nor throws.");
     }
 
     /// <summary>
@@ -218,9 +213,9 @@ public sealed class GraphWorkflowToolLaneTests
         const string tool = "probe_superseded";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
         harness.Tools.Script(tool, new GraphWorkflowScriptedTool(Parks: true));
-        var runId = await DispatchedToolRunAsync(harness, tool).ConfigureAwait(false);
+        var runId = await DispatchedToolRunAsync(harness, tool);
 
-        var call = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        var call = await harness.ReadNodeRunAsync(runId, "call");
         var executor = Executor(harness);
         AssertEx.True(executor.IsInFlight(call.Id));
 
@@ -229,7 +224,7 @@ public sealed class GraphWorkflowToolLaneTests
             {
                 Attempt = call.Attempt + 1
             }
-        ]).ConfigureAwait(false);
+        ]);
 
         AssertEx.False(executor.IsInFlight(call.Id), "the entry belongs to the attempt before, and is not an answer about this one.");
     }
@@ -245,29 +240,28 @@ public sealed class GraphWorkflowToolLaneTests
         const string tool = "probe_restart";
         await using var harness = GraphWorkflowHarness.PrivateToolHost();
         harness.Tools.Declare(tool);
-        var runId = await harness.StartRunAsync(Graph(tool)).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(Graph(tool));
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
 
         // Staged through the store rather than by dispatching: what a crash leaves is a Running row whose lane holds
         // nothing, and a row this process really is driving would be settled by the poll instead.
-        await harness.TransitionNodeRunAsync(runId, "call", GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "call", GraphWorkflowNodeRunStatus.Running);
 
-        await RestartAsync(harness).ConfigureAwait(false);
+        await RestartAsync(harness);
 
-        var failed = await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false);
+        var failed = await harness.ReadNodeRunAsync(runId, "call");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, failed.Status, "never resume a tool call: it died with the process.");
         AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, failed.FailureClass, "the plain class — recovery knows nothing about the node's attempt budget.");
         AssertEx.Equal(expected: 1, failed.Attempt, "the reconciler never re-attempts; the dispatcher's retry stage decides that.");
-        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), "node.interrupted, node.failed");
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId), "node.interrupted, node.failed");
 
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Completed,
-                         "the re-attempted tool node never carried the run to its end.")
-                     .ConfigureAwait(false);
+                         async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Completed,
+                         "the re-attempted tool node never carried the run to its end.");
 
         AssertEx.Equal(expected: 2,
-            (await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false)).Attempt,
+            (await harness.ReadNodeRunAsync(runId, "call")).Attempt,
             "a Tool node gets three attempts by default, and the restart spent the second one.");
     }
 
@@ -283,24 +277,22 @@ public sealed class GraphWorkflowToolLaneTests
         // A private host, and the cap is the thing under test rather than incidental: two slots against three nodes.
         await using var harness = GraphWorkflowHarness.PrivateToolHost(("GraphWorkflows:MaxConcurrentRuns", "2"));
         harness.Tools.Script("probe_fanout", new GraphWorkflowScriptedTool(Parks: true));
-        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolFanOut).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.ToolFanOut);
 
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await ToolRunsAsync(harness, runId).ConfigureAwait(false)).All(static nodeRun => nodeRun.Status != GraphWorkflowNodeRunStatus.Pending),
-                         "the three tool nodes were never all admitted.")
-                     .ConfigureAwait(false);
+                         async () => (await ToolRunsAsync(harness, runId)).All(static nodeRun => nodeRun.Status != GraphWorkflowNodeRunStatus.Pending),
+                         "the three tool nodes were never all admitted.");
 
-        var admitted = await ToolRunsAsync(harness, runId).ConfigureAwait(false);
+        var admitted = await ToolRunsAsync(harness, runId);
         AssertEx.Equal(expected: 2, admitted.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running), "two slots, two calls.");
         AssertEx.Equal(expected: 1, admitted.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued), "and the third says what it is waiting for.");
 
         harness.Tools.ReleaseAll();
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status == GraphWorkflowRunStatus.Completed,
-                         "a queued tool node never took the permit the settled ones freed.")
-                     .ConfigureAwait(false);
+                         async () => (await harness.ReadRunAsync(runId)).Status == GraphWorkflowRunStatus.Completed,
+                         "a queued tool node never took the permit the settled ones freed.");
 
-        AssertEx.Empty((await ToolRunsAsync(harness, runId).ConfigureAwait(false)).Where(static nodeRun => nodeRun.Status != GraphWorkflowNodeRunStatus.Succeeded),
+        AssertEx.Empty((await ToolRunsAsync(harness, runId)).Where(static nodeRun => nodeRun.Status != GraphWorkflowNodeRunStatus.Succeeded),
             "every node ran in the end; the bound is a queue, not a refusal.");
     }
 
@@ -324,12 +316,11 @@ public sealed class GraphWorkflowToolLaneTests
     /// <summary>A run ticked up to and including the tick that dispatches its tool node, with the call in flight.</summary>
     private static async Task<Guid> DispatchedToolRunAsync(GraphWorkflowHarness harness, string toolName)
     {
-        var runId = await harness.StartRunAsync(Graph(toolName)).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(Graph(toolName));
         await harness.AdvanceUntilAsync(runId,
-                         async () => (await harness.ReadNodeRunAsync(runId, "call").ConfigureAwait(false)).Status == GraphWorkflowNodeRunStatus.Running,
-                         $"the tool node naming '{toolName}' was never dispatched.")
-                     .ConfigureAwait(false);
-        await harness.Tools.WhenRunningAsync(toolName).WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+                         async () => (await harness.ReadNodeRunAsync(runId, "call")).Status == GraphWorkflowNodeRunStatus.Running,
+                         $"the tool node naming '{toolName}' was never dispatched.");
+        await harness.Tools.WhenRunningAsync(toolName).WaitAsync(TestBudgets.Contended);
         return runId;
     }
 
@@ -341,11 +332,11 @@ public sealed class GraphWorkflowToolLaneTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
-        var run = await store.GetRunAsync(runId).ConfigureAwait(false);
+        var run = await store.GetRunAsync(runId);
         var graph = GraphWorkflowGraph.Parse(run.GraphJson);
-        var nodeRun = (await store.ListNodeRunsAsync(runId).ConfigureAwait(false))
+        var nodeRun = (await store.ListNodeRunsAsync(runId))
             .Single(candidate => string.Equals(candidate.NodeKey, nodeKey, StringComparison.Ordinal));
-        return await Executor(harness).DispatchAsync(store, run, graph, graph.Nodes[nodeKey], nodeRun, CancellationToken.None).ConfigureAwait(false);
+        return await Executor(harness).DispatchAsync(store, run, graph, graph.Nodes[nodeKey], nodeRun, CancellationToken.None);
     }
 
     /// <summary>
@@ -358,14 +349,13 @@ public sealed class GraphWorkflowToolLaneTests
         await new GraphWorkflowStartupReconciler(harness.Services.GetRequiredService<IServiceScopeFactory>(),
                   Options.Create(harness.CurrentOptions()),
                   harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
 
         _ = harness.CreateReplacementDispatcher();
     }
 
     private static async Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ToolRunsAsync(GraphWorkflowHarness harness, Guid runId) =>
-        [.. (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Where(static nodeRun => nodeRun.Kind == GraphWorkflowNodeKind.Tool)];
+        [.. (await harness.ReadNodeRunsAsync(runId)).Where(static nodeRun => nodeRun.Kind == GraphWorkflowNodeKind.Tool)];
 
     private static IGraphWorkflowNodeExecutor Executor(GraphWorkflowHarness harness) =>
         harness.Services.GetServices<IGraphWorkflowNodeExecutor>().Single(static executor => executor.Owns(GraphWorkflowNodeKind.Tool));

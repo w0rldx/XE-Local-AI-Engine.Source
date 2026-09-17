@@ -59,7 +59,7 @@ public sealed partial class NodeAdminMcpTools
                 // ponytail: the store filters by WORK-ITEM status and this tool filters by RUN status, which are
                 // different enums, so the status filter and the limit are applied in memory over the whole list. Ceiling
                 // is the number of work items on the node; push it down only if a store-side run-status list appears.
-                var workItems = await _devWorkflowStore.ListWorkItemsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                var workItems = await _devWorkflowStore.ListWorkItemsAsync(cancellationToken: cancellationToken);
                 var runs = workItems.Where(item => item.LatestRunId is not null && item.LatestRunStatus is not null)
                                     .Where(item => parsedStatus is null || item.LatestRunStatus == parsedStatus)
                                     .Take(boundedLimit)
@@ -105,7 +105,7 @@ public sealed partial class NodeAdminMcpTools
                 DevWorkflowRunDetail detail;
                 try
                 {
-                    detail = await _devWorkflowRunService.GetAsync(runId, cancellationToken).ConfigureAwait(false);
+                    detail = await _devWorkflowRunService.GetAsync(runId, cancellationToken);
                 }
                 catch (DevWorkflowNotFoundException)
                 {
@@ -114,7 +114,7 @@ public sealed partial class NodeAdminMcpTools
 
                 // Names only, over the summary projection that never decrypts a graph blob — the same read the run
                 // detail endpoint uses to label a run.
-                var definitions = await _devWorkflowStore.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
+                var definitions = await _devWorkflowStore.ListDefinitionsAsync(includeArchived: true, cancellationToken);
                 var run = detail.Run;
                 return new McpWorkflowRunGetResponse("ok",
                     new McpWorkflowRunDetail(run.Id.ToString("D"),

@@ -53,8 +53,8 @@ public sealed class LocalModelExternalEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var model = models.Items.Single();
@@ -75,8 +75,8 @@ public sealed class LocalModelExternalEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/models/{Uri.EscapeDataString(ModelId)}/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(ModelId, details.ModelName);
@@ -104,8 +104,8 @@ public sealed class LocalModelExternalEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/models/{Uri.EscapeDataString(ModelId)}/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -124,7 +124,7 @@ public sealed class LocalModelExternalEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/models/{Uri.EscapeDataString(ModelId)}/details");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -145,7 +145,7 @@ public sealed class LocalModelExternalEndpointTests
         {
             ModelName = ModelId
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Equal(expected: 0, settingsStore.SaveCount);
@@ -165,8 +165,8 @@ public sealed class LocalModelExternalEndpointTests
         {
             ModelName = ModelId
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var selection = await ReadJsonAsync<SelectLocalModelResponse>(response).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var selection = await ReadJsonAsync<SelectLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(ModelId, selection.SelectedModelName);
@@ -186,8 +186,8 @@ public sealed class LocalModelExternalEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/models/{Uri.EscapeDataString(ModelId)}");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.True(body.Contains("ModelOperationNotSupportedByProvider", StringComparison.Ordinal),
@@ -254,8 +254,8 @@ public sealed class LocalModelExternalEndpointTests
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)
         where T : class
     {
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 
     /// <summary>An in-memory node-settings store that records whether a selection was actually written.</summary>

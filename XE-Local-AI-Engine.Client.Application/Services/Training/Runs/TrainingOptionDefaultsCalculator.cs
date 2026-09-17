@@ -54,8 +54,8 @@ public sealed class TrainingOptionDefaultsCalculator(
 
     public async Task<TrainingRunDefaults> ComputeAsync(Guid baseArtifactId, CancellationToken cancellationToken = default)
     {
-        var (config, parameterCount) = await ReadCheckpointAsync(baseArtifactId, cancellationToken).ConfigureAwait(false);
-        var profile = await _deviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken).ConfigureAwait(false);
+        var (config, parameterCount) = await ReadCheckpointAsync(baseArtifactId, cancellationToken);
+        var profile = await _deviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken);
         var budget = AvailableVramBytes(profile);
         var seed = Seed(parameterCount);
 
@@ -101,13 +101,13 @@ public sealed class TrainingOptionDefaultsCalculator(
     {
         if (requested is null)
         {
-            var computed = await ComputeAsync(baseArtifactId, cancellationToken).ConfigureAwait(false);
+            var computed = await ComputeAsync(baseArtifactId, cancellationToken);
             return computed.Fits ? computed : throw new TrainingRunRejectedException(computed.RejectionReason!);
         }
 
         Validate(requested);
-        var (config, parameterCount) = await ReadCheckpointAsync(baseArtifactId, cancellationToken).ConfigureAwait(false);
-        var profile = await _deviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken).ConfigureAwait(false);
+        var (config, parameterCount) = await ReadCheckpointAsync(baseArtifactId, cancellationToken);
+        var profile = await _deviceAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken);
         var budget = AvailableVramBytes(profile);
         var estimate = TrainingFootprintEstimator.Estimate(parameterCount, config, requested);
         if (estimate.GpuBytes > budget)
@@ -124,7 +124,7 @@ public sealed class TrainingOptionDefaultsCalculator(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var (config, parameterCount) = await ReadCheckpointAsync(baseArtifactId, cancellationToken).ConfigureAwait(false);
+        var (config, parameterCount) = await ReadCheckpointAsync(baseArtifactId, cancellationToken);
         return TrainingFootprintEstimator.Estimate(parameterCount, config, options);
     }
 
@@ -165,7 +165,7 @@ public sealed class TrainingOptionDefaultsCalculator(
     private async Task<CheckpointFacts> ReadCheckpointAsync(Guid baseArtifactId,
         CancellationToken cancellationToken)
     {
-        var artifact = await _store.GetAsync(baseArtifactId, cancellationToken).ConfigureAwait(false)
+        var artifact = await _store.GetAsync(baseArtifactId, cancellationToken)
                        ?? throw new TrainingRunRejectedException("The base checkpoint was not found.");
         if (artifact.Status != TrainingBaseArtifactStatus.Ready)
         {

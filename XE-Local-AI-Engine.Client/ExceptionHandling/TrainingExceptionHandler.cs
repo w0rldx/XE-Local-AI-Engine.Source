@@ -21,7 +21,7 @@ public sealed class TrainingExceptionHandler : IExceptionHandler
             return false;
         }
 
-        await TrainingEndpointSupport.Error(exception).ExecuteAsync(httpContext).ConfigureAwait(false);
+        await TrainingEndpointSupport.Error(exception).ExecuteAsync(httpContext);
         return true;
     }
 }

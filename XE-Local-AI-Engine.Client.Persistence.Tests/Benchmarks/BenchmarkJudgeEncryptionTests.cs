@@ -45,13 +45,13 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
         var databasePath = GetDatabasePath("judge-roundtrip.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
-        var revision = await readContext.BenchmarkJudgePolicyRevisions.SingleAsync().ConfigureAwait(false);
+        var revision = await readContext.BenchmarkJudgePolicyRevisions.SingleAsync();
         AssertEx.Equal(PolicyJson, Encoding.UTF8.GetString(revision.PolicyJson));
 
-        var first = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == FirstAttemptId).ConfigureAwait(false);
+        var first = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == FirstAttemptId);
         AssertEx.Equal(RuntimeJson, Encoding.UTF8.GetString(first.JudgeRuntimeJson!));
         AssertEx.Equal(ResultJson, Encoding.UTF8.GetString(first.ResultJson!));
         AssertEx.Equal(ReceiptJson, Encoding.UTF8.GetString(first.LaunchReceiptJson!));
@@ -59,7 +59,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
 
         // The attempt inserted directly as Failed never resolved a runtime; the optional path must store and read NULL
         // rather than dereference a missing value.
-        var second = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == SecondAttemptId).ConfigureAwait(false);
+        var second = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == SecondAttemptId);
         AssertEx.Null(second.JudgeRuntimeJson, "An unresolved judge runtime stays NULL.");
         AssertEx.Null(second.ResultJson, "A failed attempt has no result.");
         AssertEx.Null(second.LaunchReceiptJson, "An attempt that never launched has no receipt.");
@@ -72,15 +72,15 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
         var databasePath = GetDatabasePath("judge-at-rest.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
 
         await using (var policyCommand = connection.CreateCommand())
         {
             policyCommand.CommandText = "SELECT policy_json FROM benchmark_judge_policy_revisions LIMIT 1;";
-            AssertCiphertext((byte[])(await policyCommand.ExecuteScalarAsync().ConfigureAwait(false))!, PolicyJson, "policy_json");
+            AssertCiphertext((byte[])(await policyCommand.ExecuteScalarAsync())!, PolicyJson, "policy_json");
         }
 
         // One literal statement — CA2100 rejects a composed command text, so the columns cannot be looped over.
@@ -88,8 +88,8 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
         command.CommandText =
             "SELECT judge_runtime_json, result_json, launch_receipt_json, environment_facts_json FROM benchmark_judge_attempts WHERE id = $id;";
         command.Parameters.AddWithValue("$id", FirstAttemptId);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        AssertEx.True(await reader.ReadAsync().ConfigureAwait(false), "Expected a seeded attempt to inspect.");
+        await using var reader = await command.ExecuteReaderAsync();
+        AssertEx.True(await reader.ReadAsync(), "Expected a seeded attempt to inspect.");
 
         var plaintexts = new[]
         {
@@ -110,15 +110,13 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
     {
         var databasePath = GetDatabasePath("judge-policy-swap.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
-        await ExecuteAsync(databasePath, "UPDATE benchmark_judge_policy_revisions SET id = $id;", command => command.Parameters.AddWithValue("$id", Guid.NewGuid()))
-            .ConfigureAwait(false);
+        await ExecuteAsync(databasePath, "UPDATE benchmark_judge_policy_revisions SET id = $id;", command => command.Parameters.AddWithValue("$id", Guid.NewGuid()));
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgePolicyRevisions.SingleAsync(),
-                              "A policy read under another revision id must fail the AEAD tag check.")
-                          .ConfigureAwait(false);
+                              "A policy read under another revision id must fail the AEAD tag check.");
     }
 
     [Test]
@@ -126,7 +124,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
     {
         var databasePath = GetDatabasePath("judge-attempt-swap.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         // Cross-attempt substitution: the second attempt now carries the first attempt's result ciphertext.
         await ExecuteAsync(databasePath,
@@ -135,12 +133,11 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
             {
                 command.Parameters.AddWithValue("$first", FirstAttemptId);
                 command.Parameters.AddWithValue("$second", SecondAttemptId);
-            }).ConfigureAwait(false);
+            });
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == SecondAttemptId),
-                              "One attempt's result must not read back as another attempt's.")
-                          .ConfigureAwait(false);
+                              "One attempt's result must not read back as another attempt's.");
     }
 
     [Test]
@@ -148,24 +145,23 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
     {
         var databasePath = GetDatabasePath("judge-column-swap.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
-        await SeedAsync(databasePath, keyHolder).ConfigureAwait(false);
+        await SeedAsync(databasePath, keyHolder);
 
         // Same row, same key — only the AAD column name differs, which is exactly what must stop this.
         await ExecuteAsync(databasePath,
             "UPDATE benchmark_judge_attempts SET launch_receipt_json = result_json WHERE id = $id;",
-            command => command.Parameters.AddWithValue("$id", FirstAttemptId)).ConfigureAwait(false);
+            command => command.Parameters.AddWithValue("$id", FirstAttemptId));
 
         await using var readContext = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
         _ = await AssertEx.ThrowsAsync<CryptographicException>(async () => _ = await readContext.BenchmarkJudgeAttempts.SingleAsync(entity => entity.Id == FirstAttemptId),
-                              "A judge result presented as a launch receipt must fail the AEAD tag check.")
-                          .ConfigureAwait(false);
+                              "A judge result presented as a launch receipt must fail the AEAD tag check.");
     }
 
     private static async Task SeedAsync(string databasePath, INodeSqliteKeyHolder keyHolder)
     {
         await using var context = AgentDefinitionTestContextFactory.Create(databasePath, keyHolder);
-        _ = await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureDeletedAsync();
+        _ = await context.Database.EnsureCreatedAsync();
 
         _ = context.BenchmarkProjects.Add(new BenchmarkProject
         {
@@ -237,7 +233,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
             CompletedAtUtc = 3,
             Version = 1
         });
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
 
         // The save-changes interceptor restores plaintext onto the tracked graph after the flush, so the in-memory
         // entity never observes ciphertext.
@@ -247,13 +243,13 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
     private static async Task ExecuteAsync(string databasePath, string sql, Action<SqliteCommand> configure)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
 
         // Substituting ciphertext deliberately breaks referential integrity; the AEAD tag is what must catch it.
         await using (var pragma = connection.CreateCommand())
         {
             pragma.CommandText = "PRAGMA foreign_keys = OFF;";
-            _ = await pragma.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await pragma.ExecuteNonQueryAsync();
         }
 
         await using var command = connection.CreateCommand();
@@ -261,7 +257,7 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
         command.CommandText = sql;
 #pragma warning restore CA2100
         configure(command);
-        AssertEx.Equal(expected: 1, await command.ExecuteNonQueryAsync().ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await command.ExecuteNonQueryAsync());
     }
 
     private static void AssertCiphertext(byte[] stored, string plaintext, string columnName)

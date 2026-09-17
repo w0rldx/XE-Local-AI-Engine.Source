@@ -173,7 +173,7 @@ public sealed class DeferredLlamaServerResponseSchemaEntryPointTests
                         HttpListenerContext context;
                         try
                         {
-                            context = await _listener.GetContextAsync().ConfigureAwait(false);
+                            context = await _listener.GetContextAsync();
                         }
                         catch (HttpListenerException)
                         {
@@ -186,14 +186,14 @@ public sealed class DeferredLlamaServerResponseSchemaEntryPointTests
 
                         using (var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8))
                         {
-                            _captured.TrySetResult(await reader.ReadToEndAsync(_cts.Token).ConfigureAwait(false));
+                            _captured.TrySetResult(await reader.ReadToEndAsync(_cts.Token));
                         }
 
                         var payload = Encoding.UTF8.GetBytes(body);
                         context.Response.StatusCode = (int)HttpStatusCode.OK;
                         context.Response.ContentType = contentType;
                         context.Response.ContentLength64 = payload.Length;
-                        await context.Response.OutputStream.WriteAsync(payload, _cts.Token).ConfigureAwait(false);
+                        await context.Response.OutputStream.WriteAsync(payload, _cts.Token);
                         context.Response.Close();
                     }
                 },

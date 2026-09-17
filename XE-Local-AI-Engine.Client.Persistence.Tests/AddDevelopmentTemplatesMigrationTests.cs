@@ -12,13 +12,13 @@ public sealed class AddDevelopmentTemplatesMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesTemplatesWithUniqueAliasAndMaterializations()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-templates.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-templates.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("development_templates").ConfigureAwait(false), "development_templates must exist.");
-        AssertEx.True(await probe.TableExistsAsync("development_template_materializations").ConfigureAwait(false),
+        AssertEx.True(await probe.TableExistsAsync("development_templates"), "development_templates must exist.");
+        AssertEx.True(await probe.TableExistsAsync("development_template_materializations"),
             "development_template_materializations must exist.");
 
-        AssertEx.True((await probe.ColumnsAsync("development_templates").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("development_templates")).IsSupersetOf(new[]
         {
             "id",
             "alias",
@@ -27,7 +27,7 @@ public sealed class AddDevelopmentTemplatesMigrationTests
             "version"
         }), "development_templates must expose the mapped columns.");
 
-        AssertEx.True((await probe.ColumnsAsync("development_template_materializations").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("development_template_materializations")).IsSupersetOf(new[]
         {
             "selected_folder_id",
             "template_id",
@@ -40,11 +40,10 @@ public sealed class AddDevelopmentTemplatesMigrationTests
         AssertEx.True(await probe.IndexExistsAsync("development_templates",
                 "ux_development_templates_alias",
                 unique: true,
-                "alias").ConfigureAwait(false),
+                "alias"),
             "A template alias must be unique.");
 
-        AssertEx.True(await probe.ForeignKeyExistsAsync("development_template_materializations", "selected_folder_id", "selected_folders")
-                                 .ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("development_template_materializations", "selected_folder_id", "selected_folders"),
             "A materialization must be foreign-keyed to the granted folder it landed in.");
     }
 }

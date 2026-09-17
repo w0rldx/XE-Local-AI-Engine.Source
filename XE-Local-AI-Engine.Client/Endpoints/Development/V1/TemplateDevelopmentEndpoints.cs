@@ -19,9 +19,8 @@ public sealed class ListDevelopmentTemplatesEndpoint(IDevelopmentTemplateService
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var templates = await _service.ListTemplatesAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListDevelopmentTemplatesResponse(templates.Select(template => template.ToResponse()).ToArray()), ct)
-                  .ConfigureAwait(false);
+        var templates = await _service.ListTemplatesAsync(ct);
+        await Send.OkAsync(new ListDevelopmentTemplatesResponse(templates.Select(template => template.ToResponse()).ToArray()), ct);
     }
 }
 
@@ -40,15 +39,15 @@ public sealed class RegisterDevelopmentTemplateEndpoint(IDevelopmentTemplateServ
     {
         try
         {
-            var template = await _service.AddTemplateAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
-            await Send.OkAsync(template.ToResponse(), ct).ConfigureAwait(false);
+            var template = await _service.AddTemplateAsync(req.Alias, req.HostPath, ct);
+            await Send.OkAsync(template.ToResponse(), ct);
         }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
                                               or DirectoryNotFoundException)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }
@@ -66,13 +65,13 @@ public sealed class RemoveDevelopmentTemplateEndpoint(IDevelopmentTemplateServic
 
     public override async Task HandleAsync(DevelopmentTemplateRequest req, CancellationToken ct)
     {
-        if (!await _service.RemoveTemplateAsync(req.TemplateId, ct).ConfigureAwait(false))
+        if (!await _service.RemoveTemplateAsync(req.TemplateId, ct))
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }
 
@@ -94,12 +93,11 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint(IDevelopment
     {
         try
         {
-            var result = await _service.CreateFromTemplateAsync(req.TemplateId, req.DestinationPath, req.Alias, req.BaseBranch, ct)
-                                       .ConfigureAwait(false);
+            var result = await _service.CreateFromTemplateAsync(req.TemplateId, req.DestinationPath, req.Alias, req.BaseBranch, ct);
             await Send.OkAsync(new DevelopmentRepositoryFromTemplateResponse(result.Repository.ToResponse(),
                     result.TemplateAlias,
                     result.TemplateCommit),
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
@@ -108,7 +106,7 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint(IDevelopment
                                               or UnauthorizedAccessException)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }

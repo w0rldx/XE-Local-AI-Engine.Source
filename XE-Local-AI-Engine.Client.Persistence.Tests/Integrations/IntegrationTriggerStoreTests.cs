@@ -15,7 +15,7 @@ public sealed class IntegrationTriggerStoreTests
     public async Task CreateAsync_RoundTripsEveryFieldAndIsReadableByIdAndByName()
     {
         using var fixture = new IntegrationTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
 
         var agentId = Guid.NewGuid();
@@ -27,8 +27,7 @@ public sealed class IntegrationTriggerStoreTests
                                      IntegrationTargetKind.Agent,
                                      agentId,
                                      IntegrationSessionPolicy.CallerManaged,
-                                     IntegrationInputKinds.Text | IntegrationInputKinds.Json))
-                                 .ConfigureAwait(false);
+                                     IntegrationInputKinds.Text | IntegrationInputKinds.Json));
 
         AssertEx.Equal(expected: 1L, created.Version);
         AssertEx.Equal(FixedNow.ToUnixTimeMilliseconds(), created.CreatedAtUtc);
@@ -36,23 +35,23 @@ public sealed class IntegrationTriggerStoreTests
         await using var readContext = fixture.CreateContext();
         var readStore = new IntegrationTriggerStore(readContext, new FixedTimeProvider(FixedNow));
 
-        var byId = AssertEx.NotNull(await readStore.GetByIdAsync(created.Id).ConfigureAwait(false));
-        var byName = AssertEx.NotNull(await readStore.GetByNameAsync("sensor-ingest").ConfigureAwait(false));
+        var byId = AssertEx.NotNull(await readStore.GetByIdAsync(created.Id));
+        var byName = AssertEx.NotNull(await readStore.GetByNameAsync("sensor-ingest"));
         AssertEx.Equal(byId, byName, "The name is the external contract, so both lookups must resolve the same row.");
         AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, byId.SessionPolicy);
         AssertEx.Equal(IntegrationInputKinds.Text | IntegrationInputKinds.Json, byId.AcceptedInputKinds);
         AssertEx.Equal(agentId, byId.TargetAgentDefinitionId);
 
-        AssertEx.Null(await readStore.GetByNameAsync("no-such-trigger").ConfigureAwait(false));
+        AssertEx.Null(await readStore.GetByNameAsync("no-such-trigger"));
     }
 
     [Test]
     public async Task UpdateAsync_AppliesOnAMatchingVersionAndAnswersFalseOtherwise()
     {
         using var fixture = new IntegrationTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
-        var created = await CreateAsync(store, "sensor-ingest").ConfigureAwait(false);
+        var created = await CreateAsync(store, "sensor-ingest");
 
         var update = new IntegrationTriggerUpdateCommand(created.Id,
             created.Version,
@@ -63,17 +62,17 @@ public sealed class IntegrationTriggerStoreTests
             IntegrationSessionPolicy.CallerManaged,
             IntegrationInputKinds.Text);
 
-        AssertEx.True(await store.UpdateAsync(update).ConfigureAwait(false));
+        AssertEx.True(await store.UpdateAsync(update));
 
         // False rather than an exception: the caller maps it to 409, and a store that threw would make every admin PUT
         // a try/catch.
-        AssertEx.False(await store.UpdateAsync(update).ConfigureAwait(false), "Replaying a spent version must lose.");
+        AssertEx.False(await store.UpdateAsync(update), "Replaying a spent version must lose.");
         AssertEx.False(await store.UpdateAsync(update with
         {
             TriggerId = Guid.NewGuid()
-        }).ConfigureAwait(false));
+        }));
 
-        var read = AssertEx.NotNull(await store.GetByIdAsync(created.Id).ConfigureAwait(false));
+        var read = AssertEx.NotNull(await store.GetByIdAsync(created.Id));
         AssertEx.Equal("Renamed label", read.DisplayName);
         AssertEx.False(read.Enabled);
         AssertEx.Equal(IntegrationInputKinds.Text, read.AcceptedInputKinds);
@@ -85,19 +84,19 @@ public sealed class IntegrationTriggerStoreTests
     public async Task ListAsync_OrdersByNameAndDeleteAsyncAnswersFalseForAMissingRow()
     {
         using var fixture = new IntegrationTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
 
-        _ = await CreateAsync(store, "zulu-ingest").ConfigureAwait(false);
-        var alpha = await CreateAsync(store, "alpha-ingest").ConfigureAwait(false);
+        _ = await CreateAsync(store, "zulu-ingest");
+        var alpha = await CreateAsync(store, "alpha-ingest");
 
-        var listed = await store.ListAsync().ConfigureAwait(false);
+        var listed = await store.ListAsync();
         AssertEx.Equal(expected: 2, listed.Count);
         AssertEx.Equal("alpha-ingest", listed[0].Name);
 
-        AssertEx.True(await store.DeleteAsync(alpha.Id).ConfigureAwait(false));
-        AssertEx.False(await store.DeleteAsync(alpha.Id).ConfigureAwait(false));
-        AssertEx.Equal(expected: 1, (await store.ListAsync().ConfigureAwait(false)).Count);
+        AssertEx.True(await store.DeleteAsync(alpha.Id));
+        AssertEx.False(await store.DeleteAsync(alpha.Id));
+        AssertEx.Equal(expected: 1, (await store.ListAsync()).Count);
     }
 
     private static Task<IntegrationTriggerSnapshot> CreateAsync(IIntegrationTriggerStore store, string name) =>

@@ -34,9 +34,9 @@ public sealed class NodeChatMigrationRecoveryService
         var connectionString = _configuration.GetConnectionString(ConnectionStringName)
                                ?? throw new InvalidOperationException($"Connection string '{ConnectionStringName}' is required.");
 
-        await using var startupLock = await AcquireStartupLockAsync(connectionString, cancellationToken).ConfigureAwait(false);
+        await using var startupLock = await AcquireStartupLockAsync(connectionString, cancellationToken);
 
-        if (await TryMigrateOnceAsync(cancellationToken).ConfigureAwait(false))
+        if (await TryMigrateOnceAsync(cancellationToken))
         {
             return;
         }
@@ -45,9 +45,9 @@ public sealed class NodeChatMigrationRecoveryService
             _options.MigrationAttemptTimeout,
             EfMigrationsLockTableName);
 
-        await DropEfMigrationsLockTableAsync(cancellationToken).ConfigureAwait(false);
+        await DropEfMigrationsLockTableAsync(cancellationToken);
 
-        if (!await TryMigrateOnceAsync(cancellationToken).ConfigureAwait(false))
+        if (!await TryMigrateOnceAsync(cancellationToken))
         {
             throw new TimeoutException($"Node SQLite migration still did not complete within {_options.MigrationAttemptTimeout} after clearing {EfMigrationsLockTableName}.");
         }
@@ -63,7 +63,7 @@ public sealed class NodeChatMigrationRecoveryService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
-            await dbContext.Database.MigrateAsync(timeout.Token).ConfigureAwait(false);
+            await dbContext.Database.MigrateAsync(timeout.Token);
             return true;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
@@ -78,7 +78,7 @@ public sealed class NodeChatMigrationRecoveryService
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
         await dbContext.Database.ExecuteSqlRawAsync($"DROP TABLE IF EXISTS \"{EfMigrationsLockTableName}\";",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private async Task<FileStream?> AcquireStartupLockAsync(string connectionString, CancellationToken cancellationToken)
@@ -110,7 +110,7 @@ public sealed class NodeChatMigrationRecoveryService
                 throw new InvalidOperationException($"Could not acquire node SQLite migration startup lock '{lockPath}'. Another node process may be applying migrations.");
             }
 
-            await Task.Delay(pollInterval, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(pollInterval, cancellationToken);
         }
     }
 

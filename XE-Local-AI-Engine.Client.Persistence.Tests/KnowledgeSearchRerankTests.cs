@@ -45,11 +45,11 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         var chunkBeta = Guid.NewGuid();
         var chunkGamma = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkGamma, chunkIndex: 2, "gamma content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
+        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content");
+        await SeedChunkAsync(databasePath, documentId, chunkGamma, chunkIndex: 2, "gamma content");
 
         // Fusion order (lexical): alpha, beta, gamma. Reranker makes gamma best, then beta, then alpha.
         // FTS5 BM25 is more-negative-for-stronger (best first), so the scores descend into the negatives with rank.
@@ -64,7 +64,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 3), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 3), CancellationToken.None);
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(3, orderedChunkIds.Count);
@@ -83,10 +83,10 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         var chunkAlpha = Guid.NewGuid();
         var chunkBeta = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
+        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content");
 
         // BM25 is more-negative-for-stronger, so alpha (rank 1) is the most negative.
         var ftsHits = new List<FtsSearchHit>
@@ -102,7 +102,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 3), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 3), CancellationToken.None);
 
         var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
         AssertEx.Equal(2, orderedChunkIds.Count);
@@ -118,10 +118,10 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         var chunkAlpha = Guid.NewGuid();
         var chunkBeta = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
+        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content");
 
         // BM25 is more-negative-for-stronger, so alpha (rank 1) is the most negative.
         var ftsHits = new List<FtsSearchHit>
@@ -135,7 +135,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         // Empty reranker model name = reranking OFF.
         var service = CreateSearchService(context, ftsHits, reranker, rerankerModelName: string.Empty);
 
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 3), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 3), CancellationToken.None);
 
         AssertEx.Equal(chunkAlpha, result.Results[0].ChunkId);
         AssertEx.Equal(chunkBeta, result.Results[1].ChunkId);
@@ -151,11 +151,11 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         var chunkBeta = Guid.NewGuid();
         var chunkGamma = Guid.NewGuid();
 
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedDocumentAsync(databasePath, documentId).ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content").ConfigureAwait(false);
-        await SeedChunkAsync(databasePath, documentId, chunkGamma, chunkIndex: 2, "gamma content").ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId);
+        await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content");
+        await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content");
+        await SeedChunkAsync(databasePath, documentId, chunkGamma, chunkIndex: 2, "gamma content");
 
         // BM25 is more-negative-for-stronger, so the fused order alpha, beta, gamma descends into the negatives.
         var ftsHits = new List<FtsSearchHit>
@@ -179,7 +179,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         var service = CreateSearchService(context, ftsHits, reranker, RerankerModel);
 
         // Limit is smaller than the fused pool: the reranker must see the whole pool, then the result is cut to limit.
-        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 2), CancellationToken.None).ConfigureAwait(false);
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 2), CancellationToken.None);
 
         AssertEx.True(rerankedDocuments is not null, "The reranker must be invoked when a model is configured.");
         AssertEx.Equal(3, rerankedDocuments!.Count); // whole fused pool, not just `limit`
@@ -258,7 +258,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private async Task SeedDocumentAsync(string databasePath, Guid documentId)
@@ -270,7 +270,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         }
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -281,13 +281,13 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         command.Parameters.AddWithValue("$name", encryptedName);
         command.Parameters.AddWithValue("$hash", "hash-" + documentId.ToString("N"));
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task SeedChunkAsync(string databasePath, Guid documentId, Guid chunkId, int chunkIndex, string content)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -298,7 +298,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         command.Parameters.AddWithValue("$document", documentId);
         command.Parameters.AddWithValue("$index", chunkIndex);
         command.Parameters.AddWithValue("$content", content);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

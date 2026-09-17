@@ -30,9 +30,9 @@ public sealed class DatasetExportService(ITrainingDatasetStore store) : IDataset
 
     public async Task<string> ExportAsync(Guid datasetId, DatasetExportFormat format, CancellationToken cancellationToken = default)
     {
-        _ = await _store.GetDatasetAsync(datasetId, cancellationToken).ConfigureAwait(false)
+        _ = await _store.GetDatasetAsync(datasetId, cancellationToken)
             ?? throw new TrainingNotFoundException("The training dataset was not found.");
-        var samples = await _store.ListAllSamplesAsync(datasetId, cancellationToken).ConfigureAwait(false);
+        var samples = await _store.ListAllSamplesAsync(datasetId, cancellationToken);
         var builder = new StringBuilder();
         foreach (var sample in samples.Where(item => item.ReviewState != TrainingSampleReviewState.Rejected))
         {

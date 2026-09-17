@@ -24,7 +24,7 @@ public sealed class CreateCustomToolEndpointTests
         using var response = await CustomToolEndpointPayloads.SendAnonymousAsync(client,
             HttpMethod.Post,
             CustomToolEndpointPayloads.DefinitionsRoute,
-            CustomToolEndpointPayloads.HttpFetchDefinition("create_anon")).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("create_anon"));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -38,7 +38,7 @@ public sealed class CreateCustomToolEndpointTests
             client,
             HttpMethod.Post,
             CustomToolEndpointPayloads.DefinitionsRoute,
-            CustomToolEndpointPayloads.HttpFetchDefinition("create_viewer")).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("create_viewer"));
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -52,7 +52,7 @@ public sealed class CreateCustomToolEndpointTests
             client,
             HttpMethod.Post,
             CustomToolEndpointPayloads.DefinitionsRoute,
-            CustomToolEndpointPayloads.HttpFetchDefinition("create_unacked", acknowledged: false)).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("create_unacked", acknowledged: false));
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -66,11 +66,11 @@ public sealed class CreateCustomToolEndpointTests
             client,
             HttpMethod.Post,
             CustomToolEndpointPayloads.DefinitionsRoute,
-            CustomToolEndpointPayloads.HttpFetchDefinition("create_probe")).ConfigureAwait(false);
+            CustomToolEndpointPayloads.HttpFetchDefinition("create_probe"));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json).ConfigureAwait(false));
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
         AssertEx.NotEqual(Guid.Empty, view.Id);
         AssertEx.Equal(CustomToolKind.HttpFetch, view.Kind);
         AssertEx.Equal(CustomToolMode.Fixed, view.Mode);
@@ -84,10 +84,10 @@ public sealed class CreateCustomToolEndpointTests
         using var followUp = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            location.ToString()).ConfigureAwait(false);
+            location.ToString());
 
         AssertEx.Equal(HttpStatusCode.OK, followUp.StatusCode);
-        var fetched = AssertEx.NotNull(await followUp.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json).ConfigureAwait(false));
+        var fetched = AssertEx.NotNull(await followUp.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
         AssertEx.Equal(view.Id, fetched.Id);
     }
 }

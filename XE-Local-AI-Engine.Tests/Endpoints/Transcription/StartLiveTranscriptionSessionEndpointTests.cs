@@ -32,13 +32,13 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
 
         using var forbidden = Request(sessionId);
         factory.AddNonOperatorBearerToken(forbidden);
-        using var forbiddenResponse = await client.SendAsync(forbidden).ConfigureAwait(false);
+        using var forbiddenResponse = await client.SendAsync(forbidden);
         AssertEx.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
 
         // The control: without it a route broken for everyone would pass the assertion above.
         using var allowed = Request(sessionId);
         factory.AddNodeBearerToken(allowed);
-        using var allowedResponse = await client.SendAsync(allowed).ConfigureAwait(false);
+        using var allowedResponse = await client.SendAsync(allowed);
         AssertEx.True(allowedResponse.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden),
             $"an operator must not be refused (got {(int)allowedResponse.StatusCode}).");
     }
@@ -51,7 +51,7 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Request(Guid.NewGuid());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -75,10 +75,10 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
         var sessionId = Guid.NewGuid();
 
         using var request = Authorized(factory, sessionId);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await ReadJsonAsync(response).ConfigureAwait(false);
+        var body = await ReadJsonAsync(response);
         AssertEx.Equal(sessionId, body.GetProperty("sessionId").GetGuid());
         AssertEx.Equal("Transcribing", body.GetProperty("status").GetString());
         AssertEx.Equal(expected: 4L, body.GetProperty("lastSeq").GetInt64(), "the client subscribes from the sequence already persisted.");
@@ -105,14 +105,14 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
         var sessionId = Guid.NewGuid();
 
         using var first = Authorized(factory, sessionId);
-        using var firstResponse = await client.SendAsync(first).ConfigureAwait(false);
+        using var firstResponse = await client.SendAsync(first);
         using var second = Authorized(factory, sessionId);
-        using var secondResponse = await client.SendAsync(second).ConfigureAwait(false);
+        using var secondResponse = await client.SendAsync(second);
 
         AssertEx.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
-        AssertEx.Equal(await firstResponse.Content.ReadAsStringAsync().ConfigureAwait(false),
-            await secondResponse.Content.ReadAsStringAsync().ConfigureAwait(false),
+        AssertEx.Equal(await firstResponse.Content.ReadAsStringAsync(),
+            await secondResponse.Content.ReadAsStringAsync(),
             "the second start reports the same state as the first.");
     }
 
@@ -130,7 +130,7 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, Guid.NewGuid());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -152,10 +152,10 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, Guid.NewGuid());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var body = await ReadJsonAsync(response).ConfigureAwait(false);
+        var body = await ReadJsonAsync(response);
         AssertEx.Equal("Cancelled", body.GetProperty("status").GetString());
         AssertEx.Equal(expected: 12L, body.GetProperty("lastSeq").GetInt64());
     }
@@ -173,7 +173,7 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, Guid.NewGuid());
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -191,7 +191,7 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
     {
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<JsonElement>(payload, JsonOptions);
     }
 

@@ -128,7 +128,7 @@ public sealed class GraphWorkflowOptionsTests
             }
         };
 
-        AssertEx.Equal(HttpStatusCode.NotFound, await ProbeAsync(disabled).ConfigureAwait(false), "a disabled node must not reach anything behind the gate.");
+        AssertEx.Equal(HttpStatusCode.NotFound, await ProbeAsync(disabled), "a disabled node must not reach anything behind the gate.");
 
         await using var enabled = new TestServerWebAppFactory
         {
@@ -138,7 +138,7 @@ public sealed class GraphWorkflowOptionsTests
             }
         };
 
-        AssertEx.Equal(HttpStatusCode.Forbidden, await ProbeAsync(enabled).ConfigureAwait(false), "with the feature on, the request reaches the local-API guard.");
+        AssertEx.Equal(HttpStatusCode.Forbidden, await ProbeAsync(enabled), "with the feature on, the request reaches the local-API guard.");
     }
 
     private static async Task<HttpStatusCode> ProbeAsync(TestServerWebAppFactory factory)
@@ -146,7 +146,7 @@ public sealed class GraphWorkflowOptionsTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, ProbeRoute);
         request.Headers.Add("Origin", "https://elsewhere.example");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         return response.StatusCode;
     }
 }

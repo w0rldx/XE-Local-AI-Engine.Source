@@ -108,10 +108,9 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
         var recorder = await new WasapiRecorderBuilder()
                              .WithProcessLoopback(checked((uint)processId), CaptureMode)
                              .WithBufferLength(CaptureBufferMilliseconds)
-                             .BuildAsync()
-                             .ConfigureAwait(false);
+                             .BuildAsync();
 
-        await using (recorder.ConfigureAwait(false))
+        await using (recorder)
         {
             var converter = new Wasapi16kMonoPcmConverter(recorder.WaveFormat);
             var rented = ArrayPool<byte>.Shared.Rent(DrainChunkBytes);
@@ -120,7 +119,7 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
                 // CaptureAsync initialises and starts the audio client itself and throws "Already recording" if
                 // StartRecording ran first; its own finally stops and resets the client when the enumeration ends
                 // or the token is cancelled, so there is nothing left for this method to stop.
-                await foreach (var buffer in recorder.CaptureAsync(cancellationToken).ConfigureAwait(false))
+                await foreach (var buffer in recorder.CaptureAsync(cancellationToken))
                 {
                     converter.Write(buffer.Data.Span);
 
@@ -135,8 +134,7 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
                         // The registry copies the frame before queueing it, so the rented array is free to be
                         // reused the moment this returns. It also returns without waiting for inference, which is
                         // what keeps this loop from dropping audio at the source.
-                        await _registry.PushAudioAsync(sessionId, TranscriptChannel.Others, rented.AsMemory(0, written), cancellationToken)
-                                       .ConfigureAwait(false);
+                        await _registry.PushAudioAsync(sessionId, TranscriptChannel.Others, rented.AsMemory(0, written), cancellationToken);
                     }
                 }
             }

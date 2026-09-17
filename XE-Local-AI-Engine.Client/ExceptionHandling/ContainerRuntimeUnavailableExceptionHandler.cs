@@ -34,8 +34,7 @@ public sealed class ContainerRuntimeUnavailableExceptionHandler : IExceptionHand
         }
 
         await FastEndpointsProblemWriter
-              .WriteAsync(httpContext, unavailable.Message, StatusCodes.Status503ServiceUnavailable, cancellationToken)
-              .ConfigureAwait(false);
+              .WriteAsync(httpContext, unavailable.Message, StatusCodes.Status503ServiceUnavailable, cancellationToken);
         return true;
     }
 }

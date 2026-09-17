@@ -93,7 +93,7 @@ public sealed class DeferredLlamaServerThinkingSwitchTests
         {
             if (request.Content is not null)
             {
-                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken);
             }
 
             return new HttpResponseMessage(HttpStatusCode.OK)

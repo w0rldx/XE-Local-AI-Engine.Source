@@ -21,22 +21,21 @@ public sealed class CancelBaseArtifactEndpoint(IBaseArtifactService baseArtifact
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)
     {
-        var artifact = await baseArtifactService.GetAsync(request.ArtifactId, ct).ConfigureAwait(false);
+        var artifact = await baseArtifactService.GetAsync(request.ArtifactId, ct);
         if (artifact is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        if (!await baseArtifactService.CancelAsync(request.ArtifactId).ConfigureAwait(false))
+        if (!await baseArtifactService.CancelAsync(request.ArtifactId))
         {
             await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("not-downloading",
-                          "The base checkpoint download is not running."))
-                      .ConfigureAwait(false);
+                          "The base checkpoint download is not running."));
             return;
         }
 
         // The terminal transition is written by the download task; the client polls the get route for it.
-        await Send.OkAsync(artifact.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(artifact.ToResponse(), ct);
     }
 }

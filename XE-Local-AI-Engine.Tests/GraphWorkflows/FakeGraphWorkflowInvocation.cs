@@ -141,13 +141,13 @@ internal sealed class FakeGraphWorkflowInvocation(IServiceProvider services) : I
             if (turn.Outcome == GraphWorkflowTurnOutcome.Wedges)
             {
                 _wedged.Add(package.InvocationId);
-                await parked.Task.ConfigureAwait(false);
+                await parked.Task;
             }
             else
             {
                 using (cancellationToken.Register(() => parked.TrySetResult()))
                 {
-                    await parked.Task.ConfigureAwait(false);
+                    await parked.Task;
                 }
             }
 
@@ -155,7 +155,7 @@ internal sealed class FakeGraphWorkflowInvocation(IServiceProvider services) : I
 
             // Reported and RETURNED, never thrown: the real runner reports Cancelled to the dispatcher and returns
             // normally, which is exactly why the caller has to re-surface the cancellation itself.
-            await _eventDispatcher.Value.ReportInvocationFailedAsync(package.InvocationId, "The turn was cancelled.", FailureCategory.Cancelled).ConfigureAwait(false);
+            await _eventDispatcher.Value.ReportInvocationFailedAsync(package.InvocationId, "The turn was cancelled.", FailureCategory.Cancelled);
             return;
         }
 
@@ -168,24 +168,22 @@ internal sealed class FakeGraphWorkflowInvocation(IServiceProvider services) : I
                 return;
 
             case GraphWorkflowTurnOutcome.Fails:
-                await _eventDispatcher.Value.ReportInvocationFailedAsync(package.InvocationId, "provider said no: connection reset at 10.0.0.7", turn.FailureCategory)
-                                      .ConfigureAwait(false);
+                await _eventDispatcher.Value.ReportInvocationFailedAsync(package.InvocationId, "provider said no: connection reset at 10.0.0.7", turn.FailureCategory);
                 return;
 
             case GraphWorkflowTurnOutcome.Cancels:
-                await _eventDispatcher.Value.ReportInvocationFailedAsync(package.InvocationId, "The turn was cancelled.", FailureCategory.Cancelled).ConfigureAwait(false);
+                await _eventDispatcher.Value.ReportInvocationFailedAsync(package.InvocationId, "The turn was cancelled.", FailureCategory.Cancelled);
                 return;
 
             default:
-                await _eventDispatcher.Value.ReportInvocationStreamChunkAsync(package.InvocationId, turn.Text).ConfigureAwait(false);
+                await _eventDispatcher.Value.ReportInvocationStreamChunkAsync(package.InvocationId, turn.Text);
                 await _eventDispatcher.Value.ReportInvocationCompletedAsync(package.InvocationId,
                                           inputTokens: 11,
                                           outputTokens: 22,
                                           totalTokens: 33,
                                           reasoningTokens: 4,
                                           generationDurationMs: 55,
-                                          turn.FinishReason)
-                                      .ConfigureAwait(false);
+                                          turn.FinishReason);
                 return;
         }
     }

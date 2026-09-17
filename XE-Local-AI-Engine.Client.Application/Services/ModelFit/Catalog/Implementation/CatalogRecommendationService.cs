@@ -54,7 +54,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(installedKeys);
 
-        var snapshot = await _catalogProvider.GetCatalogAsync(cancellationToken).ConfigureAwait(false);
+        var snapshot = await _catalogProvider.GetCatalogAsync(cancellationToken);
 
         // Installed-else-pinned: the node's actual runtime when known, else the compiled-in pin — the same effective
         // tag the runtime-status endpoint reports as "recommended".
@@ -72,7 +72,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             var evaluations = eligible
                               .Select(entry => EvaluateEntryWithGuardAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, gate, cancellationToken))
                               .ToList();
-            candidates = await Task.WhenAll(evaluations).ConfigureAwait(false);
+            candidates = await Task.WhenAll(evaluations);
         }
         finally
         {
@@ -127,13 +127,13 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         SemaphoreSlim gate,
         CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await gate.WaitAsync(cancellationToken);
         try
         {
             using var repoCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             repoCts.CancelAfter(PerRepoTimeout);
 
-            return await EvaluateEntryAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, repoCts.Token).ConfigureAwait(false);
+            return await EvaluateEntryAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, repoCts.Token);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -159,7 +159,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         IReadOnlySet<string> installedKeys,
         CancellationToken cancellationToken)
     {
-        var detail = await _discovery.InspectRepoAsync(entry.GgufRepo, cancellationToken).ConfigureAwait(false);
+        var detail = await _discovery.InspectRepoAsync(entry.GgufRepo, cancellationToken);
 
         var selected = GgufFileSelector.SelectBestFit(_estimator, detail.Files, quantCeiling, ctxTarget, profile, file => BuildMoeFacts(entry, file));
         if (selected is null)

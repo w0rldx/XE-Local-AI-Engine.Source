@@ -59,8 +59,7 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
                                            HashKey(key),
                                            label.Trim(),
                                            SerializeAllowList(allowedTriggerIds)),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                       cancellationToken);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
         return new GeneratedIntegrationApiKey(key, ToView(snapshot));
@@ -68,7 +67,7 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
 
     public async Task<IReadOnlyList<IntegrationApiKeyView>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var snapshots = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var snapshots = await _store.ListAsync(cancellationToken);
         return snapshots.Select(ToView).ToArray();
     }
 
@@ -87,7 +86,7 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
             return null;
         }
 
-        var snapshot = await _store.GetByPrefixAsync(presented[..PrefixLength], cancellationToken).ConfigureAwait(false);
+        var snapshot = await _store.GetByPrefixAsync(presented[..PrefixLength], cancellationToken);
         if (snapshot is null || snapshot.RevokedAtUtc is not null)
         {
             // Uniform: "no such prefix" and "revoked" read exactly like "wrong key" to the caller (ruling R2-6). The
@@ -108,7 +107,7 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
             return null;
         }
 
-        _ = await _store.TouchLastUsedAsync(snapshot.Id, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken).ConfigureAwait(false);
+        _ = await _store.TouchLastUsedAsync(snapshot.Id, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
 
         return new IntegrationApiKeyValidation(snapshot.PrincipalId, snapshot.KeyPrefix, DeserializeAllowList(snapshot.AllowedTriggerIdsJson));
     }

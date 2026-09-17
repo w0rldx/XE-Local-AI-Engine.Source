@@ -121,15 +121,15 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var work in _work.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+        await foreach (var work in _work.Reader.ReadAllAsync(stoppingToken))
         {
-            await TryCalibrateCurrentTargetAsync(work, stoppingToken).ConfigureAwait(false);
+            await TryCalibrateCurrentTargetAsync(work, stoppingToken);
         }
     }
 
     internal async Task<bool> TryCalibrateAsync(string modelName, Uri llamaServerBaseAddress, CancellationToken cancellationToken)
     {
-        var result = await TryReadDivisorAsync(llamaServerBaseAddress, cancellationToken).ConfigureAwait(false);
+        var result = await TryReadDivisorAsync(llamaServerBaseAddress, cancellationToken);
         if (result.Divisor is not { } divisor)
         {
             return false;
@@ -197,7 +197,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         CalibrationResult result;
         using (acquisition.Lease)
         {
-            result = await TryReadDivisorAsync(work.BaseAddress, cancellationToken).ConfigureAwait(false);
+            result = await TryReadDivisorAsync(work.BaseAddress, cancellationToken);
         }
 
         lock (_sync)
@@ -266,7 +266,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                     parse_special = false,
                     with_pieces = false
                 },
-                timeout.Token).ConfigureAwait(false);
+                timeout.Token);
 
             if (IsRedirect(response.StatusCode))
             {
@@ -286,8 +286,8 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
                 return default;
             }
 
-            await using var contentStream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
-            using var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: timeout.Token).ConfigureAwait(false);
+            await using var contentStream = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: timeout.Token);
             if (!document.RootElement.TryGetProperty("tokens", out var tokens)
                 || tokens.ValueKind != JsonValueKind.Array
                 || tokens.GetArrayLength() <= 0)

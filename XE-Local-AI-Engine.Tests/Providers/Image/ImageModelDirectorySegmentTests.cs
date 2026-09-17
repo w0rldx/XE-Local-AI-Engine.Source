@@ -27,7 +27,7 @@ public sealed class ImageModelDirectorySegmentTests
         var secondSegment = HuggingFaceImageModelStore.SafeModelDirectorySegment(second);
 
         AssertEx.NotEqual(firstSegment, secondSegment);
-        await Task.CompletedTask.ConfigureAwait(false);
+        await Task.CompletedTask;
     }
 
     [Test]
@@ -35,7 +35,7 @@ public sealed class ImageModelDirectorySegmentTests
     {
         AssertEx.Equal(HuggingFaceImageModelStore.SafeModelDirectorySegment("qwen-image"),
             HuggingFaceImageModelStore.SafeModelDirectorySegment("qwen-image"));
-        await Task.CompletedTask.ConfigureAwait(false);
+        await Task.CompletedTask;
     }
 
     [Test]
@@ -52,7 +52,7 @@ public sealed class ImageModelDirectorySegmentTests
         AssertEx.False(segment.Contains('/', StringComparison.Ordinal), "The segment must not contain a path separator.");
         AssertEx.False(segment.Contains('\\', StringComparison.Ordinal), "The segment must not contain a path separator.");
         AssertEx.False(segment.Contains("..", StringComparison.Ordinal), "The segment must not contain a traversal sequence.");
-        await Task.CompletedTask.ConfigureAwait(false);
+        await Task.CompletedTask;
     }
 
     // An unnamed model still needs a directory: the readable half degrades to a constant, and the hash is what keeps
@@ -62,6 +62,6 @@ public sealed class ImageModelDirectorySegmentTests
     {
         AssertEx.NotEqual(HuggingFaceImageModelStore.SafeModelDirectorySegment("///"),
             HuggingFaceImageModelStore.SafeModelDirectorySegment("???"));
-        await Task.CompletedTask.ConfigureAwait(false);
+        await Task.CompletedTask;
     }
 }

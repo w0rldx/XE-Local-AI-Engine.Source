@@ -36,24 +36,24 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
     {
         var databasePath = Path.Combine(_rootPath, "revision-race.sqlite");
         var documentId = Guid.NewGuid();
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await SeedCurrentRepositoryRevisionAsync(databasePath, documentId).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
+        await SeedCurrentRepositoryRevisionAsync(databasePath, documentId);
 
         bool written;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var writer = new KnowledgeIndexWriter(context, TimeProvider.System);
-            written = await writer.WriteAsync(StaleInput(documentId), CancellationToken.None).ConfigureAwait(false);
+            written = await writer.WriteAsync(StaleInput(documentId), CancellationToken.None);
         }
 
-        var (contentHash, status, failureReason, chunkCount) = await ReadStateAsync(databasePath, documentId).ConfigureAwait(false);
+        var (contentHash, status, failureReason, chunkCount) = await ReadStateAsync(databasePath, documentId);
         AssertEx.False(written, "The old embedding job must not commit after a repository replacement changed the source hash.");
         AssertEx.Equal(CurrentContentHash, contentHash);
         AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), status);
         AssertEx.True(failureReason is null, "The retryable current revision must not retain a stale failure reason.");
         AssertEx.Equal(0, chunkCount);
-        AssertEx.Equal(0, await CountChunksAsync(databasePath, documentId).ConfigureAwait(false));
+        AssertEx.Equal(0, await CountChunksAsync(databasePath, documentId));
     }
 
     private static KnowledgeIndexInput StaleInput(Guid documentId)
@@ -80,7 +80,7 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private async Task SeedCurrentRepositoryRevisionAsync(string databasePath, Guid documentId)
@@ -92,8 +92,8 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
         }
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await connection.OpenAsync();
+        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -114,44 +114,44 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
         command.Parameters.AddWithValue("$status", KnowledgeDocumentStatus.Embedding.ToString());
         command.Parameters.AddWithValue("$parser", KnowledgeIndexVersions.Parser);
         command.Parameters.AddWithValue("$chunker", KnowledgeIndexVersions.Chunker);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<(string ContentHash, string Status, string? FailureReason, int ChunkCount)> ReadStateAsync(string databasePath,
         Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT content_hash, status, failure_reason, chunk_count FROM knowledge_documents WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        AssertEx.True(await reader.ReadAsync().ConfigureAwait(false));
+        await using var reader = await command.ExecuteReaderAsync();
+        AssertEx.True(await reader.ReadAsync());
         return (reader.GetString(0),
             reader.GetString(1),
-            await reader.IsDBNullAsync(2).ConfigureAwait(false) ? null : reader.GetString(2),
+            await reader.IsDBNullAsync(2) ? null : reader.GetString(2),
             reader.GetInt32(3));
     }
 
     private static async Task<int> CountChunksAsync(string databasePath, Guid documentId)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM knowledge_document_chunks WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
-        return Convert.ToInt32(await command.ExecuteScalarAsync().ConfigureAwait(false));
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
     private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
     {
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 }

@@ -20,7 +20,7 @@ public sealed class GetLlamaCppRuntimeEndpoint(ILlamaCppRuntimeAdministrationSer
 
     public override async Task HandleAsync(GetLlamaCppRuntimeRequest req, CancellationToken ct)
     {
-        var status = await _administrationService.GetStatusAsync(req.Refresh ?? false, ct).ConfigureAwait(false);
-        await Send.OkAsync(status.ToRuntimeStatusResponse(), ct).ConfigureAwait(false);
+        var status = await _administrationService.GetStatusAsync(req.Refresh ?? false, ct);
+        await Send.OkAsync(status.ToRuntimeStatusResponse(), ct);
     }
 }

@@ -21,11 +21,10 @@ public sealed class GpuModelLoadAdmissionTests
         var first = await gate.AcquireAsync(CancellationToken.None);
 
         var secondTask = gate.AcquireAsync(CancellationToken.None);
-        await AssertEx.StaysIncompleteAsync(secondTask, "the second acquire must not be admitted while the first ticket is held")
-                      .ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(secondTask, "the second acquire must not be admitted while the first ticket is held");
 
         first.Dispose();
-        var second = await secondTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        var second = await secondTask.WaitAsync(TimeSpan.FromSeconds(5));
         second.Dispose();
     }
 
@@ -37,17 +36,16 @@ public sealed class GpuModelLoadAdmissionTests
 
         using var waiterCts = new CancellationTokenSource();
         var cancelledWaiter = gate.AcquireAsync(waiterCts.Token);
-        await waiterCts.CancelAsync().ConfigureAwait(false);
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => cancelledWaiter).ConfigureAwait(false);
+        await waiterCts.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => cancelledWaiter);
 
         // The gate is still held by `first`; a fresh acquire must still queue behind it, then proceed once released — the
         // cancelled waiter neither stole the gate nor corrupted the semaphore count.
         var third = gate.AcquireAsync(CancellationToken.None);
-        await AssertEx.StaysIncompleteAsync(third, "the cancelled waiter must not have handed the gate to the next acquire")
-                      .ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(third, "the cancelled waiter must not have handed the gate to the next acquire");
 
         first.Dispose();
-        (await third.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false)).Dispose();
+        (await third.WaitAsync(TimeSpan.FromSeconds(5))).Dispose();
     }
 
     [Test]
@@ -63,7 +61,7 @@ public sealed class GpuModelLoadAdmissionTests
         var timeouts = 0L;
         using var listener = StartMeterListener("gpu_admission_timeout_total", value => Interlocked.Add(ref timeouts, value));
 
-        await AssertEx.ThrowsAsync<GpuModelLoadAdmissionTimeoutException>(() => gate.AcquireAsync(CancellationToken.None)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<GpuModelLoadAdmissionTimeoutException>(() => gate.AcquireAsync(CancellationToken.None));
 
         // Process-shared counter — assert the lower bound this test contributed.
         AssertEx.True(Interlocked.Read(ref timeouts) >= 1, "gpu_admission_timeout_total should have been incremented");
@@ -80,10 +78,9 @@ public sealed class GpuModelLoadAdmissionTests
         using var listener = StartHistogramListener("gpu_admission_wait_ms", () => Interlocked.Increment(ref waitSamples));
 
         var secondTask = gate.AcquireAsync(CancellationToken.None);
-        await AssertEx.StaysIncompleteAsync(secondTask, "the second acquire has to be queued before the first releases, or there is no wait to record")
-                      .ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(secondTask, "the second acquire has to be queued before the first releases, or there is no wait to record");
         first.Dispose();
-        (await secondTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false)).Dispose();
+        (await secondTask.WaitAsync(TimeSpan.FromSeconds(5))).Dispose();
 
         AssertEx.True(Interlocked.Read(ref waitSamples) >= 1, "gpu_admission_wait_ms should have recorded the queued wait");
     }

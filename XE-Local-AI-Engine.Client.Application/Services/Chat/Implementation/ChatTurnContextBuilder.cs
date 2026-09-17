@@ -23,7 +23,7 @@ public sealed class ChatTurnContextBuilder(
             return true;
         }
 
-        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken);
         return available.Any(file => file.ExtractionStatus is DocumentExtractionStatus.Extracted or DocumentExtractionStatus.Image);
     }
 
@@ -38,7 +38,7 @@ public sealed class ChatTurnContextBuilder(
         }
 
         var requested = attachmentFileIds.ToHashSet();
-        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken);
         var attachments = available
                           .Where(file => requested.Contains(file.FileId) && file.ExtractionStatus == DocumentExtractionStatus.Extracted)
                           .ToList();
@@ -51,7 +51,7 @@ public sealed class ChatTurnContextBuilder(
         var parts = new List<AttachmentTextPart>(attachments.Count);
         foreach (var attachment in attachments)
         {
-            var markdown = await uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken).ConfigureAwait(false);
+            var markdown = await uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken);
             if (!string.IsNullOrEmpty(markdown))
             {
                 parts.Add(new AttachmentTextPart(attachment.OriginalFileName, markdown));
@@ -83,7 +83,7 @@ public sealed class ChatTurnContextBuilder(
             return null;
         }
 
-        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken);
 
         // Preserve the requested order so the caps deterministically keep the first-requested images.
         var imageFiles = attachmentFileIds
@@ -109,7 +109,7 @@ public sealed class ChatTurnContextBuilder(
                 continue;
             }
 
-            var bytes = await uploadedFileStore.ReadBytesAsync(conversationId, file!.FileId, cancellationToken).ConfigureAwait(false);
+            var bytes = await uploadedFileStore.ReadBytesAsync(conversationId, file!.FileId, cancellationToken);
             if (bytes is not { } data)
             {
                 continue;
@@ -164,7 +164,7 @@ public sealed class ChatTurnContextBuilder(
             // connection (mirrors SearchKnowledgeBaseToolHandler).
             await using var scope = scopeFactory.CreateAsyncScope();
             var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();
-            var result = await searchService.SearchAsync(searchRequest, cancellationToken).ConfigureAwait(false);
+            var result = await searchService.SearchAsync(searchRequest, cancellationToken);
 
             if (result.Results.Count == 0)
             {

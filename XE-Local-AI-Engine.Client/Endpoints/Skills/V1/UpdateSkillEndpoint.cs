@@ -26,17 +26,17 @@ public sealed class UpdateSkillEndpoint(IAgentSkillService agentSkillService, Ti
         if (GenerationProvenance.Validate(req.GenerationMetadata) is { } metadataError)
         {
             AddError(metadataError);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var record = await _agentSkillService.UpdateAsync(req.SkillId, req.ToInput(_timeProvider.GetUtcNow()), ct).ConfigureAwait(false);
+        var record = await _agentSkillService.UpdateAsync(req.SkillId, req.ToInput(_timeProvider.GetUtcNow()), ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

@@ -36,7 +36,7 @@ public sealed class SchedulerJobDetailReconciliationService : IHostedService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var managementService = scope.ServiceProvider.GetRequiredService<IScheduledJobManagementService>();
 
-            _ = await managementService.ReconcileDurableJobsAsync(cancellationToken).ConfigureAwait(false);
+            _ = await managementService.ReconcileDurableJobsAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

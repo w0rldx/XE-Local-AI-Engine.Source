@@ -19,7 +19,7 @@ public sealed class IntegrationConversationPurgeTests
         var purgedConversationId = Guid.NewGuid();
         var survivingConversationId = Guid.NewGuid();
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var trigger = IntegrationTestFixture.Trigger();
             _ = context.IntegrationTriggers.Add(trigger);
@@ -47,24 +47,24 @@ public sealed class IntegrationConversationPurgeTests
                 _ = context.IntegrationExecutionEvents.Add(IntegrationTestFixture.Event(execution.Id, sequence: 1, "execution.accepted"));
             }
 
-            _ = await context.SaveChangesAsync().ConfigureAwait(false);
+            _ = await context.SaveChangesAsync();
 
-            await ConversationFootprintPurge.DeleteAsync(context, purgedConversationId, CancellationToken.None).ConfigureAwait(false);
+            await ConversationFootprintPurge.DeleteAsync(context, purgedConversationId, CancellationToken.None);
         }
 
         // Raw COUNT(*), not an EF-graph assertion: the node connection runs without PRAGMA foreign_keys, so a
         // cascade-based delete would false-pass through the change tracker while leaving every child row on disk.
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_sessions").ConfigureAwait(false));
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_executions").ConfigureAwait(false));
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_execution_events").ConfigureAwait(false));
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_sessions"));
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_executions"));
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_execution_events"));
 
-        var survivor = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT conversation_id FROM integration_sessions;").ConfigureAwait(false));
+        var survivor = AssertEx.NotNull(await fixture.RawScalarAsync("SELECT conversation_id FROM integration_sessions;"));
         AssertEx.Equal(survivingConversationId,
             Guid.Parse(Convert.ToString(survivor, CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture),
             "The sibling session must be untouched — the purge is keyed on one conversation.");
 
         // Node-scoped tables are correctly outside a conversation's footprint.
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_triggers").ConfigureAwait(false));
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_api_keys").ConfigureAwait(false));
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_triggers"));
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_api_keys"));
     }
 }

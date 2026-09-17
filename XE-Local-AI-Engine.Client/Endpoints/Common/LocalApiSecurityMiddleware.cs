@@ -46,7 +46,7 @@ public sealed class LocalApiSecurityMiddleware
             return;
         }
 
-        await _next(context).ConfigureAwait(false);
+        await _next(context);
     }
 
     private static bool IsLoopbackPeer(IPAddress? remoteIpAddress)

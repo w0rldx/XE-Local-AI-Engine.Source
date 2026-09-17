@@ -29,7 +29,7 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.False(outcome.MemoryExcluded);
         AssertEx.True(outcome.ModelConfigured);
@@ -50,11 +50,11 @@ public sealed class MemoryExtractionServiceTests
         store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.Equal(expected: 0, outcome.ProposedCount);
         AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count);
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -68,7 +68,7 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(FailedRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(FailedRun(agentId));
 
         AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count);
         AssertEx.Equal(MemoryScope.Failure, outcome.CreatedCandidates[0].MemoryScope);
@@ -86,12 +86,12 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([existing]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.Equal(expected: 1, outcome.ProposedCount);
         AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count);
         AssertEx.Equal(expected: 1, outcome.DuplicateCount, "A near-duplicate of an existing live action must be skipped.");
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -111,7 +111,7 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.Equal(expected: 2, outcome.ProposedCount);
         AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count, "The semantic paraphrase must be dropped, leaving one candidate.");
@@ -135,7 +135,7 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.Equal(expected: 2, outcome.CreatedCandidates.Count, "With semantic dedup not applied, both lexical survivors persist.");
         AssertEx.Equal(expected: 0, outcome.DuplicateCount, "No candidate is dropped when semantic dedup does not run.");
@@ -151,14 +151,14 @@ public sealed class MemoryExtractionServiceTests
         var outcome = await service.ExtractAsync(SuccessfulRun(agentId) with
         {
             MemoryExcluded = true
-        }).ConfigureAwait(false);
+        });
 
         AssertEx.True(outcome.MemoryExcluded, "A temp conversation must short-circuit as suppressed.");
         AssertEx.Equal(expected: 0, outcome.ProposedCount);
         AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count);
         AssertEx.Equal(expected: 0, agent.InvocationCount, "The temp gate must run BEFORE any model call.");
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await store.DidNotReceive().ListByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
+        await store.DidNotReceive().ListByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -172,11 +172,11 @@ public sealed class MemoryExtractionServiceTests
             ExtractionModelName = string.Empty
         });
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.False(outcome.ModelConfigured, "No model configured must report ModelConfigured == false.");
         AssertEx.Equal(expected: 0, agent.InvocationCount, "No model => no model call.");
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -190,10 +190,10 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count, "A candidate carrying a PEM private key must be rejected outright.");
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -207,10 +207,10 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count, "A candidate whose trigger condition carries a PEM private key must be rejected outright.");
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -225,7 +225,7 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count, "A JWT is redactable, not reject-worthy — the candidate persists.");
         var created = outcome.CreatedCandidates[0];
@@ -244,7 +244,7 @@ public sealed class MemoryExtractionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoAddedAction(store);
 
-        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
         AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count);
         var created = outcome.CreatedCandidates[0];

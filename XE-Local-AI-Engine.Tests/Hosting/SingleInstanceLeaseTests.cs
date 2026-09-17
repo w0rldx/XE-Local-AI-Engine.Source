@@ -52,7 +52,7 @@ public sealed class SingleInstanceLeaseTests
         {
             SingleInstanceLease.TryAcquire(missingDirectory);
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
     }
 
     [Test]

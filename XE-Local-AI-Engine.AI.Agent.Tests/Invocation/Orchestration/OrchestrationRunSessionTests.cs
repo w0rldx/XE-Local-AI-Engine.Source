@@ -28,7 +28,7 @@ public sealed class OrchestrationRunSessionTests
             _ => ++attempts == 1 ? ValueTask.FromException(new InvalidOperationException("fail once")) : ValueTask.CompletedTask));
 
         AssertEx.True(pending.ContainsKey("approval-1"), "A failed send must leave the approval pending so the watchdog stays suspended and the caller can retry.");
-        await OrchestrationRunSession.CompletePendingApprovalAsync(pending, "approval-1", _ => ValueTask.CompletedTask).ConfigureAwait(false);
+        await OrchestrationRunSession.CompletePendingApprovalAsync(pending, "approval-1", _ => ValueTask.CompletedTask);
         AssertEx.False(pending.ContainsKey("approval-1"), "The request is removed only after the workflow accepts the response.");
     }
 
@@ -48,17 +48,17 @@ public sealed class OrchestrationRunSessionTests
             async _ =>
             {
                 sendClaimed.SetResult();
-                await releaseFailure.Task.ConfigureAwait(false);
+                await releaseFailure.Task;
                 throw new InvalidOperationException("send failed");
             },
             () => idleClock.CancelAfter(Timeout.InfiniteTimeSpan));
 
-        await sendClaimed.Task.ConfigureAwait(false);
+        await sendClaimed.Task;
         idleClock.CancelAfter(TimeSpan.FromMilliseconds(50)); // The watch observes the temporary empty dictionary.
         releaseFailure.SetResult();
         await Assert.ThrowsAsync<InvalidOperationException>(() => completion);
         // real-timer: must outlast the real CancelAfter(50ms) above, a CancellationTokenSource with no TimeProvider seam.
-        await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromMilliseconds(100));
 
         AssertEx.True(pending.ContainsKey("approval-1"));
         AssertEx.False(idleClock.IsCancellationRequested,

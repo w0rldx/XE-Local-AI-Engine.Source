@@ -38,7 +38,7 @@ public sealed class GetExternalAppUpdatePreviewEndpoint(IExternalAppService apps
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var preview = await _apps.PreviewUpdateAsync(req.InstanceId, ct).ConfigureAwait(false);
-        await Send.OkAsync(ExternalAppMapper.ToUpdatePreview(preview), ct).ConfigureAwait(false);
+        var preview = await _apps.PreviewUpdateAsync(req.InstanceId, ct);
+        await Send.OkAsync(ExternalAppMapper.ToUpdatePreview(preview), ct);
     }
 }

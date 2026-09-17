@@ -9,7 +9,7 @@ public sealed partial class BenchmarkStore
     public async Task<BenchmarkRunRecord> StartRunAsync(BenchmarkStartRunCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return (await StartRunsAsync([command], command.ExpectedProjectVersion, cancellationToken).ConfigureAwait(false))[0];
+        return (await StartRunsAsync([command], command.ExpectedProjectVersion, cancellationToken))[0];
     }
 
     public async Task<IReadOnlyList<BenchmarkRunRecord>> StartRunsAsync(IReadOnlyList<BenchmarkStartRunCommand> commands,
@@ -32,8 +32,8 @@ public sealed partial class BenchmarkStore
             }
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var project = await RequireProjectAsync(projectId, cancellationToken);
 
         // ONE compare-and-swap for the whole group, and one commit. A per-run CAS chained on its own predecessor let a
         // concurrent writer land between run i and run i+1: the caller saw a VersionConflict and no ids while the runs
@@ -45,7 +45,7 @@ public sealed partial class BenchmarkStore
         // repeat would be N identical round trips.
         foreach (var guard in commands.Select(static command => command.FreezeCommitGuard).OfType<IBenchmarkFreezeCommitGuard>().Distinct())
         {
-            if (!await guard.IsCurrentAsync(cancellationToken).ConfigureAwait(false))
+            if (!await guard.IsCurrentAsync(cancellationToken))
             {
                 throw new BenchmarkConflictException("FreezeDependencyChanged");
             }
@@ -137,27 +137,27 @@ public sealed partial class BenchmarkStore
 
         project.Version += commands.Count;
         project.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         // One judge read for the whole group, not one per run: the batch was inserted in a single round trip precisely
         // so a repeat group does not pay N of them, and materializing it per run gave that back.
-        var views = await LoadJudgeViewsAsync([.. runs.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
+        var views = await LoadJudgeViewsAsync([.. runs.Select(static run => run.Id)], cancellationToken);
         return [.. runs.Select(run => ToRecordWithJudge(run, views))];
     }
 
     public async Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        if (await _dbContext.BenchmarkRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false) is not { } entity)
+        if (await _dbContext.BenchmarkRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken) is not { } entity)
         {
             return null;
         }
 
-        var views = await LoadJudgeViewsAsync([runId], cancellationToken).ConfigureAwait(false);
+        var views = await LoadJudgeViewsAsync([runId], cancellationToken);
         var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, runId, entity.UserScore),
             entity.UserScore,
             entity.IsWarmup,
             entity.PrimaryStopReason,
-            await LoadRunIdentityAsync(entity, cancellationToken).ConfigureAwait(false));
+            await LoadRunIdentityAsync(entity, cancellationToken));
         return ToRecord(entity) with
         {
             Judge = judge,
@@ -175,8 +175,8 @@ public sealed partial class BenchmarkStore
     {
         // Rank is computed over the WHOLE project, never the page: a run's position is a property of the project, and
         // paging must not renumber it. Filters narrow which rows come back, not what they are ranked against.
-        var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
-        return await PageAsync(ranking, projectId, skip, take, modelContentFingerprint, includeUnscored, cancellationToken).ConfigureAwait(false);
+        var ranking = await LoadRankingAsync(projectId, cancellationToken);
+        return await PageAsync(ranking, projectId, skip, take, modelContentFingerprint, includeUnscored, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -185,9 +185,8 @@ public sealed partial class BenchmarkStore
         // ONE ranking for the whole export. Paging through ListRunsAsync recomputed it per page, and the ranking is a
         // whole-project scan plus a judge-view join across three more tables — work that is identical every time,
         // because a run's rank is a property of the project rather than of the page it lands on.
-        var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
-        return await PageAsync(ranking, projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken)
-            .ConfigureAwait(false);
+        var ranking = await LoadRankingAsync(projectId, cancellationToken);
+        return await PageAsync(ranking, projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -211,7 +210,7 @@ public sealed partial class BenchmarkStore
             runs = runs.Where(entity => scoredIds.Contains(entity.Id));
         }
 
-        var totalCount = await runs.CountAsync(cancellationToken).ConfigureAwait(false);
+        var totalCount = await runs.CountAsync(cancellationToken);
 
         // Column projection, not entity materialization: the four encrypted payload columns are never read, so the
         // materialization interceptor has nothing to decrypt and a 200-row page costs no crypto at all. Everything a
@@ -317,8 +316,7 @@ public sealed partial class BenchmarkStore
                                   entity.CellKey,
                                   entity.TaskInputHash,
                                   entity.TaskItemSetHash))
-                              .ToArrayAsync(cancellationToken)
-                              .ConfigureAwait(false);
+                              .ToArrayAsync(cancellationToken);
 
         // One extra query for the page rather than a join inside the no-payload projection: the judge view is derived
         // from three more tables, and folding it in would make that projection unreadable.

@@ -22,12 +22,12 @@ public sealed class DeleteIntegrationTriggerEndpoint(IIntegrationTriggerService 
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        if (!await _triggerService.DeleteAsync(Route<Guid>("triggerId"), ct).ConfigureAwait(false))
+        if (!await _triggerService.DeleteAsync(Route<Guid>("triggerId"), ct))
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

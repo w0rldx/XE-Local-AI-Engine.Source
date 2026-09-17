@@ -68,11 +68,11 @@ public sealed class ComparisonBenchmarkHandoffService(
             throw new BenchmarkValidationException("The requested KV-cache type is not supported.");
         }
 
-        var comparison = await _evaluations.GetComparisonAsync(command.ComparisonId, cancellationToken).ConfigureAwait(false)
+        var comparison = await _evaluations.GetComparisonAsync(command.ComparisonId, cancellationToken)
                          ?? throw new BenchmarkNotFoundException("The training comparison was not found.");
 
-        var baseModelName = await ResolveInstalledModelNameAsync(comparison.BaseEvaluationRunId, "base", cancellationToken).ConfigureAwait(false);
-        var tunedModelName = await ResolveInstalledModelNameAsync(comparison.TunedEvaluationRunId, "tuned", cancellationToken).ConfigureAwait(false);
+        var baseModelName = await ResolveInstalledModelNameAsync(comparison.BaseEvaluationRunId, "base", cancellationToken);
+        var tunedModelName = await ResolveInstalledModelNameAsync(comparison.TunedEvaluationRunId, "tuned", cancellationToken);
         if (string.Equals(baseModelName, tunedModelName, StringComparison.Ordinal))
         {
             // Both sides resolving to one installed name means the tuned artifact was promoted over the base entry (or
@@ -85,7 +85,7 @@ public sealed class ComparisonBenchmarkHandoffService(
         // Trimmed on both branches because that is what the project service stores, and an untrimmed name would
         // never match the project it just created.
         var name = (string.IsNullOrWhiteSpace(command.Name) ? comparison.Name : command.Name).Trim();
-        var project = await GetOrCreateProjectAsync(name, command, cancellationToken).ConfigureAwait(false);
+        var project = await GetOrCreateProjectAsync(name, command, cancellationToken);
 
         // One scope for the pair, exactly as the matrix batch does: one capability probe, one verified lease per model,
         // and the lease held so the tuned side cannot be frozen against different bytes than the base side was.
@@ -102,10 +102,10 @@ public sealed class ComparisonBenchmarkHandoffService(
                      tunedModelName
                  })
         {
-            plans.Add(await FreezeAsync(project.Id, modelName, project.Version, kvCacheType, command, scope, cancellationToken).ConfigureAwait(false));
+            plans.Add(await FreezeAsync(project.Id, modelName, project.Version, kvCacheType, command, scope, cancellationToken));
         }
 
-        var started = await _freeze.CommitAsync(plans, cancellationToken).ConfigureAwait(false);
+        var started = await _freeze.CommitAsync(plans, cancellationToken);
         return new ComparisonBenchmarkHandoff(project.Id,
             baseModelName,
             tunedModelName,
@@ -121,7 +121,7 @@ public sealed class ComparisonBenchmarkHandoffService(
         CreateBenchmarkFromComparisonCommand command,
         CancellationToken cancellationToken)
     {
-        var existing = await _benchmarks.ListProjectsAsync(cancellationToken).ConfigureAwait(false);
+        var existing = await _benchmarks.ListProjectsAsync(cancellationToken);
         var match = existing.FirstOrDefault(project => IsSameBenchmark(project, name, command));
         if (match is not null)
         {
@@ -132,8 +132,7 @@ public sealed class ComparisonBenchmarkHandoffService(
                                   Disambiguate(name, existing),
                                   command.CoreTask,
                                   command.ContextTokens,
-                                  command.AgentDefinitionId), cancellationToken)
-                              .ConfigureAwait(false);
+                                  command.AgentDefinitionId), cancellationToken);
     }
 
     /// <summary>
@@ -190,8 +189,7 @@ public sealed class ComparisonBenchmarkHandoffService(
                                     expectedVersion,
                                     kvCacheType,
                                     command.RepeatCount,
-                                    command.Warmup), scope, cancellationToken)
-                                .ConfigureAwait(false);
+                                    command.Warmup), scope, cancellationToken);
         }
         catch (KeyNotFoundException)
         {
@@ -209,7 +207,7 @@ public sealed class ComparisonBenchmarkHandoffService(
     /// </summary>
     private async Task<string> ResolveInstalledModelNameAsync(Guid evaluationRunId, string side, CancellationToken cancellationToken)
     {
-        var evaluation = await _evaluations.GetAsync(evaluationRunId, cancellationToken).ConfigureAwait(false)
+        var evaluation = await _evaluations.GetAsync(evaluationRunId, cancellationToken)
                          ?? throw new BenchmarkNotFoundException($"The {side} evaluation of this comparison was not found.");
 
         if (evaluation.TargetKind == EvaluationModelTargetKind.InstalledModel)
@@ -222,7 +220,7 @@ public sealed class ComparisonBenchmarkHandoffService(
             throw new BenchmarkValidationException($"The {side} evaluation scored a staged artifact that can no longer be identified, so its model cannot be benchmarked.");
         }
 
-        var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
+        var artifact = await _runs.GetArtifactAsync(artifactId, cancellationToken)
                        ?? throw new BenchmarkValidationException($"The {side} evaluation's staged artifact no longer exists, so its model cannot be benchmarked.");
         if (string.IsNullOrWhiteSpace(artifact.CommittedModelName))
         {

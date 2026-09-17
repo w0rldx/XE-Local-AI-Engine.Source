@@ -34,7 +34,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
         // NoResult rather than Fail, so the challenge that emits WWW-Authenticate still runs.
         var factory = Host.Factory;
 
-        var result = await AuthenticateAsync(factory, presented: null).ConfigureAwait(false);
+        var result = await AuthenticateAsync(factory, presented: null);
 
         AssertEx.False(result.Succeeded);
         AssertEx.True(result.None, "A missing credential is not an authentication failure.");
@@ -50,7 +50,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
         var context = CreateContext(scope);
         context.Request.Headers.Authorization = header;
 
-        var result = await context.AuthenticateAsync(IntegrationApiKeyAuthenticationHandler.SchemeName).ConfigureAwait(false);
+        var result = await context.AuthenticateAsync(IntegrationApiKeyAuthenticationHandler.SchemeName);
 
         AssertEx.False(result.Succeeded);
     }
@@ -66,7 +66,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
         // exception there is a 500 where a 401 is required, reachable by anyone.
         var factory = Host.Factory;
 
-        var result = await AuthenticateAsync(factory, presented).ConfigureAwait(false);
+        var result = await AuthenticateAsync(factory, presented);
 
         AssertEx.False(result.Succeeded);
     }
@@ -76,7 +76,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     {
         var factory = Host.Factory;
 
-        var result = await AuthenticateAsync(factory, ValidKey).ConfigureAwait(false);
+        var result = await AuthenticateAsync(factory, ValidKey);
 
         AssertEx.True(result.Succeeded, "A live credential must authenticate.");
         var principal = AssertEx.NotNull(result.Principal);
@@ -93,8 +93,8 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
         // the same sessions and executions while remaining separately attributable and separately revocable.
         var factory = Host.Factory;
 
-        var original = await AuthenticateAsync(factory, ValidKey).ConfigureAwait(false);
-        var rotated = await AuthenticateAsync(factory, RotatedKey).ConfigureAwait(false);
+        var original = await AuthenticateAsync(factory, ValidKey);
+        var rotated = await AuthenticateAsync(factory, RotatedKey);
 
         AssertEx.True(rotated.Succeeded);
         AssertEx.Equal(PrincipalId.ToString("D"), AssertEx.NotNull(original.Principal).FindFirst(NodeAuthorizationPolicies.IntegrationPrincipalClaimType)?.Value);
@@ -110,8 +110,8 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
         // byte-identical rejection, so a caller can never learn that the key it holds was once real.
         var factory = Host.Factory;
 
-        var (revokedStatus, revokedChallenge, revokedBody) = await ChallengeAsync(factory, "xeint_revoked-credential-material-here").ConfigureAwait(false);
-        var (unknownStatus, unknownChallenge, unknownBody) = await ChallengeAsync(factory, "xeint_never-issued-credential-material").ConfigureAwait(false);
+        var (revokedStatus, revokedChallenge, revokedBody) = await ChallengeAsync(factory, "xeint_revoked-credential-material-here");
+        var (unknownStatus, unknownChallenge, unknownBody) = await ChallengeAsync(factory, "xeint_never-issued-credential-material");
 
         AssertEx.Equal((int)HttpStatusCode.Unauthorized, revokedStatus);
         AssertEx.Equal((int)HttpStatusCode.Unauthorized, unknownStatus);
@@ -125,13 +125,11 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     public async Task IntegrationPolicy_IsSatisfiedByTheKeySchemeAndNeverByAnOperatorRole()
     {
         var factory = Host.Factory;
-        var authenticated = await AuthenticateAsync(factory, ValidKey).ConfigureAwait(false);
+        var authenticated = await AuthenticateAsync(factory, ValidKey);
         var authorization = factory.Services.GetRequiredService<IAuthorizationService>();
 
-        var allowed = await authorization.AuthorizeAsync(AssertEx.NotNull(authenticated.Principal), resource: null, NodeAuthorizationPolicies.IntegrationApi)
-                                         .ConfigureAwait(false);
-        var operatorGate = await authorization.AuthorizeAsync(AssertEx.NotNull(authenticated.Principal), resource: null, NodeAuthorizationPolicies.Operator)
-                                              .ConfigureAwait(false);
+        var allowed = await authorization.AuthorizeAsync(AssertEx.NotNull(authenticated.Principal), resource: null, NodeAuthorizationPolicies.IntegrationApi);
+        var operatorGate = await authorization.AuthorizeAsync(AssertEx.NotNull(authenticated.Principal), resource: null, NodeAuthorizationPolicies.Operator);
 
         AssertEx.True(allowed.Succeeded, "The key IS the authorization for this family.");
         AssertEx.False(operatorGate.Succeeded, "An integrator must never satisfy the operator policy.");
@@ -151,7 +149,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
             context.Request.Headers.Authorization = $"Bearer {presented}";
         }
 
-        return await context.AuthenticateAsync(IntegrationApiKeyAuthenticationHandler.SchemeName).ConfigureAwait(false);
+        return await context.AuthenticateAsync(IntegrationApiKeyAuthenticationHandler.SchemeName);
     }
 
     private static async Task<(int StatusCode, string? WwwAuthenticate, byte[] Body)> ChallengeAsync(TestServerWebAppFactory factory, string presented)
@@ -162,7 +160,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
         using var body = new MemoryStream();
         context.Response.Body = body;
 
-        await context.ChallengeAsync(IntegrationApiKeyAuthenticationHandler.SchemeName).ConfigureAwait(false);
+        await context.ChallengeAsync(IntegrationApiKeyAuthenticationHandler.SchemeName);
 
         return (context.Response.StatusCode, context.Response.Headers.WWWAuthenticate.ToString(), body.ToArray());
     }

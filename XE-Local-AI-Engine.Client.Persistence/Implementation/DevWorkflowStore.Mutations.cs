@@ -42,7 +42,7 @@ internal sealed partial class DevWorkflowStore
                     run.EndedAtUtc = now;
                 }
 
-                await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken).ConfigureAwait(false);
+                await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken);
                 return new MutationOutcome(EventTypeFor(command.TargetStatus, isFirstStart), OutcomeFor(command.TargetStatus), ReasonDetail(command.SanitizedReason));
             },
             cancellationToken);
@@ -66,7 +66,7 @@ internal sealed partial class DevWorkflowStore
             {
                 // Checked here rather than left to the unique index: the index would surface as a DbUpdateException the
                 // caller cannot tell apart from a lost race.
-                if (await _dbContext.DevWorkflowNodeRuns.AnyAsync(entity => entity.RunId == run.Id && keys.Contains(entity.NodeKey), cancellationToken).ConfigureAwait(false))
+                if (await _dbContext.DevWorkflowNodeRuns.AnyAsync(entity => entity.RunId == run.Id && keys.Contains(entity.NodeKey), cancellationToken))
                 {
                     throw new DevWorkflowInvalidTransitionException($"Run '{run.Id}' already carries a node run for one of the requested node keys.");
                 }
@@ -89,7 +89,7 @@ internal sealed partial class DevWorkflowStore
                 if (command.RouteJson is { } producerRoute && command.RouteNodeRunId is { } producerNodeRunId)
                 {
                     EnsureNotBlank(producerRoute, nameof(command.RouteJson));
-                    var producer = await LoadNodeRunAsync(run.Id, producerNodeRunId, cancellationToken).ConfigureAwait(false);
+                    var producer = await LoadNodeRunAsync(run.Id, producerNodeRunId, cancellationToken);
                     producer.RouteJson = producerRoute;
                 }
 
@@ -115,10 +115,10 @@ internal sealed partial class DevWorkflowStore
                 // command that spends none must not be refused for a slot it was never going to take.
                 if (command is { MaxTotalAttempts: { } budget, IncrementAttempt: true })
                 {
-                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken).ConfigureAwait(false);
+                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken);
                 }
 
-                return await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false);
+                return await ApplyNodeRunTransitionAsync(run, command, cancellationToken);
             },
             cancellationToken);
     }
@@ -132,7 +132,7 @@ internal sealed partial class DevWorkflowStore
         TransitionDevWorkflowNodeRunCommand command,
         CancellationToken cancellationToken)
     {
-        var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
+        var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken);
         var now = Now();
 
         if (command.WidenMaxAttempts)
@@ -229,7 +229,7 @@ internal sealed partial class DevWorkflowStore
 
         ApplyTelemetry(nodeRun, command.Telemetry);
 
-        await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken).ConfigureAwait(false);
+        await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken);
         return new MutationOutcome(EventTypeFor(command.TargetStatus),
             command.Outcome ?? OutcomeFor(command.TargetStatus),
 
@@ -324,7 +324,7 @@ internal sealed partial class DevWorkflowStore
                 // committing between that read and this transaction spends the same slots (FU3-4).
                 if (command.MaxTotalAttempts is { } budget)
                 {
-                    await EnsureRetryBudgetAsync(run.Id, budget, command.Resets.Count, cancellationToken).ConfigureAwait(false);
+                    await EnsureRetryBudgetAsync(run.Id, budget, command.Resets.Count, cancellationToken);
                 }
 
                 var outcomes = new List<MutationOutcome>(command.Resets.Count + 1)
@@ -337,7 +337,7 @@ internal sealed partial class DevWorkflowStore
                 foreach (var reset in command.Resets)
                 {
                     EnsureVersion(run, reset.ExpectedVersion);
-                    outcomes.Add(await ApplyNodeRunTransitionAsync(run, reset, cancellationToken).ConfigureAwait(false));
+                    outcomes.Add(await ApplyNodeRunTransitionAsync(run, reset, cancellationToken));
                 }
 
                 return (IReadOnlyList<MutationOutcome>)outcomes;
@@ -354,13 +354,12 @@ internal sealed partial class DevWorkflowStore
             command.OperationId,
             async run =>
             {
-                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
+                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken);
 
                 // Checked here, not left to the filtered unique index, so a second owner reads as the transition error
                 // it is rather than a lost-race exception.
                 if (await _dbContext.DevWorkflowNodeRuns
-                                    .AnyAsync(entity => entity.WorkSessionId == command.WorkSessionId && entity.Id != nodeRun.Id, cancellationToken)
-                                    .ConfigureAwait(false))
+                                    .AnyAsync(entity => entity.WorkSessionId == command.WorkSessionId && entity.Id != nodeRun.Id, cancellationToken))
                 {
                     throw new DevWorkflowInvalidTransitionException($"Work session '{command.WorkSessionId}' is already owned by another node run.");
                 }
@@ -394,12 +393,12 @@ internal sealed partial class DevWorkflowStore
             command.OperationId,
             async run =>
             {
-                if (await _dbContext.DevWorkflowArtifacts.AnyAsync(entity => entity.Id == command.ArtifactId, cancellationToken).ConfigureAwait(false))
+                if (await _dbContext.DevWorkflowArtifacts.AnyAsync(entity => entity.Id == command.ArtifactId, cancellationToken))
                 {
                     throw new DevWorkflowConcurrencyException($"Development workflow artifact '{command.ArtifactId}' already exists.");
                 }
 
-                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
+                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken);
 
                 // Lineage identity is (run, producing node key, name). Keying on (run, name) alone would make
                 // materialized siblings — which share a template and so a logical artifact name — version each other's
@@ -409,8 +408,7 @@ internal sealed partial class DevWorkflowStore
                                                                 && entity.ProducingNodeKey == nodeRun.NodeKey
                                                                 && entity.Name == command.Name)
                                                .OrderByDescending(entity => entity.Version)
-                                               .FirstOrDefaultAsync(cancellationToken)
-                                               .ConfigureAwait(false);
+                                               .FirstOrDefaultAsync(cancellationToken);
 
                 var lineageId = previous?.LineageId ?? Guid.NewGuid();
                 var version = (previous?.Version ?? 0) + 1;
@@ -461,14 +459,13 @@ internal sealed partial class DevWorkflowStore
             command.OperationId,
             async run =>
             {
-                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
+                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken);
                 var wanted = command.ArtifactIds.Distinct().ToList();
 
                 var known = await _dbContext.DevWorkflowArtifacts.AsNoTracking()
                                             .Where(entity => entity.RunId == run.Id && wanted.Contains(entity.Id))
                                             .Select(entity => entity.Id)
-                                            .ToListAsync(cancellationToken)
-                                            .ConfigureAwait(false);
+                                            .ToListAsync(cancellationToken);
                 if (known.Count != wanted.Count)
                 {
                     throw new DevWorkflowNotFoundException($"One or more artifacts recorded as consumed by node run '{nodeRun.Id}' do not belong to run '{run.Id}'.");
@@ -477,8 +474,7 @@ internal sealed partial class DevWorkflowStore
                 var already = await _dbContext.DevWorkflowArtifactUses.AsNoTracking()
                                               .Where(entity => entity.NodeRunId == nodeRun.Id && wanted.Contains(entity.ArtifactId))
                                               .Select(entity => entity.ArtifactId)
-                                              .ToListAsync(cancellationToken)
-                                              .ConfigureAwait(false);
+                                              .ToListAsync(cancellationToken);
 
                 var added = 0;
                 foreach (var artifactId in wanted.Except(already))
@@ -515,8 +511,7 @@ internal sealed partial class DevWorkflowStore
                 // Checked rather than left to return MarkedCount: 0, which is what a genuinely unconsumed artifact also
                 // reports — a caller passing an id from the wrong run should see the mistake, not a plausible zero.
                 if (!await _dbContext.DevWorkflowArtifacts
-                                     .AnyAsync(entity => entity.Id == command.SupersededArtifactId && entity.RunId == run.Id, cancellationToken)
-                                     .ConfigureAwait(false))
+                                     .AnyAsync(entity => entity.Id == command.SupersededArtifactId && entity.RunId == run.Id, cancellationToken))
                 {
                     throw new DevWorkflowNotFoundException($"Development workflow artifact '{command.SupersededArtifactId}' does not belong to run '{run.Id}'.");
                 }
@@ -526,8 +521,7 @@ internal sealed partial class DevWorkflowStore
                 var consumers = await _dbContext.DevWorkflowArtifactUses.AsNoTracking()
                                                 .Where(entity => entity.RunId == run.Id && entity.ArtifactId == command.SupersededArtifactId)
                                                 .Select(entity => entity.NodeRunId)
-                                                .ToListAsync(cancellationToken)
-                                                .ConfigureAwait(false);
+                                                .ToListAsync(cancellationToken);
 
                 // The superseding artifact is excluded explicitly: a re-attempt of a node that consumed its own prior
                 // version is a consumer of the thing it just replaced, so without this the new version marks itself
@@ -539,8 +533,7 @@ internal sealed partial class DevWorkflowStore
                                                        && consumers.Contains(entity.ProducedByNodeRunId)
                                                        && entity.Id != command.SupersedingArtifactId
                                                        && !entity.IsStale)
-                                      .ToListAsync(cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .ToListAsync(cancellationToken);
 
                 // The value the event about to be appended will take. Stamping the mark with it means "stale as of the
                 // same watermark that records why", so a client replaying from a cursor sees both or neither.
@@ -568,7 +561,7 @@ internal sealed partial class DevWorkflowStore
             command.OperationId,
             async run =>
             {
-                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
+                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken);
 
                 // What the caller validated against, re-read under the transaction. Checked BEFORE the one-per-attempt
                 // rule below, which reads the row's CURRENT attempt and so would see a moved row as simply undecided.
@@ -584,8 +577,7 @@ internal sealed partial class DevWorkflowStore
                 // two for the same try. The standing one is loaded rather than merely counted, because the caller that
                 // gets this refusal has to be able to say WHAT was already decided.
                 if (await _dbContext.DevWorkflowDecisions.AsNoTracking()
-                                    .FirstOrDefaultAsync(entity => entity.NodeRunId == nodeRun.Id && entity.Attempt == nodeRun.Attempt, cancellationToken)
-                                    .ConfigureAwait(false) is { } standing)
+                                    .FirstOrDefaultAsync(entity => entity.NodeRunId == nodeRun.Id && entity.Attempt == nodeRun.Attempt, cancellationToken) is { } standing)
                 {
                     throw new DevWorkflowGateAlreadyDecidedException($"Node run '{nodeRun.Id}' already carries a decision for attempt {nodeRun.Attempt}.",
                         standing.Decision);
@@ -593,7 +585,7 @@ internal sealed partial class DevWorkflowStore
 
                 if (command is { Decision: DevWorkflowDecisionKind.Retry, MaxTotalAttempts: { } budget })
                 {
-                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken).ConfigureAwait(false);
+                    await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken);
                 }
 
                 _dbContext.DevWorkflowDecisions.Add(new DevWorkflowDecision

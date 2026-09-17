@@ -180,8 +180,8 @@ internal sealed class PublishingDevWorkflowStore(
         var kind = command.TargetStatus is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked
             ? DevWorkflowChangeKind.Gate
             : DevWorkflowChangeKind.Node;
-        var enriched = await EnrichAsync(command, cancellationToken).ConfigureAwait(false);
-        return await PublishAsync(_inner.TransitionNodeRunAsync(enriched, cancellationToken), kind, cancellationToken).ConfigureAwait(false);
+        var enriched = await EnrichAsync(command, cancellationToken);
+        return await PublishAsync(_inner.TransitionNodeRunAsync(enriched, cancellationToken), kind, cancellationToken);
     }
 
     /// <summary>
@@ -204,14 +204,13 @@ internal sealed class PublishingDevWorkflowStore(
         var resets = new List<TransitionDevWorkflowNodeRunCommand>(command.Resets.Count);
         foreach (var reset in command.Resets)
         {
-            resets.Add(await EnrichWithinDeadlineAsync(reset, deadline.Token, cancellationToken).ConfigureAwait(false));
+            resets.Add(await EnrichWithinDeadlineAsync(reset, deadline.Token, cancellationToken));
         }
 
         return await PublishAsync(_inner.RouteRetryAsync(command with
             {
                 Resets = resets
-            }, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken)
-            .ConfigureAwait(false);
+            }, cancellationToken), DevWorkflowChangeKind.Node, cancellationToken);
     }
 
     public Task<DevWorkflowMutationResult> AttachWorkSessionAsync(AttachDevWorkflowWorkSessionCommand command, CancellationToken cancellationToken = default) =>
@@ -298,7 +297,7 @@ internal sealed class PublishingDevWorkflowStore(
         }
 
         using var deadline = NewCollectionDeadline(cancellationToken);
-        return await EnrichWithinDeadlineAsync(command, deadline.Token, cancellationToken).ConfigureAwait(false);
+        return await EnrichWithinDeadlineAsync(command, deadline.Token, cancellationToken);
     }
 
     /// <summary>
@@ -356,7 +355,7 @@ internal sealed class PublishingDevWorkflowStore(
             {
                 try
                 {
-                    return await CollectAsync(command, deadline, cancellationToken).ConfigureAwait(false);
+                    return await CollectAsync(command, deadline, cancellationToken);
                 }
                 finally
                 {
@@ -370,7 +369,7 @@ internal sealed class PublishingDevWorkflowStore(
 
         try
         {
-            return await collection.WaitAsync(deadline).ConfigureAwait(false);
+            return await collection.WaitAsync(deadline);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -409,8 +408,8 @@ internal sealed class PublishingDevWorkflowStore(
             var telemetry = scope.ServiceProvider.GetRequiredService<IDevWorkflowNodeTelemetrySource>();
 
             return IsReAttempt(command)
-                ? await EnrichReAttemptAsync(command, reads, telemetry, deadline).ConfigureAwait(false)
-                : await EnrichSettleAsync(command, reads, telemetry, deadline).ConfigureAwait(false);
+                ? await EnrichReAttemptAsync(command, reads, telemetry, deadline)
+                : await EnrichSettleAsync(command, reads, telemetry, deadline);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -432,9 +431,9 @@ internal sealed class PublishingDevWorkflowStore(
         // The PRE-write row, and it is read for four things only: the work session, the development task, the
         // attempt's start and the row's node type. Its Status and OutputJson are the previous attempt's and must
         // never be the ones a route question is asked about.
-        var snapshot = await reads.GetNodeRunAsync(command.NodeRunId, deadline).ConfigureAwait(false);
-        var routeJson = await RouteJsonAsync(command, snapshot, reads, deadline).ConfigureAwait(false);
-        var collected = await telemetry.CollectAsync(snapshot, command.TargetStatus, deadline).ConfigureAwait(false);
+        var snapshot = await reads.GetNodeRunAsync(command.NodeRunId, deadline);
+        var routeJson = await RouteJsonAsync(command, snapshot, reads, deadline);
+        var collected = await telemetry.CollectAsync(snapshot, command.TargetStatus, deadline);
 
         if (collected is null && routeJson is null)
         {
@@ -507,7 +506,7 @@ internal sealed class PublishingDevWorkflowStore(
             OutputJson = command.OutputJson ?? snapshot.OutputJson
         };
 
-        var run = await reads.GetRunAsync(command.RunId, cancellationToken).ConfigureAwait(false);
+        var run = await reads.GetRunAsync(command.RunId, cancellationToken);
         var decision = routeSource.NodeType == DevWorkflowNodeType.HumanGate
             ? DevWorkflowStateMachine.GateDecisionFrom(routeSource.OutputJson)
             : null;
@@ -515,7 +514,7 @@ internal sealed class PublishingDevWorkflowStore(
         // The run's other rows, because whether a SKIP was waived is a walk back over the graph rather than something
         // this row carries. Without them a waived skip's out-edges would record as dead, which is the exact reading the
         // dispatcher does not make.
-        var nodeRuns = await reads.ListNodeRunsAsync(command.RunId, cancellationToken).ConfigureAwait(false);
+        var nodeRuns = await reads.ListNodeRunsAsync(command.RunId, cancellationToken);
         var nodeRunsByKey = nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
 
         return DevWorkflowStateMachine.RouteJson(DevWorkflowStateMachine.RouteTaken(_graphs.Resolve(run), routeSource, nodeRunsByKey, decision));
@@ -540,11 +539,11 @@ internal sealed class PublishingDevWorkflowStore(
         IDevWorkflowNodeTelemetrySource telemetry,
         CancellationToken deadline)
     {
-        var snapshot = await reads.GetNodeRunAsync(command.NodeRunId, deadline).ConfigureAwait(false);
+        var snapshot = await reads.GetNodeRunAsync(command.NodeRunId, deadline);
 
         // Collected as the FAILED attempt it is. The row itself may still read Running — a re-attempt is written
         // straight over a live row — but what this cost vector describes is an attempt that is over.
-        var collected = await telemetry.CollectAsync(snapshot, DevWorkflowNodeRunStatus.Failed, deadline).ConfigureAwait(false);
+        var collected = await telemetry.CollectAsync(snapshot, DevWorkflowNodeRunStatus.Failed, deadline);
         if (collected is null)
         {
             return command;
@@ -607,8 +606,8 @@ internal sealed class PublishingDevWorkflowStore(
         DevWorkflowChangeKind kind,
         CancellationToken cancellationToken)
     {
-        var result = await mutation.ConfigureAwait(false);
-        await _publisher.PublishAsync(result.RunId, result.Sequence, kind, cancellationToken).ConfigureAwait(false);
+        var result = await mutation;
+        await _publisher.PublishAsync(result.RunId, result.Sequence, kind, cancellationToken);
         return result;
     }
 }

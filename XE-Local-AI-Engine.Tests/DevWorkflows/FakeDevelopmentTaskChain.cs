@@ -199,7 +199,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     {
         await using var scope = _scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var task = await store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(taskId, cancellationToken);
 
         bool fail;
         bool hold;
@@ -243,8 +243,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                        operationId,
                                        DevelopmentTaskStatus.InReview,
                                        task.Version),
-                                   cancellationToken)
-                               .ConfigureAwait(false);
+                                   cancellationToken);
             }
 
             throw new DevelopmentInvalidTransitionException("The Development task has no executable next action in its current state.");
@@ -257,13 +256,12 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                     task,
                     DevelopmentAttemptStatus.Failed,
                     cancellationToken,
-                    DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused, DevelopmentTestWritePolicy.RefusalSentence))
-                .ConfigureAwait(false);
+                    DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused, DevelopmentTestWritePolicy.RefusalSentence));
         }
 
         if (fail || hold)
         {
-            return await StartAnAttemptAsync(store, projectId, task, fail ? DevelopmentAttemptStatus.Failed : null, cancellationToken).ConfigureAwait(false);
+            return await StartAnAttemptAsync(store, projectId, task, fail ? DevelopmentAttemptStatus.Failed : null, cancellationToken);
         }
 
         bool gateFails;
@@ -274,12 +272,12 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
 
         if (gateFails && task.Status == DevelopmentTaskStatus.ChangesRequested)
         {
-            return await StartAnAttemptAsync(store, projectId, task, terminal: null, cancellationToken).ConfigureAwait(false);
+            return await StartAnAttemptAsync(store, projectId, task, terminal: null, cancellationToken);
         }
 
         if (gateFails && task.Status == DevelopmentTaskStatus.InProgress)
         {
-            return await FailTheGateAsync(store, projectId, task, cancellationToken).ConfigureAwait(false);
+            return await FailTheGateAsync(store, projectId, task, cancellationToken);
         }
 
         if (!NextStatus.TryGetValue(task.Status, out var next))
@@ -292,8 +290,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                next,
                                task.Version,
                                ApprovedSubjectHash: next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return new DevelopmentNextActionResult("Attempt", projectId, taskId, AttemptId: null, next, DevelopmentAttemptRole.Coder);
     }
 
@@ -315,7 +312,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             throw new DevelopmentInvalidTransitionException("The Development task has no executable next action in its current state.");
         }
 
-        var judged = (await store.ListAttemptsAsync(task.Id, cancellationToken).ConfigureAwait(false))
+        var judged = (await store.ListAttemptsAsync(task.Id, cancellationToken))
             .LastOrDefault(static attempt => attempt.Role == DevelopmentAttemptRole.Coder && attempt.Status == DevelopmentAttemptStatus.Succeeded);
         if (judged is null)
         {
@@ -326,23 +323,20 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                              DevelopmentAttemptRole.Coder,
                                              "scripted-model",
                                              "local",
-                                             (await store.GetTaskAsync(task.Id, cancellationToken).ConfigureAwait(false)).Version),
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
+                                             (await store.GetTaskAsync(task.Id, cancellationToken)).Version),
+                                         cancellationToken);
             _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
                                    Guid.NewGuid(),
                                    DevelopmentAttemptStatus.Succeeded,
                                    started.Version),
-                               cancellationToken)
-                           .ConfigureAwait(false);
-            judged = (await store.ListAttemptsAsync(task.Id, cancellationToken).ConfigureAwait(false)).Single(attempt => attempt.Id == attemptId);
+                               cancellationToken);
+            judged = (await store.ListAttemptsAsync(task.Id, cancellationToken)).Single(attempt => attempt.Id == attemptId);
         }
 
         var opened = await store.StartValidationAsync(new DevelopmentStartValidationCommand(task.Id,
                                         Guid.NewGuid(),
-                                        (await store.GetTaskAsync(task.Id, cancellationToken).ConfigureAwait(false)).Version),
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                                        (await store.GetTaskAsync(task.Id, cancellationToken)).Version),
+                                    cancellationToken);
         _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
                                    projectId,
                                    task.Id,
@@ -357,8 +351,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                opened.Version,
                                DevelopmentValidationRunner.TargetFor(passed: false),
                                GateFailureReason),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         return new DevelopmentNextActionResult("Validation", projectId, task.Id, AttemptId: null, DevelopmentTaskStatus.Validation, Role: null);
     }
 
@@ -384,8 +377,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                            Guid.NewGuid(),
                                            DevelopmentTaskStatus.Ready,
                                            task.Version),
-                                       cancellationToken)
-                                   .ConfigureAwait(false);
+                                       cancellationToken);
             ready = task with
             {
                 Status = DevelopmentTaskStatus.Ready,
@@ -401,8 +393,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                "scripted-model",
                                "local",
                                ready.Version),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         if (terminal is { } landed)
         {
             _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
@@ -410,8 +401,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                                    landed,
                                    ExpectedAttemptVersion: 1,
                                    terminalReason),
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
         }
 
         return new DevelopmentNextActionResult("Attempt", projectId, ready.Id, attemptId, DevelopmentTaskStatus.InProgress, DevelopmentAttemptRole.Coder);
@@ -421,14 +411,13 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     {
         await using var scope = _scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var attempt = (await store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false)).Single(candidate => candidate.Id == attemptId);
+        var attempt = (await store.ListAttemptsAsync(taskId, cancellationToken)).Single(candidate => candidate.Id == attemptId);
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
                                Guid.NewGuid(),
                                DevelopmentAttemptStatus.Cancelled,
                                attempt.Version,
                                "The run was cancelled."),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
         lock (_gate)
         {
             _cancelled.Add(attemptId);
@@ -519,7 +508,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     {
         await using var scope = _scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var task = await store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(taskId, cancellationToken);
         if (task.ProjectId != projectId)
         {
             throw new KeyNotFoundException("The Development task does not belong to the project.");
@@ -528,12 +517,12 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         // The real service's own first two lines: an apply already recorded under this key answers with what it did
         // rather than doing it again. Kept here so a replayed node attempt is as idempotent through the fake as it is
         // through the service.
-        if (await store.FindOperationAsync(projectId, operationId, DevelopmentOperationPhases.ApplyCompleted, cancellationToken).ConfigureAwait(false) is { } completed)
+        if (await store.FindOperationAsync(projectId, operationId, DevelopmentOperationPhases.ApplyCompleted, cancellationToken) is { } completed)
         {
             return completed;
         }
 
-        if (await store.FindOperationAsync(projectId, operationId, DevelopmentOperationPhases.ApplyBlocked, cancellationToken).ConfigureAwait(false) is { } refused)
+        if (await store.FindOperationAsync(projectId, operationId, DevelopmentOperationPhases.ApplyBlocked, cancellationToken) is { } refused)
         {
             return refused;
         }
@@ -578,17 +567,17 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             SubjectHash: task.ApprovedSubjectHash ?? string.Empty);
         if (blocked)
         {
-            return await store.BlockApplyAsync(operationId, subject, BlockedReason, cancellationToken).ConfigureAwait(false);
+            return await store.BlockApplyAsync(operationId, subject, BlockedReason, cancellationToken);
         }
 
-        var result = await store.CompleteApplyAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
+        var result = await store.CompleteApplyAsync(operationId, subject, cancellationToken);
         if (hold)
         {
             // Bounded, and NOT on the caller's token: the point is to be holding when the cancel arrives, so observing
             // it here would swallow the very checkpoint under test. The timeout only turns a broken test into a failure
             // instead of a hang.
             _ = _applyHeld.TrySetResult();
-            await _applyReleased.Task.WaitAsync(TimeSpan.FromMinutes(2), CancellationToken.None).ConfigureAwait(false);
+            await _applyReleased.Task.WaitAsync(TimeSpan.FromMinutes(2), CancellationToken.None);
         }
 
         return result;

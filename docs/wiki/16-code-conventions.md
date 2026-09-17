@@ -46,8 +46,8 @@ Canonical shape: sealed, one endpoint per `*Endpoint.cs`, route derived from `Lo
 constructor guarding its dependencies into `private readonly` fields, the request's `CancellationToken` threaded
 through every call, no `ConfigureAwait` (the host is not a library — see
 [ConfigureAwait is contextual](#configureawait-is-contextual)), DTO return.
-`Endpoints/LocalChat/V1/DeleteNodeChatConversationEndpoint.cs` is the structural reference; its constructor and
-`ConfigureAwait` usage still show the pre-baseline shape until slices S3/S4 reach it.
+`Endpoints/LocalChat/V1/DeleteNodeChatConversationEndpoint.cs` is the structural reference; its constructor still
+shows the pre-baseline shape until the constructor migration reaches it.
 
 Both halves of that shape are now regression guards rather than review habits.
 `EndpointConventionTests` freezes the file and type conventions: one endpoint per `*Endpoint.cs` file named
@@ -209,13 +209,20 @@ positional records. The trap it exists to catch: converting a record to a class 
 ### `ConfigureAwait` is contextual
 
 `ConfigureAwait(false)` is written in the **library** projects — `Providers.*`, `AI.Agent`, `AI.Contracts` — which
-may be consumed from a caller that has a synchronization context. It is **not** written in `Client`,
-`Client.Application`, `Client.Persistence` or any test project: ASP.NET Core has no synchronization context, so
-there it is noise on every `await` with no behavioural effect.
+may be consumed from a caller that has a synchronization context, and every awaited call in one carries it. It is
+**not** written anywhere else: the host is ASP.NET Core, the launcher is a console process and the test host is
+TUnit, none of which installs a synchronization context, so there the call is noise on every `await` with no
+behavioural effect. The two halves are one rule with one enforcement point, `ConfigureAwaitPolicyTests`: it refuses
+the token outright in every project that is not a library, and requires a configuration for every awaited call in
+the ones that are. The library list in that test is closed, so a project added to the solution is an application
+project by default and a new library project has to be named there on purpose.
 
-*Migration status:* CA2007 and MA0004 are `none` repo-wide today. Slice **S3** removes the calls from the host,
-application, persistence and test projects, completes them in the library projects, and replaces the global `none` with path-scoped
-`.editorconfig` sections that enforce the rule in both directions.
+The disposal of an `await using` **declaration** is outside the rule. Configuring it means letting the declared
+variable become a `ConfiguredAsyncDisposable`, which stops the file compiling wherever that variable is then used,
+so those declarations in the library projects keep the shape they have. That is also why the type-aware
+analyzers are off rather than path-scoped: **CA2007** reports every one of those declarations — its own code fix is
+known to produce code that does not compile — and **MA0004** reports the identical set, so neither can gate the
+library projects and both stay `none` with that reason recorded in `.editorconfig`.
 
 ### Blocking calls and cancellation forwarding are enforced
 

@@ -41,17 +41,17 @@ public sealed class GenerateMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiK
             if (!request.HasJsonContentType())
             {
                 AddError("The request body must use the application/json media type.");
-                await Send.ErrorsAsync(StatusCodes.Status415UnsupportedMediaType, cancellation: ct).ConfigureAwait(false);
+                await Send.ErrorsAsync(StatusCodes.Status415UnsupportedMediaType, cancellation: ct);
                 return;
             }
 
             try
             {
-                var body = await request.ReadFromJsonAsync<GenerateMcpServerApiKeyRequest>(ct).ConfigureAwait(false);
+                var body = await request.ReadFromJsonAsync<GenerateMcpServerApiKeyRequest>(ct);
                 if (body is null)
                 {
                     AddError("The request body must contain a valid MCP API key scope.");
-                    await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                    await Send.ErrorsAsync(cancellation: ct);
                     return;
                 }
 
@@ -60,12 +60,12 @@ public sealed class GenerateMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiK
             catch (JsonException)
             {
                 AddError("Scope must be exactly 'delegate' or 'agentic'.");
-                await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                await Send.ErrorsAsync(cancellation: ct);
                 return;
             }
         }
 
-        var generated = await _apiKeyService.GenerateAsync(scope, ct).ConfigureAwait(false);
-        await Send.OkAsync(McpServerApiKeyMapper.ToGenerated(generated, HttpContext), ct).ConfigureAwait(false);
+        var generated = await _apiKeyService.GenerateAsync(scope, ct);
+        await Send.OkAsync(McpServerApiKeyMapper.ToGenerated(generated, HttpContext), ct);
     }
 }

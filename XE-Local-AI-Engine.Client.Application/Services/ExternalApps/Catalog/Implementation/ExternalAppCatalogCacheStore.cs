@@ -37,7 +37,7 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
 
     public async Task<StoredExternalAppCatalogCache?> LoadAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (!File.Exists(_cachePath))
@@ -48,7 +48,7 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
             try
             {
                 await using var fileStream = File.OpenRead(_cachePath);
-                return await JsonSerializer.DeserializeAsync<StoredExternalAppCatalogCache>(fileStream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+                return await JsonSerializer.DeserializeAsync<StoredExternalAppCatalogCache>(fileStream, SerializerOptions, cancellationToken);
             }
             catch (JsonException exception)
             {
@@ -78,7 +78,7 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
     {
         ArgumentNullException.ThrowIfNull(cache);
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             // Unlike the model catalog's cache the path carries a subdirectory, so it may not exist yet on a node that
@@ -86,7 +86,7 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
             Directory.CreateDirectory(Path.GetDirectoryName(_cachePath)!);
 
             await using var fileStream = CreateOwnerOnly(_cachePath);
-            await JsonSerializer.SerializeAsync(fileStream, cache, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            await JsonSerializer.SerializeAsync(fileStream, cache, SerializerOptions, cancellationToken);
         }
         catch (IOException exception)
         {

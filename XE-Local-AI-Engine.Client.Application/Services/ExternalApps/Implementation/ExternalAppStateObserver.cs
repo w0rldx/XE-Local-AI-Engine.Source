@@ -83,7 +83,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _stopping.CancelAsync().ConfigureAwait(false);
+        await _stopping.CancelAsync();
 
         if (_loop is not { } loop)
         {
@@ -92,7 +92,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
 
         try
         {
-            await loop.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await loop.WaitAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -117,7 +117,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
 
         // The rows come first, and a tick with nothing to watch never touches the daemon at all.
-        var candidates = (await store.ListAsync(cancellationToken).ConfigureAwait(false))
+        var candidates = (await store.ListAsync(cancellationToken))
                          .Where(static row => row is { DesiredState: ExternalAppDesiredState.Running, Status: ExternalAppInstanceStatus.Running })
                          .ToList();
         if (candidates.Count == 0)
@@ -126,7 +126,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         }
 
         var resolver = scope.ServiceProvider.GetRequiredService<IContainerRuntimeResolver>();
-        var resolution = await resolver.ResolveAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(cancellationToken: cancellationToken);
         if (!resolution.Ready)
         {
             // "There is no container runtime right now" is not evidence that an application stopped, and writing it
@@ -134,7 +134,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
             return;
         }
 
-        await using var runtime = await resolver.CreateRuntimeAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        await using var runtime = await resolver.CreateRuntimeAsync(cancellationToken: cancellationToken);
 
         // ONE call for the whole tick. The state word arrives with the ids, which is the entire reason this can tell
         // a stopped container from a removed one.
@@ -144,14 +144,13 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
                                    [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue,
                                    [ExternalAppLabels.Install] = _service.InstallId
                                },
-                               cancellationToken)
-                           .ConfigureAwait(false);
+                               cancellationToken);
 
         foreach (var row in candidates)
         {
             try
             {
-                await JudgeAsync(store, row, listed, cancellationToken).ConfigureAwait(false);
+                await JudgeAsync(store, row, listed, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -166,11 +165,11 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_options.ObserverIntervalSeconds), _timeProvider);
 
-        while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+        while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             try
             {
-                await PollOnceAsync(cancellationToken).ConfigureAwait(false);
+                await PollOnceAsync(cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -195,7 +194,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
             return;
         }
 
-        using var lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(row.Id)).ConfigureAwait(false);
+        using var lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(row.Id));
         if (lease is null)
         {
             // An operation owns this instance. Its own final write is the newer verdict, and overwriting it from an
@@ -219,8 +218,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         {
             if (!byService.TryGetValue(serviceName, out var container))
             {
-                await ReportStoppedAsync(store, row, $"The container for service '{serviceName}' is no longer on the container runtime.", cancellationToken)
-                    .ConfigureAwait(false);
+                await ReportStoppedAsync(store, row, $"The container for service '{serviceName}' is no longer on the container runtime.", cancellationToken);
                 return;
             }
 
@@ -229,7 +227,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
                 var exitCode = container.ExitCode is { } code
                     ? string.Create(CultureInfo.InvariantCulture, $" with exit code {code}")
                     : string.Empty;
-                await ReportStoppedAsync(store, row, $"Service '{serviceName}' is {container.State}{exitCode}.", cancellationToken).ConfigureAwait(false);
+                await ReportStoppedAsync(store, row, $"Service '{serviceName}' is {container.State}{exitCode}.", cancellationToken);
                 return;
             }
         }
@@ -254,8 +252,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
                                         StoppedAtUtc: now,
                                         FailureCategory: ExternalAppFailureCategory.StoppedUnexpectedly,
                                         FailureSummary: summary),
-                                    cancellationToken)
-                                .ConfigureAwait(false);
+                                    cancellationToken);
 
         if (!result.Applied)
         {
@@ -269,8 +266,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         try
         {
             await _publisher.PublishAsync(row.Id, result.Sequence, ExternalAppInstanceEventKind.StoppedUnexpectedly, ExternalAppInstanceStatus.StoppedUnexpectedly,
-                                CancellationToken.None)
-                            .ConfigureAwait(false);
+                                CancellationToken.None);
         }
 #pragma warning disable CA1031 // A subscriber that cannot be reached must not fail the observation it describes.
         catch (Exception exception)

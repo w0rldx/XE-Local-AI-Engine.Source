@@ -19,13 +19,13 @@ public sealed class DeleteCustomToolEndpoint(ICustomToolService customToolServic
     public override async Task HandleAsync(CancellationToken ct)
     {
         var customToolId = Route<Guid>("customToolId");
-        var deleted = await _customToolService.DeleteAsync(customToolId, ct).ConfigureAwait(false);
+        var deleted = await _customToolService.DeleteAsync(customToolId, ct);
         if (!deleted)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

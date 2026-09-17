@@ -63,7 +63,7 @@ internal sealed class ScriptedExportSpawner : ITrainingProcessSpawner
                 yield return line;
             }
 
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
         }
     }
 }

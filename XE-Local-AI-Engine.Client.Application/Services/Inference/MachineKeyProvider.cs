@@ -36,7 +36,7 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
             return cached;
         }
 
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        await _gate.WaitAsync(ct);
         try
         {
             // Re-check under the gate: a racing first-caller may have generated and cached it while we waited.
@@ -45,7 +45,7 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
                 return _cachedKey;
             }
 
-            var settings = await _settingsStore.LoadAsync(ct).ConfigureAwait(false);
+            var settings = await _settingsStore.LoadAsync(ct);
             var key = settings.MachineKey;
             if (string.IsNullOrWhiteSpace(key))
             {
@@ -61,8 +61,7 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
                                                                 MachineKey = Guid.NewGuid().ToString("N")
                                                             }
                                                             : latest,
-                                                        ct)
-                                                    .ConfigureAwait(false);
+                                                        ct);
                 key = persisted.MachineKey;
                 if (string.IsNullOrWhiteSpace(key))
                 {

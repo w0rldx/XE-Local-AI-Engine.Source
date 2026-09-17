@@ -73,7 +73,7 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
 
         // One scope for every pass, which is the caller shape ReconcileNonTerminalNodeRunsAsync documents: it clears the
         // change tracker itself so a later pass cannot judge run rows its earlier one cached.
-        await RecoverAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), cancellationToken).ConfigureAwait(false);
+        await RecoverAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) =>
@@ -96,21 +96,21 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
         ArgumentNullException.ThrowIfNull(store);
 
         var recovered = 0;
-        var remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
+        var remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken);
         for (var pass = 1; pass <= RecoveryPasses && remaining.Count > 0; pass++)
         {
             var verdicts = ComposeVerdicts(remaining);
             var unjudged = pass == RecoveryPasses
                 ? new GraphWorkflowUnjudgedNodeRunSettlement(GraphWorkflowFailureClass.Interrupted, UnjudgedReason)
                 : null;
-            var reconciled = await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken).ConfigureAwait(false);
+            var reconciled = await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken);
             recovered += reconciled.Count;
             _logger.LogInformation("Graph workflow startup recovery pass {Pass} of {Passes} judged {Judged} in-flight node run(s) and reconciled {Reconciled}.",
                 pass,
                 RecoveryPasses,
                 remaining.Count,
                 reconciled.Count);
-            remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
+            remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken);
         }
 
         if (remaining.Count > 0)

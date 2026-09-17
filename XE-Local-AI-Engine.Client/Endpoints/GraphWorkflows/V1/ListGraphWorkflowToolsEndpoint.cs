@@ -22,7 +22,7 @@ public sealed class ListGraphWorkflowToolsEndpoint(IToolInvocationService tools)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var invocable = await _tools.ListInvocableToolsAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListGraphWorkflowToolsResponse([.. invocable.Select(GraphWorkflowToolMapper.ToResponse)]), ct).ConfigureAwait(false);
+        var invocable = await _tools.ListInvocableToolsAsync(ct);
+        await Send.OkAsync(new ListGraphWorkflowToolsResponse([.. invocable.Select(GraphWorkflowToolMapper.ToResponse)]), ct);
     }
 }

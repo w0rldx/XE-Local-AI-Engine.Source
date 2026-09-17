@@ -39,7 +39,7 @@ public sealed class ValidateExecutableEndpointTests
             new
             {
                 path = "/usr/bin/list-things"
-            }).ConfigureAwait(false);
+            });
 
         AssertEx.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
@@ -55,7 +55,7 @@ public sealed class ValidateExecutableEndpointTests
             new
             {
                 path = "/usr/bin/list-things"
-            }).ConfigureAwait(false);
+            });
 
         // The desktop filter still leaves the POST unregistered, but 405 is no longer what an ANONYMOUS caller
         // sees: routing selects no endpoint for this verb, and the FallbackPolicy answers that case with a

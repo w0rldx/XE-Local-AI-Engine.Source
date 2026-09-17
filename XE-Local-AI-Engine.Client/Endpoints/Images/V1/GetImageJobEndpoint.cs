@@ -23,13 +23,13 @@ public sealed class GetImageJobEndpoint(IImageJobCoordinator coordinator)
 
     public override async Task HandleAsync(ImageJobRouteRequest req, CancellationToken ct)
     {
-        var view = await _coordinator.GetAsync(req.JobId, ct).ConfigureAwait(false);
+        var view = await _coordinator.GetAsync(req.JobId, ct);
         if (view is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(view.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(view.ToResponse(), ct);
     }
 }

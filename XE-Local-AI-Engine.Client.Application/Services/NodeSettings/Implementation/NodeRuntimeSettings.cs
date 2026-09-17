@@ -92,31 +92,31 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     }
 
     public async Task<string> GetDefaultModelNameAsync(CancellationToken cancellationToken = default) =>
-        ResolveDefaultModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveDefaultModelName(await LoadAsync(cancellationToken));
 
     public async Task<bool> GetEnableToolsAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         return stored.EnableTools ?? _enableToolsSeed;
     }
 
     public async Task<bool> GetCustomToolsEnabledAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         // No appsettings seed: a host-execution feature has no config-file default, so the fallback IS the hardcoded off.
         return stored.CustomToolsEnabled ?? StoredNodeSettings.DefaultCustomToolsEnabled;
     }
 
     public async Task<bool> GetToolRelevanceEnabledAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         // No appsettings seed: nothing sets Agent:ToolRelevance:Enabled, so the fallback IS the hardcoded off.
         return stored.ToolRelevanceEnabled ?? StoredNodeSettings.DefaultToolRelevanceEnabled;
     }
 
     public async Task<string?> GetExternalAccessProfileAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         // Verbatim, and deliberately NO fallback: null is the answer (undecided), not an absent value to be seeded.
         // Normalize has already nulled anything that is not one of the four literals.
         return stored.ExternalAccessProfile;
@@ -124,7 +124,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public async Task<bool> GetAutoCheckApplicationUpdatesAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         // No appsettings seed: nothing configures this, so the fallback IS the hardcoded on — an upgraded node whose
         // file predates the member keeps checking exactly as it did before.
         return stored.AutoCheckApplicationUpdates ?? StoredNodeSettings.DefaultAutoCheckApplicationUpdates;
@@ -132,113 +132,113 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public async Task<bool> GetAutoCheckRuntimeUpdatesAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         // No appsettings seed: nothing configures this, so the fallback IS the hardcoded on.
         return stored.AutoCheckRuntimeUpdates ?? StoredNodeSettings.DefaultAutoCheckRuntimeUpdates;
     }
 
     public async Task<bool> GetAutoProvisionFirstRunModelAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         // No appsettings seed of its own: FirstRunModel:Enabled is a SEPARATE, earlier gate, not this one's seed, so
         // the fallback IS the hardcoded on.
         return stored.AutoProvisionFirstRunModel ?? StoredNodeSettings.DefaultAutoProvisionFirstRunModel;
     }
 
     public async Task<IReadOnlyList<string>> GetToolCapableModelsAsync(CancellationToken cancellationToken = default) =>
-        ResolveToolCapableModels(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveToolCapableModels(await LoadAsync(cancellationToken));
 
     public async Task<string> GetOllamaEndpointAsync(CancellationToken cancellationToken = default) =>
-        ResolveOllamaEndpoint(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveOllamaEndpoint(await LoadAsync(cancellationToken));
 
     public async Task<string> GetHuggingFaceDefaultQuantAsync(CancellationToken cancellationToken = default) =>
-        ResolveHuggingFaceDefaultQuant(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveHuggingFaceDefaultQuant(await LoadAsync(cancellationToken));
 
     public async Task<long> GetHuggingFaceDiskMarginBytesAsync(CancellationToken cancellationToken = default) =>
-        ResolveHuggingFaceDiskMarginBytes(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveHuggingFaceDiskMarginBytes(await LoadAsync(cancellationToken));
 
     public async Task<int> GetLlamaMaxLoadedProcessesAsync(CancellationToken cancellationToken = default) =>
-        ResolveLlamaMaxLoadedProcesses(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveLlamaMaxLoadedProcesses(await LoadAsync(cancellationToken));
 
     public async Task<TimeSpan> GetLlamaIdleTimeToLiveAsync(CancellationToken cancellationToken = default) =>
-        ResolveLlamaIdleTimeToLive(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveLlamaIdleTimeToLive(await LoadAsync(cancellationToken));
 
     public async Task<bool> GetKeepModelWarmEnabledAsync(CancellationToken cancellationToken = default) =>
-        ResolveKeepModelWarmEnabled(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveKeepModelWarmEnabled(await LoadAsync(cancellationToken));
 
     public async Task<string?> GetKeepModelWarmModelNameAsync(CancellationToken cancellationToken = default) =>
-        ResolveKeepModelWarmModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveKeepModelWarmModelName(await LoadAsync(cancellationToken));
 
     public async Task<TimeSpan> GetKeepModelWarmIntervalAsync(CancellationToken cancellationToken = default) =>
-        ResolveKeepModelWarmInterval(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveKeepModelWarmInterval(await LoadAsync(cancellationToken));
 
     public async Task<int> GetMaxResponseSizeMbAsync(CancellationToken cancellationToken = default) =>
-        ResolveMaxResponseSizeMb(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveMaxResponseSizeMb(await LoadAsync(cancellationToken));
 
     public async Task<string> GetRecommendedLlamaCppTagAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         return StoredNodeSettings.IsValidRecommendedLlamaCppTag(stored.RecommendedLlamaCppTag)
             ? stored.RecommendedLlamaCppTag!
             : LlamaCppReleasePins.PinnedTag;
     }
 
     public async Task<int> GetOrchestrationIdleTimeoutSecondsAsync(CancellationToken cancellationToken = default) =>
-        ResolveOrchestrationIdleTimeoutSeconds(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveOrchestrationIdleTimeoutSeconds(await LoadAsync(cancellationToken));
 
     public async Task<int> GetAgentHomePrepareTimeoutSecondsAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         return stored.AgentHomePrepareTimeoutSeconds ?? _agentHomePrepareTimeoutSeed;
     }
 
     public async Task<int> GetAgentHomeCommandTimeoutSecondsAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         return stored.AgentHomeCommandTimeoutSeconds ?? _agentHomeCommandTimeoutSeed;
     }
 
     public async Task<long> GetAgentHomeMaxSelectedFolderBytesAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         return stored.AgentHomeMaxSelectedFolderBytes ?? _agentHomeMaxSelectedFolderBytesSeed;
     }
 
     public async Task<long> GetAgentHomeMaxPatchBytesAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadAsync(cancellationToken);
         return stored.AgentHomeMaxPatchBytes ?? _agentHomeMaxPatchBytesSeed;
     }
 
     public async Task<int> GetMaxPendingToolCallAgeMinutesAsync(CancellationToken cancellationToken = default) =>
-        ResolveMaxPendingToolCallAgeMinutes(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveMaxPendingToolCallAgeMinutes(await LoadAsync(cancellationToken));
 
     public async Task<int> GetDetachedGraceSecondsAsync(CancellationToken cancellationToken = default) =>
-        ResolveDetachedGraceSeconds(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveDetachedGraceSeconds(await LoadAsync(cancellationToken));
 
     public async Task<int> GetChatCacheReuseAsync(CancellationToken cancellationToken = default) =>
-        ResolveChatCacheReuse(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveChatCacheReuse(await LoadAsync(cancellationToken));
 
     public async Task<string> GetSpeculativeModeAsync(CancellationToken cancellationToken = default) =>
-        ResolveSpeculativeMode(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveSpeculativeMode(await LoadAsync(cancellationToken));
 
     public async Task<string> GetKvCacheTypeAsync(CancellationToken cancellationToken = default) =>
-        ResolveKvCacheType(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveKvCacheType(await LoadAsync(cancellationToken));
 
     public async Task<string?> GetSpeculativeDraftModelNameAsync(CancellationToken cancellationToken = default) =>
-        ResolveSpeculativeDraftModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveSpeculativeDraftModelName(await LoadAsync(cancellationToken));
 
     public async Task<int> GetSpeculativeDraftMaxTokensAsync(CancellationToken cancellationToken = default) =>
-        ResolveSpeculativeDraftMaxTokens(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveSpeculativeDraftMaxTokens(await LoadAsync(cancellationToken));
 
     public async Task<int?> GetSpeculativeDraftGpuLayersAsync(CancellationToken cancellationToken = default) =>
-        ResolveSpeculativeDraftGpuLayers(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveSpeculativeDraftGpuLayers(await LoadAsync(cancellationToken));
 
     public async Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default) =>
-        ResolveRerankerModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveRerankerModelName(await LoadAsync(cancellationToken));
 
     public async Task<string?> GetAutoEffortFastModelNameAsync(CancellationToken cancellationToken = default) =>
-        ResolveAutoEffortFastModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+        ResolveAutoEffortFastModelName(await LoadAsync(cancellationToken));
 
     public string GetDefaultModelName() =>
         ResolveDefaultModelName(LoadStored());
@@ -377,7 +377,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     {
         // The production stores never return null; coalesce defensively so a substitute that leaves a load unconfigured
         // (returns null) degrades to the seed/default precedence instead of throwing on a null stored object.
-        return await _store.LoadAsync(cancellationToken).ConfigureAwait(false) ?? new StoredNodeSettings();
+        return await _store.LoadAsync(cancellationToken) ?? new StoredNodeSettings();
     }
 
     // The synchronous property readers above cannot await, so they go through NodeSettingsStore.Load — the

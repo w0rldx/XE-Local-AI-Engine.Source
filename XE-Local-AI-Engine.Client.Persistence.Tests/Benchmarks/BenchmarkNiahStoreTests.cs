@@ -33,18 +33,17 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     [Test]
     public async Task CreateTaskItem_WithChildren_WritesTheGeneratorAndItsCasesInOneTransaction()
     {
-        var (context, store) = await CreateStoreAsync("niah-create.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("niah-create.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]);
         var probeId = Guid.NewGuid();
 
         var probe = await store.CreateTaskItemAsync(project.Id,
                                    project.Version,
                                    Probe(probeId),
-                                   [Case(probeId, "case-a"), Case(probeId, "case-b"), Case(probeId, "case-c")])
-                               .ConfigureAwait(false);
+                                   [Case(probeId, "case-a"), Case(probeId, "case-b"), Case(probeId, "case-c")]);
 
-        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var items = await store.ListTaskItemsAsync(project.Id);
         AssertEx.Equal(expected: 5, items.Count, "One authored prompt, one generator, three cases.");
         AssertEx.Equal(expected: 4, items.Count(static item => item.IsLeaf), "The generator is NOT one of the leaves a freeze fans out over.");
         AssertEx.Equal(expected: 3, items.Count(item => item.ParentItemId == probe.Id));
@@ -62,15 +61,15 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     [Test]
     public async Task CreateTaskItem_WithChildren_MovesTheItemSetHash()
     {
-        var (context, store) = await CreateStoreAsync("niah-set-hash.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("niah-set-hash.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]);
         var before = AssertEx.NotNull(project.TaskItemSetHash);
         var probeId = Guid.NewGuid();
 
-        _ = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a")]).ConfigureAwait(false);
+        _ = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a")]);
 
-        var after = AssertEx.NotNull((await store.GetProjectAsync(project.Id).ConfigureAwait(false))!.TaskItemSetHash);
+        var after = AssertEx.NotNull((await store.GetProjectAsync(project.Id))!.TaskItemSetHash);
         AssertEx.True(!string.Equals(before, after, StringComparison.Ordinal), "A project that asks a new question is a project with a different score.");
     }
 
@@ -81,17 +80,15 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     [Test]
     public async Task UpdateTaskItem_WithChildren_ReplacesTheOldCases()
     {
-        var (context, store) = await CreateStoreAsync("niah-update.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("niah-update.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]);
         var probeId = Guid.NewGuid();
-        var probe = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "old-a"), Case(probeId, "old-b")])
-                               .ConfigureAwait(false);
+        var probe = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "old-a"), Case(probeId, "old-b")]);
 
-        _ = await store.UpdateTaskItemAsync(project.Id, probe.Id, probe.Version, Probe(probeId, "revised probe"), [Case(probeId, "new-a")])
-                       .ConfigureAwait(false);
+        _ = await store.UpdateTaskItemAsync(project.Id, probe.Id, probe.Version, Probe(probeId, "revised probe"), [Case(probeId, "new-a")]);
 
-        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var items = await store.ListTaskItemsAsync(project.Id);
         var cases = items.Where(item => item.ParentItemId == probe.Id).ToArray();
         AssertEx.Equal(expected: 1, cases.Length, "Two cases were replaced by one; nothing is left over.");
         AssertEx.Equal("new-a", Encoding.UTF8.GetString(cases[0].PromptJson.Span));
@@ -106,16 +103,15 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     [Test]
     public async Task DeleteTaskItem_TakesTheGeneratorsCasesWithIt()
     {
-        var (context, store) = await CreateStoreAsync("niah-delete.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("niah-delete.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]);
         var probeId = Guid.NewGuid();
-        var probe = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a"), Case(probeId, "case-b")])
-                               .ConfigureAwait(false);
+        var probe = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a"), Case(probeId, "case-b")]);
 
-        await store.DeleteTaskItemAsync(project.Id, probe.Id, probe.Version).ConfigureAwait(false);
+        await store.DeleteTaskItemAsync(project.Id, probe.Id, probe.Version);
 
-        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var items = await store.ListTaskItemsAsync(project.Id);
         AssertEx.Equal(expected: 1, items.Count, "The generator and both of its cases are gone; the authored prompt remains.");
         AssertEx.Equal("authored", Encoding.UTF8.GetString(items[0].PromptJson.Span));
     }
@@ -127,19 +123,18 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     [Test]
     public async Task ReorderTaskItems_WithCasesPresent_LeavesTheItemSetHashAlone()
     {
-        var (context, store) = await CreateStoreAsync("niah-reorder.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("niah-reorder.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]);
         var probeId = Guid.NewGuid();
-        _ = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a"), Case(probeId, "case-b")])
-                       .ConfigureAwait(false);
-        var before = AssertEx.NotNull((await store.GetProjectAsync(project.Id).ConfigureAwait(false))!.TaskItemSetHash);
-        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        _ = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a"), Case(probeId, "case-b")]);
+        var before = AssertEx.NotNull((await store.GetProjectAsync(project.Id))!.TaskItemSetHash);
+        var items = await store.ListTaskItemsAsync(project.Id);
 
-        var reordered = await store.ReorderTaskItemsAsync(project.Id, [.. items.Select(static item => item.Id).Reverse()]).ConfigureAwait(false);
+        var reordered = await store.ReorderTaskItemsAsync(project.Id, [.. items.Select(static item => item.Id).Reverse()]);
 
         AssertEx.Equal(expected: 4, reordered.Count);
-        AssertEx.Equal(before, (await store.GetProjectAsync(project.Id).ConfigureAwait(false))!.TaskItemSetHash,
+        AssertEx.Equal(before, (await store.GetProjectAsync(project.Id))!.TaskItemSetHash,
             "Reordering asks the same questions, so it must not unrank the answers to them.");
     }
 
@@ -151,21 +146,20 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     [Test]
     public async Task ACellOfOnlyDisplayOnlyLeaves_IsUnrankedAsNoScore_NotItemIncomplete()
     {
-        var (context, store) = await CreateStoreAsync("niah-only-project.sqlite").ConfigureAwait(false);
+        var (context, store) = await CreateStoreAsync("niah-only-project.sqlite");
         await using var scope = context;
-        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]).ConfigureAwait(false);
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]);
         var probeId = Guid.NewGuid();
-        _ = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a"), Case(probeId, "case-b")])
-                       .ConfigureAwait(false);
+        _ = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a"), Case(probeId, "case-b")]);
 
         // Leaving only the two cases behind: every remaining leaf is excluded from the mean.
-        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var items = await store.ListTaskItemsAsync(project.Id);
         var authored = items.Single(static item => string.Equals(item.Kind, BenchmarkTaskItemKinds.Prompt, StringComparison.Ordinal));
-        await store.DeleteTaskItemAsync(project.Id, authored.Id, authored.Version).ConfigureAwait(false);
+        await store.DeleteTaskItemAsync(project.Id, authored.Id, authored.Version);
 
-        var runIds = await ScoredCellAsync(store, project.Id, 100, 0).ConfigureAwait(false);
+        var runIds = await ScoredCellAsync(store, project.Id, 100, 0);
 
-        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 50).ConfigureAwait(false);
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 50);
         var byId = page.Items.ToDictionary(static run => run.Id);
         AssertEx.Equal(BenchmarkRunJudgeStates.ReasonNoScore, byId[runIds[0]].Judge!.RankExclusionReason,
             "Nothing here is scored, and there is no missing item to re-run.");
@@ -179,8 +173,8 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     /// <summary>One freeze of every leaf into one cell, drained in insert order and scored by the operator.</summary>
     private static async Task<IReadOnlyList<Guid>> ScoredCellAsync(BenchmarkStore store, Guid projectId, params int[] scores)
     {
-        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false));
-        var leaves = (await store.ListTaskItemsAsync(projectId).ConfigureAwait(false)).Where(static item => item.IsLeaf).ToArray();
+        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId));
+        var leaves = (await store.ListTaskItemsAsync(projectId)).Where(static item => item.IsLeaf).ToArray();
         var key = "cell:" + Guid.NewGuid().ToString("D") + ":1";
         var runs = await store.StartRunsAsync([
             .. leaves.Select(item => NewRun(project) with
@@ -191,18 +185,18 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
                 TaskInputHash = item.InputHash,
                 TaskItemSetHash = project.TaskItemSetHash
             })
-        ], project.Version).ConfigureAwait(false);
+        ], project.Version);
 
         var ids = new List<Guid>(runs.Count);
         for (var index = 0; index < runs.Count; index++)
         {
-            var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+            var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
             var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(claimed.RunId, claimed.Run.Version,
                     Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), 1, 4096, 10, 12, 120) with
                 {
                     PrimaryStopReason = "stop"
-                }).ConfigureAwait(false);
-            _ = await store.SetUserScoreAsync(claimed.RunId, scores[index], succeeded.Version).ConfigureAwait(false);
+                });
+            _ = await store.SetUserScoreAsync(claimed.RunId, scores[index], succeeded.Version);
             ids.Add(claimed.RunId);
         }
 
@@ -237,8 +231,8 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     {
         _ = Directory.CreateDirectory(_rootPath);
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
-        _ = await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureDeletedAsync();
+        _ = await context.Database.EnsureCreatedAsync();
         return (context, new BenchmarkStore(context, TimeProvider.System));
     }
 }

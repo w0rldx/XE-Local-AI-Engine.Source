@@ -31,14 +31,14 @@ public sealed class UpdateSuggestedPlaybookActionEndpoint(IPlaybookActionService
                 req.TriggerCondition,
                 req.Scope,
                 req.Priority),
-            ct).ConfigureAwait(false);
+            ct);
 
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

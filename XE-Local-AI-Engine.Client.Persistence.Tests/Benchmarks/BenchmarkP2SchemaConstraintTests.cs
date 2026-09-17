@@ -21,30 +21,27 @@ public sealed class BenchmarkP2SchemaConstraintTests
     [Test]
     public async Task Comparison_NonCanonicalPairOrder_IsRejectedByTheCheck()
     {
-        await using var probe = await SeedAsync("p2-pair-order.sqlite").ConfigureAwait(false);
+        await using var probe = await SeedAsync("p2-pair-order.sqlite");
 
-        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Queued").ConfigureAwait(false);
+        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Queued");
 
         // Reversed, the SAME comparison would occupy a second slot no index could join to the first.
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertComparisonAsync(probe, Guid.NewGuid(), RunB, RunA, order: 0, attemptSequence: 1, status: "Queued"),
-                              "run_a_id must be the smaller id — the canonical ordering is a database invariant, not a planner convention.")
-                          .ConfigureAwait(false);
+                              "run_a_id must be the smaller id — the canonical ordering is a database invariant, not a planner convention.");
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 2, attemptSequence: 1, status: "Queued"),
-                              "Only the two presentation orders exist; position swap is the whole point.")
-                          .ConfigureAwait(false);
+                              "Only the two presentation orders exist; position swap is the whole point.");
     }
 
     [Test]
     public async Task Comparison_SecondLiveRowForOneSlot_IsRejected()
     {
-        await using var probe = await SeedAsync("p2-slot-live.sqlite").ConfigureAwait(false);
+        await using var probe = await SeedAsync("p2-slot-live.sqlite");
 
-        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Queued").ConfigureAwait(false);
+        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Queued");
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 2, status: "Queued"),
-                              "One live-or-successful comparison per slot: two would both be fitted and the pair would count twice.")
-                          .ConfigureAwait(false);
+                              "One live-or-successful comparison per slot: two would both be fitted and the pair would count twice.");
     }
 
     /// <summary>
@@ -54,41 +51,38 @@ public sealed class BenchmarkP2SchemaConstraintTests
     [Test]
     public async Task Comparison_FailedSlot_CanBeReEnqueuedAtTheNextAttemptSequence()
     {
-        await using var probe = await SeedAsync("p2-slot-retry.sqlite").ConfigureAwait(false);
+        await using var probe = await SeedAsync("p2-slot-retry.sqlite");
 
-        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Failed").ConfigureAwait(false);
-        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 2, status: "Cancelled").ConfigureAwait(false);
-        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 3, status: "Queued").ConfigureAwait(false);
+        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Failed");
+        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 2, status: "Cancelled");
+        await InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 3, status: "Queued");
 
-        var live = await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_comparisons WHERE status IN ('Queued', 'Running', 'Succeeded');").ConfigureAwait(false);
+        var live = await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_comparisons WHERE status IN ('Queued', 'Running', 'Succeeded');");
         AssertEx.Equal(expected: 1L, Convert.ToInt64(live, CultureInfo.InvariantCulture), "Exactly one attempt is live after two terminal failures.");
 
         // The per-attempt index still separates them, so the history of the slot survives the retries.
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertComparisonAsync(probe, Guid.NewGuid(), RunA, RunB, order: 0, attemptSequence: 1, status: "Failed"),
-                              "Re-using an attempt sequence would overwrite a slot's history.")
-                          .ConfigureAwait(false);
+                              "Re-using an attempt sequence would overwrite a slot's history.");
     }
 
     [Test]
     public async Task PairwiseFit_SecondActiveRowInOneScope_IsRejectedByTheIndex()
     {
-        await using var probe = await SeedAsync("p2-fit-pointer.sqlite").ConfigureAwait(false);
+        await using var probe = await SeedAsync("p2-fit-pointer.sqlite");
 
-        await InsertFitAsync(probe, "v1:aaa", isActive: true).ConfigureAwait(false);
-        await InsertFitAsync(probe, "v1:bbb", isActive: false).ConfigureAwait(false);
+        await InsertFitAsync(probe, "v1:aaa", isActive: true);
+        await InsertFitAsync(probe, "v1:bbb", isActive: false);
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertFitAsync(probe, "v1:ccc", isActive: true),
-                              "At most one active fit per (revision, generation, case) — a second one is a ranking that blends two fits.")
-                          .ConfigureAwait(false);
+                              "At most one active fit per (revision, generation, case) — a second one is a ranking that blends two fits.");
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertFitAsync(probe, "v1:aaa", isActive: false),
-                              "The fit key is unique, so a duplicate publication violates and no-ops rather than minting a second fit of the same thing.")
-                          .ConfigureAwait(false);
+                              "The fit key is unique, so a duplicate publication violates and no-ops rather than minting a second fit of the same thing.");
     }
 
     private static async Task<MigrationSchemaProbe> SeedAsync(string fileName)
     {
-        var probe = await MigrationSchemaProbe.FromChatTemplateAsync(fileName).ConfigureAwait(false);
+        var probe = await MigrationSchemaProbe.FromChatTemplateAsync(fileName);
         await probe.ExecuteAsync("""
                                  INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
                                  VALUES ($project, 'p2-constraints', x'00', 4096, $agent, 1, 1, 1);

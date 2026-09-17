@@ -21,7 +21,7 @@ public sealed class ExternalAppEntityConfigurationTests
     public async Task InstanceTable_MapsEveryColumnToItsSnakeCaseName()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var expected = new[]
         {
@@ -59,7 +59,7 @@ public sealed class ExternalAppEntityConfigurationTests
     public async Task EventTable_MapsEveryColumnToItsSnakeCaseName()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var expected = new[]
         {
@@ -79,10 +79,10 @@ public sealed class ExternalAppEntityConfigurationTests
     public async Task StatusDesiredStateFailureCategoryAndKind_AreStoredAsText()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = new ExternalAppInstanceStore(context);
         var command = ExternalAppTestFixture.Create();
-        var created = await store.CreateAsync(command).ConfigureAwait(false);
+        var created = await store.CreateAsync(command);
         _ = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(command.Id,
                            created.Version,
                            new HashSet<ExternalAppInstanceStatus>
@@ -95,32 +95,31 @@ public sealed class ExternalAppEntityConfigurationTests
                            OccurredAtUtc: 2_000,
                            ExternalAppDesiredState.Running,
                            FailureCategory: ExternalAppFailureCategory.ImagePullFailed,
-                           FailureSummary: "The image could not be pulled at its pinned digest."))
-                       .ConfigureAwait(false);
+                           FailureSummary: "The image could not be pulled at its pinned digest."));
 
         // Text rather than the ordinal: an enum stored as a number silently re-labels every existing row the day a
         // member is inserted in the middle, and these values are read by operators in the database file.
-        AssertEx.Equal("Failed", await ScalarTextAsync(fixture, "SELECT status FROM external_app_instances;").ConfigureAwait(false));
-        AssertEx.Equal("Running", await ScalarTextAsync(fixture, "SELECT desired_state FROM external_app_instances;").ConfigureAwait(false));
-        AssertEx.Equal("ImagePullFailed", await ScalarTextAsync(fixture, "SELECT failure_category FROM external_app_instances;").ConfigureAwait(false));
-        AssertEx.Equal("Failed", await ScalarTextAsync(fixture, "SELECT kind FROM external_app_instance_events WHERE sequence = 2;").ConfigureAwait(false));
+        AssertEx.Equal("Failed", await ScalarTextAsync(fixture, "SELECT status FROM external_app_instances;"));
+        AssertEx.Equal("Running", await ScalarTextAsync(fixture, "SELECT desired_state FROM external_app_instances;"));
+        AssertEx.Equal("ImagePullFailed", await ScalarTextAsync(fixture, "SELECT failure_category FROM external_app_instances;"));
+        AssertEx.Equal("Failed", await ScalarTextAsync(fixture, "SELECT kind FROM external_app_instance_events WHERE sequence = 2;"));
     }
 
     [Test]
     public async Task NeedsRecreate_DefaultsToFalseAndRoundTrips()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = new ExternalAppInstanceStore(context);
         var command = ExternalAppTestFixture.Create();
-        var created = await store.CreateAsync(command).ConfigureAwait(false);
+        var created = await store.CreateAsync(command);
 
-        AssertEx.Equal(expected: 0L, Convert.ToInt64(await fixture.RawScalarAsync("SELECT needs_recreate FROM external_app_instances;").ConfigureAwait(false),
+        AssertEx.Equal(expected: 0L, Convert.ToInt64(await fixture.RawScalarAsync("SELECT needs_recreate FROM external_app_instances;"),
             CultureInfo.InvariantCulture));
 
-        _ = await store.UpdateVariablesAsync(command.Id, created.Version, """{"ODYSSEUS_ADMIN_PASSWORD":"rotated"}""", updatedAtUtc: 3_000).ConfigureAwait(false);
+        _ = await store.UpdateVariablesAsync(command.Id, created.Version, """{"ODYSSEUS_ADMIN_PASSWORD":"rotated"}""", updatedAtUtc: 3_000);
 
-        AssertEx.Equal(expected: 1L, Convert.ToInt64(await fixture.RawScalarAsync("SELECT needs_recreate FROM external_app_instances;").ConfigureAwait(false),
+        AssertEx.Equal(expected: 1L, Convert.ToInt64(await fixture.RawScalarAsync("SELECT needs_recreate FROM external_app_instances;"),
             CultureInfo.InvariantCulture));
     }
 
@@ -128,9 +127,9 @@ public sealed class ExternalAppEntityConfigurationTests
     public async Task EventSequence_IsUniquePerInstance()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var command = ExternalAppTestFixture.Create();
-        _ = await new ExternalAppInstanceStore(context).CreateAsync(command).ConfigureAwait(false);
+        _ = await new ExternalAppInstanceStore(context).CreateAsync(command);
 
         _ = context.ExternalAppInstanceEvents.Add(new ExternalAppInstanceEvent
         {
@@ -142,7 +141,7 @@ public sealed class ExternalAppEntityConfigurationTests
             OccurredAtUtc = 2_000
         });
 
-        var failure = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync()).ConfigureAwait(false);
+        var failure = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
         _ = AssertEx.NotNull(failure.InnerException as SqliteException,
             "A duplicate (instance_id, sequence) means two writers minted the same sequence — a bug the database has to refuse, not a race to swallow.");
     }
@@ -151,7 +150,7 @@ public sealed class ExternalAppEntityConfigurationTests
     public async Task Version_IsAConcurrencyToken()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var property = AssertEx.NotNull(context.Model.FindEntityType(typeof(ExternalAppInstance))?.FindProperty(nameof(ExternalAppInstance.Version)));
 
@@ -170,5 +169,5 @@ public sealed class ExternalAppEntityConfigurationTests
     }
 
     private static async Task<string> ScalarTextAsync(ExternalAppTestFixture fixture, string sql) =>
-        AssertEx.NotNull(await fixture.RawScalarAsync(sql).ConfigureAwait(false) as string, $"'{sql}' returned no text.");
+        AssertEx.NotNull(await fixture.RawScalarAsync(sql) as string, $"'{sql}' returned no text.");
 }

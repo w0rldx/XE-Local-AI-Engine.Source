@@ -28,7 +28,7 @@ public sealed class EmbeddingModelResolverTests
         var provider = ProviderWithModels(Descriptor("nomic-embed-text"), Descriptor("qwen2.5:Q4_K_M"));
         var resolver = CreateResolver();
 
-        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.True(resolution.IsConfident, "An exact configured-name match is a confident resolution.");
@@ -42,7 +42,7 @@ public sealed class EmbeddingModelResolverTests
             Descriptor("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M"));
         var resolver = CreateResolver();
 
-        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
 
         AssertEx.Equal("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M", resolution.Name);
         AssertEx.True(resolution.IsConfident, "A matched embedding GGUF fallback is still a confident resolution.");
@@ -55,7 +55,7 @@ public sealed class EmbeddingModelResolverTests
             Descriptor("bge-small:Q4"));
         var resolver = CreateResolver();
 
-        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
 
         // Deterministic ordinal-ignore-case order: "bge-small:Q4" sorts before "mxbai-embed-large:Q8_0".
         AssertEx.Equal("bge-small:Q4", resolution.Name);
@@ -69,8 +69,8 @@ public sealed class EmbeddingModelResolverTests
         var replacement = ProviderWithModels(Descriptor("nomic-embed-text", revisionFingerprint: "sha256:replacement"));
         var resolver = CreateResolver();
 
-        var first = await resolver.ResolveAsync(original, CancellationToken.None).ConfigureAwait(false);
-        var second = await resolver.ResolveAsync(replacement, CancellationToken.None).ConfigureAwait(false);
+        var first = await resolver.ResolveAsync(original, CancellationToken.None);
+        var second = await resolver.ResolveAsync(replacement, CancellationToken.None);
 
         AssertEx.Equal(first.Name, second.Name, "The installed model name intentionally remains stable.");
         AssertEx.NotEqual(first.RevisionFingerprint, second.RevisionFingerprint,
@@ -90,8 +90,8 @@ public sealed class EmbeddingModelResolverTests
             revisionFingerprint: "sha256:same-content"));
         var resolver = CreateResolver();
 
-        var first = await resolver.ResolveAsync(firstInventory, CancellationToken.None).ConfigureAwait(false);
-        var refreshed = await resolver.ResolveAsync(refreshedInventory, CancellationToken.None).ConfigureAwait(false);
+        var first = await resolver.ResolveAsync(firstInventory, CancellationToken.None);
+        var refreshed = await resolver.ResolveAsync(refreshedInventory, CancellationToken.None);
 
         AssertEx.Equal(first.RevisionFingerprint, refreshed.RevisionFingerprint,
             "An immutable provider digest is authoritative; mutable inventory metadata must not churn the vector identity.");
@@ -103,7 +103,7 @@ public sealed class EmbeddingModelResolverTests
         var provider = ProviderWithModels(Descriptor("qwen2.5:Q4_K_M"), Descriptor("llama-3.1-8b-instruct:Q6_K"));
         var resolver = CreateResolver();
 
-        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.False(resolution.IsConfident, "Nothing installed matched, so this is a bare fallback, not a real resolution.");
@@ -115,7 +115,7 @@ public sealed class EmbeddingModelResolverTests
         var provider = ProviderWithModels();
         var resolver = CreateResolver();
 
-        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.False(resolution.IsConfident);
@@ -129,7 +129,7 @@ public sealed class EmbeddingModelResolverTests
                 .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new HttpRequestException("provider down"));
         var resolver = CreateResolver();
 
-        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.False(resolution.IsConfident, "A transport failure is a degrade, not a real resolution.");
@@ -141,13 +141,13 @@ public sealed class EmbeddingModelResolverTests
         // A genuine caller cancellation (the token that fired IS the caller's token) must propagate — it is not a
         // transport timeout and must not be swallowed into a silent "degrade to configured name".
         using var cts = new CancellationTokenSource();
-        await cts.CancelAsync().ConfigureAwait(false);
+        await cts.CancelAsync();
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ListModelsAsync(Arg.Any<CancellationToken>())
                 .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new OperationCanceledException(cts.Token));
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => resolver.ResolveAsync(provider, cts.Token)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => resolver.ResolveAsync(provider, cts.Token));
     }
 
     [Test]
@@ -161,7 +161,7 @@ public sealed class EmbeddingModelResolverTests
                 .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new TaskCanceledException("provider request timed out"));
         var resolver = CreateResolver();
 
-        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None).ConfigureAwait(false);
+        var resolution = await resolver.ResolveAsync(provider, CancellationToken.None);
 
         AssertEx.Equal(ConfiguredName, resolution.Name);
         AssertEx.False(resolution.IsConfident, "A request timeout is a degrade, not a real resolution.");

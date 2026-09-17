@@ -31,7 +31,7 @@ internal static class StartupCrashLog
             Directory.CreateDirectory(directory);
             var line = string.Create(CultureInfo.InvariantCulture,
                 $"[{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff zzz}] {message}{Environment.NewLine}");
-            await File.AppendAllTextAsync(Path.Combine(directory, LogFileName), line, cancellationToken).ConfigureAwait(false);
+            await File.AppendAllTextAsync(Path.Combine(directory, LogFileName), line, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
                                               or ArgumentException or NotSupportedException)

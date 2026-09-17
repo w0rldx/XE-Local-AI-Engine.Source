@@ -19,10 +19,8 @@ public sealed partial class DevelopmentStore
             async () =>
             {
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.TaskId && entity.ProjectId == command.ProjectId, cancellationToken)
-                                           .ConfigureAwait(false)
                            ?? throw new DevelopmentNotFoundException($"Development task '{command.TaskId}' was not found.");
-                if (command.AttemptId is { } attemptId && !await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id, cancellationToken)
-                                                                           .ConfigureAwait(false))
+                if (command.AttemptId is { } attemptId && !await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id, cancellationToken))
                 {
                     throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
                 }
@@ -41,9 +39,9 @@ public sealed partial class DevelopmentStore
                     version: 1,
                     command.ArtifactId,
                     detailJson: null,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> RecordWorkspaceSecretsAsync(Guid taskId,
@@ -57,7 +55,7 @@ public sealed partial class DevelopmentStore
             throw new ArgumentException("A workspace-secret event must name at least one path.", nameof(repositoryRelativePaths));
         }
 
-        var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken);
 
         // Keyed on the ATTEMPT id rather than a fresh operation id, which is what makes it idempotent: a task's
         // workspace is prepared once by the coder and again by validation, and the same finding recorded twice would
@@ -67,7 +65,7 @@ public sealed partial class DevelopmentStore
             WorkspaceSecretsOperationPhase,
             async () =>
             {
-                if (!await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.Id == attemptId && entity.TaskId == taskId, cancellationToken).ConfigureAwait(false))
+                if (!await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.Id == attemptId && entity.TaskId == taskId, cancellationToken))
                 {
                     throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
                 }
@@ -83,9 +81,9 @@ public sealed partial class DevelopmentStore
                     version: 1,
                     artifactId: null,
                     JsonSerializer.SerializeToUtf8Bytes(repositoryRelativePaths, JsonOptions),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> RecordWorkflowPolicyAsync(Guid taskId,
@@ -108,7 +106,7 @@ public sealed partial class DevelopmentStore
                 nameof(ruleSets));
         }
 
-        var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken);
 
         // Keyed on the caller's own deterministic operation id, which is what makes it idempotent: a workflow re-binds
         // its node run to the same task after a crash, and the same policy recorded twice would read as two separate
@@ -127,29 +125,28 @@ public sealed partial class DevelopmentStore
                 version: 1,
                 artifactId: null,
                 JsonSerializer.SerializeToUtf8Bytes(new WorkflowPolicyDetail(policyText, ruleSets), JsonOptions),
-                cancellationToken).ConfigureAwait(false),
-            cancellationToken).ConfigureAwait(false);
+                cancellationToken),
+            cancellationToken);
     }
 
     public async Task<int> ReconcileRunningAttemptsAsync(string sanitizedReason, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var attempts = await _dbContext.DevelopmentAttempts.Where(entity => entity.Status == DevelopmentAttemptStatus.Running)
                                        .OrderBy(entity => entity.StartedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         if (attempts.Count == 0)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken);
             return 0;
         }
 
         foreach (var attempt in attempts)
         {
-            var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == attempt.TaskId, cancellationToken).ConfigureAwait(false);
+            var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == attempt.TaskId, cancellationToken);
             var operationId = attempt.Id;
-            if (await FindOperationCoreAsync(task.ProjectId, operationId, StartupOperationPhase, cancellationToken).ConfigureAwait(false) is not null)
+            if (await FindOperationCoreAsync(task.ProjectId, operationId, StartupOperationPhase, cancellationToken) is not null)
             {
                 continue;
             }
@@ -169,18 +166,18 @@ public sealed partial class DevelopmentStore
                 attempt.Version,
                 artifactId: null,
                 detailJson: null,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
 
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return attempts.Count;
         }
         catch (DbUpdateConcurrencyException exception)
         {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            await transaction.RollbackAsync(CancellationToken.None);
             throw new DevelopmentConcurrencyException("Concurrent startup reconciliation won the optimistic concurrency race.", exception);
         }
     }
@@ -195,8 +192,7 @@ public sealed partial class DevelopmentStore
                                               entity.Id,
                                               entity.Version
                                           })
-                                          .ToListAsync(cancellationToken)
-                                          .ConfigureAwait(false);
+                                          .ToListAsync(cancellationToken);
         var reconciled = 0;
         foreach (var validation in validations)
         {
@@ -206,8 +202,7 @@ public sealed partial class DevelopmentStore
                             validation.Id,
                             validation.Version,
                             sanitizedReason),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                        cancellationToken);
                 reconciled++;
             }
             catch (DevelopmentConcurrencyException)
@@ -239,7 +234,7 @@ public sealed partial class DevelopmentStore
             DevelopmentOperationPhases.ApplyStarted,
             async () =>
             {
-                var task = await LoadApplyTaskAsync(subject, cancellationToken).ConfigureAwait(false);
+                var task = await LoadApplyTaskAsync(subject, cancellationToken);
                 EnsureVersion(task.Version, subject.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.AwaitingApply
                     || string.IsNullOrWhiteSpace(subject.SubjectHash)
@@ -260,9 +255,9 @@ public sealed partial class DevelopmentStore
                     task.Version,
                     artifactId: null,
                     detail,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> CompleteApplyAsync(Guid operationId,
@@ -275,7 +270,7 @@ public sealed partial class DevelopmentStore
             DevelopmentOperationPhases.ApplyCompleted,
             async () =>
             {
-                var task = await LoadApplyTaskAsync(subject, cancellationToken).ConfigureAwait(false);
+                var task = await LoadApplyTaskAsync(subject, cancellationToken);
                 EnsureVersion(task.Version, subject.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.AwaitingApply)
                 {
@@ -301,9 +296,9 @@ public sealed partial class DevelopmentStore
                     task.Version,
                     artifactId: null,
                     detailJson: null,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     public async Task<DevelopmentOperationResult> BlockApplyAsync(Guid operationId,
@@ -318,7 +313,7 @@ public sealed partial class DevelopmentStore
             DevelopmentOperationPhases.ApplyBlocked,
             async () =>
             {
-                var task = await LoadApplyTaskAsync(subject, cancellationToken).ConfigureAwait(false);
+                var task = await LoadApplyTaskAsync(subject, cancellationToken);
                 if (task.Status != DevelopmentTaskStatus.Blocked)
                 {
                     task.Status = DevelopmentTaskStatus.Blocked;
@@ -342,8 +337,8 @@ public sealed partial class DevelopmentStore
                     {
                         reason = sanitizedReason
                     }, JsonOptions)),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

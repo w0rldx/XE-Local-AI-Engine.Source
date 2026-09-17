@@ -30,37 +30,37 @@ public sealed class DevWorkflowFixLoopTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing());
         harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoop, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoop, developmentProjectId: DevelopmentProjectId);
 
         // Round one: the implementation lands, both checks run, and the test fails.
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        var firstSession = await harness.ReadSessionIdAsync(runId, "implement").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var firstSession = await harness.ReadSessionIdAsync(runId, "implement");
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var routed = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "node.retry.routed");
+        var routed = (await harness.ReadEventsAsync(runId)).Single(static entry => entry.EventType == "node.retry.routed");
         AssertEx.Contains(AssertEx.NotNull(routed.DetailJson), "\"from\":\"test\"");
         AssertEx.Contains(AssertEx.NotNull(routed.DetailJson), "\"to\":\"implement\"");
         AssertEx.Contains(AssertEx.NotNull(routed.DetailJson), "ToolCommandFailed");
 
-        var implement = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implement = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(expected: 2, implement.Attempt, "the node that failed is not the node that is re-attempted.");
         AssertEx.NotEqual(firstSession,
-            await harness.ReadSessionIdAsync(runId, "implement").ConfigureAwait(false),
+            await harness.ReadSessionIdAsync(runId, "implement"),
             "a re-run target drives a NEW session, so it does not resume what it did last time.");
 
-        var lint = await harness.ReadNodeRunAsync(runId, "lint").ConfigureAwait(false);
+        var lint = await harness.ReadNodeRunAsync(runId, "lint");
         AssertEx.Equal(expected: 2, lint.Attempt, "a SUCCEEDED sibling is reset too: its answer was about an implementation that is being replaced.");
-        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "test").ConfigureAwait(false)).Attempt);
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "test")).Attempt);
         AssertEx.Equal(expected: 1,
-            (await harness.ReadNodeRunAsync(runId, "join").ConfigureAwait(false)).Attempt,
+            (await harness.ReadNodeRunAsync(runId, "join")).Attempt,
             "a node run that never started needs no reset, and an attempt recorded on it would be one the run never made.");
 
         // Round two: the same graph runs forward again through the edges it already had.
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
         AssertEx.Equal(expected: 2, harness.Tools.Ran.Count(static nodeKey => nodeKey == "lint"), "the lint really did run again.");
         AssertEx.Equal(expected: 2, harness.Tools.Ran.Count(static nodeKey => nodeKey == "test"));
         AssertEx.Equal(expected: 2, harness.Agent.Created.Count, "one session per round of the loop.");
@@ -76,13 +76,13 @@ public sealed class DevWorkflowFixLoopTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing());
         harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoop, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoop, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var implement = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var implement = await harness.ReadNodeRunAsync(runId, "implement");
         var input = AssertEx.NotNull(implement.InputJson);
         AssertEx.Contains(input, "\"priorFailureNode\":\"test\"");
         AssertEx.Contains(input, "\"testsFailed\":3", message: "the failing node's own output document is what travels, counts and all.");
@@ -104,22 +104,21 @@ public sealed class DevWorkflowFixLoopTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Passing());
         harness.Tools.Answer("verify", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FixLoopOverAConsumedArtifact, developmentProjectId: DevelopmentProjectId)
-                                 .ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FixLoopOverAConsumedArtifact, developmentProjectId: DevelopmentProjectId);
 
         // Round one: validate reports, the agent consumes that report and writes one of its own, and verify fails.
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
-        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "summarize").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId);
+        var consumed = await harness.ReadConsumedArtifactIdsAsync(runId, "summarize");
         AssertEx.Equal(expected: 1, consumed.Count, "the agent node recorded what it was given, which is what makes the staleness rule reachable at all.");
-        _ = await harness.SaveAgentArtifactAsync(runId, "summarize", "summary.md", "The validation passed.").ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "summarize").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "summarize", "summary.md", "The validation passed.");
+        await harness.SettleAgentAsync(runId, "summarize");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         // Round two: validate re-runs and its new report supersedes the one the summary was written from.
-        await harness.SettleAgentAsync(runId, "summarize").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "summarize");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var artifacts = await harness.ReadArtifactsAsync(runId).ConfigureAwait(false);
+        var artifacts = await harness.ReadArtifactsAsync(runId);
         var reports = artifacts.Where(static artifact => artifact.ProducingNodeKey == "validate").OrderBy(static artifact => artifact.Version).ToList();
         AssertEx.Equal(expected: 2, reports.Count, "the re-run versioned the same lineage rather than starting a new one.");
         AssertEx.False(reports[0].IsLatest, "the first version is no longer current.");
@@ -134,7 +133,7 @@ public sealed class DevWorkflowFixLoopTests
         // insert and a staleness flip never re-stamps it. Every re-run producer supersedes its own report, so the run
         // carries one of these per re-run node; the one that matters here is the one naming the report the summary was
         // written from.
-        var marked = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "artifact.stale.marked").ToList();
+        var marked = (await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "artifact.stale.marked").ToList();
         AssertEx.Equal(expected: 1,
             marked.Count(entry => entry.DetailJson?.Contains(reports[0].Id.ToString(), StringComparison.OrdinalIgnoreCase) == true),
             "the flip that flagged the summary is on the feed exactly once.");
@@ -152,25 +151,25 @@ public sealed class DevWorkflowFixLoopTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("checkone", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
         harness.Tools.Answer("checktwo", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TwoChecksBothRoutingBack, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TwoChecksBothRoutingBack, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.retry.routed"),
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "node.retry.routed"),
             "one round of the loop is one re-run, however many of its checks failed.");
-        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt);
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "implement")).Attempt);
 
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         AssertEx.Equal(DevWorkflowRunStatus.Completed,
-            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            (await harness.ReadRunAsync(runId)).Status,
             "and the round finished rather than the two checks waiting on each other.");
-        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "checkone").ConfigureAwait(false)).Attempt);
-        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "checktwo").ConfigureAwait(false)).Attempt);
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "checkone")).Attempt);
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "checktwo")).Attempt);
     }
 
     /// <summary>
@@ -184,28 +183,28 @@ public sealed class DevWorkflowFixLoopTests
     {
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FixLoopBesideAnOpenGate, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FixLoopBesideAnOpenGate, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var gate = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        var gate = await harness.ReadNodeRunAsync(runId, "approve");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, gate.Status, "the open gate went back to the start of a new attempt rather than wedging the route.");
         AssertEx.Equal(expected: 2, gate.Attempt);
         AssertEx.Null(gate.PendingDecisionKind, "and it is no longer asking for the answer it wanted about the round that was replaced.");
 
         // The second round re-opens it, and the answer it takes then is one about work that still exists.
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var reopened = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        var reopened = await harness.ReadNodeRunAsync(runId, "approve");
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, reopened.Status);
         AssertEx.Equal(DevWorkflowDecisionKind.Approve, reopened.PendingDecisionKind);
-        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId)).Status);
     }
 
     /// <summary>
@@ -221,39 +220,39 @@ public sealed class DevWorkflowFixLoopTests
         await using var harness = new DevWorkflowHarness();
         var held = harness.Tools.Hold("slow");
         harness.Tools.Answer("check", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.LiveSiblingsBesideAFixLoop, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.LiveSiblingsBesideAFixLoop, developmentProjectId: DevelopmentProjectId);
 
         // Round one: the implementation lands and all three of its successors are admitted by the same tick.
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await held.Started.ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        _ = await harness.AdvanceAsync(runId);
+        await held.Started;
 
-        var reviewSession = await harness.ReadSessionIdAsync(runId, "review").ConfigureAwait(false);
-        var slow = await harness.ReadNodeRunAsync(runId, "slow").ConfigureAwait(false);
-        var check = await harness.ReadNodeRunAsync(runId, "check").ConfigureAwait(false);
+        var reviewSession = await harness.ReadSessionIdAsync(runId, "review");
+        var slow = await harness.ReadNodeRunAsync(runId, "slow");
+        var check = await harness.ReadNodeRunAsync(runId, "check");
         AssertEx.True(harness.ToolLane.IsInFlight(slow.Id), "the held sibling really is holding a sandbox slot when the check routes.");
 
         // The check's verdict lands and sends the run back to the implementation, resetting both live siblings.
-        await harness.ToolLane.WaitForCompletionAsync(check.Id).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.ToolLane.WaitForCompletionAsync(check.Id);
+        _ = await harness.AdvanceAsync(runId);
 
-        var review = await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false);
+        var review = await harness.ReadNodeRunAsync(runId, "review");
         AssertEx.Equal(expected: 2, review.Attempt, "the agent sibling was reset along with everything else downstream of the target.");
         AssertEx.Null(review.WorkSessionId, "and the reset released the session it was driving.");
         AssertEx.Contains(harness.Agent.Calls, ("cancel", reviewSession), "which is only honest if the session was ASKED to stop first.");
         AssertEx.Equal(AgentWorkSessionStatus.Cancelled,
-            (await harness.Agent.GetAsync(reviewSession).ConfigureAwait(false)).Status,
+            (await harness.Agent.GetAsync(reviewSession)).Status,
             "the superseded session still EXISTS — it ran, so it is audit evidence — and it is no longer holding the node's slot.");
         AssertEx.False(harness.ToolLane.IsInFlight(slow.Id), "the sandbox sibling's pass was dropped rather than left running for an attempt nobody will poll.");
 
         // Round two drives fresh work rather than resuming what it superseded.
         held.Release();
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         AssertEx.NotEqual(reviewSession,
-            await harness.ReadSessionIdAsync(runId, "review").ConfigureAwait(false),
+            await harness.ReadSessionIdAsync(runId, "review"),
             "the re-attempt gets a NEW session, so it does not resume the context that was thrown away.");
     }
 
@@ -269,22 +268,22 @@ public sealed class DevWorkflowFixLoopTests
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "2"));
         harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing());
         harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoop, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoop, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var failing = await harness.ReadNodeRunAsync(runId, "test").ConfigureAwait(false);
+        var failing = await harness.ReadNodeRunAsync(runId, "test");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, failing.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, failing.FailureClass, "the cascade costs three re-attempts and the run allows two.");
         AssertEx.Equal(expected: 1, failing.Attempt, "a refused route spends nothing.");
 
-        var target = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        var target = await harness.ReadNodeRunAsync(runId, "implement");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, target.Status, "the target is left exactly as it was; the human decides what happens next.");
         AssertEx.Equal(expected: 1, target.Attempt);
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.retry.routed"));
-        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.retry.routed"));
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId)).Status);
     }
 
     /// <summary>
@@ -297,22 +296,22 @@ public sealed class DevWorkflowFixLoopTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing(), FakeDevWorkflowToolCommands.Passing());
         harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Failing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoopBounded, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoopBounded, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
-        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt, "the first failure routes: one re-run is what the cap allows.");
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "implement")).Attempt, "the first failure routes: one re-run is what the cap allows.");
 
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var failing = await harness.ReadNodeRunAsync(runId, "test").ConfigureAwait(false);
+        var failing = await harness.ReadNodeRunAsync(runId, "test");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, failing.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, failing.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(failing.TerminalReason), "fix loop has been re-run 1 time, which is as many as it allows");
         AssertEx.Equal(expected: 2,
-            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt,
+            (await harness.ReadNodeRunAsync(runId, "implement")).Attempt,
             "and the target is left exactly where the one allowed re-run left it, with attempts of its own to spare.");
     }
 
@@ -330,18 +329,18 @@ public sealed class DevWorkflowFixLoopTests
             FakeDevWorkflowToolCommands.Failing(),
             FakeDevWorkflowToolCommands.Failing(),
             FakeDevWorkflowToolCommands.Failing());
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoopBounded, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FanOutFixLoopBounded, developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        await harness.DecideAsync(runId, "test", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "test", DevWorkflowDecisionKind.Retry);
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
-        var failing = await harness.ReadNodeRunAsync(runId, "test").ConfigureAwait(false);
+        var failing = await harness.ReadNodeRunAsync(runId, "test");
         AssertEx.Equal(expected: 3, failing.Attempt, "the person's retry really did spend an attempt on the row.");
         AssertEx.Contains(AssertEx.NotNull(failing.TerminalReason),
             "fix loop has been re-run 1 time",
@@ -358,19 +357,19 @@ public sealed class DevWorkflowFixLoopTests
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("lint", FakeDevWorkflowToolCommands.Passing(), FakeDevWorkflowToolCommands.Passing());
         harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Failing());
-        var runId = await harness.StartRunAsync(Uncapped(), developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(Uncapped(), developmentProjectId: DevelopmentProjectId);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
-        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
-        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
+        await harness.SettleAgentAsync(runId, "implement");
+        await harness.AdvanceThroughToolLaneAsync(runId);
 
         AssertEx.Equal(expected: 3,
-            (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt,
+            (await harness.ReadNodeRunAsync(runId, "implement")).Attempt,
             "the second failure routes as well, exactly as it did before this rule existed.");
         AssertEx.Equal(expected: 2,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.retry.routed"));
+            (await harness.ReadEventsAsync(runId)).Count(static entry => entry.EventType == "node.retry.routed"));
     }
 
     /// <summary>The same graph with its per-loop cap taken off, so the two accountings are compared on one shape.</summary>

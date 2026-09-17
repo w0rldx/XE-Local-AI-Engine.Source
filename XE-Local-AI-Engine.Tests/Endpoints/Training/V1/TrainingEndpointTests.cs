@@ -51,7 +51,7 @@ public sealed class TrainingEndpointTests
             });
         }
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -69,8 +69,8 @@ public sealed class TrainingEndpointTests
             name = "dataset"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Contains(body, "TrainingBusy", StringComparison.OrdinalIgnoreCase);
@@ -88,8 +88,8 @@ public sealed class TrainingEndpointTests
             name = "dataset"
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         AssertEx.Contains(body, "\"status\":\"Generating\"", StringComparison.Ordinal);
@@ -104,8 +104,8 @@ public sealed class TrainingEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Delete, $"{Api}/datasets/{DatasetId}?expectedVersion=4");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Contains(body, "GenerationActive", StringComparison.OrdinalIgnoreCase);
@@ -119,7 +119,7 @@ public sealed class TrainingEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/datasets/{DatasetId}/cancel");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
         _ = await context.Generation.Received(1).CancelAsync(DatasetId, Arg.Any<CancellationToken>());
@@ -134,7 +134,7 @@ public sealed class TrainingEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/datasets/{DatasetId}/cancel");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -146,7 +146,7 @@ public sealed class TrainingEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, $"{Api}/datasets/{DatasetId}/samples?page=1&pageSize=500");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -159,8 +159,8 @@ public sealed class TrainingEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, $"{Api}/datasets/{DatasetId}/export");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"format\":\"Jsonl\"", StringComparison.Ordinal);
@@ -175,8 +175,8 @@ public sealed class TrainingEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, $"{Api}/datasets/{DatasetId}");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"status\":\"Generating\"", StringComparison.Ordinal);
@@ -190,8 +190,8 @@ public sealed class TrainingEndpointTests
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Get, $"{Api}/mocks/{MockId}");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "read_file", StringComparison.Ordinal);
@@ -210,8 +210,8 @@ public sealed class TrainingEndpointTests
             expectedVersion = 2
         });
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(body, "\"verificationState\":\"Verified\"", StringComparison.Ordinal);

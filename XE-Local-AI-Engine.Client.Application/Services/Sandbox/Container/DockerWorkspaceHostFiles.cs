@@ -77,7 +77,7 @@ internal static class DockerWorkspaceHostFiles
         }
 
         EnsureNoSymlinkComponents(canonicalRoot, destination, sandboxPath);
-        await WriteNoFollowAsync(destination, content, cancellationToken).ConfigureAwait(false);
+        await WriteNoFollowAsync(destination, content, cancellationToken);
     }
 
     /// <summary>
@@ -141,7 +141,7 @@ internal static class DockerWorkspaceHostFiles
         {
             // Non-Linux fallback: the per-component walk above already rejected an existing leaf symlink, and the
             // engine host is Windows only in the configuration where the daemon is remote anyway.
-            await File.WriteAllBytesAsync(hostPath, content, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(hostPath, content, cancellationToken);
             return;
         }
 
@@ -156,7 +156,7 @@ internal static class DockerWorkspaceHostFiles
         }
 
         using var handle = new SafeFileHandle(fileDescriptor, ownsHandle: true);
-        await RandomAccess.WriteAsync(handle, content, fileOffset: 0, cancellationToken).ConfigureAwait(false);
+        await RandomAccess.WriteAsync(handle, content, fileOffset: 0, cancellationToken);
     }
 
     // DllImport rather than the source-generated LibraryImport, matching ProcessSandboxRuntimeProvider: the generated

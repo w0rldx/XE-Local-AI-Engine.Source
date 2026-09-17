@@ -8,7 +8,7 @@ internal static class ChatEndpoint
 {
     public static async Task<IResult> HandleAsync(HttpContext context, FakeOllamaState state)
     {
-        using var body = await FakeOllamaEndpointMapper.ReadJsonAsync(context).ConfigureAwait(false);
+        using var body = await FakeOllamaEndpointMapper.ReadJsonAsync(context);
         if (body is null)
         {
             return Results.BadRequest(new
@@ -26,7 +26,7 @@ internal static class ChatEndpoint
 
         FakeOllamaEndpointMapper.Record(context, state, model, messages.Length, lastUserMessage);
 
-        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
+        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model))
         {
             return Results.Empty;
         }
@@ -37,12 +37,12 @@ internal static class ChatEndpoint
             var toolCall = state.ToolCallScript(messages);
             if (toolCall is not null)
             {
-                await WriteToolCallChunksAsync(context, model, toolCall, lastUserMessage.Length).ConfigureAwait(false);
+                await WriteToolCallChunksAsync(context, model, toolCall, lastUserMessage.Length);
                 return Results.Empty;
             }
         }
 
-        var tokens = await ReadTokensAsync(state, model, messages, context.RequestAborted).ConfigureAwait(false);
+        var tokens = await ReadTokensAsync(state, model, messages, context.RequestAborted);
         if (!FakeOllamaEndpointMapper.StreamEnabled(root))
         {
             return Results.Json(new
@@ -92,7 +92,7 @@ internal static class ChatEndpoint
             eval_duration = 1
         });
 
-        await FakeOllamaEndpointMapper.WriteNdjsonAsync(context, chunks).ConfigureAwait(false);
+        await FakeOllamaEndpointMapper.WriteNdjsonAsync(context, chunks);
         return Results.Empty;
     }
 
@@ -151,7 +151,7 @@ internal static class ChatEndpoint
         {
             toolCallChunk,
             doneChunk
-        }).ConfigureAwait(false);
+        });
     }
 
     private static IEnumerable<Message> ReadMessages(JsonElement root)
@@ -181,7 +181,7 @@ internal static class ChatEndpoint
                 Stream = true
             };
 
-            await foreach (var token in state.ChatScript(request).WithCancellation(ct).ConfigureAwait(false))
+            await foreach (var token in state.ChatScript(request).WithCancellation(ct))
             {
                 scripted.Add(token);
             }

@@ -18,11 +18,11 @@ public sealed class ListCustomToolsEndpoint(ICustomToolService customToolService
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var views = await _customToolService.ListAsync(ct).ConfigureAwait(false);
+        var views = await _customToolService.ListAsync(ct);
         await Send.OkAsync(new ListCustomToolsResponse
             {
                 Items = views
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

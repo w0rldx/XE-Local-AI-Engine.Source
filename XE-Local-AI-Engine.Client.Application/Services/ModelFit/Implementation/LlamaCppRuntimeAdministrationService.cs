@@ -34,11 +34,11 @@ internal sealed class LlamaCppRuntimeAdministrationService(
 
     public async Task<LlamaCppRuntimeStatus> GetStatusAsync(bool refresh = false, CancellationToken cancellationToken = default)
     {
-        var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken).ConfigureAwait(false);
-        var installed = await installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
+        var installed = await installedRuntimeStore.ReadAsync(cancellationToken);
         var current = updateState.Current;
         var snapshot = refresh && IsStale(current.CheckedAtUtc, _timeProvider.GetUtcNow())
-            ? await ComputeFreshSnapshotAsync(recommendedTag, installed?.Tag, cancellationToken).ConfigureAwait(false)
+            ? await ComputeFreshSnapshotAsync(recommendedTag, installed?.Tag, cancellationToken)
             : current;
 
         return new LlamaCppRuntimeStatus(installed is null ? null : ToView(installed),
@@ -67,7 +67,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
     public async Task<LlamaCppRuntimeMutationResult> EnsureAsync(GpuVariant variant,
         CancellationToken cancellationToken = default)
     {
-        var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken).ConfigureAwait(false);
+        var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken);
         await using var lease = admission.Lease;
         if (lease is null || admission.BlockedMessage is not null)
         {
@@ -78,8 +78,8 @@ internal sealed class LlamaCppRuntimeAdministrationService(
 
         try
         {
-            var binary = await binaryManager.EnsureBinaryAsync(variant, lease, cancellationToken).ConfigureAwait(false);
-            var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken).ConfigureAwait(false);
+            var binary = await binaryManager.EnsureBinaryAsync(variant, lease, cancellationToken);
+            var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
             return LlamaCppRuntimeMutationResult.Success(ToView(binary), recommendedTag);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -110,28 +110,28 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         }
 
         var canonicalTag = tag.Trim();
-        if (await nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken).ConfigureAwait(false))
+        if (await nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
         {
             return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
                 KeepModelWarmBlockedMessage,
                 processSupervisor.CountRunningProcesses());
         }
 
-        var selectedVariant = variant ?? await variantSelector.SelectVariantAsync(cancellationToken).ConfigureAwait(false);
+        var selectedVariant = variant ?? await variantSelector.SelectVariantAsync(cancellationToken);
         try
         {
             var asset = await releaseCatalog.ResolveAssetAsync(canonicalTag,
                 CurrentOsPlatform(),
                 RuntimeInformation.OSArchitecture,
                 selectedVariant,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             if (asset.Asset is null)
             {
                 return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.InvalidRequest,
                     "The llama.cpp runtime catalog is unavailable or has no matching asset for the requested tag.");
             }
 
-            var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken).ConfigureAwait(false);
+            var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken);
             await using var lease = admission.Lease;
             if (lease is null || admission.BlockedMessage is not null)
             {
@@ -146,10 +146,10 @@ internal sealed class LlamaCppRuntimeAdministrationService(
                 asset.Asset.Size,
                 selectedVariant,
                 lease,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             localChatClientCacheInvalidator.ClearClientCache();
-            await RefreshSnapshotAsync(canonicalTag, cancellationToken).ConfigureAwait(false);
-            var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshSnapshotAsync(canonicalTag, cancellationToken);
+            var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
             return LlamaCppRuntimeMutationResult.Success(ToView(binary), recommendedTag);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -166,13 +166,13 @@ internal sealed class LlamaCppRuntimeAdministrationService(
     public async Task<LlamaCppRuntimeAcquisitionStartResult> StartAcquisitionAsync(GpuVariant? variant = null,
         CancellationToken cancellationToken = default)
     {
-        var selectedVariant = variant ?? await variantSelector.SelectVariantAsync(cancellationToken).ConfigureAwait(false);
-        var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken).ConfigureAwait(false);
+        var selectedVariant = variant ?? await variantSelector.SelectVariantAsync(cancellationToken);
+        var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken);
         if (admission.Lease is null || admission.BlockedMessage is not null)
         {
             if (admission.Lease is not null)
             {
-                await admission.Lease.DisposeAsync().ConfigureAwait(false);
+                await admission.Lease.DisposeAsync();
             }
 
             return new LlamaCppRuntimeAcquisitionStartResult(false,
@@ -198,12 +198,12 @@ internal sealed class LlamaCppRuntimeAdministrationService(
 
     private async Task<PrebuiltMutationAdmission> TryAcquirePrebuiltMutationAsync(CancellationToken cancellationToken)
     {
-        if (await nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken).ConfigureAwait(false))
+        if (await nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
         {
             return new PrebuiltMutationAdmission(null, processSupervisor.CountRunningProcesses(), KeepModelWarmBlockedMessage);
         }
 
-        var lease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken).ConfigureAwait(false);
+        var lease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
         if (lease is null)
         {
             return new PrebuiltMutationAdmission(null,
@@ -214,7 +214,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         var transferred = false;
         try
         {
-            var installed = await installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
+            var installed = await installedRuntimeStore.ReadAsync(cancellationToken);
             if (installed?.SourceBuildPath is { Length: > 0 })
             {
                 return new PrebuiltMutationAdmission(null,
@@ -244,7 +244,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         {
             if (!transferred)
             {
-                await lease.DisposeAsync().ConfigureAwait(false);
+                await lease.DisposeAsync();
             }
         }
     }
@@ -253,9 +253,9 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         ILlamaServerRuntimeMutationLease lease,
         CancellationToken applicationStopping)
     {
-        await using (lease.ConfigureAwait(false))
+        await using (lease)
         {
-            await binaryManager.EnsureBinaryAsync(variant, lease, applicationStopping).ConfigureAwait(false);
+            await binaryManager.EnsureBinaryAsync(variant, lease, applicationStopping);
         }
     }
 
@@ -263,7 +263,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
     {
         try
         {
-            await task.ConfigureAwait(false);
+            await task;
         }
         catch (OperationCanceledException) when (applicationLifetime.ApplicationStopping.IsCancellationRequested)
         {
@@ -289,8 +289,8 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         string? installedTag,
         CancellationToken cancellationToken)
     {
-        var recommendedResult = await releaseCatalog.ResolveRecommendedAsync(recommendedTag, cancellationToken).ConfigureAwait(false);
-        var upstreamResult = await releaseCatalog.ResolveUpstreamLatestAsync(cancellationToken).ConfigureAwait(false);
+        var recommendedResult = await releaseCatalog.ResolveRecommendedAsync(recommendedTag, cancellationToken);
+        var upstreamResult = await releaseCatalog.ResolveUpstreamLatestAsync(cancellationToken);
         var resolvedRecommended = recommendedResult.Tag;
         var snapshot = new LlamaCppUpdateSnapshot(installedTag,
             resolvedRecommended ?? recommendedTag,
@@ -304,8 +304,8 @@ internal sealed class LlamaCppRuntimeAdministrationService(
 
     private async Task RefreshSnapshotAsync(string installedTag, CancellationToken cancellationToken)
     {
-        var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken).ConfigureAwait(false);
-        var installed = await installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
+        var installed = await installedRuntimeStore.ReadAsync(cancellationToken);
         var effectiveInstalledTag = installed?.Tag ?? installedTag;
         var previous = updateState.Current;
         updateState.Store(new LlamaCppUpdateSnapshot(effectiveInstalledTag,

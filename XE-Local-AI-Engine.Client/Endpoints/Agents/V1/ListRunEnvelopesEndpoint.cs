@@ -32,11 +32,11 @@ public sealed class ListRunEnvelopesEndpoint(AgentExecutionLogQueryService execu
         var limit = req.Limit is { } requested && requested > 0 ? Math.Min(requested, MaxPageSize) : DefaultPageSize;
         var offset = req.Offset is { } requestedOffset && requestedOffset > 0 ? requestedOffset : 0;
 
-        var records = await _executionLogs.ListRunEnvelopesAsync(req.ConversationId, limit, offset, ct).ConfigureAwait(false);
+        var records = await _executionLogs.ListRunEnvelopesAsync(req.ConversationId, limit, offset, ct);
         await Send.OkAsync(new ListRunEnvelopesResponse
             {
                 Items = [.. records.Select(static record => record.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

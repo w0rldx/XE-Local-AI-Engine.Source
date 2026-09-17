@@ -16,7 +16,7 @@ public sealed class ResponseSecurityHeaderTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await client.GetAsync("/index.html").ConfigureAwait(false);
+        using var response = await client.GetAsync("/index.html");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertDenyAntiFramingHeader(response);
@@ -27,7 +27,7 @@ public sealed class ResponseSecurityHeaderTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await client.GetAsync("/health/live").ConfigureAwait(false);
+        using var response = await client.GetAsync("/health/live");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertDenyAntiFramingHeader(response);
@@ -38,7 +38,7 @@ public sealed class ResponseSecurityHeaderTests
     {
         using var client = Factory.CreateClient();
 
-        using var response = await client.PostAsync("/api/local/v1/diagnostics/validation-probe", content: null).ConfigureAwait(false);
+        using var response = await client.PostAsync("/api/local/v1/diagnostics/validation-probe", content: null);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertDenyAntiFramingHeader(response);

@@ -42,11 +42,11 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     {
         var databasePath = GetDatabasePath("cosine-match.sqlite");
         var chunkId = Guid.NewGuid();
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f)).ConfigureAwait(false);
+            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f));
         }
 
         var hits = await RunSearchAsync(databasePath, normalized: false, new[]
@@ -55,7 +55,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             0f,
             0f,
             0f
-        }, limit: 10).ConfigureAwait(false);
+        }, limit: 10);
 
         AssertEx.Equal(expected: 1, hits.Count);
         AssertEx.True(hits[0].ChunkId == chunkId && hits[0].Score > 0.999f,
@@ -66,13 +66,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     public async Task SearchAsync_WhenStoredVectorDimensionDiffersFromQuery_SkipsIt()
     {
         var databasePath = GetDatabasePath("cosine-dim-mismatch.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
         // The stored vector keeps the same embedding model so it passes the model filter, but it has three dimensions
         // against a four-dimension query and must be skipped rather than scored.
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            await InsertVectorAsync(connection, Guid.NewGuid(), Guid.NewGuid(), FloatBytes(1f, 0f, 0f)).ConfigureAwait(false);
+            await InsertVectorAsync(connection, Guid.NewGuid(), Guid.NewGuid(), FloatBytes(1f, 0f, 0f));
         }
 
         var hits = await RunSearchAsync(databasePath, normalized: false, new[]
@@ -81,7 +81,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             0f,
             0f,
             0f
-        }, limit: 10).ConfigureAwait(false);
+        }, limit: 10);
 
         AssertEx.Empty(hits);
     }
@@ -90,16 +90,16 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     public async Task SearchAsync_WhenStoredVectorIdentityDiffersAtTheSameWidth_ExcludesIt()
     {
         var databasePath = GetDatabasePath("cosine-identity-mismatch.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             var chunkId = Guid.NewGuid();
-            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f)).ConfigureAwait(false);
+            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f));
             await using var update = connection.CreateCommand();
             update.CommandText = "UPDATE knowledge_chunk_vectors SET vector_identity = 'legacy:unversioned' WHERE chunk_id = $id;";
             update.Parameters.AddWithValue("$id", chunkId);
-            _ = await update.ExecuteNonQueryAsync().ConfigureAwait(false);
+            _ = await update.ExecuteNonQueryAsync();
         }
 
         var hits = await RunSearchAsync(databasePath, normalized: false, new[]
@@ -108,7 +108,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             0f,
             0f,
             0f
-        }, limit: 10).ConfigureAwait(false);
+        }, limit: 10);
 
         AssertEx.Empty(hits, "Exact canonical identity filtering must exclude same-model, same-width legacy vectors.");
     }
@@ -117,11 +117,11 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     public async Task SearchAsync_CosinePath_MatchesNaiveReferenceRankingOnDeterministicCorpus()
     {
         var databasePath = GetDatabasePath("cosine-equivalence.sqlite");
-        var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 200, dimension: 16, seed: 1234).ConfigureAwait(false);
+        var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 200, dimension: 16, seed: 1234);
         var query = DeterministicVector(new Random(9999), dimension: 16);
 
         // Cosine path (state not complete): must equal the naive full-sort reference exactly.
-        var hits = await RunSearchAsync(databasePath, normalized: false, query, limit: 10).ConfigureAwait(false);
+        var hits = await RunSearchAsync(databasePath, normalized: false, query, limit: 10);
 
         AssertRankingMatches(ReferenceCosineTopK(corpus, query, limit: 10), hits);
     }
@@ -132,13 +132,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         var databasePath = GetDatabasePath("dot-equivalence.sqlite");
         // Seed LEGACY unnormalized vectors, capture the reference ranking over them, THEN normalize in place and search on
         // the dot-product path — the ranking must be byte-for-rank identical to the pre-migration reference.
-        var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 200, dimension: 16, seed: 4242).ConfigureAwait(false);
+        var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 200, dimension: 16, seed: 4242);
         var query = DeterministicVector(new Random(1357), dimension: 16);
         var reference = ReferenceCosineTopK(corpus, query, limit: 10);
 
-        await NormalizeInPlaceAsync(databasePath).ConfigureAwait(false);
+        await NormalizeInPlaceAsync(databasePath);
 
-        var hits = await RunSearchAsync(databasePath, normalized: true, query, limit: 10).ConfigureAwait(false);
+        var hits = await RunSearchAsync(databasePath, normalized: true, query, limit: 10);
 
         AssertRankingMatches(reference, hits);
     }
@@ -147,15 +147,15 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     public async Task SearchAsync_TopKBoundaries_MatchReference_WhenLimitMeetsOrExceedsCorpus()
     {
         var databasePath = GetDatabasePath("topk-boundaries.sqlite");
-        var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 12, dimension: 8, seed: 77).ConfigureAwait(false);
+        var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 12, dimension: 8, seed: 77);
         var query = DeterministicVector(new Random(5), dimension: 8);
-        await NormalizeInPlaceAsync(databasePath).ConfigureAwait(false);
+        await NormalizeInPlaceAsync(databasePath);
 
         // K == N and K > N both return every candidate in full-sort order.
-        var atCount = await RunSearchAsync(databasePath, normalized: true, query, limit: 12).ConfigureAwait(false);
+        var atCount = await RunSearchAsync(databasePath, normalized: true, query, limit: 12);
         AssertRankingMatches(ReferenceCosineTopK(corpus, query, limit: 12), atCount);
 
-        var overCount = await RunSearchAsync(databasePath, normalized: true, query, limit: 50).ConfigureAwait(false);
+        var overCount = await RunSearchAsync(databasePath, normalized: true, query, limit: 50);
         AssertRankingMatches(ReferenceCosineTopK(corpus, query, limit: 50), overCount);
         AssertEx.Equal(expected: 12, overCount.Count);
     }
@@ -164,7 +164,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     public async Task SearchAsync_WhenCandidatesTieOnScore_ReturnsTheExpectedTopKSet()
     {
         var databasePath = GetDatabasePath("topk-ties.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
         // Three identical vectors (a perfect tie at cosine 1) plus one weaker vector. A limit of 2 must return two of the
         // three tied ids and never the weaker one.
@@ -175,24 +175,24 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             Guid.NewGuid()
         };
         var weakId = Guid.NewGuid();
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             foreach (var id in tied)
             {
-                await InsertVectorAsync(connection, id, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f)).ConfigureAwait(false);
+                await InsertVectorAsync(connection, id, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f));
             }
 
-            await InsertVectorAsync(connection, weakId, Guid.NewGuid(), FloatBytes(0.1f, 1f, 0f, 0f)).ConfigureAwait(false);
+            await InsertVectorAsync(connection, weakId, Guid.NewGuid(), FloatBytes(0.1f, 1f, 0f, 0f));
         }
 
-        await NormalizeInPlaceAsync(databasePath).ConfigureAwait(false);
+        await NormalizeInPlaceAsync(databasePath);
         var hits = await RunSearchAsync(databasePath, normalized: true, new[]
         {
             1f,
             0f,
             0f,
             0f
-        }, limit: 2).ConfigureAwait(false);
+        }, limit: 2);
 
         AssertEx.Equal(expected: 2, hits.Count);
         AssertEx.True(hits.All(hit => tied.Contains(hit.ChunkId)), "The top-2 of a 3-way tie must all come from the tied set, never the weaker vector.");
@@ -203,14 +203,14 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     public async Task SearchAsync_ZeroVector_IsExcluded_OnBothPaths()
     {
         var databasePath = GetDatabasePath("zero-vector.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
 
         var zeroId = Guid.NewGuid();
         var realId = Guid.NewGuid();
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            await InsertVectorAsync(connection, zeroId, Guid.NewGuid(), FloatBytes(0f, 0f, 0f, 0f)).ConfigureAwait(false);
-            await InsertVectorAsync(connection, realId, Guid.NewGuid(), FloatBytes(0.2f, 0.9f, 0.1f, 0f)).ConfigureAwait(false);
+            await InsertVectorAsync(connection, zeroId, Guid.NewGuid(), FloatBytes(0f, 0f, 0f, 0f));
+            await InsertVectorAsync(connection, realId, Guid.NewGuid(), FloatBytes(0.2f, 0.9f, 0.1f, 0f));
         }
 
         // Cosine path: a zero-magnitude vector scores NaN and is skipped.
@@ -220,18 +220,18 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             0f,
             0f,
             0f
-        }, limit: 10).ConfigureAwait(false);
+        }, limit: 10);
         AssertEx.True(cosineHits.All(hit => hit.ChunkId != zeroId), "The zero vector must be excluded on the cosine path.");
 
         // After migration the zero vector stays exactly zero; the dot path must skip it too (not score it a false 0).
-        await NormalizeInPlaceAsync(databasePath).ConfigureAwait(false);
+        await NormalizeInPlaceAsync(databasePath);
         var dotHits = await RunSearchAsync(databasePath, normalized: true, new[]
         {
             1f,
             0f,
             0f,
             0f
-        }, limit: 10).ConfigureAwait(false);
+        }, limit: 10);
         AssertEx.True(dotHits.All(hit => hit.ChunkId != zeroId), "The zero vector must be excluded on the dot path too.");
         AssertEx.True(dotHits.Any(hit => hit.ChunkId == realId), "The real vector should still be returned.");
     }
@@ -240,13 +240,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     public async Task SearchAsync_WhenQueryVectorIsZero_ReturnsEmptyOnDotPath()
     {
         var databasePath = GetDatabasePath("zero-query.sqlite");
-        await MigrateAsync(databasePath).ConfigureAwait(false);
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await MigrateAsync(databasePath);
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            await InsertVectorAsync(connection, Guid.NewGuid(), Guid.NewGuid(), FloatBytes(0.2f, 0.9f, 0.1f, 0f)).ConfigureAwait(false);
+            await InsertVectorAsync(connection, Guid.NewGuid(), Guid.NewGuid(), FloatBytes(0.2f, 0.9f, 0.1f, 0f));
         }
 
-        await NormalizeInPlaceAsync(databasePath).ConfigureAwait(false);
+        await NormalizeInPlaceAsync(databasePath);
 
         // A zero-magnitude query has no direction — cosine would be NaN for every candidate (an empty result); the dot
         // path mirrors that by returning nothing rather than scoring everything 0.
@@ -256,7 +256,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             0f,
             0f,
             0f
-        }, limit: 10).ConfigureAwait(false);
+        }, limit: 10);
         AssertEx.Empty(hits);
     }
 
@@ -264,14 +264,14 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     public async Task SearchAsync_WhenTokenIsAlreadyCancelled_Throws()
     {
         var databasePath = GetDatabasePath("cancellation.sqlite");
-        await SeedDeterministicCorpusAsync(databasePath, count: 20, dimension: 8, seed: 3).ConfigureAwait(false);
+        await SeedDeterministicCorpusAsync(databasePath, count: 20, dimension: 8, seed: 3);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+        await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
         var search = new ManagedCosineVectorSearch(context, CompleteState());
 
         using var cts = new CancellationTokenSource();
-        await cts.CancelAsync().ConfigureAwait(false);
+        await cts.CancelAsync();
 
         var threw = false;
         try
@@ -282,7 +282,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
                 vectorDimension: 8,
                 limit: 10,
                 documentId: null,
-                cts.Token).ConfigureAwait(false);
+                cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -296,7 +296,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     private async Task<IReadOnlyList<VectorSearchHit>> RunSearchAsync(string databasePath, bool normalized, float[] query, int limit)
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+        await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
         var search = new ManagedCosineVectorSearch(context, normalized ? CompleteState() : new KnowledgeVectorNormalizationState());
         return await search.SearchAsync(query,
             EmbeddingModel,
@@ -304,7 +304,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             query.Length,
             limit,
             documentId: null,
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
     }
 
     private static IKnowledgeVectorNormalizationState CompleteState()
@@ -316,29 +316,29 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
 
     private static async Task<List<(Guid ChunkId, float[] Vector)>> SeedDeterministicCorpusAsync(string databasePath, int count, int dimension, int seed)
     {
-        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await MigrateAsync(databasePath);
         var random = new Random(seed);
         var corpus = new List<(Guid, float[])>(count);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        await using var transaction = await connection.BeginTransactionAsync();
         for (var i = 0; i < count; i++)
         {
             var chunkId = Guid.NewGuid();
             var vector = DeterministicVector(random, dimension);
             corpus.Add((chunkId, vector));
-            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), MemoryMarshal.AsBytes<float>(vector).ToArray(), transaction).ConfigureAwait(false);
+            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), MemoryMarshal.AsBytes<float>(vector).ToArray(), transaction);
         }
 
-        await transaction.CommitAsync().ConfigureAwait(false);
+        await transaction.CommitAsync();
         return corpus;
     }
 
     // Runs the real normalization backfill core against the stored rows, in place.
     private static async Task NormalizeInPlaceAsync(string databasePath)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        _ = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        _ = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None);
     }
 
     // Naive reference: cosine over the RAW stored vectors, skip zero-magnitude (NaN), order by score desc with a stable
@@ -411,7 +411,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string databasePath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
     private static async Task InsertVectorAsync(SqliteConnection connection, Guid chunkId, Guid documentId, byte[] embedding, DbTransaction? transaction = null)
@@ -433,7 +433,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         command.Parameters.AddWithValue("$blob", embedding);
         command.Parameters.AddWithValue("$model", EmbeddingModel);
         command.Parameters.AddWithValue("$identity", NativeIdentity(embedding.Length / sizeof(float)));
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static string NativeIdentity(int dimension)
@@ -444,8 +444,8 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        await EnsureForeignKeysOffAsync(connection).ConfigureAwait(false);
+        await connection.OpenAsync();
+        await EnsureForeignKeysOffAsync(connection);
         return connection;
     }
 
@@ -455,12 +455,12 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     {
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

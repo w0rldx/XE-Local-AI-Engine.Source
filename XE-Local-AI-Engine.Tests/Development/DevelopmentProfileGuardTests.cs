@@ -44,7 +44,7 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
     [Test]
     public async Task WorkspaceInvariant_WhenTheProfileImportFileIsRewritten_RejectsTheNextCatalogCommand()
     {
-        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var repository = await CreateRepositoryAsync();
         var data = Path.Combine(_root, "data");
         Directory.CreateDirectory(data);
         var options = Options.Create(new DevelopmentOptions());
@@ -54,7 +54,7 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
 
         using var sandbox = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
-        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository, identity)).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository, identity));
 
         // The profile carries a DIFFERENT ImportDigest from what the worktree contains, to pin that the tamper check
         // baselines off the worktree rather than off this stored value. Comparing against the stored value would fail
@@ -66,20 +66,18 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
             importDigest: new string('b', 64));
 
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, profile);
-        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus).ConfigureAwait(false);
+        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
 
         // Simulate a build or test command writing the file as a side effect. The path guard never sees this — nothing
         // named ".xe-dev" was passed to a workspace tool.
         var importDirectory = Path.Combine(session.HostWorktreePath, ".xe-dev");
         Directory.CreateDirectory(importDirectory);
         await File.WriteAllTextAsync(Path.Combine(importDirectory, "profile.json"),
-                      """{"profileId":"generic-git","buildTarget":null}""")
-                  .ConfigureAwait(false);
+                      """{"profileId":"generic-git","buildTarget":null}""");
 
         var rejection = await AssertEx
                               .ThrowsAsync<DevelopmentWorkspaceSecurityException>(() =>
-                                  tools.RunCommandAsync(DevelopmentCommandIds.GitStatus))
-                              .ConfigureAwait(false);
+                                  tools.RunCommandAsync(DevelopmentCommandIds.GitStatus));
         AssertEx.Contains(rejection.Message, "command-profile import file", StringComparison.Ordinal);
     }
 
@@ -123,7 +121,7 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
             {
                 DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("tests/Probe/FeatureTests.cs", destructive)), profile);
                 return Task.CompletedTask;
-            }).ConfigureAwait(false);
+            });
             AssertEx.Contains(rejected.Message, "test that existed at the base commit", StringComparison.Ordinal);
         }
 
@@ -134,7 +132,7 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
             DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("tests/Probe/Feature.txt", "renamed", "tests/Probe/FeatureTests.cs")),
                 profile);
             return Task.CompletedTask;
-        }).ConfigureAwait(false);
+        });
 
         // A non-test file may be freely modified or deleted; the policy is about tests, not about change in general.
         DevelopmentTestWritePolicy.Ensure(Evidence(new DevelopmentChangedFile("src/Lib/Feature.cs", "deleted")), profile);
@@ -190,12 +188,12 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(repository);
-        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "guard fixture\n").ConfigureAwait(false);
-        await RunGitAsync(repository, "init", "--initial-branch=main").ConfigureAwait(false);
-        await RunGitAsync(repository, "config", "user.email", "development-guard@example.invalid").ConfigureAwait(false);
-        await RunGitAsync(repository, "config", "user.name", "Development Guard Test").ConfigureAwait(false);
-        await RunGitAsync(repository, "add", "-A", "--", ".").ConfigureAwait(false);
-        await RunGitAsync(repository, "commit", "-m", "guard fixture").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "guard fixture\n");
+        await RunGitAsync(repository, "init", "--initial-branch=main");
+        await RunGitAsync(repository, "config", "user.email", "development-guard@example.invalid");
+        await RunGitAsync(repository, "config", "user.name", "Development Guard Test");
+        await RunGitAsync(repository, "add", "-A", "--", ".");
+        await RunGitAsync(repository, "commit", "-m", "guard fixture");
         return repository;
     }
 
@@ -213,10 +211,10 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         }
 
         using var process = Process.Start(start) ?? throw new InvalidOperationException("git could not be started.");
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        await process.WaitForExitAsync();
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {await process.StandardError.ReadToEndAsync().ConfigureAwait(false)}");
+            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {await process.StandardError.ReadToEndAsync()}");
         }
     }
 }

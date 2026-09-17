@@ -28,12 +28,12 @@ public sealed class GetExternalAppInstallPreviewEndpoint(IExternalAppService app
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var preview = await _apps.PreviewInstallAsync(req.ApplicationId, ct).ConfigureAwait(false);
+        var preview = await _apps.PreviewInstallAsync(req.ApplicationId, ct);
 
         // Nothing reconciled to produce this resolution, so the foreign-container count is 0 rather than a cached
         // observation reported as a fresh one.
         var runtime = ExternalAppMapper.ToRuntimeResponse(preview.Runtime, foreignInstallContainers: 0);
 
-        await Send.OkAsync(ExternalAppMapper.ToPreview(preview, runtime), ct).ConfigureAwait(false);
+        await Send.OkAsync(ExternalAppMapper.ToPreview(preview, runtime), ct);
     }
 }

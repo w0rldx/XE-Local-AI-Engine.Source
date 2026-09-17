@@ -25,8 +25,8 @@ public sealed class GraphWorkflowValidateEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.StartAgentEnd)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.StartAgentEnd));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -47,8 +47,8 @@ public sealed class GraphWorkflowValidateEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseBetweenTwoAgents)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseBetweenTwoAgents));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -68,8 +68,8 @@ public sealed class GraphWorkflowValidateEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseBetweenTwoAgentsWithContextEdge)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseBetweenTwoAgentsWithContextEdge));
+        var body = await response.Content.ReadAsStringAsync();
 
         using var document = JsonDocument.Parse(body);
         AssertEx.True(document.RootElement.GetProperty("valid").GetBoolean());
@@ -87,8 +87,8 @@ public sealed class GraphWorkflowValidateEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseAfterALooseResponseSchema)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.PauseAfterALooseResponseSchema));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -110,8 +110,8 @@ public sealed class GraphWorkflowValidateEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.TwoNodeConfigErrors)).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await SendAsync(factory, Body(GraphWorkflowGraphs.TwoNodeConfigErrors));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, "a graph that does not route is a report to draw, not a request that failed.");
         using var document = JsonDocument.Parse(body);
@@ -134,8 +134,8 @@ public sealed class GraphWorkflowValidateEndpointTests
         var store = Store();
         await using var factory = EnabledFactory(store);
 
-        using var clean = await SendAsync(factory, Body(GraphWorkflowGraphs.StartAgentEnd)).ConfigureAwait(false);
-        using var broken = await SendAsync(factory, Body(GraphWorkflowGraphs.TwoNodeConfigErrors)).ConfigureAwait(false);
+        using var clean = await SendAsync(factory, Body(GraphWorkflowGraphs.StartAgentEnd));
+        using var broken = await SendAsync(factory, Body(GraphWorkflowGraphs.TwoNodeConfigErrors));
 
         AssertEx.Equal(HttpStatusCode.OK, clean.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, broken.StatusCode);
@@ -156,7 +156,7 @@ public sealed class GraphWorkflowValidateEndpointTests
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
         factory.AddNodeBearerToken(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static TestServerWebAppFactory EnabledFactory(IGraphWorkflowStore store) =>

@@ -31,14 +31,14 @@ public sealed class GetExternalProviderConnectionEndpoint(IExternalProviderStore
         // Canonicalized with the SAME helper the store mints slugs through, so a differently-cased id in the URL
         // resolves to the connection it names rather than to nothing.
         var connectionId = ExternalModelId.CanonicalizeConnectionId(req.ConnectionId);
-        var config = await _store.LoadAsync(ct).ConfigureAwait(false);
+        var config = await _store.LoadAsync(ct);
         var connection = config.Connections.FirstOrDefault(candidate => string.Equals(candidate.Id, connectionId, StringComparison.Ordinal));
         if (connection is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(connection.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(connection.ToResponse(), ct);
     }
 }

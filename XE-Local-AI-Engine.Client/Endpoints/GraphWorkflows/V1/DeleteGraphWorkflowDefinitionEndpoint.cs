@@ -27,7 +27,7 @@ public sealed class DeleteGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await _definitions.DeleteAsync(req.DefinitionId, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await _definitions.DeleteAsync(req.DefinitionId, ct);
+        await Send.NoContentAsync(ct);
     }
 }

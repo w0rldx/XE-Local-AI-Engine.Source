@@ -27,9 +27,9 @@ public sealed class CreateWorkspaceEndpoint(ISelectedFolderResolver selectedFold
         var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration(req.Alias ?? string.Empty,
                 req.HostPath ?? string.Empty,
                 SelectedFolderMode.ReadOnlyMount),
-            ct).ConfigureAwait(false);
+            ct);
 
-        await Send.OkAsync(ToResponse(reference), ct).ConfigureAwait(false);
+        await Send.OkAsync(ToResponse(reference), ct);
     }
 
     private static WorkspaceResponse ToResponse(SelectedFolderReference reference)

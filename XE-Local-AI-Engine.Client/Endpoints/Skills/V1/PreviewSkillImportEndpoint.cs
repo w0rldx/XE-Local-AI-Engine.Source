@@ -43,9 +43,9 @@ public sealed class PreviewSkillImportEndpoint(ISkillImportService importService
         // the rule that was broken and never echoes an entry path, a resource name or any imported text.
         var preview = req.Source switch
         {
-            SkillImportSourceKind.Upload => await PreviewUploadAsync(req, ct).ConfigureAwait(false),
-            SkillImportSourceKind.Paste => await PreviewPasteAsync(req, ct).ConfigureAwait(false),
-            SkillImportSourceKind.GitHub => await PreviewGitHubAsync(req, ct).ConfigureAwait(false),
+            SkillImportSourceKind.Upload => await PreviewUploadAsync(req, ct),
+            SkillImportSourceKind.Paste => await PreviewPasteAsync(req, ct),
+            SkillImportSourceKind.GitHub => await PreviewGitHubAsync(req, ct),
             _ => UnknownSource()
         };
 
@@ -53,11 +53,11 @@ public sealed class PreviewSkillImportEndpoint(ISkillImportService importService
         {
             // A null return means the request did not carry the payload its source names; each branch has already
             // put the specific error on the response.
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        await Send.OkAsync(preview.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(preview.ToResponse(), ct);
     }
 
     private SkillImportPreview? UnknownSource()
@@ -78,7 +78,7 @@ public sealed class PreviewSkillImportEndpoint(ISkillImportService importService
         // Buffering and the size cap belong to the import service, which enforces the cap on the bytes it actually
         // reads and refuses an oversized upload through the same SkillImportException every other guard uses.
         await using var upload = file.OpenReadStream();
-        return await _importService.PreviewArchiveAsync(upload, ct).ConfigureAwait(false);
+        return await _importService.PreviewArchiveAsync(upload, ct);
     }
 
     private async Task<SkillImportPreview?> PreviewPasteAsync(SkillImportPreviewRequest req, CancellationToken ct)
@@ -89,7 +89,7 @@ public sealed class PreviewSkillImportEndpoint(ISkillImportService importService
             return null;
         }
 
-        return await _importService.PreviewMarkdownAsync(req.Markdown, ct).ConfigureAwait(false);
+        return await _importService.PreviewMarkdownAsync(req.Markdown, ct);
     }
 
     private async Task<SkillImportPreview?> PreviewGitHubAsync(SkillImportPreviewRequest req, CancellationToken ct)
@@ -100,7 +100,7 @@ public sealed class PreviewSkillImportEndpoint(ISkillImportService importService
             return null;
         }
 
-        return await _importService.PreviewGitHubRepositoryAsync(req.Owner, req.Repository, ct).ConfigureAwait(false);
+        return await _importService.PreviewGitHubRepositoryAsync(req.Owner, req.Repository, ct);
     }
 }
 

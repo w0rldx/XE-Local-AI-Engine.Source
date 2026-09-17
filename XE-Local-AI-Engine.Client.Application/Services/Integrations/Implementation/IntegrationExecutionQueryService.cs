@@ -91,7 +91,7 @@ public sealed class IntegrationExecutionQueryService
     /// </summary>
     public async Task<IntegrationCancelOutcome> RequestCancelAsync(Guid executionId, CancellationToken cancellationToken = default)
     {
-        var execution = await _executions.GetByIdAsync(executionId, cancellationToken).ConfigureAwait(false);
+        var execution = await _executions.GetByIdAsync(executionId, cancellationToken);
         if (execution is null)
         {
             return IntegrationCancelOutcome.NotFound;
@@ -131,14 +131,13 @@ public sealed class IntegrationExecutionQueryService
                                                   EndedAtUtc: null,
                                                   InvocationId: null,
                                                   nowUnixMs),
-                                              CancellationToken.None)
-                                          .ConfigureAwait(false);
+                                              CancellationToken.None);
 
             if (!marked)
             {
                 // The CAS lost. Either the coordinator advanced the row a moment ago and the signal below still
                 // reaches it, or the row terminalized — and a cancel on a finished run is a 409, not a 202.
-                var fresh = await _executions.GetByIdAsync(executionId, CancellationToken.None).ConfigureAwait(false);
+                var fresh = await _executions.GetByIdAsync(executionId, CancellationToken.None);
                 if (fresh is null)
                 {
                     return IntegrationCancelOutcome.NotFound;
@@ -150,12 +149,12 @@ public sealed class IntegrationExecutionQueryService
                 }
             }
             else if (execution.Status is IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued
-                     && !await TryTerminalizeCancelledAsync(execution, execution.Version + 1, nowUnixMs, CancellationToken.None).ConfigureAwait(false))
+                     && !await TryTerminalizeCancelledAsync(execution, execution.Version + 1, nowUnixMs, CancellationToken.None))
             {
                 // The terminal CAS lost. If it lost to a TERMINAL row — a pre-run rejection that beat this cancel to
                 // it — the run is over and the honest answer is a 409, not a 202 the caller will poll for a cancel
                 // that will never arrive. A still-live row is the ordinary case and stays a 202.
-                var fresh = await _executions.GetByIdAsync(executionId, CancellationToken.None).ConfigureAwait(false);
+                var fresh = await _executions.GetByIdAsync(executionId, CancellationToken.None);
                 if (fresh is not null
                     && fresh.Status is not (IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued or IntegrationExecutionStatus.Running))
                 {
@@ -194,7 +193,7 @@ public sealed class IntegrationExecutionQueryService
 
         // The audit row is built BEFORE the terminal command and carried inside it, so the store inserts it in the
         // same transaction. Written only if the CAS below wins, because a lost CAS rolls that transaction back.
-        var trigger = await _triggers.GetByIdAsync(execution.TriggerId, cancellationToken).ConfigureAwait(false);
+        var trigger = await _triggers.GetByIdAsync(execution.TriggerId, cancellationToken);
         var audit = new IntegrationInvocationAuditInput(execution.InvocationId,
             execution.RequestId,
             trigger?.Name ?? execution.TriggerId.ToString("D"),
@@ -223,8 +222,7 @@ public sealed class IntegrationExecutionQueryService
                                                FailureSummary: null,
                                                EventDetailJson: null,
                                                audit),
-                                           cancellationToken)
-                                       .ConfigureAwait(false);
+                                           cancellationToken);
             if (!won)
             {
                 return false;

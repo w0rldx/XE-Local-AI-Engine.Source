@@ -20,8 +20,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
 
         var entity = await _dbContext.ModelClassifications
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(classification => classification.ModelName == modelName, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(classification => classification.ModelName == modelName, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -31,8 +30,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
         var entities = await _dbContext.ModelClassifications
                                        .AsNoTracking()
                                        .OrderBy(classification => classification.ModelName)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -49,8 +47,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
 
         // Load tracked so an existing operator override is preserved across the detection refresh.
         var entity = await _dbContext.ModelClassifications
-                                     .FirstOrDefaultAsync(classification => classification.ModelName == modelName, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(classification => classification.ModelName == modelName, cancellationToken);
 
         if (entity is null)
         {
@@ -76,7 +73,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
             entity.UpdatedAtUtc = now;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -90,8 +87,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         var entity = await _dbContext.ModelClassifications
-                                     .FirstOrDefaultAsync(classification => classification.ModelName == modelName, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(classification => classification.ModelName == modelName, cancellationToken);
 
         if (entity is null)
         {
@@ -116,7 +112,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
             entity.UpdatedAtUtc = now;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }

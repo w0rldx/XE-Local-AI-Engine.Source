@@ -60,7 +60,7 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            await _dbContext.Database.OpenConnectionAsync(probeToken).ConfigureAwait(false);
+            await _dbContext.Database.OpenConnectionAsync(probeToken);
             var connection = (SqliteConnection)_dbContext.Database.GetDbConnection();
 
             // The write probe's transaction must be rolled back on EVERY exit — the DDL failing, the 2s probe timeout,
@@ -74,7 +74,7 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                 await using (var readCommand = connection.CreateCommand())
                 {
                     readCommand.CommandText = "SELECT 1;";
-                    var readResult = await readCommand.ExecuteScalarAsync(probeToken).ConfigureAwait(false);
+                    var readResult = await readCommand.ExecuteScalarAsync(probeToken);
                     if (readResult is null)
                     {
                         return Unhealthy(stopwatch, reason: "unavailable", "Node SQLite probe returned no result.");
@@ -86,7 +86,7 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                 {
                     schemaCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = $table LIMIT 1;";
                     _ = schemaCommand.Parameters.AddWithValue("$table", SchemaSentinelTable);
-                    var schemaResult = await schemaCommand.ExecuteScalarAsync(probeToken).ConfigureAwait(false);
+                    var schemaResult = await schemaCommand.ExecuteScalarAsync(probeToken);
                     if (schemaResult is null)
                     {
                         return Unhealthy(stopwatch, reason: "schema-missing",
@@ -103,19 +103,19 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                     await using (var beginCommand = connection.CreateCommand())
                     {
                         beginCommand.CommandText = "BEGIN IMMEDIATE;";
-                        _ = await beginCommand.ExecuteNonQueryAsync(probeToken).ConfigureAwait(false);
+                        _ = await beginCommand.ExecuteNonQueryAsync(probeToken);
                         transactionOpen = true;
                     }
 
                     await using (var writeCommand = connection.CreateCommand())
                     {
                         writeCommand.CommandText = "CREATE TABLE _xe_write_probe (probe INTEGER);";
-                        _ = await writeCommand.ExecuteNonQueryAsync(probeToken).ConfigureAwait(false);
+                        _ = await writeCommand.ExecuteNonQueryAsync(probeToken);
                     }
 
                     await using var rollbackCommand = connection.CreateCommand();
                     rollbackCommand.CommandText = "ROLLBACK;";
-                    _ = await rollbackCommand.ExecuteNonQueryAsync(probeToken).ConfigureAwait(false);
+                    _ = await rollbackCommand.ExecuteNonQueryAsync(probeToken);
                     transactionOpen = false;
                 }
                 catch (Exception writeException) when (writeException is not OperationCanceledException)
@@ -143,7 +143,7 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                         // must never mask the original error either, hence the best-effort catch.
                         await using var rollbackCommand = connection.CreateCommand();
                         rollbackCommand.CommandText = "ROLLBACK;";
-                        _ = await rollbackCommand.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+                        _ = await rollbackCommand.ExecuteNonQueryAsync(CancellationToken.None);
                     }
                     catch (Exception)
                     {
@@ -151,7 +151,7 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                     }
                 }
 
-                await _dbContext.Database.CloseConnectionAsync().ConfigureAwait(false);
+                await _dbContext.Database.CloseConnectionAsync();
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

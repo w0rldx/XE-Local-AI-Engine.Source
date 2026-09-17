@@ -484,7 +484,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var timedOut = false;
         try
         {
-            await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeoutSource.Token);
         }
         catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested)
         {
@@ -494,11 +494,11 @@ public sealed class PersistenceEncryptionTests : IDisposable
                 process.Kill(entireProcessTree: true);
             }
 
-            await process.WaitForExitAsync().ConfigureAwait(false);
+            await process.WaitForExitAsync();
         }
 
-        var standardOutput = await standardOutputTask.ConfigureAwait(false);
-        var standardError = await standardErrorTask.ConfigureAwait(false);
+        var standardOutput = await standardOutputTask;
+        var standardError = await standardErrorTask;
 
         var combinedOutput = standardOutput + Environment.NewLine + standardError;
 

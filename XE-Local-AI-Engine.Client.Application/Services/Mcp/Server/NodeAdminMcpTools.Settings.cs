@@ -80,8 +80,8 @@ public sealed partial class NodeAdminMcpTools
                 KvCacheType = kv_cache_type,
                 RerankerModelName = reranker_model_name,
                 AutoEffortFastModelName = auto_effort_fast_model_name
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken);
             return result.ToResponse();
-        }, static response => !response.Updated).ConfigureAwait(false);
+        }, static response => !response.Updated);
     }
 }

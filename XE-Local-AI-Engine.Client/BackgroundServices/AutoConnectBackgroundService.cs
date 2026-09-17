@@ -50,7 +50,7 @@ public sealed class AutoConnectBackgroundService : BackgroundService
         try
         {
             var startupDelay = TestStartupDelayOverride > TimeSpan.Zero ? TestStartupDelayOverride : StartupDelay;
-            await Task.Delay(startupDelay, linkedToken).ConfigureAwait(false);
+            await Task.Delay(startupDelay, linkedToken);
         }
         catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
         {
@@ -86,7 +86,7 @@ public sealed class AutoConnectBackgroundService : BackgroundService
                     attempt + 1,
                     options.ReconnectMaxAttempts == 0 ? string.Empty : $"/{options.ReconnectMaxAttempts}");
 
-                await _hubConnection.ConnectAsync(linkedToken).ConfigureAwait(false);
+                await _hubConnection.ConnectAsync(linkedToken);
 
                 _logger.LogInformation("Connected to Central Platform successfully.");
                 return;
@@ -110,7 +110,7 @@ public sealed class AutoConnectBackgroundService : BackgroundService
 
                 try
                 {
-                    await Task.Delay(delay.Value, linkedToken).ConfigureAwait(false);
+                    await Task.Delay(delay.Value, linkedToken);
                 }
                 catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
                 {
@@ -126,8 +126,8 @@ public sealed class AutoConnectBackgroundService : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _shutdownSignal.CancelAsync().ConfigureAwait(false);
-        await base.StopAsync(cancellationToken).ConfigureAwait(false);
+        await _shutdownSignal.CancelAsync();
+        await base.StopAsync(cancellationToken);
     }
 
     public override void Dispose()

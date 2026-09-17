@@ -36,7 +36,7 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
             return false;
         }
 
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
         var descriptor = installed.FirstOrDefault(model =>
             string.Equals(model.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
 
@@ -45,7 +45,7 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
             return false;
         }
 
-        var added = await AddAsync([descriptor.ModelName], cancellationToken).ConfigureAwait(false);
+        var added = await AddAsync([descriptor.ModelName], cancellationToken);
         if (added > 0)
         {
             _logger.LogInformation("Model {ModelName} advertises tool calling in its chat template; added it to the tool-capable model list.",
@@ -57,7 +57,7 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
 
     public async Task<int> BackfillInstalledAsync(CancellationToken cancellationToken = default)
     {
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
         var capable = installed.Where(model => model.IsToolCapable)
                                .Select(model => model.ModelName)
                                .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -68,7 +68,7 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
             return 0;
         }
 
-        var added = await AddAsync(capable, cancellationToken).ConfigureAwait(false);
+        var added = await AddAsync(capable, cancellationToken);
         if (added > 0)
         {
             _logger.LogInformation("Added {Count} installed tool-capable model(s) to the tool-capable model list.", added);
@@ -97,7 +97,7 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
     /// </remarks>
     private async Task<int> AddAsync(IReadOnlyList<string> modelNames, CancellationToken cancellationToken)
     {
-        var stored = await _settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await _settingsStore.LoadAsync(cancellationToken);
         if (Missing(stored.ToolCapableModels, modelNames).Count == 0)
         {
             return 0;
@@ -120,7 +120,7 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
             {
                 ToolCapableModels = merged
             };
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
 
         return added;
     }

@@ -23,16 +23,16 @@ public sealed class GraphWorkflowRetryTests
     public async Task ARetryableFailureUnderBothBudgets_GoesBackToPendingOnTheNextAttemptAndRuns()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.NodeFailed).ConfigureAwait(false);
+        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.NodeFailed);
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
 
-        var work = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var work = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(expected: 2, work.Attempt, "the attempt is incremented in the same write that clears the failure.");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, work.Status, "and the fresh attempt is admitted by the tick that scheduled it.");
         AssertEx.Equal(GraphWorkflowFailureClass.None, work.FailureClass, "a re-attempt must not report the previous try's outcome while it runs.");
 
-        var retried = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "node.retried");
+        var retried = (await harness.ReadEventsAsync(runId)).Single(static entry => entry.EventType == "node.retried");
         AssertEx.Contains(retried.DetailJson, "NodeFailed", message: "the row cleared the failure, so the event is the only place it survives.");
         AssertEx.Contains(retried.DetailJson, "\"reason\":\"the lane said so\"");
     }
@@ -46,16 +46,16 @@ public sealed class GraphWorkflowRetryTests
     public async Task ASingleAttemptNodeThatTimesOut_IsClassedAttemptsExhaustedAndNotRetried()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await RunningWorkNodeAsync(harness, GraphWorkflowGraphs.InlineSingleAttempt).ConfigureAwait(false);
+        var runId = await RunningWorkNodeAsync(harness, GraphWorkflowGraphs.InlineSingleAttempt);
 
-        _ = await ExpireAsync(harness, runId).ConfigureAwait(false);
+        _ = await ExpireAsync(harness, runId);
 
-        var work = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var work = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, work.Status);
         AssertEx.Equal(expected: 1, work.Attempt, "nothing re-attempted it.");
         AssertEx.Equal(GraphWorkflowFailureClass.AttemptsExhausted, work.FailureClass);
         AssertEx.Contains(work.Error, "did not finish within", message: "what actually happened survives on the row's reason.");
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.retried"));
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.retried"));
     }
 
     /// <summary>Spending the node's LAST attempt is what <c>AttemptsExhausted</c> means; the attempts before it are not.</summary>
@@ -65,15 +65,15 @@ public sealed class GraphWorkflowRetryTests
         await using var harness = new GraphWorkflowHarness(Host);
 
         // Two attempts already spent on a three-attempt node: the next failure is the one with nowhere to go.
-        var runId = await RunningWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Pending, incrementAttempt: true).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Pending, incrementAttempt: true).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        var runId = await RunningWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Pending, incrementAttempt: true);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Pending, incrementAttempt: true);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running);
 
-        _ = await ExpireAsync(harness, runId).ConfigureAwait(false);
+        _ = await ExpireAsync(harness, runId);
 
-        var work = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var work = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(expected: 3, work.Attempt);
         AssertEx.Equal(GraphWorkflowFailureClass.AttemptsExhausted, work.FailureClass);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, work.Status, "no attempt is left, so the failure stands.");
@@ -88,24 +88,23 @@ public sealed class GraphWorkflowRetryTests
     {
         // A private host: the total-attempt budget is host-level configuration.
         await using var harness = new GraphWorkflowHarness(("GraphWorkflows:MaxTotalAttempts", "1"));
-        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.NodeFailed).ConfigureAwait(false);
+        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.NodeFailed);
 
         // One attempt already spent run-wide, which is the whole of this host's budget.
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Pending, incrementAttempt: true).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Pending, incrementAttempt: true);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running);
         await harness.TransitionNodeRunAsync(runId,
                          "work",
                          GraphWorkflowNodeRunStatus.Failed,
                          GraphWorkflowFailureClass.NodeFailed,
-                         "the lane said so again")
-                     .ConfigureAwait(false);
+                         "the lane said so again");
 
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
 
-        var work = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var work = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(expected: 2, work.Attempt, "the run's budget is spent, so nothing re-attempted it.");
         AssertEx.Equal(GraphWorkflowFailureClass.NodeFailed, work.FailureClass, "the class the failure carried stands: the NODE had attempts left.");
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.retried"));
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.retried"));
     }
 
     /// <summary>
@@ -116,14 +115,14 @@ public sealed class GraphWorkflowRetryTests
     public async Task AValidationFailure_IsNeverRetried()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.ValidationFailed).ConfigureAwait(false);
+        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.ValidationFailed);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        var work = await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false);
+        var work = await harness.ReadNodeRunAsync(runId, "work");
         AssertEx.Equal(expected: 1, work.Attempt);
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, work.Status);
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.retried"));
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.retried"));
     }
 
     /// <summary>An over-cap document is over-cap again on the next attempt, for the same reason.</summary>
@@ -131,31 +130,31 @@ public sealed class GraphWorkflowRetryTests
     public async Task AnOverCapFailure_IsNeverRetried()
     {
         await using var harness = new GraphWorkflowHarness(Host);
-        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.OutputTooLarge).ConfigureAwait(false);
+        var runId = await FailedWorkNodeAsync(harness, GraphWorkflowGraphs.InlineRetryable, GraphWorkflowFailureClass.OutputTooLarge);
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
-        AssertEx.Equal(expected: 1, (await harness.ReadNodeRunAsync(runId, "work").ConfigureAwait(false)).Attempt);
-        AssertEx.Empty((await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Where(static entry => entry.EventType == "node.retried"));
+        AssertEx.Equal(expected: 1, (await harness.ReadNodeRunAsync(runId, "work")).Attempt);
+        AssertEx.Empty((await harness.ReadEventsAsync(runId)).Where(static entry => entry.EventType == "node.retried"));
     }
 
     /// <summary>A run ticked far enough that its work node is <c>Running</c>, ready to be failed or expired.</summary>
     private static async Task<Guid> RunningWorkNodeAsync(GraphWorkflowHarness harness, string graphJson)
     {
-        var runId = await harness.StartRunAsync(graphJson).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(graphJson);
 
         // Out of Pending, then Start — after which the work node is Pending and nothing has dispatched it yet.
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Running);
         return runId;
     }
 
     /// <summary>The same run with its work node already failed, the way a lane this build does not ship would leave it.</summary>
     private static async Task<Guid> FailedWorkNodeAsync(GraphWorkflowHarness harness, string graphJson, GraphWorkflowFailureClass failureClass)
     {
-        var runId = await RunningWorkNodeAsync(harness, graphJson).ConfigureAwait(false);
-        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Failed, failureClass, "the lane said so").ConfigureAwait(false);
+        var runId = await RunningWorkNodeAsync(harness, graphJson);
+        await harness.TransitionNodeRunAsync(runId, "work", GraphWorkflowNodeRunStatus.Failed, failureClass, "the lane said so");
         return runId;
     }
 

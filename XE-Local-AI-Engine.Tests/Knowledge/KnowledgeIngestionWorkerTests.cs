@@ -39,17 +39,17 @@ public sealed class KnowledgeIngestionWorkerTests
         await using var provider = BuildProvider(ingestion, catalog);
         using var worker = CreateWorker(provider, dispatcher);
 
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
 
         // Recovery resets the interrupted rows to Pending, re-dispatches their ids, and the worker drains them — so the
         // ingestion state machine runs for BOTH documents without any new upload.
         await AssertEx.EventuallyAsync(() => ingestion.Started.Count == 2,
             PollTimeout,
-            "Startup recovery should have re-dispatched both interrupted documents.").ConfigureAwait(false);
+            "Startup recovery should have re-dispatched both interrupted documents.");
         AssertEx.Contains(ingestion.Started, first);
         AssertEx.Contains(ingestion.Started, second);
 
-        await worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StopAsync(CancellationToken.None);
     }
 
     [Test]
@@ -64,20 +64,20 @@ public sealed class KnowledgeIngestionWorkerTests
         await using var provider = BuildProvider(ingestion, catalog);
         using var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 30);
 
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
+        await dispatcher.EnqueueAsync(documentId, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => !ingestion.Started.IsEmpty,
             PollTimeout,
-            "The worker should have started ingesting the enqueued document.").ConfigureAwait(false);
+            "The worker should have started ingesting the enqueued document.");
 
         // Begin shutdown while the document is still mid-run (blocked on the gate). StopAsync must not complete yet.
         var stop = worker.StopAsync(CancellationToken.None);
-        await AssertEx.StaysIncompleteAsync(stop, "StopAsync must wait for the in-flight document to finish draining.").ConfigureAwait(false);
+        await AssertEx.StaysIncompleteAsync(stop, "StopAsync must wait for the in-flight document to finish draining.");
         AssertEx.True(ingestion.Completed.IsEmpty, "The document must not have completed while still gated.");
 
         // Release the document; StopAsync completes only after its terminal write lands.
         gate.SetResult();
-        await stop.ConfigureAwait(false);
+        await stop;
         AssertEx.Contains(ingestion.Completed, documentId);
     }
 
@@ -93,16 +93,16 @@ public sealed class KnowledgeIngestionWorkerTests
         await using var provider = BuildProvider(ingestion, catalog);
         using var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 1);
 
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
+        await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => !ingestion.Started.IsEmpty,
             PollTimeout,
-            "The worker should have started ingesting the enqueued document.").ConfigureAwait(false);
+            "The worker should have started ingesting the enqueued document.");
 
         // The document ignores cancellation and would run for 10s; StopAsync must return within the ~1s drain window and
         // must not throw, abandoning the hung document (it stays non-terminal and recovers on the next start).
         var stopwatch = Stopwatch.StartNew();
-        await worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StopAsync(CancellationToken.None);
         stopwatch.Stop();
 
         AssertEx.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
@@ -141,13 +141,13 @@ public sealed class KnowledgeIngestionWorkerTests
                 var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 1);
                 try
                 {
-                    await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
-                    await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+                    await worker.StartAsync(CancellationToken.None);
+                    await dispatcher.EnqueueAsync(Guid.NewGuid(), CancellationToken.None);
                     await AssertEx.EventuallyAsync(() => !ingestion.Started.IsEmpty,
                         PollTimeout,
-                        "The worker should have started ingesting the enqueued document.").ConfigureAwait(false);
+                        "The worker should have started ingesting the enqueued document.");
 
-                    await worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                    await worker.StopAsync(CancellationToken.None);
                 }
                 finally
                 {
@@ -157,10 +157,10 @@ public sealed class KnowledgeIngestionWorkerTests
                 // Let the abandoned document finish so its finally runs Release() on the now-disposed semaphore.
                 await AssertEx.EventuallyAsync(() => !ingestion.Completed.IsEmpty,
                     PollTimeout,
-                    "The abandoned document should have finished after disposal.").ConfigureAwait(false);
+                    "The abandoned document should have finished after disposal.");
 
                 // The guarded Release runs in the abandoned task's finally, one continuation after the completion above.
-                await AssertEx.SettleAsync().ConfigureAwait(false);
+                await AssertEx.SettleAsync();
             }
 
 #pragma warning disable S1215 // Deterministic finalizer flush is the only way to surface UnobservedTaskException in-test.
@@ -202,16 +202,16 @@ public sealed class KnowledgeIngestionWorkerTests
         await using var provider = BuildProvider(ingestion, catalog);
         using var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 30);
 
-        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StartAsync(CancellationToken.None);
         // One normal document primes the pump; its completion drains the queue to empty and fires the sweep that admits the
         // two stranded documents the full-queue path never enqueued — the "drain → enqueued → ingested" recovery.
-        _ = await dispatcher.EnqueueAsync(trigger, CancellationToken.None).ConfigureAwait(false);
+        _ = await dispatcher.EnqueueAsync(trigger, CancellationToken.None);
 
         await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(trigger) && ingestion.Completed.Contains(strandedA) && ingestion.Completed.Contains(strandedB),
             PollTimeout,
-            "The drain-sweep should have admitted and ingested both stranded Pending documents.").ConfigureAwait(false);
+            "The drain-sweep should have admitted and ingested both stranded Pending documents.");
 
-        await worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        await worker.StopAsync(CancellationToken.None);
     }
 
     private static IKnowledgeDocumentCatalogService NoRecovery()
@@ -254,7 +254,7 @@ public sealed class KnowledgeIngestionWorkerTests
         public async Task RunAsync(Guid documentId, CancellationToken cancellationToken)
         {
             Started.Add(documentId);
-            await behavior(documentId, cancellationToken).ConfigureAwait(false);
+            await behavior(documentId, cancellationToken);
             Completed.Add(documentId);
         }
     }

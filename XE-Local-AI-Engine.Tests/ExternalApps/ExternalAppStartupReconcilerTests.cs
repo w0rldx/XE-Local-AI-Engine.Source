@@ -24,16 +24,16 @@ public sealed class ExternalAppStartupReconcilerTests
     public async Task Reconcile_WhenTheRuntimeIsNotReady_WritesNoRowAndSaysSo()
     {
         var manifest = SingleServiceManifest();
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
-        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing);
 
         harness.Resolver.Resolution = FakeContainerRuntimeResolver.UnavailableResolution("Nothing is listening on the daemon socket.");
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(ExternalAppReconcileSummary.Nothing, summary);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(seeded.Id).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(seeded.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Installing, row.Status);
         AssertEx.Equal(seeded.Version, row.Version);
     }
@@ -48,16 +48,15 @@ public sealed class ExternalAppStartupReconcilerTests
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, static options => options with
                                                                  {
                                                                      Enabled = false
-                                                                 })
-                                                                 .ConfigureAwait(false);
-        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing).ConfigureAwait(false);
+                                                                 });
+        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(ExternalAppReconcileSummary.Nothing, summary);
         AssertEx.Equal(expected: 0, harness.Gated.ListDetailedCalls, "A disabled feature must not reach the daemon at all.");
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(seeded.Id).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(seeded.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Installing, row.Status);
         AssertEx.Equal(seeded.Version, row.Version, "A pass that judged nothing may not have moved the row's version either.");
     }
@@ -69,13 +68,13 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchA_Uninstalling_CompletesTheUninstallAndRemovesTheRowsAndTheDirectory()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Uninstalling).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Uninstalling);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
-        AssertEx.Null(await harness.ReadAsync(row.Id).ConfigureAwait(false), "An interrupted uninstall must not leave the row behind.");
+        AssertEx.Null(await harness.ReadAsync(row.Id), "An interrupted uninstall must not leave the row behind.");
         AssertEx.NotEmpty(harness.Runtime.RemovedContainerIds);
         AssertEx.False(Directory.Exists(row.StoragePath), $"The instance directory '{row.StoragePath}' survived the completed uninstall.");
         AssertEx.Contains(harness.Publisher.Events.Select(static published => published.Kind), ExternalAppInstanceEventKind.Uninstalled);
@@ -94,14 +93,14 @@ public sealed class ExternalAppStartupReconcilerTests
             return;
         }
 
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Uninstalling).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Uninstalling);
         harness.MakeUndeletable(row.StoragePath);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
-        AssertEx.Null(await harness.ReadAsync(row.Id).ConfigureAwait(false));
+        AssertEx.Null(await harness.ReadAsync(row.Id));
         AssertEx.True(Directory.Exists(row.StoragePath), "The fixture failed to make the directory undeletable, so this proves nothing.");
     }
 
@@ -113,8 +112,8 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task Reconcile_WhenAnUpdateFinishesBetweenTheListAndTheJudgement_LeavesTheNewContainersAlone()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        var stale = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Updating).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+        var stale = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Updating);
 
         // The rows are read before the containers are listed, so this fires with the stale 'Updating' snapshot
         // already in the pass's hand — which is exactly the interleaving the gate alone cannot exclude.
@@ -129,14 +128,14 @@ public sealed class ExternalAppStartupReconcilerTests
             _ = harness.ForceStatusAsync(stale.Id, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running).GetAwaiter().GetResult();
         };
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, moved, "The fixture never moved the row, so this proves nothing about a stale snapshot.");
         AssertEx.Equal(expected: 1, summary.RowsSkippedBusy, "A row that moved under the pass is skipped, not judged on what it used to say.");
         AssertEx.Equal(expected: 0, summary.RowsChanged);
         AssertEx.Empty(harness.Runtime.RemovedContainerIds, "The containers the finished update left running must survive the stale verdict.");
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(stale.Id).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(stale.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Running, row.Status);
     }
 
@@ -148,24 +147,24 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchA_WhenAContainerSurvivesTheTeardown_KeepsTheRowForTheNextPassToRetry()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Uninstalling).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Uninstalling);
 
         harness.Gated.RemoveFailure = static _ => new DockerRuntimeException("The daemon refused to remove the container.");
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 0, summary.RowsChanged);
-        var kept = AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false), "The row must survive a teardown that did not complete.");
+        var kept = AssertEx.NotNull(await harness.ReadAsync(row.Id), "The row must survive a teardown that did not complete.");
         AssertEx.Equal(ExternalAppInstanceStatus.Uninstalling, kept.Status, "The status is what makes the next pass run this same branch again.");
         AssertEx.True(Directory.Exists(kept.StoragePath), "A teardown that did not complete must not have deleted the instance's data.");
 
         // The retry, in the same test: with the daemon healthy the next pass finishes the uninstall it refused to.
         harness.Gated.RemoveFailure = null;
-        var second = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var second = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, second.RowsChanged);
-        AssertEx.Null(await harness.ReadAsync(row.Id).ConfigureAwait(false));
+        AssertEx.Null(await harness.ReadAsync(row.Id));
         AssertEx.False(Directory.Exists(kept.StoragePath), "The completed uninstall removes the directory it kept.");
     }
 
@@ -181,14 +180,14 @@ public sealed class ExternalAppStartupReconcilerTests
     [Arguments(ExternalAppInstanceStatus.Resetting, "being reset")]
     public async Task BranchA_EachOtherTransientStatus_SettlesToFailedNamingTheInterruptedOperation(ExternalAppInstanceStatus status, string verb)
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        var row = await harness.ForceStatusAsync(harness.InstalledId, status).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+        var row = await harness.ForceStatusAsync(harness.InstalledId, status);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var settled = AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false));
+        var settled = AssertEx.NotNull(await harness.ReadAsync(row.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Failed, settled.Status);
         AssertEx.Equal(ExternalAppFailureCategory.Unknown, settled.FailureCategory);
         AssertEx.Contains(AssertEx.NotNull(settled.FailureSummary), verb);
@@ -205,14 +204,14 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchB_WhenEveryContainerIsRunningAndVerifies_RestoresAFailedRowToRunning()
     {
-        await using var harness = await RunningHarnessAsync(TwoServiceManifest()).ConfigureAwait(false);
-        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(TwoServiceManifest());
+        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Failed);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var restored = AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false));
+        var restored = AssertEx.NotNull(await harness.ReadAsync(row.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Running, restored.Status);
         AssertEx.Null(restored.FailureCategory, "Adoption must clear the stale failure, not inherit it.");
         AssertEx.Contains(harness.Publisher.Events.Select(static published => published.Kind), ExternalAppInstanceEventKind.RestoredOnBoot);
@@ -222,14 +221,14 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchB_WhenAContainerIsMissing_ReportsStoppedUnexpectedly()
     {
-        await using var harness = await RunningHarnessAsync(TwoServiceManifest()).ConfigureAwait(false);
-        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[1]).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(TwoServiceManifest());
+        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[1]);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly, row.Status);
         AssertEx.Equal(ExternalAppFailureCategory.StoppedUnexpectedly, row.FailureCategory);
 
@@ -244,15 +243,15 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchB_WhenAContainerIsExitedButStillListed_ReportsStoppedUnexpectedlyWithItsExitCode()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
         // The single service's only container, killed out of band. It is still LISTED, which is the whole point.
         harness.Runtime.ExitState = static _ => Exited(exitCode: 137);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly, row.Status);
 
         // The whole sentence: the state word and the exit code come from two different members of the listing, and
@@ -267,17 +266,17 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchB_WhenAnExistingContainersDigestDiffers_ReportsFailedWithPolicyViolation()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
         harness.Runtime.InspectionMutator = inspection => inspection with
         {
             Image = ExternalAppTestManifests.SecondImage
         };
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.Failed, row.Status);
         AssertEx.Equal(ExternalAppFailureCategory.PolicyViolation, row.FailureCategory);
         AssertEx.Equal(ExternalAppDesiredState.Running, row.DesiredState, "A drifted container is repaired by a Start, so the desired state must survive.");
@@ -293,19 +292,19 @@ public sealed class ExternalAppStartupReconcilerTests
     [Arguments("")]
     public async Task BranchB_WhenTheObservedImageIsNotTheInstalledReference_RefusesAdoption(string observed)
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        _ = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+        _ = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Failed);
 
         harness.Runtime.InspectionMutator = inspection => inspection with
         {
             Image = observed
         };
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.Failed, row.Status);
         AssertEx.Equal(ExternalAppFailureCategory.PolicyViolation, row.FailureCategory);
         AssertEx.Contains(AssertEx.NotNull(row.FailureSummary), "an image this instance did not install");
@@ -318,7 +317,7 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchB_WhenTheObservedBindingIsOffLoopback_ReportsFailedWithPolicyViolation()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
 
         harness.Runtime.InspectionMutator = inspection => inspection with
         {
@@ -331,11 +330,11 @@ public sealed class ExternalAppStartupReconcilerTests
             ]
         };
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.Failed, row.Status);
         AssertEx.Equal(ExternalAppFailureCategory.PolicyViolation, row.FailureCategory);
         var failureSummary = AssertEx.NotNull(row.FailureSummary);
@@ -348,18 +347,18 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchB_WhenTheObservedContainerIsPrivileged_ReportsFailedWithPolicyViolation()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
 
         harness.Runtime.InspectionMutator = static inspection => inspection with
         {
             Privileged = true
         };
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.Failed, row.Status);
         AssertEx.Equal(ExternalAppFailureCategory.PolicyViolation, row.FailureCategory);
     }
@@ -367,43 +366,43 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task BranchB_WhenTheDesiredStateIsStoppedAndAContainerIsRunning_StopsItAndReportsStopped()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
 
         // Desired Stopped while the containers are up: what a daemon restart with unless-stopped produces after the
         // user stopped the instance from a build that did not yet write the desired state.
-        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Stopped).ConfigureAwait(false);
+        var row = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Stopped);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
-        AssertEx.Equal(ExternalAppInstanceStatus.Stopped, AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false)).Status);
+        AssertEx.Equal(ExternalAppInstanceStatus.Stopped, AssertEx.NotNull(await harness.ReadAsync(row.Id)).Status);
         AssertEx.NotEmpty(harness.Runtime.StoppedGracePeriods);
     }
 
     [Test]
     public async Task BranchB_WhenTheDesiredStateIsStoppedAndNothingIsRunning_WritesNothing()
     {
-        await using var harness = await StoppedHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        var before = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        await using var harness = await StoppedHarnessAsync(SingleServiceManifest());
+        var before = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 0, summary.RowsChanged);
-        AssertEx.Equal(before.Version, AssertEx.NotNull(await harness.ReadAsync(before.Id).ConfigureAwait(false)).Version);
+        AssertEx.Equal(before.Version, AssertEx.NotNull(await harness.ReadAsync(before.Id)).Version);
     }
 
     /// <summary>Branch C: containers wearing THIS install id that no row claims are the only ones removed.</summary>
     [Test]
     public async Task Reconcile_RemovesTheContainersOfAnInstanceNoRowClaims()
     {
-        await using var harness = await RunningHarnessAsync(TwoServiceManifest()).ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        await using var harness = await RunningHarnessAsync(TwoServiceManifest());
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         // The row goes, the containers stay: an uninstall that died between the two writes, or a database restored
         // from an older backup.
-        await harness.DeleteRowAsync(row.Id, row.Version).ConfigureAwait(false);
+        await harness.DeleteRowAsync(row.Id, row.Version);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 2, summary.OrphansRemoved);
         AssertEx.Equal(expected: 0, summary.RowsInspected);
@@ -419,18 +418,18 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task Reconcile_WhenAnInstallIsInFlightOnAnUnclaimedInstance_KeepsItsContainers()
     {
-        await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         // The containers with no row the pass can see: exactly what an install that inserted its row after the
         // opening ListAsync looks like from here.
-        await harness.DeleteRowAsync(row.Id, row.Version).ConfigureAwait(false);
+        await harness.DeleteRowAsync(row.Id, row.Version);
 
         var reconciler = harness.CreateReconciler();
         ExternalAppReconcileSummary guarded;
-        using (AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(row.Id)).ConfigureAwait(false)))
+        using (AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(row.Id))))
         {
-            guarded = await reconciler.ReconcileAsync().ConfigureAwait(false);
+            guarded = await reconciler.ReconcileAsync();
         }
 
         AssertEx.Equal(expected: 0, guarded.OrphansRemoved, "An instance somebody holds the gate on is not an orphan.");
@@ -438,7 +437,7 @@ public sealed class ExternalAppStartupReconcilerTests
 
         // The negative control, in the same test: once the gate is free the very same containers ARE removed, which
         // is what proves the fixture built a genuine orphan rather than an unreachable one.
-        var unguarded = await reconciler.ReconcileAsync().ConfigureAwait(false);
+        var unguarded = await reconciler.ReconcileAsync();
 
         AssertEx.Equal(expected: 1, unguarded.OrphansRemoved);
         AssertEx.NotEmpty(harness.Runtime.RemovedContainerIds);
@@ -452,21 +451,21 @@ public sealed class ExternalAppStartupReconcilerTests
     public async Task Reconcile_WhenOneRowsInspectThrows_CountsItAndStillJudgesTheOthers()
     {
         var manifest = SingleServiceManifest();
-        await using var harness = await RunningHarnessAsync(manifest).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(manifest);
 
         // A second row with no containers at all, so its verdict needs no inspect and is decided from the list.
-        var second = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running).ConfigureAwait(false);
+        var second = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
 
         harness.Gated.InspectFailure = static _ =>
             new DockerRuntimeException(DockerDaemonPreflightStatus.ProbeFailed, "No such container: it was removed between the list and the inspect.");
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsFailed);
         AssertEx.Equal(expected: 1, summary.RowsChanged, "The row whose judgement needed no inspect must still have been judged.");
-        AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly, AssertEx.NotNull(await harness.ReadAsync(second.Id).ConfigureAwait(false)).Status);
+        AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly, AssertEx.NotNull(await harness.ReadAsync(second.Id)).Status);
         AssertEx.Equal(ExternalAppInstanceStatus.Running,
-            AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false)).Status,
+            AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId)).Status,
             "A row nothing could judge keeps the status it had.");
     }
 
@@ -479,25 +478,24 @@ public sealed class ExternalAppStartupReconcilerTests
     public async Task Reconcile_WhenAStoredSnapshotIsRefusedByThePolicy_FailsThatRowAloneAndJudgesTheOthers()
     {
         var manifest = SingleServiceManifest();
-        await using var harness = await RunningHarnessAsync(manifest).ConfigureAwait(false);
-        var second = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(manifest);
+        var second = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
 
         // Same services and names, so the containers are still found; only the image lost its digest pin, which is
         // what ApplicationContainerPolicy refuses when the plan is rebuilt for verification.
         await harness.ReplaceManifestSnapshotAsync(harness.InstalledId,
-                         ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)], image: "ghcr.io/example/app:1.0.0")]))
-                     .ConfigureAwait(false);
+                         ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)], image: "ghcr.io/example/app:1.0.0")]));
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 0, summary.RowsFailed, "A refusal the planner handles is a verdict, not an unjudgeable row.");
         AssertEx.Equal(expected: 2, summary.RowsChanged);
 
-        var refused = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var refused = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
         AssertEx.Equal(ExternalAppInstanceStatus.Failed, refused.Status);
         AssertEx.Equal(ExternalAppFailureCategory.Unknown, refused.FailureCategory);
         AssertEx.Contains(AssertEx.NotNull(refused.FailureSummary), "could not be verified");
-        AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly, AssertEx.NotNull(await harness.ReadAsync(second.Id).ConfigureAwait(false)).Status);
+        AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly, AssertEx.NotNull(await harness.ReadAsync(second.Id)).Status);
     }
 
     /// <summary>
@@ -508,12 +506,12 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task Reconcile_WithOwnerLabelledContainersWhoseInstallLabelIsMissingOrDifferent_CountsThemAndRemovesNothing()
     {
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(SingleServiceManifest()).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(SingleServiceManifest());
 
-        var differentInstall = await RunForeignAsync(harness, "stranger", installId: "a-different-installation").ConfigureAwait(false);
-        var noInstall = await RunForeignAsync(harness, "unlabelled", installId: null).ConfigureAwait(false);
+        var differentInstall = await RunForeignAsync(harness, "stranger", installId: "a-different-installation");
+        var noInstall = await RunForeignAsync(harness, "unlabelled", installId: null);
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 2, summary.ForeignInstallContainers);
         AssertEx.Equal(expected: 0, summary.OrphansRemoved);
@@ -529,16 +527,16 @@ public sealed class ExternalAppStartupReconcilerTests
     public async Task Reconcile_SkipsAnInstanceWhoseGateIsHeld_AndCountsIt()
     {
         var manifest = SingleServiceManifest();
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
-        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Updating).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Updating);
 
-        using var held = AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(seeded.Id)).ConfigureAwait(false));
+        using var held = AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(seeded.Id)));
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsSkippedBusy);
         AssertEx.Equal(expected: 0, summary.RowsChanged);
-        AssertEx.Equal(ExternalAppInstanceStatus.Updating, AssertEx.NotNull(await harness.ReadAsync(seeded.Id).ConfigureAwait(false)).Status);
+        AssertEx.Equal(ExternalAppInstanceStatus.Updating, AssertEx.NotNull(await harness.ReadAsync(seeded.Id)).Status);
     }
 
     /// <summary>
@@ -548,14 +546,14 @@ public sealed class ExternalAppStartupReconcilerTests
     [Test]
     public async Task ReconcileAsync_CalledTwice_IsIdempotent()
     {
-        await using var harness = await RunningHarnessAsync(TwoServiceManifest()).ConfigureAwait(false);
-        _ = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        await using var harness = await RunningHarnessAsync(TwoServiceManifest());
+        _ = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Failed);
         var reconciler = harness.CreateReconciler();
 
-        var first = await reconciler.ReconcileAsync().ConfigureAwait(false);
-        var afterFirst = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
-        var second = await reconciler.ReconcileAsync().ConfigureAwait(false);
-        var afterSecond = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var first = await reconciler.ReconcileAsync();
+        var afterFirst = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
+        var second = await reconciler.ReconcileAsync();
+        var afterSecond = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
         AssertEx.Equal(ExternalAppInstanceStatus.Running, afterFirst.Status);
         AssertEx.Equal(ExternalAppInstanceStatus.Running, afterSecond.Status);
@@ -573,7 +571,7 @@ public sealed class ExternalAppStartupReconcilerTests
     public async Task Reconcile_AfterAShutdownLeftAnOperationTransient_SettlesTheRowAndTouchesNothingElse()
     {
         var manifest = SingleServiceManifest();
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         harness.Gated.PullGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
@@ -581,21 +579,20 @@ public sealed class ExternalAppStartupReconcilerTests
                                         manifest.ManifestVersion,
                                         manifest.ManifestSha256,
                                         new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true))
-                                    .ConfigureAwait(false);
-        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+                                        AcceptPermissions: true));
+        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
 
         harness.StopHost();
-        await harness.WaitUntilIdleAsync(admitted.Id).ConfigureAwait(false);
+        await harness.WaitUntilIdleAsync(admitted.Id);
         AssertEx.Equal(ExternalAppInstanceStatus.Installing,
-            AssertEx.NotNull(await harness.ReadAsync(admitted.Id).ConfigureAwait(false)).Status,
+            AssertEx.NotNull(await harness.ReadAsync(admitted.Id)).Status,
             "The shutdown path must leave the row transient; without that this pass has nothing to settle.");
 
-        var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
+        var summary = await harness.CreateReconciler().ReconcileAsync();
 
         AssertEx.Equal(expected: 1, summary.RowsChanged);
 
-        var settled = AssertEx.NotNull(await harness.ReadAsync(admitted.Id).ConfigureAwait(false));
+        var settled = AssertEx.NotNull(await harness.ReadAsync(admitted.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Failed, settled.Status);
         AssertEx.Contains(AssertEx.NotNull(settled.FailureSummary), "being installed");
     }
@@ -608,16 +605,16 @@ public sealed class ExternalAppStartupReconcilerTests
     public async Task StartAsync_WhenThePassThrows_DoesNotFailStartup()
     {
         var manifest = SingleServiceManifest();
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
-        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing);
 
         harness.Resolver.CreateFailure = new InvalidOperationException("The daemon socket vanished mid-pass.");
 
         // Returning at all is the assertion's other half: StartAsync throwing is precisely the failure this guards
         // against, and the platform would report it as this test's own exception.
-        await harness.CreateReconciler().StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await harness.CreateReconciler().StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(ExternalAppInstanceStatus.Installing, AssertEx.NotNull(await harness.ReadAsync(seeded.Id).ConfigureAwait(false)).Status);
+        AssertEx.Equal(ExternalAppInstanceStatus.Installing, AssertEx.NotNull(await harness.ReadAsync(seeded.Id)).Status);
     }
 
     private static ContainerRunState Exited(long exitCode)
@@ -709,27 +706,26 @@ public sealed class ExternalAppStartupReconcilerTests
 
     private static async Task<ExternalAppServiceHarness> RunningHarnessAsync(ApplicationManifest manifest)
     {
-        var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
                                         DisplayName: null,
                                         manifest.ManifestVersion,
                                         manifest.ManifestSha256,
                                         new Dictionary<string, string>(StringComparer.Ordinal),
-                                        AcceptPermissions: true))
-                                    .ConfigureAwait(false);
+                                        AcceptPermissions: true));
 
-        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         harness.InstalledId = admitted.Id;
         return harness;
     }
 
     private static async Task<ExternalAppServiceHarness> StoppedHarnessAsync(ApplicationManifest manifest)
     {
-        var harness = await RunningHarnessAsync(manifest).ConfigureAwait(false);
-        var running = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        var harness = await RunningHarnessAsync(manifest);
+        var running = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
 
-        _ = await harness.Service.StopAsync(running.Id, running.Version).ConfigureAwait(false);
-        _ = await harness.SettleAsync(running.Id, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        _ = await harness.Service.StopAsync(running.Id, running.Version);
+        _ = await harness.SettleAsync(running.Id, ExternalAppInstanceStatus.Stopped);
         return harness;
     }
 }

@@ -138,7 +138,7 @@ internal sealed class ExternalAppOperationRunner
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
-            await pipeline(scope.ServiceProvider, entry.Source.Token).ConfigureAwait(false);
+            await pipeline(scope.ServiceProvider, entry.Source.Token);
         }
 #pragma warning disable CA1031 // The pipeline is the last frame that can act; anything escaping it must not tear the process down.
         catch (Exception exception)

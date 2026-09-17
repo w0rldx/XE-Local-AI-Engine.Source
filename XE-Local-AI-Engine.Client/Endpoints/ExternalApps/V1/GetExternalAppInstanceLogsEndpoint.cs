@@ -30,12 +30,11 @@ public sealed class GetExternalAppInstanceLogsEndpoint(IExternalAppService apps)
 
         // The read runs FIRST, so an unknown instance or an unknown service is a 404 from the service rather than
         // something this endpoint has to decide for itself.
-        var snapshot = await _apps.ReadLogsAsync(req.InstanceId, req.Service, req.Tail, ct).ConfigureAwait(false);
+        var snapshot = await _apps.ReadLogsAsync(req.InstanceId, req.Service, req.Tail, ct);
 
-        var service = req.Service ?? await ResolveDefaultServiceAsync(req.InstanceId, ct).ConfigureAwait(false);
+        var service = req.Service ?? await ResolveDefaultServiceAsync(req.InstanceId, ct);
 
-        await Send.OkAsync(new ExternalAppInstanceLogsResponse(service, snapshot.Text, snapshot.LineCount, snapshot.Truncated), ct)
-                  .ConfigureAwait(false);
+        await Send.OkAsync(new ExternalAppInstanceLogsResponse(service, snapshot.Text, snapshot.LineCount, snapshot.Truncated), ct);
     }
 
     /// <summary>
@@ -45,7 +44,7 @@ public sealed class GetExternalAppInstanceLogsEndpoint(IExternalAppService apps)
     /// </summary>
     private async Task<string> ResolveDefaultServiceAsync(Guid instanceId, CancellationToken ct)
     {
-        var detail = await _apps.GetAsync(instanceId, ct).ConfigureAwait(false);
+        var detail = await _apps.GetAsync(instanceId, ct);
         var services = detail.Manifest.Services;
 
         ApplicationService? published = null;

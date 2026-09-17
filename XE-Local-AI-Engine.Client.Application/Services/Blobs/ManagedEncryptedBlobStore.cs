@@ -74,15 +74,15 @@ internal sealed class ManagedEncryptedBlobStore
 
         if (File.Exists(finalPath))
         {
-            return await VerifyExistingWriteAsync(scopeId, blobId, finalPath, content, contentHash, cancellationToken).ConfigureAwait(false);
+            return await VerifyExistingWriteAsync(scopeId, blobId, finalPath, content, contentHash, cancellationToken);
         }
 
         try
         {
             var encrypted = Encrypt(scopeId, blobId, content.Span);
-            await File.WriteAllBytesAsync(tempPath, encrypted, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(tempPath, encrypted, cancellationToken);
 
-            var verifiedEncrypted = await File.ReadAllBytesAsync(tempPath, cancellationToken).ConfigureAwait(false);
+            var verifiedEncrypted = await File.ReadAllBytesAsync(tempPath, cancellationToken);
             var verifiedPlaintext = Decrypt(scopeId, blobId, verifiedEncrypted);
             var verifiedHash = Convert.ToHexString(SHA256.HashData(verifiedPlaintext));
             if (verifiedPlaintext.LongLength != content.Length || !string.Equals(verifiedHash, contentHash, StringComparison.Ordinal))
@@ -96,7 +96,7 @@ internal sealed class ManagedEncryptedBlobStore
             }
             catch (IOException) when (File.Exists(finalPath))
             {
-                return await VerifyExistingWriteAsync(scopeId, blobId, finalPath, content, contentHash, cancellationToken).ConfigureAwait(false);
+                return await VerifyExistingWriteAsync(scopeId, blobId, finalPath, content, contentHash, cancellationToken);
             }
 
             return new ManagedBlobWriteResult(OpaqueReference(scopeId, blobId), contentHash, content.Length);
@@ -124,7 +124,7 @@ internal sealed class ManagedEncryptedBlobStore
         byte[] plaintext;
         try
         {
-            var encrypted = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+            var encrypted = await File.ReadAllBytesAsync(path, cancellationToken);
             plaintext = Decrypt(scopeId, blobId, encrypted);
         }
         catch (Exception exception) when (exception is AuthenticationTagMismatchException or CryptographicException or InvalidDataException)
@@ -180,7 +180,7 @@ internal sealed class ManagedEncryptedBlobStore
         byte[] plaintext;
         try
         {
-            plaintext = Decrypt(scopeId, blobId, await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false));
+            plaintext = Decrypt(scopeId, blobId, await File.ReadAllBytesAsync(path, cancellationToken));
         }
         catch (Exception exception) when (exception is AuthenticationTagMismatchException or CryptographicException or InvalidDataException)
         {

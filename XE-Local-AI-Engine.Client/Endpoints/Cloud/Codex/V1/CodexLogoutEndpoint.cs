@@ -23,12 +23,12 @@ public sealed class CodexLogoutEndpoint(CodexSessionService session)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await _session.SignOutAsync(ct).ConfigureAwait(false);
+        await _session.SignOutAsync(ct);
 
         await Send.OkAsync(new CodexStatusResponse
         {
             SignedIn = false,
             LoginPending = false
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

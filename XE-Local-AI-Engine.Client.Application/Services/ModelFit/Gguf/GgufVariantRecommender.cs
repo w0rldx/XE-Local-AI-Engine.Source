@@ -46,7 +46,7 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
             return [];
         }
 
-        var freeVramBytes = await TryResolveFreeVramAsync(ct).ConfigureAwait(false);
+        var freeVramBytes = await TryResolveFreeVramAsync(ct);
 
         var tiers = new GgufQuantTier[files.Count];
         var verdicts = new GgufFitVerdict[files.Count];
@@ -75,9 +75,9 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     {
         try
         {
-            var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
+            var variant = await _variantSelector.SelectVariantAsync(ct);
             var backend = InferenceBackends.FromVariant(variant);
-            return await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct).ConfigureAwait(false);
+            return await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

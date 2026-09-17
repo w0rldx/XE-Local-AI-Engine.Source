@@ -12,9 +12,9 @@ public sealed class AddTutorialStateMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsTutorialStateToAspNetUsers()
     {
-        await using var probe = await MigrationSchemaProbe.FromIdentityTemplateAsync("tutorial-state.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromIdentityTemplateAsync("tutorial-state.sqlite");
 
-        var columns = await probe.ColumnsAsync("AspNetUsers").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("AspNetUsers");
 
         AssertEx.True(columns.Contains("tutorial_state"), "AspNetUsers must carry the tutorial state column.");
     }

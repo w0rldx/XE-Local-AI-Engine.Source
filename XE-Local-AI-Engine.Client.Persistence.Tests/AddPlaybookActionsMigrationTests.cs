@@ -31,21 +31,21 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         var databasePath = GetDatabasePath("playbook-actions-up.sqlite");
         var agentId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePlaybookActionsMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePlaybookActionsMigrationId);
 
-        await InsertHistoricalAgentAsync(databasePath, agentId).ConfigureAwait(false);
+        await InsertHistoricalAgentAsync(databasePath, agentId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.True(await TableExistsAsync(connection, "playbook_actions").ConfigureAwait(false),
+        AssertEx.True(await TableExistsAsync(connection, "playbook_actions"),
             "Migration should create the playbook_actions table.");
 
-        var actionColumns = await GetPlaybookActionColumnsAsync(connection).ConfigureAwait(false);
+        var actionColumns = await GetPlaybookActionColumnsAsync(connection);
         // A full MigrateAsync() also applies the later AddPlaybookActionAnalysisColumns migration (analysis columns
         // source_feedback_ids, confidence), AddPlaybookEvalAndGoldenConversations (eval_result),
         // AddPlaybookActionEnabledAtUtc (enabled_at_utc) and AddAdaptiveAgentMemory (memory_scope) — hence they are
@@ -70,10 +70,10 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
             "memory_scope"
         }), "playbook_actions should expose the mapped columns.");
 
-        var agentColumns = await GetAgentDefinitionColumnsAsync(connection).ConfigureAwait(false);
+        var agentColumns = await GetAgentDefinitionColumnsAsync(connection);
         AssertEx.True(agentColumns.Contains("playbook_enabled"), "agent_definitions.playbook_enabled should be added.");
 
-        AssertEx.True(await ReadPlaybookEnabledIsFalseAsync(connection, agentId).ConfigureAwait(false),
+        AssertEx.True(await ReadPlaybookEnabledIsFalseAsync(connection, agentId),
             "Existing agents should default to playbook_enabled = false.");
     }
 
@@ -84,19 +84,19 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         var agentId = Guid.NewGuid();
         var actionId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
         // SQLite enforces foreign keys only when the pragma is on for the connection.
-        await EnableForeignKeysAsync(connection).ConfigureAwait(false);
-        await InsertAgentAsync(connection, agentId).ConfigureAwait(false);
-        await InsertPlaybookActionAsync(connection, actionId, agentId).ConfigureAwait(false);
+        await EnableForeignKeysAsync(connection);
+        await InsertAgentAsync(connection, agentId);
+        await InsertPlaybookActionAsync(connection, actionId, agentId);
 
-        AssertEx.Equal(expected: 1L, await CountPlaybookActionsForAgentAsync(connection, agentId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 1L, await CountPlaybookActionsForAgentAsync(connection, agentId));
 
-        await DeleteAgentAsync(connection, agentId).ConfigureAwait(false);
+        await DeleteAgentAsync(connection, agentId);
 
-        AssertEx.Equal(expected: 0L, await CountPlaybookActionsForAgentAsync(connection, agentId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0L, await CountPlaybookActionsForAgentAsync(connection, agentId));
     }
 
     [Test]
@@ -104,19 +104,19 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("playbook-actions-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookActionsMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookActionsMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        AssertEx.False(await TableExistsAsync(connection, "playbook_actions").ConfigureAwait(false),
+        AssertEx.False(await TableExistsAsync(connection, "playbook_actions"),
             "Rollback should drop the playbook_actions table.");
 
-        var agentColumns = await GetAgentDefinitionColumnsAsync(connection).ConfigureAwait(false);
+        var agentColumns = await GetAgentDefinitionColumnsAsync(connection);
         AssertEx.False(agentColumns.Contains("playbook_enabled"), "Rollback should drop agent_definitions.playbook_enabled.");
     }
 
@@ -127,8 +127,8 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
 
     private static async Task InsertHistoricalAgentAsync(string databasePath, Guid agentId)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        await InsertAgentAsync(connection, agentId).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        await InsertAgentAsync(connection, agentId);
     }
 
     private static async Task InsertAgentAsync(SqliteConnection connection, Guid agentId)
@@ -154,7 +154,7 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         command.Parameters.AddWithValue("$created", value: 1234L);
         command.Parameters.AddWithValue("$updated", value: 1234L);
 
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task InsertPlaybookActionAsync(SqliteConnection connection, Guid actionId, Guid agentId)
@@ -180,7 +180,7 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         command.Parameters.AddWithValue("$created", value: 1234L);
         command.Parameters.AddWithValue("$updated", value: 1234L);
 
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task DeleteAgentAsync(SqliteConnection connection, Guid agentId)
@@ -188,7 +188,7 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "DELETE FROM agent_definitions WHERE id = $id;";
         command.Parameters.AddWithValue("$id", agentId.ToString());
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<long> CountPlaybookActionsForAgentAsync(SqliteConnection connection, Guid agentId)
@@ -196,20 +196,20 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM playbook_actions WHERE agent_definition_id = $id;";
         command.Parameters.AddWithValue("$id", agentId.ToString());
-        return (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+        return (long)(await command.ExecuteScalarAsync())!;
     }
 
     private static async Task EnableForeignKeysAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA foreign_keys = ON;";
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -218,26 +218,26 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<IReadOnlySet<string>> GetPlaybookActionColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM playbook_actions LIMIT 0;";
-        return await ReadColumnNamesAsync(command).ConfigureAwait(false);
+        return await ReadColumnNamesAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> GetAgentDefinitionColumnsAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM agent_definitions LIMIT 0;";
-        return await ReadColumnNamesAsync(command).ConfigureAwait(false);
+        return await ReadColumnNamesAsync(command);
     }
 
     private static async Task<IReadOnlySet<string>> ReadColumnNamesAsync(SqliteCommand command)
     {
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -248,7 +248,7 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT playbook_enabled FROM agent_definitions WHERE id = $id;";
         command.Parameters.AddWithValue("$id", agentId.ToString());
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is not null && Convert.ToInt64(value, CultureInfo.InvariantCulture) == 0L;
     }
 

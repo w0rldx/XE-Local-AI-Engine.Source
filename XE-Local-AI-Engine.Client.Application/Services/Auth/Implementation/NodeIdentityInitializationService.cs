@@ -22,16 +22,15 @@ public sealed class NodeIdentityInitializationService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeIdentityDbContext>();
 
-        await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
-        await EnsureAdminRoleAsync(dbContext, cancellationToken).ConfigureAwait(false);
+        await dbContext.Database.MigrateAsync(cancellationToken);
+        await EnsureAdminRoleAsync(dbContext, cancellationToken);
     }
 
     private async Task EnsureAdminRoleAsync(NodeIdentityDbContext dbContext, CancellationToken cancellationToken)
     {
         var normalizedRoleName = AdminRoleName.ToUpperInvariant();
         var roleExists = await dbContext.Roles
-                                        .AnyAsync(role => role.NormalizedName == normalizedRoleName, cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .AnyAsync(role => role.NormalizedName == normalizedRoleName, cancellationToken);
 
         if (roleExists)
         {
@@ -44,7 +43,7 @@ public sealed class NodeIdentityInitializationService
             ConcurrencyStamp = Guid.NewGuid().ToString("N")
         });
 
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Seeded node identity role {RoleName}.", AdminRoleName);
     }
 }

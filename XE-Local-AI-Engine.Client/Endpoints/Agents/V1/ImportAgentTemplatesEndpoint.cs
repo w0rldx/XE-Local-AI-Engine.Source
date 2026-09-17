@@ -22,7 +22,7 @@ public sealed class ImportAgentTemplatesEndpoint(IAgentTemplateImportService imp
 
         // A bulk additive operation with no single created resource, so it returns 200 with the per-slug outcome rather
         // than 201 + Location.
-        var result = await _importService.ImportAsync(req.Slugs ?? [], ct).ConfigureAwait(false);
+        var result = await _importService.ImportAsync(req.Slugs ?? [], ct);
 
         await Send.OkAsync(new ImportAgentTemplatesResponse
             {
@@ -30,6 +30,6 @@ public sealed class ImportAgentTemplatesEndpoint(IAgentTemplateImportService imp
                 SkippedExisting = result.SkippedExisting,
                 Unknown = result.Unknown
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

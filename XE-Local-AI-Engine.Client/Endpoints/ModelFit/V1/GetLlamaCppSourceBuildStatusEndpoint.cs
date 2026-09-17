@@ -18,6 +18,6 @@ public sealed class GetLlamaCppSourceBuildStatusEndpoint(LlamaCppRuntimeOrchestr
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(runtime.GetSourceBuildStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(runtime.GetSourceBuildStatus().ToResponse(), ct);
     }
 }

@@ -32,14 +32,14 @@ public sealed class GetAgentPlaybookMonitorEndpoint(
 
     public override async Task HandleAsync(GetAgentPlaybookMonitorRequest req, CancellationToken ct)
     {
-        var agent = await _agentDefinitions.GetByIdAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
+        var agent = await _agentDefinitions.GetByIdAsync(req.AgentDefinitionId, ct);
         if (agent is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        var views = await _playbookMonitorService.GetMonitorAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
-        await Send.OkAsync(views.ToResponse(_retrievalOptions), ct).ConfigureAwait(false);
+        var views = await _playbookMonitorService.GetMonitorAsync(req.AgentDefinitionId, ct);
+        await Send.OkAsync(views.ToResponse(_retrievalOptions), ct);
     }
 }

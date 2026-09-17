@@ -15,11 +15,10 @@ internal static class ContainerCreateEndpoint
 
     public static async Task HandleAsync(HttpContext context, FakeDockerState state)
     {
-        var body = await FakeDockerEndpointMapper.ReadJsonObjectAsync(context).ConfigureAwait(false);
+        var body = await FakeDockerEndpointMapper.ReadJsonObjectAsync(context);
         if (body is null)
         {
-            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status400BadRequest, "invalid create body")
-                                          .ConfigureAwait(false);
+            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status400BadRequest, "invalid create body");
             return;
         }
 
@@ -28,8 +27,7 @@ internal static class ContainerCreateEndpoint
         {
             // The daemon's own wording, and a 404 rather than a 500: it is what the production client classifies
             // into the "pull it first" outcome an operator can act on.
-            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status404NotFound, $"No such image: {image}")
-                                          .ConfigureAwait(false);
+            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status404NotFound, $"No such image: {image}");
             return;
         }
 
@@ -44,8 +42,7 @@ internal static class ContainerCreateEndpoint
             await FakeDockerEndpointMapper
                   .WriteErrorAsync(context,
                       StatusCodes.Status409Conflict,
-                      $"Conflict. The container name \"/{name}\" is already in use.")
-                  .ConfigureAwait(false);
+                      $"Conflict. The container name \"/{name}\" is already in use.");
             return;
         }
 
@@ -54,8 +51,7 @@ internal static class ContainerCreateEndpoint
         var attached = state.Networks.Values.FirstOrDefault(network => string.Equals(network.Name, networkMode, StringComparison.Ordinal));
         if (attached is null && !BuiltInNetworks.Contains(networkMode, StringComparer.Ordinal))
         {
-            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status404NotFound, $"network {networkMode} not found")
-                                          .ConfigureAwait(false);
+            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status404NotFound, $"network {networkMode} not found");
             return;
         }
 
@@ -83,8 +79,7 @@ internal static class ContainerCreateEndpoint
                                               ["Id"] = container.Id,
                                               ["Warnings"] = new JsonArray()
                                           },
-                                          StatusCodes.Status201Created)
-                                      .ConfigureAwait(false);
+                                          StatusCodes.Status201Created);
     }
 
     /// <summary>

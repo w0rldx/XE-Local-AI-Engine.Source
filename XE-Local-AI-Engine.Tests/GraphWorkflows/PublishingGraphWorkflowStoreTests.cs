@@ -49,7 +49,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         {
             var (store, publisher, _) = Create();
 
-            await probe.Invoke(store).ConfigureAwait(false);
+            await probe.Invoke(store);
 
             await publisher.Received(1).PublishAsync(RunId, Sequence, probe.Kind, Arg.Any<CancellationToken>());
             AssertEx.Equal(expected: 1,
@@ -64,7 +64,7 @@ public sealed class PublishingGraphWorkflowStoreTests
     {
         var (store, publisher, _) = Create();
 
-        _ = await store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.WaitingForApproval)).ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(NodeRunTransition(GraphWorkflowNodeRunStatus.WaitingForApproval));
 
         await publisher.Received(1).PublishAsync(RunId, Sequence, GraphWorkflowChangeKind.Gate, Arg.Any<CancellationToken>());
     }
@@ -76,7 +76,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         {
             var (store, publisher, _) = Create();
 
-            await read(store).ConfigureAwait(false);
+            await read(store);
 
             AssertEx.Empty(publisher.ReceivedCalls());
         }
@@ -93,7 +93,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         {
             var (store, publisher, _) = Create();
 
-            await write(store).ConfigureAwait(false);
+            await write(store);
 
             AssertEx.Empty(publisher.ReceivedCalls());
         }
@@ -111,7 +111,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         var publisher = Substitute.For<IGraphWorkflowEventPublisher>();
         var store = new PublishingGraphWorkflowStore(inner, publisher, NullLogger<PublishingGraphWorkflowStore>.Instance);
 
-        AssertEx.Null(await store.DecideNodeRunAsync(Decision()).ConfigureAwait(false), "the decline travels to the caller untouched.");
+        AssertEx.Null(await store.DecideNodeRunAsync(Decision()), "the decline travels to the caller untouched.");
         AssertEx.Empty(publisher.ReceivedCalls());
     }
 
@@ -126,8 +126,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         publisher.PublishAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<GraphWorkflowChangeKind>(), Arg.Any<CancellationToken>())
                  .ThrowsAsyncForAnyArgs(new InvalidOperationException("the hub is gone"));
 
-        var result = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(RunId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Running))
-                                .ConfigureAwait(false);
+        var result = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand(RunId, GraphWorkflowVersions.Any, GraphWorkflowRunStatus.Running));
 
         AssertEx.Equal(Sequence, result.Sequence, "the commit's own watermark still reaches the caller.");
         await inner.Received(1).TransitionRunAsync(Arg.Any<TransitionGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>());

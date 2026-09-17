@@ -54,7 +54,7 @@ internal sealed class StubChatClient : IChatClient
         {
             // Hold the stream open here so the test can flip the selection (which would dispose a swapped-out
             // client if the production code disposed on swap) WHILE this enumeration is live.
-            await _midStreamGate().ConfigureAwait(false);
+            await _midStreamGate();
 
             // If a disposal happened underneath us, surface it as the failure the regression guards against.
             ObjectDisposedException.ThrowIf(IsDisposed, this);

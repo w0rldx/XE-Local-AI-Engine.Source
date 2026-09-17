@@ -27,7 +27,7 @@ public sealed class CancelGgufDownloadEndpoint(IGgufDownloadCoordinator download
         if (string.IsNullOrWhiteSpace(req.ModelName))
         {
             AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
@@ -39,6 +39,6 @@ public sealed class CancelGgufDownloadEndpoint(IGgufDownloadCoordinator download
                 ModelName = modelName,
                 Cancelled = cancelled
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

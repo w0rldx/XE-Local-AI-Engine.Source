@@ -34,13 +34,13 @@ public sealed class SeededAgentToolNameTests
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         foreach (var seeder in Seeders(factory, scopeFactory))
         {
-            await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            await seeder.StartAsync(CancellationToken.None);
         }
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var known = new HashSet<string>(await scope.ServiceProvider.GetRequiredService<ILocalToolOfferProvider>().GetKnownToolNamesAsync().ConfigureAwait(false),
+        var known = new HashSet<string>(await scope.ServiceProvider.GetRequiredService<ILocalToolOfferProvider>().GetKnownToolNamesAsync(),
             StringComparer.Ordinal);
-        var seeded = (await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().ListAsync().ConfigureAwait(false))
+        var seeded = (await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().ListAsync())
                      .Where(static definition => definition.SeedSlug is not null)
                      .ToList();
 

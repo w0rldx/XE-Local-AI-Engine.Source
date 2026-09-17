@@ -49,7 +49,7 @@ internal sealed class DevWorkflowTestFixture : IDisposable
     public async Task<NodeChatDbContext> CreateSchemaAsync()
     {
         var context = CreateContext();
-        _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await context.Database.EnsureCreatedAsync();
 
         // This leaves a WAL database, not a rollback journal: EF Core's SqliteDatabaseCreator.Create enables WAL, and
         // journal_mode is a persistent file property. The encryption suite scans the MAIN database file and its
@@ -69,16 +69,14 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         string graphJson = SampleGraph,
         Guid? developmentProjectId = null)
     {
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), title, request, developmentProjectId)).ConfigureAwait(false);
-        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1))
-                                    .ConfigureAwait(false);
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), title, request, developmentProjectId));
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1));
         var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
                                  workItem.Id,
                                  definition.Id,
                                  definition.Version,
                                  definition.GraphHash,
-                                 graphJson))
-                             .ConfigureAwait(false);
+                                 graphJson));
         return new DevWorkflowSeed(workItem.Id, definition.Id, run.Id, run.Version);
     }
 
@@ -111,8 +109,7 @@ internal sealed class DevWorkflowTestFixture : IDisposable
                                             maxAttempts,
                                             DevelopmentProjectId: developmentProjectId,
                                             InputJson: inputJson)
-                                    ]))
-                                .ConfigureAwait(false);
+                                    ]));
         return result.Version;
     }
 
@@ -120,39 +117,38 @@ internal sealed class DevWorkflowTestFixture : IDisposable
     public async Task<object?> RawScalarAsync(string sql, Action<SqliteCommand>? configure = null)
     {
         await using var connection = new SqliteConnection($"Data Source={DatabasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
 #pragma warning disable CA2100 // The SQL is a fixed literal in the calling suite; every value binds through `configure`.
         command.CommandText = sql;
 #pragma warning restore CA2100
         configure?.Invoke(command);
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is DBNull ? null : value;
     }
 
     public async Task RawExecuteAsync(string sql, Action<SqliteCommand>? configure = null)
     {
         await using var connection = new SqliteConnection($"Data Source={DatabasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
 #pragma warning disable CA2100 // Same: fixed literal, bound parameters.
         command.CommandText = sql;
 #pragma warning restore CA2100
         configure?.Invoke(command);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     public async Task<long> RawCountAsync(string table, string column, Guid value)
     {
         var count = await RawScalarAsync($"SELECT COUNT(*) FROM {table} WHERE {column} = $value;",
-                command => command.Parameters.AddWithValue("$value", value))
-            .ConfigureAwait(false);
+                command => command.Parameters.AddWithValue("$value", value));
         return Convert.ToInt64(count, CultureInfo.InvariantCulture);
     }
 
     public async Task<long> RawTableCountAsync(string table)
     {
-        var count = await RawScalarAsync($"SELECT COUNT(*) FROM {table};").ConfigureAwait(false);
+        var count = await RawScalarAsync($"SELECT COUNT(*) FROM {table};");
         return Convert.ToInt64(count, CultureInfo.InvariantCulture);
     }
 }

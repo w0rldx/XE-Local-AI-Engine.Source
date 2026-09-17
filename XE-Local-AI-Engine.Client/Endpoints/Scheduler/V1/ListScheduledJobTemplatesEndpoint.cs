@@ -24,6 +24,6 @@ public sealed class ListScheduledJobTemplatesEndpoint(IScheduledJobManagementSer
             {
                 Items = [.. descriptors.Select(static d => d.ToResponse())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

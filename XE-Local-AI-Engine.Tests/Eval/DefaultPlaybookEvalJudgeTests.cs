@@ -22,7 +22,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
         var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
         var goldenCase = AssertionCase(["cite"], ["maybe"]);
 
-        var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>()).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>());
 
         AssertEx.True(score.Pass, "All required phrases present and no forbidden phrase → pass.");
         AssertEx.Equal("assertion", score.ScoredBy);
@@ -34,7 +34,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
         var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
         var goldenCase = AssertionCase(["cite"], []);
 
-        var score = await judge.ScoreAsync(goldenCase, "No citation here.", Substitute.For<IChatClient>()).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "No citation here.", Substitute.For<IChatClient>());
 
         AssertEx.False(score.Pass, "A missing required phrase must fail.");
         AssertEx.Equal("assertion", score.ScoredBy);
@@ -47,7 +47,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
         var goldenCase = AssertionCase(["cite"], ["maybe"]);
 
         // Ordinal (case-sensitive) match: the forbidden phrase "maybe" appears verbatim in the candidate output.
-        var score = await judge.ScoreAsync(goldenCase, "I will maybe cite the source.", Substitute.For<IChatClient>()).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "I will maybe cite the source.", Substitute.For<IChatClient>());
 
         AssertEx.False(score.Pass, "A present forbidden phrase must fail even when required phrases are present.");
         AssertEx.Equal("assertion", score.ScoredBy);
@@ -60,7 +60,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
         // An empty forbidden entry is degenerate ("".Contains("") is true) — it must be ignored, not force-fail.
         var goldenCase = AssertionCase(["cite"], [""]);
 
-        var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>()).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>());
 
         AssertEx.True(score.Pass, "An empty forbidden phrase entry must be ignored, not force-fail a clean candidate.");
         AssertEx.Equal("assertion", score.ScoredBy);
@@ -73,7 +73,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
         // An empty required entry would always "pass" — it must be ignored so only meaningful phrases gate the case.
         var goldenCase = AssertionCase([""], ["maybe"]);
 
-        var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>()).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>());
 
         AssertEx.True(score.Pass, "An empty required phrase entry must be ignored; the forbidden phrase is absent so the case passes.");
     }
@@ -92,7 +92,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10);
 
-        var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>()).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>());
 
         AssertEx.False(score.Pass, "A case with neither assertion nor rubric is invalid and must score as a fail.");
     }
@@ -105,7 +105,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
         // fail closed instead — this closes the empty-array bypass for legacy golden rows.
         var goldenCase = AssertionCase([], []);
 
-        var score = await judge.ScoreAsync(goldenCase, "literally anything", Substitute.For<IChatClient>()).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "literally anything", Substitute.For<IChatClient>());
 
         AssertEx.False(score.Pass, "An assertion with no meaningful phrase proves nothing and must not auto-pass.");
         AssertEx.Equal("assertion", score.ScoredBy);
@@ -130,7 +130,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
             UpdatedAtUtc: 10);
         using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
 
-        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient);
 
         AssertEx.True(score.Pass, "The empty assertion is treated as absent; the rubric (judge) path scores the case.");
         AssertEx.Equal("judge", score.ScoredBy);
@@ -156,7 +156,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
         // If the judge wrongly fell back to the rubric, this client would be invoked and pass the case.
         using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
 
-        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient);
 
         AssertEx.False(score.Pass, "A malformed assertion must fail the case outright, never silently pass on the rubric.");
         AssertEx.Equal(DefaultPlaybookEvalJudge.MalformedAssertionScoredBy, score.ScoredBy);
@@ -183,7 +183,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
         // If the judge wrongly fell back to the rubric, this client would be invoked and pass the case.
         using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
 
-        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient);
 
         AssertEx.False(score.Pass, "An assertion with an unmapped member must fail the case outright, never silently pass on the rubric.");
         AssertEx.Equal(DefaultPlaybookEvalJudge.MalformedAssertionScoredBy, score.ScoredBy);
@@ -204,7 +204,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10);
 
-        var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>()).ConfigureAwait(false);
+        var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>());
 
         AssertEx.False(score.Pass, "A malformed assertion with no rubric must fail closed.");
         AssertEx.Equal(DefaultPlaybookEvalJudge.MalformedAssertionScoredBy, score.ScoredBy);
@@ -250,7 +250,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
             CancellationToken cancellationToken = default)
         {
             // The judge uses the non-streaming GetResponseAsync; an empty stream suffices.
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 

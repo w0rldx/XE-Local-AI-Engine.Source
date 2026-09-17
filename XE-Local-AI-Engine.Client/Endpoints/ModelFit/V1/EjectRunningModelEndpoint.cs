@@ -35,21 +35,21 @@ public sealed class EjectRunningModelEndpoint(LlamaCppRuntimeOrchestrationServic
         if (string.IsNullOrWhiteSpace(req.ModelName))
         {
             AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         if (ModelFitMapper.TryParseRole(req.Role) is not { } role)
         {
             AddError("Role is not supported.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
         var modelName = req.ModelName.Trim();
         NodeMetrics.ModelEjectTotal.Add(1, new KeyValuePair<string, object?>("outcome", "requested"));
 
-        var outcome = await _runtime.EjectAsync(modelName, role, req.Force, ct).ConfigureAwait(false);
+        var outcome = await _runtime.EjectAsync(modelName, role, req.Force, ct);
         NodeMetrics.ModelEjectTotal.Add(1, new KeyValuePair<string, object?>("outcome", ToWireOutcome(outcome)));
 
         await Send.OkAsync(new EjectRunningModelResponse
@@ -58,7 +58,7 @@ public sealed class EjectRunningModelEndpoint(LlamaCppRuntimeOrchestrationServic
                 Role = role.ToWireString(),
                 Outcome = ToWireOutcome(outcome)
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 
     private static string ToWireOutcome(LlamaServerEjectOutcome outcome)

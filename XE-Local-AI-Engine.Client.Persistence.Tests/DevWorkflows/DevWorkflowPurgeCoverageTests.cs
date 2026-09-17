@@ -18,7 +18,7 @@ public sealed class DevWorkflowPurgeCoverageTests
     public async Task NoWorkflowTable_IsKeyedByAConversationOrMessage()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var offenders = new List<string>();
         var inspected = 0;
@@ -52,7 +52,7 @@ public sealed class DevWorkflowPurgeCoverageTests
     public async Task CoveredChildTables_MatchesEveryWorkItemScopedTableInTheModel()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var discovered = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entityType in context.Model.GetEntityTypes())
@@ -92,17 +92,17 @@ public sealed class DevWorkflowPurgeCoverageTests
         using var fixture = new DevWorkflowTestFixture();
         Guid workItemId;
 
-        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        await using (var context = await fixture.CreateSchemaAsync())
         {
             var store = DevWorkflowTestFixture.StoreFor(context);
-            var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+            var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
             workItemId = seed.WorkItemId;
-            _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store).ConfigureAwait(false);
+            _ = await DevWorkflowTestFixture.CreateRuleSetAsync(store);
 
             var producerId = Guid.NewGuid();
             var consumerId = Guid.NewGuid();
-            var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, producerId, "research", seed.RunVersion).ConfigureAwait(false);
-            version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, consumerId, "approval", version, DevWorkflowNodeType.HumanGate).ConfigureAwait(false);
+            var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, producerId, "research", seed.RunVersion);
+            version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, consumerId, "approval", version, DevWorkflowNodeType.HumanGate);
 
             var artifactId = Guid.NewGuid();
             var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
@@ -115,25 +115,20 @@ public sealed class DevWorkflowPurgeCoverageTests
                                           "text/markdown",
                                           "hash-1",
                                           SizeBytes: 10,
-                                          "reference-1"))
-                                      .ConfigureAwait(false);
-            var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, consumerId, appended.Version, Guid.NewGuid(), [artifactId]))
-                                  .ConfigureAwait(false);
+                                          "reference-1"));
+            var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, consumerId, appended.Version, Guid.NewGuid(), [artifactId]));
             _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
                                Guid.NewGuid(),
                                consumerId,
                                used.Version,
                                Guid.NewGuid(),
-                               DevWorkflowDecisionKind.Approve))
-                           .ConfigureAwait(false);
+                               DevWorkflowDecisionKind.Approve));
 
             _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.DeleteWorkItemAsync(workItemId),
-                                  "A work item whose run is still live must not be deleted out from under the executor driving it.")
-                              .ConfigureAwait(false);
-            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Cancelled))
-                           .ConfigureAwait(false);
+                                  "A work item whose run is still live must not be deleted out from under the executor driving it.");
+            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Cancelled));
 
-            var removed = await store.DeleteWorkItemAsync(workItemId).ConfigureAwait(false);
+            var removed = await store.DeleteWorkItemAsync(workItemId);
             AssertEx.True(removed.RemovedRows > 0, "The delete must report the rows it removed.");
             AssertEx.Equal(seed.RunId,
                 removed.RunIds.Single(),
@@ -151,12 +146,12 @@ public sealed class DevWorkflowPurgeCoverageTests
                      "dev_workflow_artifact_uses"
                  })
         {
-            AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync(table).ConfigureAwait(false), $"{table} must be empty after the work item is deleted.");
+            AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync(table), $"{table} must be empty after the work item is deleted.");
         }
 
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_definitions").ConfigureAwait(false),
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_definitions"),
             "A definition is not work-item-scoped and survives by design.");
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_rule_sets").ConfigureAwait(false),
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_rule_sets"),
             "Neither is a rule set: deleting a work item must not take the policy documents every other run still resolves against.");
     }
 
@@ -165,12 +160,12 @@ public sealed class DevWorkflowPurgeCoverageTests
     public async Task DeleteRun_TakesItsSubtreeAndLeavesTheWorkItemStanding()
     {
         using var fixture = new DevWorkflowTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store);
 
         var nodeRunId = Guid.NewGuid();
-        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion);
         _ = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
                            Guid.NewGuid(),
                            nodeRunId,
@@ -181,13 +176,12 @@ public sealed class DevWorkflowPurgeCoverageTests
                            "text/markdown",
                            "hash-1",
                            SizeBytes: 10,
-                           "reference-1"))
-                       .ConfigureAwait(false);
+                           "reference-1"));
 
-        await using (var transaction = await context.Database.BeginTransactionAsync().ConfigureAwait(false))
+        await using (var transaction = await context.Database.BeginTransactionAsync())
         {
-            await DevWorkflowPurge.DeleteRunAsync(context, seed.RunId, CancellationToken.None).ConfigureAwait(false);
-            await transaction.CommitAsync().ConfigureAwait(false);
+            await DevWorkflowPurge.DeleteRunAsync(context, seed.RunId, CancellationToken.None);
+            await transaction.CommitAsync();
         }
 
         context.ChangeTracker.Clear();
@@ -200,10 +194,10 @@ public sealed class DevWorkflowPurgeCoverageTests
                      "dev_workflow_artifacts"
                  })
         {
-            AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync(table).ConfigureAwait(false), $"{table} must be empty after the run is deleted.");
+            AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync(table), $"{table} must be empty after the run is deleted.");
         }
 
-        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_work_items").ConfigureAwait(false),
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_work_items"),
             "A work item outlives its runs; only deleting the work item takes it.");
     }
 }

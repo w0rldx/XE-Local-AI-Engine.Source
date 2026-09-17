@@ -26,7 +26,7 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
     public async Task SetAsync_RotatesHashPrefixAndScopeOnTheSingletonRow()
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
-        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await context.Database.EnsureCreatedAsync();
         var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
 
         _ = await store.SetAsync("xemcp_first", new byte[]
@@ -34,15 +34,15 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
             1,
             2,
             3
-        }, 1).ConfigureAwait(false);
+        }, 1);
         var replacement = await store.SetAsync("xemcp_second", new byte[]
         {
             4,
             5,
             6
-        }, 0).ConfigureAwait(false);
+        }, 0);
 
-        AssertEx.Equal(expected: 1, await context.McpServerApiKeys.CountAsync().ConfigureAwait(false));
+        AssertEx.Equal(expected: 1, await context.McpServerApiKeys.CountAsync());
         AssertEx.Equal("xemcp_second", replacement.Prefix);
         AssertEx.Equal(0, replacement.Scope);
         AssertEx.True(replacement.KeyHash.Span.SequenceEqual(new byte[]
@@ -58,7 +58,7 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
     public async Task SetAsync_WithUndefinedScope_IsRejected()
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
-        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await context.Database.EnsureCreatedAsync();
         var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
 
         _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() =>
@@ -67,34 +67,34 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
                 1,
                 2,
                 3
-            }, scope: 2)).ConfigureAwait(false);
+            }, scope: 2));
 
-        AssertEx.Equal(expected: 0, await context.McpServerApiKeys.CountAsync().ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await context.McpServerApiKeys.CountAsync());
     }
 
     [Test]
     public async Task TouchLastUsedAsync_AfterRotation_DoesNotStampReplacement()
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
-        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await context.Database.EnsureCreatedAsync();
         var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
         var original = await store.SetAsync("xemcp_first", new byte[]
         {
             1,
             2,
             3
-        }, scope: 1).ConfigureAwait(false);
+        }, scope: 1);
         var replacement = await store.SetAsync("xemcp_second", new byte[]
         {
             4,
             5,
             6
-        }, scope: 0).ConfigureAwait(false);
+        }, scope: 0);
 
-        var touched = await store.TouchLastUsedAsync(original.GenerationId, timestampUtc: 999).ConfigureAwait(false);
+        var touched = await store.TouchLastUsedAsync(original.GenerationId, timestampUtc: 999);
 
         AssertEx.False(touched, "A stale validation generation must lose to key rotation.");
-        var current = AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false));
+        var current = AssertEx.NotNull(await store.GetAsync());
         AssertEx.Equal(replacement.GenerationId, current.GenerationId);
         AssertEx.Null(current.LastUsedAtUtc);
     }

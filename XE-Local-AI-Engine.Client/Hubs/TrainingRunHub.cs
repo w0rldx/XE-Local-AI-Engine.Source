@@ -40,23 +40,22 @@ public sealed class TrainingRunHub(ITrainingRunService runs, ITrainingRunEventBu
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var run = await _runs.GetAsync(runId, cancellationToken).ConfigureAwait(false)
+        var run = await _runs.GetAsync(runId, cancellationToken)
                   ?? throw new HubException("The training run was not found.");
-        await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken).ConfigureAwait(false);
+        await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken);
 
         var replay = _events.Replay(runId, afterSeq);
         if (replay.ResetRequired)
         {
             await Clients.Caller.SendAsync(TrainingRunHubEvents.ReplayReset,
                              new TrainingRunReplayReset(runId, replay.LatestSequence, run.Version),
-                             cancellationToken)
-                         .ConfigureAwait(false);
+                             cancellationToken);
             return;
         }
 
         foreach (var runEvent in replay.Events)
         {
-            await Clients.Caller.SendAsync(TrainingRunHubEvents.Event, runEvent, cancellationToken).ConfigureAwait(false);
+            await Clients.Caller.SendAsync(TrainingRunHubEvents.Event, runEvent, cancellationToken);
         }
     }
 

@@ -27,11 +27,11 @@ public sealed class GetSkillResourceEndpoint(IAgentSkillService agentSkillServic
         if (name is null)
         {
             AddError("The resource name is invalid.");
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var record = await _agentSkillService.GetByIdAsync(req.SkillId, ct).ConfigureAwait(false);
+        var record = await _agentSkillService.GetByIdAsync(req.SkillId, ct);
 
         // Case-insensitive, matching the store's upsert-by-name rule: a name that would REPLACE a resource on write
         // has to be the name that FINDS it on read.
@@ -40,10 +40,10 @@ public sealed class GetSkillResourceEndpoint(IAgentSkillService agentSkillServic
 
         if (resource is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(resource.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(resource.ToResponse(), ct);
     }
 }

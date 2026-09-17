@@ -53,8 +53,7 @@ internal sealed class CompleteWorkSessionToolHandler(
                                WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
                                Outcome: null,
                                JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!, request.ObjectiveMet))),
-                           cancellationToken)
-                       .ConfigureAwait(false);
+                           cancellationToken);
 
         // No sequence is published: the session is not finished until the supervisor closes it, and announcing a change
         // now would put the UI ahead of the truth.

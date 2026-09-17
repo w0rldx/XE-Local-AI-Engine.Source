@@ -28,7 +28,7 @@ internal sealed class CustomToolConcurrencyLimiter : IDisposable
     /// <summary>Acquires a run slot, releasing it when the returned handle is disposed. Honors cancellation while waiting.</summary>
     public async Task<IDisposable> AcquireAsync(CancellationToken cancellationToken)
     {
-        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken);
         return new Slot(_semaphore);
     }
 

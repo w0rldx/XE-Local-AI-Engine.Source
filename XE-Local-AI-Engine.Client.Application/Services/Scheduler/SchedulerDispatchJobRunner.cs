@@ -46,7 +46,7 @@ internal static class SchedulerDispatchJobRunner
             context.FireTimeUtc,
             context.CancellationToken,
             parameterOverrides,
-            triggeredBy).ConfigureAwait(false);
+            triggeredBy);
     }
 
     /// <summary>

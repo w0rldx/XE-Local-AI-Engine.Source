@@ -51,13 +51,13 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
 
         var bytesPath = BytesPath(conversationDirectory, input.FileId, extension);
         var encryptedBytes = _blobProtector.Encrypt(input.ConversationId, input.FileId, UploadedFileBlobProtector.FileBytesColumn, input.Content.Span);
-        await File.WriteAllBytesAsync(bytesPath, encryptedBytes, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(bytesPath, encryptedBytes, cancellationToken);
 
         if (input.ExtractedMarkdown is not null)
         {
             var markdownPath = MarkdownPath(conversationDirectory, input.FileId);
             var encryptedMarkdown = _blobProtector.Encrypt(input.ConversationId, input.FileId, UploadedFileBlobProtector.FileMarkdownColumn, Encoding.UTF8.GetBytes(input.ExtractedMarkdown));
-            await File.WriteAllBytesAsync(markdownPath, encryptedMarkdown, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(markdownPath, encryptedMarkdown, cancellationToken);
         }
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
@@ -83,8 +83,8 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         AddParameter(command, "$extracted_chars", input.ExtractedChars);
         AddParameter(command, "$storage_path", storagePath);
         AddParameter(command, "$created_at_utc", createdAtUtc);
-        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
+        await command.ExecuteNonQueryAsync(cancellationToken);
 
         return new ConversationUploadedFileInfo(input.FileId,
             input.ConversationId,
@@ -110,15 +110,15 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
                               ORDER BY created_at_utc ASC, file_id ASC;
                               """;
         AddParameter(command, "$conversation_id", conversationId);
-        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var files = new List<ConversationUploadedFileInfo>();
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await reader.ReadAsync(cancellationToken))
         {
             var fileId = Guid.Parse(reader.GetString(0));
             var ownerConversationId = Guid.Parse(reader.GetString(1));
-            var nameBytes = await reader.GetFieldValueAsync<byte[]>(ordinal: 2, cancellationToken).ConfigureAwait(false);
+            var nameBytes = await reader.GetFieldValueAsync<byte[]>(ordinal: 2, cancellationToken);
             var originalFileName = dbContext.DecryptUploadedFileName(nameBytes, ownerConversationId, fileId);
 
             files.Add(new ConversationUploadedFileInfo(fileId,
@@ -128,7 +128,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
                 reader.GetString(4),
                 reader.GetInt64(5),
                 ParseStatus(reader.GetString(6)),
-                await reader.IsDBNullAsync(ordinal: 7, cancellationToken).ConfigureAwait(false) ? null : reader.GetInt32(7),
+                await reader.IsDBNullAsync(ordinal: 7, cancellationToken) ? null : reader.GetInt32(7),
                 reader.GetInt64(8)));
         }
 
@@ -143,7 +143,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
             return null;
         }
 
-        var encrypted = await File.ReadAllBytesAsync(markdownPath, cancellationToken).ConfigureAwait(false);
+        var encrypted = await File.ReadAllBytesAsync(markdownPath, cancellationToken);
         var plaintext = _blobProtector.Decrypt(conversationId, fileId, UploadedFileBlobProtector.FileMarkdownColumn, encrypted);
         return Encoding.UTF8.GetString(plaintext);
     }
@@ -159,7 +159,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
             return null;
         }
 
-        var encrypted = await File.ReadAllBytesAsync(bytesPath, cancellationToken).ConfigureAwait(false);
+        var encrypted = await File.ReadAllBytesAsync(bytesPath, cancellationToken);
         ReadOnlyMemory<byte> plaintext = _blobProtector.Decrypt(conversationId, fileId, UploadedFileBlobProtector.FileBytesColumn, encrypted);
         return plaintext;
     }
@@ -169,7 +169,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         var connection = dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(connection, cancellationToken);
 
         // Read the stored extension so the server-named bytes file can be located precisely; a missing row means there
         // is nothing to delete.
@@ -179,7 +179,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
             lookup.CommandText = "SELECT extension FROM conversation_uploaded_files WHERE conversation_id = $conversation_id AND file_id = $file_id;";
             AddParameter(lookup, "$conversation_id", conversationId);
             AddParameter(lookup, "$file_id", fileId);
-            var result = await lookup.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            var result = await lookup.ExecuteScalarAsync(cancellationToken);
             if (result is null or DBNull)
             {
                 return false;
@@ -193,7 +193,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
             delete.CommandText = "DELETE FROM conversation_uploaded_files WHERE conversation_id = $conversation_id AND file_id = $file_id;";
             AddParameter(delete, "$conversation_id", conversationId);
             AddParameter(delete, "$file_id", fileId);
-            await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await delete.ExecuteNonQueryAsync(cancellationToken);
         }
 
         var conversationDirectory = ConversationDirectory(conversationId);
@@ -251,7 +251,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
 
     public async Task<IConversationStagingSnapshot> CreateStagingSnapshotAsync(Guid conversationId, CancellationToken cancellationToken)
     {
-        var files = await ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        var files = await ListAsync(conversationId, cancellationToken);
         var stagingDirectory = Directory.CreateTempSubdirectory("xe-attachments-").FullName;
 
         try
@@ -260,14 +260,14 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
             var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var file in files)
             {
-                var markdown = await ReadExtractedMarkdownAsync(conversationId, file.FileId, cancellationToken).ConfigureAwait(false);
+                var markdown = await ReadExtractedMarkdownAsync(conversationId, file.FileId, cancellationToken);
                 if (markdown is null)
                 {
                     continue;
                 }
 
                 var stagedName = BuildStagedFileName(file, usedNames);
-                await File.WriteAllTextAsync(Path.Combine(stagingDirectory, stagedName), markdown, cancellationToken).ConfigureAwait(false);
+                await File.WriteAllTextAsync(Path.Combine(stagingDirectory, stagedName), markdown, cancellationToken);
                 stagedNames.Add(stagedName);
             }
 

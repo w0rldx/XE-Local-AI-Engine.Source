@@ -155,7 +155,7 @@ public sealed class ByteBudgetedCache<TKey, TValue>
         IReadOnlyList<TValue>? computed;
         try
         {
-            computed = await computeMissing(missing, cancellationToken).ConfigureAwait(false);
+            computed = await computeMissing(missing, cancellationToken);
         }
         catch
         {
@@ -186,7 +186,7 @@ public sealed class ByteBudgetedCache<TKey, TValue>
 
         foreach (var (index, wait) in waits)
         {
-            var resolution = await wait.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var resolution = await wait.WaitAsync(cancellationToken);
             if (!resolution.Resolved)
             {
                 // The caller that owned this key degraded; so does this batch, taking its own existing degrade path

@@ -64,7 +64,7 @@ public sealed class CapacityService : ICapacityService
     /// <inheritdoc />
     public async Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct)
     {
-        return await DecideAsync(new CapacityRequest(modelName, role), ct).ConfigureAwait(false);
+        return await DecideAsync(new CapacityRequest(modelName, role), ct);
     }
 
     /// <inheritdoc />
@@ -93,7 +93,7 @@ public sealed class CapacityService : ICapacityService
             return new CapacityDecision(CapacityVerdict.Allow, ReasonAllowCloud, OllamaEvictionWarning: false);
         }
 
-        var providerName = await _localProviderResolver.ResolveProviderNameForModelAsync(modelName, ct).ConfigureAwait(false);
+        var providerName = await _localProviderResolver.ResolveProviderNameForModelAsync(modelName, ct);
         var isOllama = string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase);
         var isLlamaServer = string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
         if (isLlamaServer && _externalEndpoints.Resolve(modelName, role) is not null)
@@ -124,13 +124,13 @@ public sealed class CapacityService : ICapacityService
         // re-probes live). This is also the documented lock ordering for the GPU-load admission gate: the capacity
         // decision never holds the ledger gate while that gate is acquired — it is taken later, inside the supervisor
         // spawn, only after DecideAsync has fully returned and released this ledger gate.
-        await _runtimeAudit.GetAuditAsync(forceRefresh: false, ct).ConfigureAwait(false);
+        await _runtimeAudit.GetAuditAsync(forceRefresh: false, ct);
 
         // The decide-commit gate serializes the read-decide-reserve so two concurrent different-model spawns cannot both
         // pass on the same snapshot. Held only for this short sequence — no inference runs under it.
-        using var gate = await _ledger.EnterDecisionAsync(ct).ConfigureAwait(false);
+        using var gate = await _ledger.EnterDecisionAsync(ct);
 
-        var runningSnapshot = await SnapshotRunningKeysAsync(isOllama, ct).ConfigureAwait(false);
+        var runningSnapshot = await SnapshotRunningKeysAsync(isOllama, ct);
         var running = runningSnapshot.Keys;
 
         // Already running for this (model, role): serialize on that process; no fit math, no second load.
@@ -163,10 +163,9 @@ public sealed class CapacityService : ICapacityService
         // degraded to CPU-mode (VRAM unknown) when the device audit reports a silent CPU fallback. So on a GPU box whose
         // Vulkan runtime enumerates no devices, admission sizes against system RAM instead of pretending 16 GB of VRAM
         // exists. The audit was warmed above, so this call only re-probes the raw hardware profile under the gate.
-        var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct).ConfigureAwait(false);
+        var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct);
         var footprint = await _footprintProvider
-                              .ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, request.KvCacheType, ct)
-                              .ConfigureAwait(false);
+                              .ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, request.KvCacheType, ct);
         if (!footprint.IsKnown)
         {
             return new CapacityDecision(CapacityVerdict.RejectInsufficient, ReasonRejectFootprintUnknown, ollamaWarning);
@@ -286,14 +285,14 @@ public sealed class CapacityService : ICapacityService
         {
             if (isOllama)
             {
-                var snapshot = await _ollamaModelService.ListRunningModelsAsync(ct).ConfigureAwait(false);
+                var snapshot = await _ollamaModelService.ListRunningModelsAsync(ct);
                 return new RunningSnapshot(snapshot
                                            .Select(model => new RunningKey(model.ModelName ?? model.Name ?? string.Empty, ModelRole.Chat))
                                            .ToHashSet(),
                     IsKnown: true);
             }
 
-            var health = await _supervisor.CheckHealthAsync(ct).ConfigureAwait(false);
+            var health = await _supervisor.CheckHealthAsync(ct);
 
             // EXITED entries are not running. The supervisor's table keeps a crashed process until the idle reaper
             // collects it (up to a quarter of the idle TTL), and counting a corpse as resident is wrong in both

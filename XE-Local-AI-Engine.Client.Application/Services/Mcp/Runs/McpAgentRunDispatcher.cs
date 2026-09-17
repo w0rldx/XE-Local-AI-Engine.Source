@@ -57,7 +57,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         // gate without claiming, so waiting with None cannot deadlock and cannot escape as a TaskCanceledException that
         // would crash host shutdown. The sibling shutdown paths (RunWatchdogAsync, FinalizeClaimDuringShutdownAsync)
         // already persist with None for the same reason.
-        await _claimGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await _claimGate.WaitAsync(CancellationToken.None);
         try
         {
             active = _cancellations.BeginShutdown();
@@ -72,10 +72,10 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             await PersistStopThenSignalAsync(handle,
                 McpAgentRunStopReason.HostShutdown,
                 "host",
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
         }
 
-        await base.StopAsync(cancellationToken).ConfigureAwait(false);
+        await base.StopAsync(cancellationToken);
     }
 
     private async Task RunWorkerAsync(CancellationToken stoppingToken)
@@ -84,16 +84,16 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         {
             try
             {
-                var registered = await TryClaimAndRegisterNextAsync(stoppingToken).ConfigureAwait(false);
+                var registered = await TryClaimAndRegisterNextAsync(stoppingToken);
                 if (registered is null)
                 {
                     await Task.Delay(TimeSpan.FromMilliseconds(_options.PollIntervalMilliseconds),
                         _timeProvider,
-                        stoppingToken).ConfigureAwait(false);
+                        stoppingToken);
                     continue;
                 }
 
-                await ExecuteClaimAsync(registered.Value.Claimed, registered.Value.ExecutionToken).ConfigureAwait(false);
+                await ExecuteClaimAsync(registered.Value.Claimed, registered.Value.ExecutionToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -103,14 +103,14 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             {
                 NodeSqliteContention.Record("raw", exception, _logger);
                 _logger.LogError(exception, "Durable MCP agent run dispatch iteration failed; the worker will retry.");
-                await DelayAfterFailureAsync(stoppingToken).ConfigureAwait(false);
+                await DelayAfterFailureAsync(stoppingToken);
             }
         }
     }
 
     private async Task<RegisteredClaim?> TryClaimAndRegisterNextAsync(CancellationToken cancellationToken)
     {
-        await _claimGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _claimGate.WaitAsync(cancellationToken);
         try
         {
             if (Volatile.Read(ref _stopping) != 0)
@@ -120,7 +120,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
 
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IMcpAgentRunStore>();
-            var queued = await store.ListAsync(limit: 32, McpAgentRunStatus.Queued, cancellationToken).ConfigureAwait(false);
+            var queued = await store.ListAsync(limit: 32, McpAgentRunStatus.Queued, cancellationToken);
             foreach (var candidate in queued)
             {
                 if (Volatile.Read(ref _stopping) != 0)
@@ -132,13 +132,13 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
                 var result = await store.TryClaimAsync(candidate.RequestId,
                     candidate.Version,
                     claimedAt,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
                 if (result.Kind != McpAgentRunClaimKind.Claimed || result.Run is not { } claimed)
                 {
                     continue;
                 }
 
-                await _metrics.RefreshAsync(store, CancellationToken.None).ConfigureAwait(false);
+                await _metrics.RefreshAsync(store, CancellationToken.None);
                 _metrics.RecordLifecycle("claimed");
                 _metrics.RecordClaimAge(claimedAt - claimed.CreatedAtUtc);
 
@@ -148,13 +148,13 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
                     out var executionToken);
                 if (registration == McpAgentRunRegistrationKind.Duplicate)
                 {
-                    await FinalizeRegistrationFailureAsync(claimed, claimed.ClaimToken.Value).ConfigureAwait(false);
+                    await FinalizeRegistrationFailureAsync(claimed, claimed.ClaimToken.Value);
                     return null;
                 }
 
                 if (registration == McpAgentRunRegistrationKind.ShuttingDown)
                 {
-                    await FinalizeClaimDuringShutdownAsync(claimed, claimed.ClaimToken.Value).ConfigureAwait(false);
+                    await FinalizeClaimDuringShutdownAsync(claimed, claimed.ClaimToken.Value);
                     return null;
                 }
 
@@ -188,7 +188,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
 
             // A stop may have committed after claim and before the process-local handle existed. Reload before resolving
             // binding or acquiring any later workspace lease so the durable marker always wins without inference.
-            var current = await store.GetAsync(claimed.RequestId, CancellationToken.None).ConfigureAwait(false);
+            var current = await store.GetAsync(claimed.RequestId, CancellationToken.None);
             if (current is null || current.ClaimToken != claimToken)
             {
                 return;
@@ -196,7 +196,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
 
             if (current.StopReason != McpAgentRunStopReason.None)
             {
-                await FinalizeMarkerWinnerAsync(store, current, claimToken).ConfigureAwait(false);
+                await FinalizeMarkerWinnerAsync(store, current, claimToken);
                 return;
             }
 
@@ -204,7 +204,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             try
             {
                 var executor = scope.ServiceProvider.GetRequiredService<IMcpAgentRunExecutor>();
-                outcome = await executor.ExecuteAsync(current, executionToken).ConfigureAwait(false);
+                outcome = await executor.ExecuteAsync(current, executionToken);
             }
             catch (OperationCanceledException)
             {
@@ -216,7 +216,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
                 outcome = SpawnOutcome.Failed(InternalFailureCode, "The run failed unexpectedly.");
             }
 
-            current = await store.GetAsync(claimed.RequestId, CancellationToken.None).ConfigureAwait(false);
+            current = await store.GetAsync(claimed.RequestId, CancellationToken.None);
             if (current is null || current.ClaimToken != claimToken)
             {
                 return;
@@ -224,24 +224,24 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
 
             if (current.StopReason != McpAgentRunStopReason.None)
             {
-                await FinalizeMarkerWinnerAsync(store, current, claimToken).ConfigureAwait(false);
+                await FinalizeMarkerWinnerAsync(store, current, claimToken);
                 return;
             }
 
             var finalization = CreateNormalFinalization(current, claimToken, outcome);
-            if (!await store.TryFinalizeAsync(finalization, CancellationToken.None).ConfigureAwait(false))
+            if (!await store.TryFinalizeAsync(finalization, CancellationToken.None))
             {
                 // A stop CAS may have won after the reload. Discard the external result and let its immutable marker
                 // choose the terminal outcome.
-                current = await store.GetAsync(claimed.RequestId, CancellationToken.None).ConfigureAwait(false);
+                current = await store.GetAsync(claimed.RequestId, CancellationToken.None);
                 if (current is not null && current.ClaimToken == claimToken && current.StopReason != McpAgentRunStopReason.None)
                 {
-                    await FinalizeMarkerWinnerAsync(store, current, claimToken).ConfigureAwait(false);
+                    await FinalizeMarkerWinnerAsync(store, current, claimToken);
                 }
             }
             else
             {
-                await _metrics.RefreshAsync(store, CancellationToken.None).ConfigureAwait(false);
+                await _metrics.RefreshAsync(store, CancellationToken.None);
                 _metrics.RecordLifecycle(McpAgentRunText.ToLowercaseInvariant(finalization.Status));
             }
         }
@@ -252,10 +252,10 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         }
         finally
         {
-            await watchdogCompleted.CancelAsync().ConfigureAwait(false);
+            await watchdogCompleted.CancelAsync();
             try
             {
-                await watchdog.ConfigureAwait(false);
+                await watchdog;
             }
             catch (OperationCanceledException)
             {
@@ -270,11 +270,11 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
 
     private async Task RunWatchdogAsync(McpAgentRunCancellationHandle active, CancellationToken completedToken)
     {
-        await Task.Delay(TimeSpan.FromMinutes(_options.WatchdogMinutes), _timeProvider, completedToken).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromMinutes(_options.WatchdogMinutes), _timeProvider, completedToken);
         await PersistStopThenSignalAsync(active,
             McpAgentRunStopReason.WatchdogExpired,
             "watchdog",
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
     }
 
     private async Task PersistStopThenSignalAsync(McpAgentRunCancellationHandle active,
@@ -294,7 +294,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
                     expectedVersion,
                     reason,
                     _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken);
                 if (stopped.Kind != McpAgentRunStopKind.VersionConflict)
                 {
                     if (stopped.Kind is McpAgentRunStopKind.Requested or McpAgentRunStopKind.AlreadyRequested)
@@ -304,14 +304,14 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
 
                     if (stopped.Kind == McpAgentRunStopKind.Requested)
                     {
-                        await _metrics.RefreshAsync(store, CancellationToken.None).ConfigureAwait(false);
+                        await _metrics.RefreshAsync(store, CancellationToken.None);
                     }
 
                     _metrics.RecordStop(metricReason, McpAgentRunText.ToLowercaseInvariant(stopped.Kind));
                     return;
                 }
 
-                var current = await store.GetAsync(active.RequestId, cancellationToken).ConfigureAwait(false);
+                var current = await store.GetAsync(active.RequestId, cancellationToken);
                 if (current is null || current.ClaimToken != active.ClaimToken)
                 {
                     return;
@@ -354,10 +354,10 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
                     Result: null,
                     DisplayMessage: "The run could not be started.",
                     CompletedAtUtc: _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
             if (finalized)
             {
-                await _metrics.RefreshAsync(store, CancellationToken.None).ConfigureAwait(false);
+                await _metrics.RefreshAsync(store, CancellationToken.None);
             }
         }
         catch (Exception exception)
@@ -375,14 +375,14 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             await PersistStopThenSignalAsync(active,
                 McpAgentRunStopReason.HostShutdown,
                 "host",
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IMcpAgentRunStore>();
-            var current = await store.GetAsync(claimed.RequestId, CancellationToken.None).ConfigureAwait(false);
+            var current = await store.GetAsync(claimed.RequestId, CancellationToken.None);
             if (current is not null && current.ClaimToken == claimToken && current.StopReason != McpAgentRunStopReason.None)
             {
-                await FinalizeMarkerWinnerAsync(store, current, claimToken).ConfigureAwait(false);
+                await FinalizeMarkerWinnerAsync(store, current, claimToken);
             }
         }
         catch (Exception exception)
@@ -415,10 +415,10 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
                 Result: null,
                 DisplayMessage: displayMessage,
                 CompletedAtUtc: _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
-            CancellationToken.None).ConfigureAwait(false);
+            CancellationToken.None);
         if (finalized)
         {
-            await _metrics.RefreshAsync(store, CancellationToken.None).ConfigureAwait(false);
+            await _metrics.RefreshAsync(store, CancellationToken.None);
             _metrics.RecordLifecycle(McpAgentRunText.ToLowercaseInvariant(status));
         }
     }
@@ -446,7 +446,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         {
             await Task.Delay(TimeSpan.FromMilliseconds(_options.PollIntervalMilliseconds),
                 _timeProvider,
-                stoppingToken).ConfigureAwait(false);
+                stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

@@ -34,10 +34,10 @@ public sealed class BenchmarkQueueHostedService(
             // them. The poll interval is the backoff.
             if (!recovered)
             {
-                recovered = await RecoverAsync(stoppingToken).ConfigureAwait(false);
+                recovered = await RecoverAsync(stoppingToken);
                 if (!recovered)
                 {
-                    await signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
+                    await signal.WaitAsync(_pollInterval, stoppingToken);
                     continue;
                 }
             }
@@ -48,7 +48,7 @@ public sealed class BenchmarkQueueHostedService(
             // Retried on the same poll interval until it lands once.
             if (!reconciled)
             {
-                reconciled = await ReconcilePairwiseAsync(stoppingToken).ConfigureAwait(false);
+                reconciled = await ReconcilePairwiseAsync(stoppingToken);
             }
 
             BenchmarkClaimedWork? work = null;
@@ -62,7 +62,7 @@ public sealed class BenchmarkQueueHostedService(
                 {
                     await using var claimScope = scopeFactory.CreateAsyncScope();
                     var store = claimScope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
-                    work = await store.ClaimNextAsync(stoppingToken).ConfigureAwait(false);
+                    work = await store.ClaimNextAsync(stoppingToken);
                 }
 
                 if (work is not null)
@@ -72,26 +72,22 @@ public sealed class BenchmarkQueueHostedService(
                     {
                         case BenchmarkWorkKind.Primary:
                             await executionScope.ServiceProvider.GetRequiredService<IBenchmarkRunExecutor>()
-                                                .ExecuteAsync(work, stoppingToken)
-                                                .ConfigureAwait(false);
+                                                .ExecuteAsync(work, stoppingToken);
                             break;
                         case BenchmarkWorkKind.Judge:
                             await executionScope.ServiceProvider.GetRequiredService<IBenchmarkJudgeExecutor>()
-                                                .ExecuteAsync(work, stoppingToken)
-                                                .ConfigureAwait(false);
+                                                .ExecuteAsync(work, stoppingToken);
                             break;
                         case BenchmarkWorkKind.Fidelity:
                             await executionScope.ServiceProvider.GetRequiredService<IBenchmarkFidelityExecutor>()
-                                                .ExecuteAsync(work, stoppingToken)
-                                                .ConfigureAwait(false);
+                                                .ExecuteAsync(work, stoppingToken);
                             break;
                         case BenchmarkWorkKind.Comparison:
                             await executionScope.ServiceProvider.GetRequiredService<IBenchmarkComparisonExecutor>()
-                                                .ExecuteAsync(work, stoppingToken)
-                                                .ConfigureAwait(false);
+                                                .ExecuteAsync(work, stoppingToken);
                             break;
                         default:
-                            await TerminalizeUnsupportedAsync(executionScope.ServiceProvider, work, stoppingToken).ConfigureAwait(false);
+                            await TerminalizeUnsupportedAsync(executionScope.ServiceProvider, work, stoppingToken);
                             break;
                     }
                 }
@@ -123,7 +119,7 @@ public sealed class BenchmarkQueueHostedService(
 
             if (work is null)
             {
-                await signal.WaitAsync(_pollInterval, stoppingToken).ConfigureAwait(false);
+                await signal.WaitAsync(_pollInterval, stoppingToken);
             }
         }
     }
@@ -144,11 +140,11 @@ public sealed class BenchmarkQueueHostedService(
         var store = services.GetRequiredService<IBenchmarkStore>();
         if (work.Kind == BenchmarkWorkKind.Comparison)
         {
-            await store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, reason, cancellationToken).ConfigureAwait(false);
+            await store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, reason, cancellationToken);
             return;
         }
 
-        _ = await store.MarkFidelityFailedAsync(work.RunId, work.Version, reason, cancellationToken).ConfigureAwait(false);
+        _ = await store.MarkFidelityFailedAsync(work.RunId, work.Version, reason, cancellationToken);
     }
 
     /// <summary>
@@ -166,7 +162,7 @@ public sealed class BenchmarkQueueHostedService(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
-            var recovered = await store.RecoverRunsOnStartupAsync(cancellationToken).ConfigureAwait(false);
+            var recovered = await store.RecoverRunsOnStartupAsync(cancellationToken);
             foreach (var run in recovered)
             {
                 events.EvictPlaintext(run.Id);
@@ -208,7 +204,7 @@ public sealed class BenchmarkQueueHostedService(
                 return true;
             }
 
-            await planner.ReconcilePairwiseAsync(cancellationToken).ConfigureAwait(false);
+            await planner.ReconcilePairwiseAsync(cancellationToken);
             logger.LogInformation("Reconciled missing pairwise benchmark comparisons.");
             return true;
         }

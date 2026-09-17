@@ -33,6 +33,6 @@ public sealed class ModelLaunchArgumentsService(IModelLaunchArgumentsStore store
     /// <summary>Removes the override for <paramref name="modelName" />. Idempotent: no override is not an error.</summary>
     public async Task ClearAsync(string modelName, CancellationToken cancellationToken = default)
     {
-        _ = await _store.DeleteAsync(modelName, cancellationToken).ConfigureAwait(false);
+        _ = await _store.DeleteAsync(modelName, cancellationToken);
     }
 }

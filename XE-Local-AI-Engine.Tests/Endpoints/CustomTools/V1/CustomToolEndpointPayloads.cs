@@ -72,11 +72,11 @@ internal static class CustomToolEndpointPayloads
             client,
             HttpMethod.Post,
             DefinitionsRoute,
-            HttpFetchDefinition(name, acknowledged: true, secretHeaderValue)).ConfigureAwait(false);
+            HttpFetchDefinition(name, acknowledged: true, secretHeaderValue));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode, $"Seeding the custom tool '{name}' must succeed.");
 
-        var view = await response.Content.ReadFromJsonAsync<CustomToolView>(Json).ConfigureAwait(false);
+        var view = await response.Content.ReadFromJsonAsync<CustomToolView>(Json);
         return AssertEx.NotNull(view).Id;
     }
 
@@ -126,6 +126,6 @@ internal static class CustomToolEndpointPayloads
         }
 
         authenticate?.Invoke(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 }

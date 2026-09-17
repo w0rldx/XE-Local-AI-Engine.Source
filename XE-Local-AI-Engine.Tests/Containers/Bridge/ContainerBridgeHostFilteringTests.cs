@@ -110,9 +110,9 @@ public sealed class ContainerBridgeHostFilteringTests
     [Test]
     public async Task Bridge_WithTheWidening_AcceptsAContainersHostHeader()
     {
-        await using var host = await FilteredBridgeHost.StartAsync(widenAllowedHosts: true).ConfigureAwait(false);
+        await using var host = await FilteredBridgeHost.StartAsync(widenAllowedHosts: true);
 
-        using var response = await host.GetAsync(ContainerBridgePipeline.ModelsPath).ConfigureAwait(false);
+        using var response = await host.GetAsync(ContainerBridgePipeline.ModelsPath);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode,
             "The request must reach the bridge's token gate; a 400 here means host filtering refused it first.");
@@ -126,9 +126,9 @@ public sealed class ContainerBridgeHostFilteringTests
     [Test]
     public async Task Bridge_WithoutTheWidening_IsRefusedByHostFilteringBeforeAnyBridgeMiddleware()
     {
-        await using var host = await FilteredBridgeHost.StartAsync(widenAllowedHosts: false).ConfigureAwait(false);
+        await using var host = await FilteredBridgeHost.StartAsync(widenAllowedHosts: false);
 
-        using var response = await host.GetAsync(ContainerBridgePipeline.ModelsPath).ConfigureAwait(false);
+        using var response = await host.GetAsync(ContainerBridgePipeline.ModelsPath);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode,
             "Without the widening the shipped loopback-only allow list refuses the bridge's own Host header, which is the defect this guard exists for.");
@@ -299,7 +299,7 @@ public sealed class ContainerBridgeHostFilteringTests
             // composition root registers, and the bridge branch is one of those things.
             app.UseHostFiltering();
             ContainerBridgePipeline.Map(app, listenerEndpoint);
-            await app.StartAsync().ConfigureAwait(false);
+            await app.StartAsync();
 
             var client = new HttpClient
             {
@@ -315,14 +315,14 @@ public sealed class ContainerBridgeHostFilteringTests
             // The header a container sends, independent of the loopback socket this test connects over.
             request.Headers.Host = $"{BridgeAddress}:{_port}";
 
-            return await _client.SendAsync(request).ConfigureAwait(false);
+            return await _client.SendAsync(request);
         }
 
         public async ValueTask DisposeAsync()
         {
             _client.Dispose();
             _watcher.Dispose();
-            await _app.DisposeAsync().ConfigureAwait(false);
+            await _app.DisposeAsync();
         }
 
         // Bind :0, read what the kernel handed out, release it, and bind that number for real. The window between

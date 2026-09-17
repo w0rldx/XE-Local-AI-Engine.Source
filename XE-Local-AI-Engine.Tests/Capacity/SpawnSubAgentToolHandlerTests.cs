@@ -45,23 +45,23 @@ public sealed class SpawnSubAgentToolHandlerTests
 
         foreach (var request in invalidRequests)
         {
-            var result = await handler.ExecuteAsync(JsonSerializer.Serialize(request)).ConfigureAwait(false);
+            var result = await handler.ExecuteAsync(JsonSerializer.Serialize(request));
             AssertEx.True(result.Contains("exceeded", StringComparison.OrdinalIgnoreCase), "Oversized arguments must return a bounded validation failure.");
         }
 
-        await spawnService.DidNotReceive().SpawnAsync(Arg.Any<SubAgentSpawnRequest>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await spawnService.DidNotReceive().SpawnAsync(Arg.Any<SubAgentSpawnRequest>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task ExecuteAsync_WhenUnknownMemberIsPresent_RejectsBeforeCallingSpawnService()
     {
         var (handler, spawnService, provider) = CreateHandler();
-        await using (provider.ConfigureAwait(false))
+        await using (provider)
         {
-            var result = await handler.ExecuteAsync("{\"modelId\":\"model\",\"task\":\"task\",\"unexpected\":true}").ConfigureAwait(false);
+            var result = await handler.ExecuteAsync("{\"modelId\":\"model\",\"task\":\"task\",\"unexpected\":true}");
 
             AssertEx.True(result.Contains("not valid JSON", StringComparison.OrdinalIgnoreCase));
-            await spawnService.DidNotReceive().SpawnAsync(Arg.Any<SubAgentSpawnRequest>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+            await spawnService.DidNotReceive().SpawnAsync(Arg.Any<SubAgentSpawnRequest>(), Arg.Any<CancellationToken>());
         }
     }
 
@@ -69,13 +69,13 @@ public sealed class SpawnSubAgentToolHandlerTests
     public async Task ExecuteAsync_WhenUnknownMemberMakesRawPayloadOversized_RejectsBeforeDeserializationOrSpawn()
     {
         var (handler, spawnService, provider) = CreateHandler();
-        await using (provider.ConfigureAwait(false))
+        await using (provider)
         {
             var payload = "{\"modelId\":\"model\",\"task\":\"task\",\"padding\":\"" + new string('x', 20000) + "\"}";
-            var result = await handler.ExecuteAsync(payload).ConfigureAwait(false);
+            var result = await handler.ExecuteAsync(payload);
 
             AssertEx.True(result.Contains("payload", StringComparison.OrdinalIgnoreCase));
-            await spawnService.DidNotReceive().SpawnAsync(Arg.Any<SubAgentSpawnRequest>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+            await spawnService.DidNotReceive().SpawnAsync(Arg.Any<SubAgentSpawnRequest>(), Arg.Any<CancellationToken>());
         }
     }
 

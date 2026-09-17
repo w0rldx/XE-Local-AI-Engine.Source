@@ -16,7 +16,7 @@ public sealed class ExternalAppPurgeCoverageTests
     public async Task NoExternalAppTable_IsKeyedByAConversationOrMessage()
     {
         using var fixture = new ExternalAppTestFixture();
-        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var context = await fixture.CreateSchemaAsync();
 
         var offenders = new List<string>();
         var inspected = 0;

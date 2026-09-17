@@ -90,7 +90,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         var model = _options.EmbeddingModelName;
         if (string.IsNullOrWhiteSpace(model) || candidates.Count <= threshold || string.IsNullOrWhiteSpace(query))
         {
-            return await _lexical.SelectAsync(query, candidates, threshold, cancellationToken).ConfigureAwait(false);
+            return await _lexical.SelectAsync(query, candidates, threshold, cancellationToken);
         }
 
         // The selector's OWN bound. The relevance hop calls this under CancellationToken.None (the decision is shared
@@ -101,13 +101,13 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
 
         try
         {
-            return await RankByEmbeddingAsync(query, candidates, threshold, model, timeout.Token, cancellationToken).ConfigureAwait(false);
+            return await RankByEmbeddingAsync(query, candidates, threshold, model, timeout.Token, cancellationToken);
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             // The bound fired: a cold model load, or a re-ensure parked behind a profiling run. Degrade — the turn is
             // already streaming towards its first token and must not fail for a ranking.
-            return await FallBackToLexicalAsync(query, candidates, threshold, exception: null, cancellationToken).ConfigureAwait(false);
+            return await FallBackToLexicalAsync(query, candidates, threshold, exception: null, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -121,7 +121,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
             // profiling retry, a transport error (the deferred llama-server generator wraps its LlamaRuntimeException
             // and its refusals to IOException), or an unregistered EmbeddingProviderName. None is a reason to break a
             // send, and none of them is a reason to hide a tool either — the lexical ranking is a complete answer.
-            return await FallBackToLexicalAsync(query, candidates, threshold, exception, cancellationToken).ConfigureAwait(false);
+            return await FallBackToLexicalAsync(query, candidates, threshold, exception, cancellationToken);
         }
     }
 
@@ -217,11 +217,11 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         // remaining misses plus the query go out as ONE batch, so a turn costs a single embedding round-trip. The query
         // is always re-embedded and never cached.
         var queryVector = ReadOnlyMemory<float>.Empty;
-        var candidateVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingCandidatesAsync, cancellationToken).ConfigureAwait(false);
+        var candidateVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingCandidatesAsync, cancellationToken);
 
         if (candidateVectors is null)
         {
-            return await FallBackToLexicalAsync(query, candidates, threshold, exception: null, callerToken).ConfigureAwait(false);
+            return await FallBackToLexicalAsync(query, candidates, threshold, exception: null, callerToken);
         }
 
         var selected = rankable
@@ -245,7 +245,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
 
             batchTexts.Add(query);
 
-            var generated = await generator.GenerateAsync(batchTexts, options: null, token).ConfigureAwait(false);
+            var generated = await generator.GenerateAsync(batchTexts, options: null, token);
 
             // A well-behaved generator returns exactly one embedding per input, in order. A short or partial response
             // would make the positional indexing throw outside the narrow catch set; signal a degrade instead. No tool

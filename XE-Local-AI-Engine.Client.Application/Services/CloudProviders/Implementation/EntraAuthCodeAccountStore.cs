@@ -36,7 +36,7 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
 
     public async Task<string?> LoadHomeAccountIdAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (!File.Exists(_recordPath))
@@ -46,7 +46,7 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
 
             try
             {
-                var protectedPayload = await File.ReadAllBytesAsync(_recordPath, cancellationToken).ConfigureAwait(false);
+                var protectedPayload = await File.ReadAllBytesAsync(_recordPath, cancellationToken);
                 var payload = _protector.Unprotect(protectedPayload);
                 var homeAccountId = Encoding.UTF8.GetString(payload);
                 return string.IsNullOrWhiteSpace(homeAccountId) ? null : homeAccountId;
@@ -75,10 +75,10 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
 
         var protectedPayload = _protector.Protect(Encoding.UTF8.GetBytes(homeAccountId));
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            await File.WriteAllBytesAsync(_recordPath, protectedPayload, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(_recordPath, protectedPayload, cancellationToken);
             SecureFilePermissions.Apply(_recordPath);
         }
         finally
@@ -89,7 +89,7 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
 
     public async Task ClearAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (File.Exists(_recordPath))

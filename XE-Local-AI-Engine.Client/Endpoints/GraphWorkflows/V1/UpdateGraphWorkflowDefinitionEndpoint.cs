@@ -33,7 +33,7 @@ public sealed class UpdateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
 
         if (GraphWorkflowRequestSizeLimit.IsOversized(HttpContext.Request))
         {
-            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail)).ConfigureAwait(false);
+            await Send.ResultAsync(RequestBodyTooLargeProblem.Result(GraphWorkflowRequestSizeLimit.OversizedDetail));
             return;
         }
 
@@ -43,13 +43,13 @@ public sealed class UpdateGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefiniti
 
         try
         {
-            var updated = await _definitions.UpdateAsync(req.DefinitionId, req.Version, req.Name, req.Description, graphJson, ct).ConfigureAwait(false);
-            await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+            var updated = await _definitions.UpdateAsync(req.DefinitionId, req.Version, req.Name, req.Description, graphJson, ct);
+            await Send.OkAsync(updated.ToResponse(), ct);
         }
         catch (GraphWorkflowValidationException exception)
         {
             GraphWorkflowValidationErrors.AddTo(this, exception.Result);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(cancellation: ct);
         }
     }
 }

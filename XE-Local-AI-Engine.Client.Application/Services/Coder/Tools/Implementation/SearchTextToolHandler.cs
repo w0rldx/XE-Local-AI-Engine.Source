@@ -63,6 +63,6 @@ internal sealed class SearchTextToolHandler : IClientLocalToolHandler
             return $"search_text arguments are invalid: {string.Join(" ", validationErrors)}";
         }
 
-        return await _reader.SearchTextAsync(request, cancellationToken).ConfigureAwait(false);
+        return await _reader.SearchTextAsync(request, cancellationToken);
     }
 }

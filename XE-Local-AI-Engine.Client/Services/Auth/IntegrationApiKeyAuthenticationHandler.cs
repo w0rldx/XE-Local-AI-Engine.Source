@@ -74,7 +74,7 @@ internal sealed class IntegrationApiKeyAuthenticationHandler : AuthenticationHan
         // Never log the header, the presented value or any substring of it beyond the display prefix the service
         // returns on success.
         var presented = header[BearerPrefix.Length..].Trim();
-        var validation = await _apiKeyService.ValidateAsync(presented, Context.RequestAborted).ConfigureAwait(false);
+        var validation = await _apiKeyService.ValidateAsync(presented, Context.RequestAborted);
         if (validation is null)
         {
             return AuthenticateResult.Fail("Invalid integration API key.");

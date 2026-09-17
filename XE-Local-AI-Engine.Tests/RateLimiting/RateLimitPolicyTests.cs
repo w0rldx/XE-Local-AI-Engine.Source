@@ -84,7 +84,7 @@ public sealed class RateLimitPolicyTests
             for (var attempt = 1; attempt <= (ProductionAuthPermitLimit * 2) + 1; attempt++)
             {
                 attempts = attempt;
-                var response = await PostLoginAsync(client).ConfigureAwait(false);
+                var response = await PostLoginAsync(client);
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     rejected = response;
@@ -105,7 +105,7 @@ public sealed class RateLimitPolicyTests
                 throttled.Headers.TryGetValues("Retry-After", out var retryAfter) ? string.Join(",", retryAfter) : null,
                 "A 429 must carry the Retry-After hint OnRejected sets.");
 
-            var body = await throttled.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var body = await throttled.Content.ReadAsStringAsync();
             AssertEx.Contains(body, "Too many auth attempts", StringComparison.Ordinal);
         }
         finally
@@ -124,7 +124,7 @@ public sealed class RateLimitPolicyTests
         // rather than from a global limiter accidentally left on.
         for (var attempt = 1; attempt <= (ProductionAuthPermitLimit * 3); attempt++)
         {
-            using var response = await client.GetAsync(new Uri("/api/local/v1/auth/status", UriKind.Relative)).ConfigureAwait(false);
+            using var response = await client.GetAsync(new Uri("/api/local/v1/auth/status", UriKind.Relative));
             AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, $"auth/status request {attempt} must not be throttled.");
         }
     }
@@ -170,12 +170,12 @@ public sealed class RateLimitPolicyTests
                 method = "tools/list"
             })
         };
-        using var mcpResponse = await client.SendAsync(mcpRequest).ConfigureAwait(false);
+        using var mcpResponse = await client.SendAsync(mcpRequest);
         AssertEx.NotEqual(HttpStatusCode.InternalServerError,
             mcpResponse.StatusCode,
             $"{NodeAuthRateLimits.McpPolicy} must resolve; a 500 means it is referenced but not registered.");
 
-        using var proxyResponse = await client.GetAsync(new Uri("/api/local/v1/proxy/v1/models", UriKind.Relative)).ConfigureAwait(false);
+        using var proxyResponse = await client.GetAsync(new Uri("/api/local/v1/proxy/v1/models", UriKind.Relative));
         AssertEx.NotEqual(HttpStatusCode.InternalServerError,
             proxyResponse.StatusCode,
             $"{NodeAuthRateLimits.LocalModelProxyPolicy} must resolve; a 500 means it is referenced but not registered.");
@@ -196,7 +196,7 @@ public sealed class RateLimitPolicyTests
             for (var attempt = 1; attempt <= (IntegrationIpPermitLimit * 2) + 1; attempt++)
             {
                 attempts = attempt;
-                var response = await PostInvokeAsync(client).ConfigureAwait(false);
+                var response = await PostInvokeAsync(client);
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     rejected = response;
@@ -216,7 +216,7 @@ public sealed class RateLimitPolicyTests
 
             // OnRejected is shared by every policy, so its body has to name the one that rejected. An integrator told
             // it made "too many auth attempts" is sent to rotate a credential that was never the problem.
-            var body = await throttled.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var body = await throttled.Content.ReadAsStringAsync();
             AssertEx.False(body.Contains("auth", StringComparison.OrdinalIgnoreCase),
                 $"The integration family's 429 must not be worded as an auth throttle, and reads: {body}");
             AssertEx.Contains(body, "Too many requests", StringComparison.Ordinal);

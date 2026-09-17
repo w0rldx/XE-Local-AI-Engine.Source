@@ -86,10 +86,10 @@ public sealed class BenchmarkFidelityExecutor(
         var token = registration.Token;
         try
         {
-            var attempt = await store.GetFidelityAttemptAsync(attemptId, token).ConfigureAwait(false)
+            var attempt = await store.GetFidelityAttemptAsync(attemptId, token)
                           ?? throw new BenchmarkExecutionException("The fidelity attempt is no longer available.");
-            var command = await MeasureAsync(work, attempt, token).ConfigureAwait(false);
-            _ = await store.MarkFidelitySucceededAsync(command, CancellationToken.None).ConfigureAwait(false);
+            var command = await MeasureAsync(work, attempt, token);
+            _ = await store.MarkFidelitySucceededAsync(command, CancellationToken.None);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -97,14 +97,14 @@ public sealed class BenchmarkFidelityExecutor(
         }
         catch (OperationCanceledException)
         {
-            _ = await store.MarkFidelityCancelledAsync(work.RunId, work.Version, CancellationToken.None).ConfigureAwait(false);
+            _ = await store.MarkFidelityCancelledAsync(work.RunId, work.Version, CancellationToken.None);
         }
         catch (BenchmarkFidelityRequeueException exception)
         {
             // NOT a failure: the blocker is another process's work, and it clears itself. The item goes back to Queued
             // carrying the reason, so the consumer moves on to whatever else is waiting and comes back to this.
             logger.LogInformation("Benchmark fidelity work {RunId} was requeued: {Reason}", work.RunId, exception.Message);
-            _ = await store.RequeueFidelityAsync(work.RunId, work.Version, exception.Message, CancellationToken.None).ConfigureAwait(false);
+            _ = await store.RequeueFidelityAsync(work.RunId, work.Version, exception.Message, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -117,8 +117,7 @@ public sealed class BenchmarkFidelityExecutor(
                                exception is BenchmarkExecutionException or BenchmarkSnapshotException or LlamaRuntimeException
                                    ? exception.Message
                                    : "The fidelity measurement failed. See local logs for details.",
-                               CancellationToken.None)
-                           .ConfigureAwait(false);
+                               CancellationToken.None);
         }
     }
 
@@ -127,24 +126,24 @@ public sealed class BenchmarkFidelityExecutor(
         CancellationToken token)
     {
         var snapshot = snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
-        var project = await store.GetProjectAsync(work.Run.ProjectId, token).ConfigureAwait(false)
+        var project = await store.GetProjectAsync(work.Run.ProjectId, token)
                       ?? throw new BenchmarkExecutionException("The benchmark project is no longer available.");
         var corpus = BenchmarkFidelityCorpus.Require();
         var chunks = BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks);
 
-        await using var modelLease = await installedModels.AcquireAsync(snapshot.PrimaryModel.ModelName, token).ConfigureAwait(false);
+        await using var modelLease = await installedModels.AcquireAsync(snapshot.PrimaryModel.ModelName, token);
         if (!BenchmarkSnapshotModelComparer.Matches(snapshot.PrimaryModel, modelLease.Snapshot))
         {
             throw new BenchmarkExecutionException(FingerprintChangedMessage);
         }
 
-        var modelPath = await ggufModels.ResolveModelFilePathAsync(snapshot.PrimaryModel.ModelName, token).ConfigureAwait(false)
+        var modelPath = await ggufModels.ResolveModelFilePathAsync(snapshot.PrimaryModel.ModelName, token)
                         ?? throw new BenchmarkExecutionException("The model file for this run is no longer on disk.");
 
         // Host facts captured before anything is reserved or spawned, exactly as the judge does. Non-throwing.
-        var environment = await environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token).ConfigureAwait(false);
+        var environment = await environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token);
 
-        var binary = await binaries.EnsureBinaryAsync(snapshot.PrimaryRuntime.Variant, token).ConfigureAwait(false);
+        var binary = await binaries.EnsureBinaryAsync(snapshot.PrimaryRuntime.Variant, token);
         if (binary.PerplexityExecutablePath is not { } executable)
         {
             throw new BenchmarkExecutionException(PerplexityUnavailableMessage);
@@ -156,7 +155,7 @@ public sealed class BenchmarkFidelityExecutor(
         // the box where the base is the big one. The two phases never overlap, so two sequential reservations cost
         // nothing and describe what is actually resident.
         var kld = string.Equals(attempt.Kind, "kld", StringComparison.Ordinal)
-            ? await PrepareKldAsync(work.RunId, project, corpus, chunks, executable, snapshot, token).ConfigureAwait(false)
+            ? await PrepareKldAsync(work.RunId, project, corpus, chunks, executable, snapshot, token)
             : null;
 
         // Sized on the PINNED 512 window rather than the project's context: that is what this process will allocate.
@@ -175,12 +174,11 @@ public sealed class BenchmarkFidelityExecutor(
                                                                CapacityRejectedMessage),
                                                            new BenchmarkWaitBudget(admissionRetry),
                                                            logger,
-                                                           token)
-                                                       .ConfigureAwait(false);
+                                                           token);
         using var reservation = decision.Reservation;
 
         var arguments = BuildArguments(modelPath, corpus.Path, chunks, snapshot.PrimaryRuntime, kld?.BaseFilePath, isBasePhase: false);
-        var result = await RunUnderWatchdogAsync(executable, arguments, token).ConfigureAwait(false);
+        var result = await RunUnderWatchdogAsync(executable, arguments, token);
 
         var reading = BenchmarkPerplexityOutputParser.TryParsePerplexity(result.Output);
         if (result.ExitCode != 0 || reading is null)
@@ -208,7 +206,7 @@ public sealed class BenchmarkFidelityExecutor(
             kld?.BaseModelName,
             kld?.BaseFingerprint,
             kld?.Key.Digest,
-            await BuildReceiptAsync(executable, snapshot, arguments, corpus, chunks, environment).ConfigureAwait(false));
+            await BuildReceiptAsync(executable, snapshot, arguments, corpus, chunks, environment));
     }
 
     /// <summary>
@@ -235,13 +233,13 @@ public sealed class BenchmarkFidelityExecutor(
             return new KldPreparation(key, existing, baseModelName, baseFingerprint);
         }
 
-        await using var baseLease = await installedModels.AcquireAsync(baseModelName, token).ConfigureAwait(false);
+        await using var baseLease = await installedModels.AcquireAsync(baseModelName, token);
         if (!string.Equals(baseLease.Snapshot.ModelContentFingerprint, baseFingerprint, StringComparison.Ordinal))
         {
             throw new BenchmarkExecutionException("The selected KL-divergence base model changed since it was chosen for this project.");
         }
 
-        var basePath = await ggufModels.ResolveModelFilePathAsync(baseModelName, token).ConfigureAwait(false)
+        var basePath = await ggufModels.ResolveModelFilePathAsync(baseModelName, token)
                        ?? throw new BenchmarkExecutionException("The KL-divergence base model file is no longer on disk.");
 
         // The lease is the crash-safe half: DeleteOnClose means a killed writer's lock is released by the OS, so a
@@ -253,7 +251,7 @@ public sealed class BenchmarkFidelityExecutor(
             // the SAME cadence a capacity rejection waits on, and if it has still not landed put the item back in the
             // queue. It used to throw here, which terminalized the measurement as failed — under a message that
             // promised a retry there was no mechanism for.
-            return await WaitForPublishedBaseAsync(key, token).ConfigureAwait(false) is { } published
+            return await WaitForPublishedBaseAsync(key, token) is { } published
                 ? new KldPreparation(key, published, baseModelName, baseFingerprint)
                 : throw new BenchmarkFidelityRequeueException(BaseWaitedTooLongMessage);
         }
@@ -275,15 +273,14 @@ public sealed class BenchmarkFidelityExecutor(
                                                                CapacityRejectedMessage),
                                                            new BenchmarkWaitBudget(admissionRetry),
                                                            logger,
-                                                           token)
-                                                       .ConfigureAwait(false);
+                                                           token);
         using var reservation = decision.Reservation;
         cache.EnsureSpaceFor(BenchmarkFidelityPolicy.EstimateKldBytes(chunks, BenchmarkFidelityPolicy.DefaultVocabSize));
         var tempPath = cache.TempPathFor(key, Guid.NewGuid());
         try
         {
             var arguments = BuildArguments(basePath, corpus.Path, chunks, snapshot.PrimaryRuntime, tempPath, isBasePhase: true);
-            var result = await RunUnderWatchdogAsync(executable, arguments, token).ConfigureAwait(false);
+            var result = await RunUnderWatchdogAsync(executable, arguments, token);
             if (result.ExitCode != 0 || BenchmarkPerplexityOutputParser.TryParsePerplexity(result.Output) is null)
             {
                 throw new BenchmarkExecutionException($"{UnparseableOutputMessage} {BenchmarkPerplexityOutputParser.Tail(result.Output)}");
@@ -298,7 +295,7 @@ public sealed class BenchmarkFidelityExecutor(
             BenchmarkKldBaseCache.DeleteBestEffort(tempPath);
         }
 
-        _ = cache.Trim(cacheOptions.Value.KldCacheMaxBytes, await store.ListLiveFidelityDigestsAsync(token).ConfigureAwait(false));
+        _ = cache.Trim(cacheOptions.Value.KldCacheMaxBytes, await store.ListLiveFidelityDigestsAsync(token));
         return new KldPreparation(key, cache.PathFor(key), baseModelName, baseFingerprint);
     }
 
@@ -320,7 +317,7 @@ public sealed class BenchmarkFidelityExecutor(
         watchdog.CancelAfter(_measurementTimeout);
         try
         {
-            return await perplexity.RunAsync(executable, arguments, watchdog.Token).ConfigureAwait(false);
+            return await perplexity.RunAsync(executable, arguments, watchdog.Token);
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
         {
@@ -340,7 +337,7 @@ public sealed class BenchmarkFidelityExecutor(
         {
             if (attempt > 0)
             {
-                await Task.Delay(admissionRetry.Interval, token).ConfigureAwait(false);
+                await Task.Delay(admissionRetry.Interval, token);
             }
 
             if (cache.TryResolveExisting(key) is { } published)
@@ -442,7 +439,7 @@ public sealed class BenchmarkFidelityExecutor(
             schemaVersion = 1,
             kind = "fidelity-evidence",
             executablePath = executable,
-            executableSha256 = await TryHashFileAsync(executable).ConfigureAwait(false),
+            executableSha256 = await TryHashFileAsync(executable),
             variant = snapshot.PrimaryRuntime.Variant,
             argv = arguments,
             corpusId = corpus.CorpusId,
@@ -458,7 +455,7 @@ public sealed class BenchmarkFidelityExecutor(
             // CancellationToken.None: a bounded local-file hash the caller cannot usefully abandon, and cancelling it
             // would turn recorded evidence into a failure. Matches the pre-S4 synchronous read.
             await using var stream = File.OpenRead(path);
-            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, CancellationToken.None).ConfigureAwait(false));
+            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, CancellationToken.None));
         }
         catch (IOException)
         {

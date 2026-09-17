@@ -31,6 +31,6 @@ public sealed class EntraDeviceCodeStatusEndpoint(IEntraDeviceCodeSignInCoordina
             UserCode = status.UserCode,
             VerificationUri = status.VerificationUri,
             ExpiresAtUtc = status.ExpiresAtUtc
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

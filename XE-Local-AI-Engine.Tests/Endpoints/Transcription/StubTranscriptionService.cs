@@ -195,7 +195,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         {
             // WaitAsync, not a bare await: a client that disconnects must unwind the handler, which is what the
             // cancellation case is there to prove.
-            await Gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await Gate.Task.WaitAsync(cancellationToken);
         }
 
         if (TranscribeThrows is not null)
@@ -208,7 +208,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
             return TranscribeResult;
         }
 
-        var session = await GetSessionAsync(slot.SessionId, cancellationToken).ConfigureAwait(false)
+        var session = await GetSessionAsync(slot.SessionId, cancellationToken)
                       ?? new TranscriptionSessionDetailView
                       {
                           Id = slot.SessionId,

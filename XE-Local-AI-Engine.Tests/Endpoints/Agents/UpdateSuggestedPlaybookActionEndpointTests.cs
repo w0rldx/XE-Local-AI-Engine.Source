@@ -34,7 +34,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
                 priority = 7
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -45,7 +45,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(agentId, Guid.NewGuid()))
         {
@@ -56,7 +56,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -67,9 +67,9 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var otherAgentId = await SeedAgentAsync(factory, "Other").ConfigureAwait(false);
-        var seeded = await SeedSuggestionAsync(factory, ownerAgentId).ConfigureAwait(false);
+        var ownerAgentId = await SeedAgentAsync(factory, "Owner");
+        var otherAgentId = await SeedAgentAsync(factory, "Other");
+        var seeded = await SeedSuggestionAsync(factory, ownerAgentId);
 
         // Edit the owner's suggestion via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(otherAgentId, seeded.Id))
@@ -81,7 +81,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -92,8 +92,8 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var seeded = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var seeded = await SeedSuggestionAsync(factory, agentId);
 
         // A blank Behavior is rejected by the service (PlaybookActionValidationException → 400 via Send.ErrorsAsync).
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(agentId, seeded.Id))
@@ -105,7 +105,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -116,8 +116,8 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var seeded = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var seeded = await SeedSuggestionAsync(factory, agentId);
 
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(agentId, seeded.Id))
         {
@@ -130,11 +130,11 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -165,7 +165,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -180,6 +180,6 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
             "search",
             Priority: 100,
             [Guid.NewGuid()],
-            Confidence: 0.8d)).ConfigureAwait(false);
+            Confidence: 0.8d));
     }
 }

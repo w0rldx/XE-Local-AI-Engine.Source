@@ -567,7 +567,7 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         public async Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
         {
-            await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+            await Task.Delay(Timeout.Infinite, ct);
             return GpuVariant.Cpu;
         }
     }

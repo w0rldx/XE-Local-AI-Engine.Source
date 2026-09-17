@@ -23,7 +23,7 @@ public sealed class GetCustomToolEndpointTests
 
         using var response = await CustomToolEndpointPayloads.SendAnonymousAsync(client,
             HttpMethod.Get,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -36,7 +36,7 @@ public sealed class GetCustomToolEndpointTests
         using var response = await CustomToolEndpointPayloads.SendAsNonOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -49,7 +49,7 @@ public sealed class GetCustomToolEndpointTests
         using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{Guid.NewGuid()}");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -59,20 +59,20 @@ public sealed class GetCustomToolEndpointTests
     {
         const string Cleartext = "super-secret-api-key-value";
         using var client = Factory.CreateClient();
-        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "get_secret_probe", Cleartext).ConfigureAwait(false);
+        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "get_secret_probe", Cleartext);
 
         using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}").ConfigureAwait(false);
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{toolId}");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var raw = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var raw = await response.Content.ReadAsStringAsync();
         AssertEx.False(raw.Contains(Cleartext, StringComparison.Ordinal),
             "The custom-tool read path must never return a stored secret in cleartext.");
 
-        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json).ConfigureAwait(false));
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
         AssertEx.Equal(toolId, view.Id);
         var header = AssertEx.NotNull(view.Http).Headers.Single(candidate => candidate.Name == "X-Api-Key");
         AssertEx.True(header.IsSecret, "The header must stay marked secret across the round trip.");

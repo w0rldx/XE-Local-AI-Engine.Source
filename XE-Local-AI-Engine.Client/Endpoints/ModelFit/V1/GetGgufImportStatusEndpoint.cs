@@ -21,10 +21,10 @@ public sealed class GetGgufImportStatusEndpoint(IGgufImportTransactionCoordinato
         var status = _coordinator.GetStatus(req.OperationId);
         if (status is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(GgufImportEndpointSupport.Map(status), ct).ConfigureAwait(false);
+        await Send.OkAsync(GgufImportEndpointSupport.Map(status), ct);
     }
 }

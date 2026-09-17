@@ -108,14 +108,14 @@ public sealed class ChatInvocationStatePump(
                     reasoningDelta,
                     contentOffset,
                     reasoningOffset),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
         }
 
         // Persists one snapshot's content/reasoning delta. Emits nothing — the client was already fed by
         // EmitDeltaAsync on its own cadence, and a persisted row is no longer needed to build a delta frame.
         async Task PersistPartialAsync(InvocationState snapshotToFlush)
         {
-            var flush = await invocationPump.FlushDeltaAsync(correlation, snapshotToFlush, persistCursor, cancellationToken).ConfigureAwait(false);
+            var flush = await invocationPump.FlushDeltaAsync(correlation, snapshotToFlush, persistCursor, cancellationToken);
             persistCursor = flush.Cursor;
 
             if (flush.Persisted is null)
@@ -129,7 +129,7 @@ public sealed class ChatInvocationStatePump(
 
         try
         {
-            await foreach (var state in stateReader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var state in stateReader.ReadAllAsync(cancellationToken))
             {
                 // Coalesce a burst: when the runner produces states faster than we persist, they queue on the
                 // channel. Drain the backlog and keep only the newest snapshot (never draining past a terminal), so
@@ -152,8 +152,7 @@ public sealed class ChatInvocationStatePump(
                 if (!isTerminal && latest.RuntimePhase is { } runtimePhase && runtimePhase != lastEmittedPhase)
                 {
                     lastEmittedPhase = runtimePhase;
-                    await eventSink.WriteAsync(ChatStreamEventMapper.PhaseEvent(correlation, runtimePhase, NowUnixMilliseconds(), sequence.Next(), latest.RuntimePhaseChangedAtUtc), cancellationToken)
-                                   .ConfigureAwait(false);
+                    await eventSink.WriteAsync(ChatStreamEventMapper.PhaseEvent(correlation, runtimePhase, NowUnixMilliseconds(), sequence.Next(), latest.RuntimePhaseChangedAtUtc), cancellationToken);
                 }
 
                 // Send first, on the fast cadence. The first delta emits immediately so the first token is visible
@@ -165,7 +164,7 @@ public sealed class ChatInvocationStatePump(
                     || timeProvider.GetElapsedTime(lastEmitTimestamp) >= emitDebounceInterval)
                 {
                     pendingEmitState = null;
-                    await EmitDeltaAsync(latest).ConfigureAwait(false);
+                    await EmitDeltaAsync(latest);
                 }
                 else
                 {
@@ -184,7 +183,7 @@ public sealed class ChatInvocationStatePump(
                         _options))
                 {
                     pendingPartialState = null;
-                    await PersistPartialAsync(latest).ConfigureAwait(false);
+                    await PersistPartialAsync(latest);
                 }
                 else
                 {
@@ -196,7 +195,7 @@ public sealed class ChatInvocationStatePump(
                     // An empty snapshot (a plain-text turn with no reasoning/tools) is passed as null so the persisted
                     // parts are left untouched rather than overwritten with an empty interleave.
                     var snapshot = parts.HasParts ? parts.Snapshot() : null;
-                    var terminal = await invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot, sources).ConfigureAwait(false);
+                    var terminal = await invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot, sources);
                     terminalPersisted = true;
 
                     // Post-run adaptive memory: hand the just-persisted terminal to the (background, fire-and-forget)
@@ -213,7 +212,7 @@ public sealed class ChatInvocationStatePump(
                             outputTokens: latest.OutputTokens,
                             totalTokens: latest.TotalTokens,
                             reasoningTokens: latest.ReasoningTokens),
-                        CancellationToken.None).ConfigureAwait(false);
+                        CancellationToken.None);
                     break;
                 }
             }
@@ -225,19 +224,19 @@ public sealed class ChatInvocationStatePump(
                 // parts[], which the emit path owns.
                 if (pendingEmitState is not null)
                 {
-                    await EmitDeltaAsync(pendingEmitState).ConfigureAwait(false);
+                    await EmitDeltaAsync(pendingEmitState);
                 }
 
                 if (pendingPartialState is not null)
                 {
-                    await PersistPartialAsync(pendingPartialState).ConfigureAwait(false);
+                    await PersistPartialAsync(pendingPartialState);
                 }
 
                 await TerminalizeInterruptedStreamAsync(eventSink,
                     correlation,
                     sequence.Next(),
                     persistCursor,
-                    cancellationToken.IsCancellationRequested).ConfigureAwait(false);
+                    cancellationToken.IsCancellationRequested);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !terminalPersisted)
@@ -253,7 +252,7 @@ public sealed class ChatInvocationStatePump(
                 correlation,
                 sequence.Next(),
                 persistCursor,
-                wasCancelled: true).ConfigureAwait(false);
+                wasCancelled: true);
         }
         catch (Exception) when (!terminalPersisted)
         {
@@ -264,7 +263,7 @@ public sealed class ChatInvocationStatePump(
             // fault. The NodeChatMessageTransitions atomic `AND status IN (...)` guard makes this Failed terminalize a
             // no-op over any real terminal that committed concurrently, so a late fault-terminalize can never overwrite
             // a genuine outcome.
-            await TerminalizeFaultedStreamAsync(eventSink, correlation, requestedModel, persistCursor, parts, sequence.Next(), sources).ConfigureAwait(false);
+            await TerminalizeFaultedStreamAsync(eventSink, correlation, requestedModel, persistCursor, parts, sequence.Next(), sources);
             throw;
         }
         finally
@@ -302,10 +301,9 @@ public sealed class ChatInvocationStatePump(
             };
 
             var snapshot = parts.HasParts ? parts.Snapshot() : null;
-            var terminal = await invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot, sources).ConfigureAwait(false);
+            var terminal = await invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot, sources);
 
-            await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None)
-                           .ConfigureAwait(false);
+            await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
         }
         catch (Exception)
         {
@@ -320,10 +318,9 @@ public sealed class ChatInvocationStatePump(
         NodeChatPumpCursor cursor,
         bool wasCancelled)
     {
-        var terminal = await invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled).ConfigureAwait(false);
+        var terminal = await invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled);
 
-        await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None)
-                       .ConfigureAwait(false);
+        await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
     }
 
     private long NowUnixMilliseconds()

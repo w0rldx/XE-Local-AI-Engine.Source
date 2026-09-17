@@ -22,7 +22,7 @@ public sealed class ListCustomToolsEndpointTests
 
         using var response = await CustomToolEndpointPayloads.SendAnonymousAsync(client,
             HttpMethod.Get,
-            CustomToolEndpointPayloads.DefinitionsRoute).ConfigureAwait(false);
+            CustomToolEndpointPayloads.DefinitionsRoute);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -35,7 +35,7 @@ public sealed class ListCustomToolsEndpointTests
         using var response = await CustomToolEndpointPayloads.SendAsNonOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            CustomToolEndpointPayloads.DefinitionsRoute).ConfigureAwait(false);
+            CustomToolEndpointPayloads.DefinitionsRoute);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -44,16 +44,16 @@ public sealed class ListCustomToolsEndpointTests
     public async Task List_WhenOperator_Returns200WithItemsEnvelope()
     {
         using var client = Factory.CreateClient();
-        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "list_probe").ConfigureAwait(false);
+        var toolId = await CustomToolEndpointPayloads.CreateAsync(Factory, client, "list_probe");
 
         using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
             client,
             HttpMethod.Get,
-            CustomToolEndpointPayloads.DefinitionsRoute).ConfigureAwait(false);
+            CustomToolEndpointPayloads.DefinitionsRoute);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadFromJsonAsync<ListCustomToolsResponse>(CustomToolEndpointPayloads.Json).ConfigureAwait(false);
+        var payload = await response.Content.ReadFromJsonAsync<ListCustomToolsResponse>(CustomToolEndpointPayloads.Json);
         var items = AssertEx.NotNull(payload).Items;
         AssertEx.ContainsSingle(items, view => view.Id == toolId);
 

@@ -94,7 +94,7 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
         bool tokenIsFresh;
         try
         {
-            tokenIsFresh = await EnsureFreshAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+            tokenIsFresh = await EnsureFreshAccessTokenAsync(cancellationToken);
         }
         catch (WorkerCredentialsRevokedException exception)
         {
@@ -112,20 +112,20 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
 
         try
         {
-            await DisposeHubConnectionAsync().ConfigureAwait(false);
+            await DisposeHubConnectionAsync();
 
             _hubConnection = CreateHubConnection();
-            await _hubConnection.StartAsync(cancellationToken).ConfigureAwait(false);
+            await _hubConnection.StartAsync(cancellationToken);
 
-            var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false);
+            var clientNodeId = await _tokenStore.GetClientNodeIdAsync();
             if (clientNodeId is null)
             {
                 throw new WorkerNotPairedException("Worker pairing is incomplete because no client node id is stored.");
             }
 
-            await SendWorkerHelloAsync(clientNodeId.Value, cancellationToken).ConfigureAwait(false);
-            await _capabilityReporter.Value.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
-            await RegisterNodeKeyAsync(cancellationToken).ConfigureAwait(false);
+            await SendWorkerHelloAsync(clientNodeId.Value, cancellationToken);
+            await _capabilityReporter.Value.ReportToApiAsync(cancellationToken);
+            await RegisterNodeKeyAsync(cancellationToken);
             _connectionState.TransitionTo(WorkerConnectionState.Connected);
         }
         catch (Exception exception) when (IsInactiveHubSendException(exception))
@@ -155,11 +155,11 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
 
         try
         {
-            await _hubConnection.StopAsync(cancellationToken).ConfigureAwait(false);
+            await _hubConnection.StopAsync(cancellationToken);
         }
         finally
         {
-            await DisposeHubConnectionAsync().ConfigureAwait(false);
+            await DisposeHubConnectionAsync();
             _connectionState.TransitionTo(WorkerConnectionState.Disconnected);
         }
     }
@@ -299,7 +299,7 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
     public async ValueTask DisposeAsync()
     {
         _connectionState.StateChanged -= OnConnectionStateChanged;
-        await DisposeHubConnectionAsync().ConfigureAwait(false);
+        await DisposeHubConnectionAsync();
         _tokenRefreshLock.Dispose();
     }
 
@@ -347,6 +347,6 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
             throw new InvalidOperationException($"Worker hub connection is not active. Cannot send '{methodName}'.");
         }
 
-        await connection.SendAsync(methodName, payload, cancellationToken).ConfigureAwait(false);
+        await connection.SendAsync(methodName, payload, cancellationToken);
     }
 }

@@ -103,8 +103,8 @@ internal sealed class ConversationStepContextBound(
         // metadata_json blob the capped turn read omits for every non-user row the synopsis covers, so the capped read
         // would measure a transcript smaller than the one the turn sends — the exact failure this bound prevents.
         var conversation = includeToolHistory
-            ? await _persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false)
-            : await _persistence.GetConversationForTurnAsync(conversationId, cancellationToken).ConfigureAwait(false);
+            ? await _persistence.GetConversationAsync(conversationId, cancellationToken)
+            : await _persistence.GetConversationForTurnAsync(conversationId, cancellationToken);
         if (conversation is null)
         {
             return;
@@ -121,7 +121,7 @@ internal sealed class ConversationStepContextBound(
         // The FOLD runs on the node's default chat model, not on the one the step itself uses — true for a session's
         // caller pin exactly as it already is for a bound agent's own. Summarizing is not the session's work, and
         // routing it to a pinned model would make a fold contend for that model's load slot mid-session.
-        var result = await _compaction.CompactAsync(conversationId, requestedModel: null, keepVerbatimExchanges, cancellationToken).ConfigureAwait(false);
+        var result = await _compaction.CompactAsync(conversationId, requestedModel: null, keepVerbatimExchanges, cancellationToken);
         _logger.LogInformation(
             "Work session conversation {ConversationId} projected ~{Projected} replayed token(s) against a step budget of {Budget} (effective {EffectiveBudget} after this model's observed correction); forced compaction reported {Outcome} after folding {Folded} message(s).",
             conversationId,

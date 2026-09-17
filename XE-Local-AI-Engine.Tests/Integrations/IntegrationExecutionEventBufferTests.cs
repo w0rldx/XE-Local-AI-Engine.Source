@@ -370,12 +370,12 @@ public sealed class IntegrationExecutionEventBufferTests
         var beforePublish = buffer.AppendedTask(executionId);
         var published = buffer.Reserve(executionId);
         buffer.Publish(Event(executionId, published, IntegrationStreamEventTypes.ExternalOutput));
-        await beforePublish.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await beforePublish.WaitAsync(TimeSpan.FromSeconds(5));
 
         var beforeAbandon = buffer.AppendedTask(executionId);
         var abandoned = buffer.Reserve(executionId);
         buffer.Abandon(executionId, abandoned);
-        await beforeAbandon.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await beforeAbandon.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Test]
@@ -409,8 +409,7 @@ public sealed class IntegrationExecutionEventBufferTests
         var minted = await Task.WhenAll(Enumerable.Range(start: 0, count: 8)
                                                   .Select(_ => Task.Run(() => Enumerable.Range(start: 0, count: 50)
                                                                                         .Select(_ => Append(buffer, executionId).Sequence)
-                                                                                        .ToArray())))
-                               .ConfigureAwait(false);
+                                                                                        .ToArray())));
 
         var sequences = minted.SelectMany(static batch => batch).OrderBy(static sequence => sequence).ToArray();
         AssertEx.Equal(expected: 400, sequences.Length);

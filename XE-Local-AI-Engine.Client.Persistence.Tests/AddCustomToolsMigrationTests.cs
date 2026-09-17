@@ -12,11 +12,11 @@ public sealed class AddCustomToolsMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesCustomToolsWithUniqueNameIndex()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("custom-tools.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("custom-tools.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("custom_tools").ConfigureAwait(false), "custom_tools must exist.");
+        AssertEx.True(await probe.TableExistsAsync("custom_tools"), "custom_tools must exist.");
 
-        var columns = await probe.ColumnsAsync("custom_tools").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("custom_tools");
         AssertEx.True(columns.IsSupersetOf(new[]
         {
             "id",
@@ -33,7 +33,7 @@ public sealed class AddCustomToolsMigrationTests
             "updated_at_utc"
         }), "custom_tools must expose the mapped columns.");
 
-        AssertEx.True(await probe.IndexExistsAsync("custom_tools", "IX_custom_tools_name", unique: true, "name").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("custom_tools", "IX_custom_tools_name", unique: true, "name"),
             "custom_tools.name must be uniquely indexed.");
     }
 }

@@ -28,19 +28,19 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
     public async Task MigrateAsync_AddsNullableRevocationAndActiveOnlyAliasIndex()
     {
         var databasePath = GetDatabasePath("selected-folder-revocation.sqlite");
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRevocationMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRevocationMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
-        AssertEx.True(await ColumnExistsAsync(connection, "revoked_at_utc").ConfigureAwait(false),
+        await connection.OpenAsync();
+        AssertEx.True(await ColumnExistsAsync(connection, "revoked_at_utc"),
             "The selected-folder table must retain revoked rows with a nullable timestamp.");
 
-        var sql = await GetAliasIndexSqlAsync(connection).ConfigureAwait(false);
+        var sql = await GetAliasIndexSqlAsync(connection);
         AssertEx.True(sql.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase));
         AssertEx.True(sql.Contains("revoked_at_utc IS NULL", StringComparison.OrdinalIgnoreCase),
             "Only active aliases should participate in the uniqueness constraint.");
@@ -53,34 +53,34 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
         var activeId = Guid.NewGuid();
         var revokedId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
-            await InsertSelectedFolderAsync(connection, activeId, "shared-alias", revokedAtUtc: null).ConfigureAwait(false);
-            await InsertSelectedFolderAsync(connection, revokedId, "shared-alias", revokedAtUtc: 1_000).ConfigureAwait(false);
+            await InsertSelectedFolderAsync(connection, activeId, "shared-alias", revokedAtUtc: null);
+            await InsertSelectedFolderAsync(connection, revokedId, "shared-alias", revokedAtUtc: 1_000);
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreRevocationMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreRevocationMigrationId);
         }
 
-        await using var downgradedConnection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        AssertEx.False(await ColumnExistsAsync(downgradedConnection, "revoked_at_utc").ConfigureAwait(false),
+        await using var downgradedConnection = await OpenConnectionAsync(databasePath);
+        AssertEx.False(await ColumnExistsAsync(downgradedConnection, "revoked_at_utc"),
             "The pre-revocation schema must not expose the revocation timestamp.");
-        AssertEx.True(await SelectedFolderExistsAsync(downgradedConnection, activeId).ConfigureAwait(false),
+        AssertEx.True(await SelectedFolderExistsAsync(downgradedConnection, activeId),
             "An active selected folder must survive the representational downgrade.");
-        AssertEx.False(await SelectedFolderExistsAsync(downgradedConnection, revokedId).ConfigureAwait(false),
+        AssertEx.False(await SelectedFolderExistsAsync(downgradedConnection, revokedId),
             "A revoked selected folder cannot be represented by the old schema and must be discarded.");
 
-        var indexSql = await GetAliasIndexSqlAsync(downgradedConnection).ConfigureAwait(false);
+        var indexSql = await GetAliasIndexSqlAsync(downgradedConnection);
         AssertEx.True(indexSql.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(indexSql.Contains("WHERE", StringComparison.OrdinalIgnoreCase),
             "The downgraded alias index must enforce uniqueness across every remaining row.");
 
         var exception = await AssertEx.ThrowsAsync<SqliteException>(() =>
-            InsertLegacySelectedFolderAsync(downgradedConnection, Guid.NewGuid(), "shared-alias")).ConfigureAwait(false);
+            InsertLegacySelectedFolderAsync(downgradedConnection, Guid.NewGuid(), "shared-alias"));
         AssertEx.Equal(19, exception.SqliteErrorCode,
             "Inserting a duplicate alias after rollback must fail with a SQLite constraint violation.");
     }
@@ -91,7 +91,7 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -111,7 +111,7 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
             3
         });
         command.Parameters.AddWithValue("$revokedAtUtc", revokedAtUtc is null ? DBNull.Value : revokedAtUtc.Value);
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task InsertLegacySelectedFolderAsync(SqliteConnection connection, Guid id, string alias)
@@ -129,7 +129,7 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
             5,
             6
         });
-        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<bool> SelectedFolderExistsAsync(SqliteConnection connection, Guid id)
@@ -137,14 +137,14 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT 1 FROM selected_folders WHERE id = $id;";
         command.Parameters.AddWithValue("$id", id.ToString());
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private static async Task<string> GetAliasIndexSqlAsync(SqliteConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_selected_folders_alias';";
-        return AssertEx.NotNull(await command.ExecuteScalarAsync().ConfigureAwait(false) as string);
+        return AssertEx.NotNull(await command.ExecuteScalarAsync() as string);
     }
 
     private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string columnName)
@@ -152,7 +152,7 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT 1 FROM pragma_table_info('selected_folders') WHERE name = $name;";
         command.Parameters.AddWithValue("$name", columnName);
-        return await command.ExecuteScalarAsync().ConfigureAwait(false) is not null;
+        return await command.ExecuteScalarAsync() is not null;
     }
 
     private string GetDatabasePath(string fileName)

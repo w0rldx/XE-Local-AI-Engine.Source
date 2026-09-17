@@ -54,12 +54,12 @@ public sealed class KnowledgeChunkEmbeddingCache : IKnowledgeChunkEmbeddingCache
 
         if (_ttl <= TimeSpan.Zero)
         {
-            return await CreateAndValidateAsync(keys, factory, cancellationToken).ConfigureAwait(false);
+            return await CreateAndValidateAsync(keys, factory, cancellationToken);
         }
 
         var resolved = await _entries.GetOrAddManyAsync(keys,
-            async (missing, token) => await ResolveMissingAsync(missing, factory, token).ConfigureAwait(false),
-            cancellationToken).ConfigureAwait(false);
+            async (missing, token) => await ResolveMissingAsync(missing, factory, token),
+            cancellationToken);
 
         if (resolved is null)
         {
@@ -78,8 +78,7 @@ public sealed class KnowledgeChunkEmbeddingCache : IKnowledgeChunkEmbeddingCache
             return [];
         }
 
-        var durable = await _reuseStore.FindManyAsync(missing, _timeProvider.GetUtcNow() - _ttl, cancellationToken)
-                                       .ConfigureAwait(false);
+        var durable = await _reuseStore.FindManyAsync(missing, _timeProvider.GetUtcNow() - _ttl, cancellationToken);
         var values = new byte[missing.Count][];
         var factoryKeys = new List<KnowledgeChunkEmbeddingCacheKey>();
         var factoryIndexes = new List<int>();
@@ -100,7 +99,7 @@ public sealed class KnowledgeChunkEmbeddingCache : IKnowledgeChunkEmbeddingCache
 
         if (factoryKeys.Count > 0)
         {
-            var created = await CreateAndValidateAsync(factoryKeys, factory, cancellationToken).ConfigureAwait(false);
+            var created = await CreateAndValidateAsync(factoryKeys, factory, cancellationToken);
             for (var index = 0; index < created.Count; index++)
             {
                 values[factoryIndexes[index]] = created[index].ToArray();
@@ -114,7 +113,7 @@ public sealed class KnowledgeChunkEmbeddingCache : IKnowledgeChunkEmbeddingCache
         Func<IReadOnlyList<KnowledgeChunkEmbeddingCacheKey>, CancellationToken, Task<IReadOnlyList<byte[]>>> factory,
         CancellationToken cancellationToken)
     {
-        var created = await factory(keys, cancellationToken).ConfigureAwait(false);
+        var created = await factory(keys, cancellationToken);
         if (created is null || created.Count != keys.Count)
         {
             throw new InvalidOperationException("The chunk embedding factory returned an incomplete result.");

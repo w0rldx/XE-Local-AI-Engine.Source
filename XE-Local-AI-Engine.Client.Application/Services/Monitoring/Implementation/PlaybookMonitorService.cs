@@ -22,7 +22,7 @@ public sealed class PlaybookMonitorService(
 
     public async Task<IReadOnlyList<PlaybookActionMonitorView>> GetMonitorAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
-        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken);
 
         var views = new List<PlaybookActionMonitorView>(enabled.Count);
         foreach (var action in enabled)
@@ -40,7 +40,7 @@ public sealed class PlaybookMonitorService(
             // scope yields an empty facet cohort, which classifies as InsufficientData and is never flagged — benign by design.
             var facetToolName = string.IsNullOrWhiteSpace(action.Scope) ? null : action.Scope;
 
-            var comparison = await _monitorStore.GetCohortComparisonAsync(agentDefinitionId, enabledAtUtc, facetToolName, cancellationToken).ConfigureAwait(false);
+            var comparison = await _monitorStore.GetCohortComparisonAsync(agentDefinitionId, enabledAtUtc, facetToolName, cancellationToken);
             views.Add(BuildView(action.Id, enabledAtUtc, comparison, facetToolName));
         }
 

@@ -37,19 +37,19 @@ public sealed class UnloadLocalModelEndpoint(
         // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and unload
         // the decoded canonical name to keep "validated name == unloaded name" true.
         var decodedModelName = ModelRouteName.Decode(req.ModelName);
-        if (!await ValidateModelNameAsync(decodedModelName, ct).ConfigureAwait(false))
+        if (!await ValidateModelNameAsync(decodedModelName, ct))
         {
             return;
         }
 
         var modelName = decodedModelName!.Trim();
-        var unloaded = await _unloadCoordinator.UnloadAsync(modelName, ct).ConfigureAwait(false);
+        var unloaded = await _unloadCoordinator.UnloadAsync(modelName, ct);
 
         await Send.OkAsync(new UnloadLocalModelResponse
         {
             ModelName = modelName,
             Unloaded = unloaded
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
@@ -61,7 +61,7 @@ public sealed class UnloadLocalModelEndpoint(
         }
 
         AddError(validationError);
-        await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        await Send.ErrorsAsync(cancellation: ct);
         return false;
     }
 }

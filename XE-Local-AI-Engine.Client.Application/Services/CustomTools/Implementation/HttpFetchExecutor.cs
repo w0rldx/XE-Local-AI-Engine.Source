@@ -73,14 +73,14 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
             redactor = BuildRedactor(config);
 
             using var request = BuildRequest(config, parameters, jsonArguments);
-            using var slot = await _concurrencyLimiter.AcquireAsync(cancellationToken).ConfigureAwait(false);
+            using var slot = await _concurrencyLimiter.AcquireAsync(cancellationToken);
             using var timeoutSource = new CancellationTokenSource();
             using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(FetchTimeoutSeconds));
 
             var client = _httpClientFactory.CreateClient(HttpClientName);
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedSource.Token).ConfigureAwait(false);
-            return await FormatResponseAsync(response, redactor, linkedSource.Token).ConfigureAwait(false);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedSource.Token);
+            return await FormatResponseAsync(response, redactor, linkedSource.Token);
         }
         catch (CustomToolExecutionException exception)
         {
@@ -222,7 +222,7 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
         AppendSafeHeaders(builder, response.Headers);
         AppendSafeHeaders(builder, response.Content.Headers);
 
-        var body = await ReadCappedBodyAsync(response.Content, cancellationToken).ConfigureAwait(false);
+        var body = await ReadCappedBodyAsync(response.Content, cancellationToken);
         builder.Append('\n');
         builder.Append(body);
 
@@ -242,14 +242,14 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
 
     private static async Task<string> ReadCappedBodyAsync(HttpContent content, CancellationToken cancellationToken)
     {
-        var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        await using (stream.ConfigureAwait(false))
+        var stream = await content.ReadAsStreamAsync(cancellationToken);
+        await using (stream)
         {
             var buffer = new byte[MaxResponseBodyBytes];
             var total = 0;
             while (total < buffer.Length)
             {
-                var read = await stream.ReadAsync(buffer.AsMemory(total, buffer.Length - total), cancellationToken).ConfigureAwait(false);
+                var read = await stream.ReadAsync(buffer.AsMemory(total, buffer.Length - total), cancellationToken);
                 if (read == 0)
                 {
                     break;

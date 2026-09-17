@@ -19,7 +19,7 @@ public sealed class IntegrationApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
 
         AssertEx.True(generated.Key.StartsWith("xeint_", StringComparison.Ordinal), "The key must carry the scheme marker so a leaked value is attributable.");
         AssertEx.True(generated.Key.StartsWith(generated.View.KeyPrefix, StringComparison.Ordinal), "The display prefix must be a genuine prefix of the key.");
@@ -34,14 +34,14 @@ public sealed class IntegrationApiKeyServiceTests
     {
         var service = CreateService(out var store);
 
-        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
 
         var row = store.Rows.Single();
         AssertEx.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(generated.Key))), Convert.ToHexString(row.KeyHash.ToArray()));
         AssertEx.False(row.Label.Contains(generated.Key, StringComparison.Ordinal), "No stored column may carry the plaintext.");
         AssertEx.False(generated.Key.Equals(row.KeyPrefix, StringComparison.Ordinal));
 
-        var listed = (await service.ListAsync().ConfigureAwait(false)).Single();
+        var listed = (await service.ListAsync()).Single();
         AssertEx.Equal(generated.View.KeyPrefix, listed.KeyPrefix);
     }
 
@@ -50,12 +50,12 @@ public sealed class IntegrationApiKeyServiceTests
     {
         var service = CreateService(out var store);
 
-        var first = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
-        var second = await service.GenerateAsync("readback", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        var first = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
+        var second = await service.GenerateAsync("readback", allowedTriggerIds: null, principalId: null);
 
         AssertEx.Equal(expected: 2, store.Rows.Count, "A node holds many integration credentials, unlike the singleton MCP and proxy keys.");
-        AssertEx.NotNull(await service.ValidateAsync(first.Key).ConfigureAwait(false));
-        AssertEx.NotNull(await service.ValidateAsync(second.Key).ConfigureAwait(false));
+        AssertEx.NotNull(await service.ValidateAsync(first.Key));
+        AssertEx.NotNull(await service.ValidateAsync(second.Key));
     }
 
     [Test]
@@ -63,8 +63,8 @@ public sealed class IntegrationApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        var first = await service.GenerateAsync("one", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
-        var second = await service.GenerateAsync("two", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        var first = await service.GenerateAsync("one", allowedTriggerIds: null, principalId: null);
+        var second = await service.GenerateAsync("two", allowedTriggerIds: null, principalId: null);
 
         AssertEx.NotEqual(Guid.Empty, first.View.PrincipalId);
         AssertEx.NotEqual(first.View.PrincipalId, second.View.PrincipalId);
@@ -76,15 +76,15 @@ public sealed class IntegrationApiKeyServiceTests
         // The rotation case ruling R4-6 exists for: a second credential for the same integrator inherits every session
         // and in-flight execution the first one owns, because ownership keys on the principal and not on the prefix.
         var service = CreateService(out _);
-        var original = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        var original = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
 
-        var rotated = await service.GenerateAsync("ingest-v2", allowedTriggerIds: null, original.View.PrincipalId).ConfigureAwait(false);
+        var rotated = await service.GenerateAsync("ingest-v2", allowedTriggerIds: null, original.View.PrincipalId);
 
         AssertEx.Equal(original.View.PrincipalId, rotated.View.PrincipalId);
         AssertEx.NotEqual(original.View.KeyPrefix, rotated.View.KeyPrefix);
 
-        var originalValidation = AssertEx.NotNull(await service.ValidateAsync(original.Key).ConfigureAwait(false));
-        var rotatedValidation = AssertEx.NotNull(await service.ValidateAsync(rotated.Key).ConfigureAwait(false));
+        var originalValidation = AssertEx.NotNull(await service.ValidateAsync(original.Key));
+        var rotatedValidation = AssertEx.NotNull(await service.ValidateAsync(rotated.Key));
         AssertEx.Equal(originalValidation.PrincipalId, rotatedValidation.PrincipalId);
         AssertEx.NotEqual(originalValidation.KeyPrefix, rotatedValidation.KeyPrefix);
     }
@@ -99,14 +99,14 @@ public sealed class IntegrationApiKeyServiceTests
             Guid.NewGuid()
         };
 
-        var narrow = await service.GenerateAsync("narrow", allowed, principalId: null).ConfigureAwait(false);
-        var broad = await service.GenerateAsync("broad", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        var narrow = await service.GenerateAsync("narrow", allowed, principalId: null);
+        var broad = await service.GenerateAsync("broad", allowedTriggerIds: null, principalId: null);
 
         AssertEx.True(allowed.SequenceEqual(AssertEx.NotNull(narrow.View.AllowedTriggerIds)), "The stored allowlist must round-trip in order.");
         AssertEx.Null(broad.View.AllowedTriggerIds, "A null allowlist is the wire form of 'every trigger'.");
-        AssertEx.True(allowed.SequenceEqual(AssertEx.NotNull(AssertEx.NotNull(await service.ValidateAsync(narrow.Key).ConfigureAwait(false)).AllowedTriggerIds)),
+        AssertEx.True(allowed.SequenceEqual(AssertEx.NotNull(AssertEx.NotNull(await service.ValidateAsync(narrow.Key)).AllowedTriggerIds)),
             "Validation must hand the authorisation path the same allowlist that was stored.");
-        AssertEx.Null(AssertEx.NotNull(await service.ValidateAsync(broad.Key).ConfigureAwait(false)).AllowedTriggerIds);
+        AssertEx.Null(AssertEx.NotNull(await service.ValidateAsync(broad.Key)).AllowedTriggerIds);
     }
 
     [Test]
@@ -123,12 +123,12 @@ public sealed class IntegrationApiKeyServiceTests
     public async Task ValidateAsync_AcceptsTheMintedKeyAndRejectsAWrongOneWithTheSamePrefix()
     {
         var service = CreateService(out _);
-        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
 
-        AssertEx.NotNull(await service.ValidateAsync(generated.Key).ConfigureAwait(false));
-        AssertEx.Null(await service.ValidateAsync(generated.View.KeyPrefix + "0000000000000000000000000000000000000000").ConfigureAwait(false),
+        AssertEx.NotNull(await service.ValidateAsync(generated.Key));
+        AssertEx.Null(await service.ValidateAsync(generated.View.KeyPrefix + "0000000000000000000000000000000000000000"),
             "A candidate sharing the display prefix but not the secret must fail on the digest.");
-        AssertEx.Null(await service.ValidateAsync(generated.Key[..^1]).ConfigureAwait(false), "A truncated candidate must fail rather than match as a prefix.");
+        AssertEx.Null(await service.ValidateAsync(generated.Key[..^1]), "A truncated candidate must fail rather than match as a prefix.");
     }
 
     [Test]
@@ -143,9 +143,9 @@ public sealed class IntegrationApiKeyServiceTests
         // The authentication handler calls this with whatever followed "Bearer " and does not wrap it: an unguarded
         // slice here is a 500 where a 401 is required, reachable by anyone who can reach the route.
         var service = CreateService(out _);
-        _ = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        _ = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
 
-        AssertEx.Null(await service.ValidateAsync(presented).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(presented));
     }
 
     [Test]
@@ -153,22 +153,22 @@ public sealed class IntegrationApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.Null(await service.ValidateAsync(presented: null).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(presented: null));
     }
 
     [Test]
     public async Task ValidateAsync_AfterRevocation_FailsAndTheRowSurvives()
     {
         var service = CreateService(out var store);
-        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
-        AssertEx.NotNull(await service.ValidateAsync(generated.Key).ConfigureAwait(false));
+        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
+        AssertEx.NotNull(await service.ValidateAsync(generated.Key));
 
-        AssertEx.True(await service.RevokeAsync(generated.View.Id).ConfigureAwait(false));
+        AssertEx.True(await service.RevokeAsync(generated.View.Id));
 
-        AssertEx.Null(await service.ValidateAsync(generated.Key).ConfigureAwait(false), "A revoked credential must stop authenticating immediately.");
+        AssertEx.Null(await service.ValidateAsync(generated.Key), "A revoked credential must stop authenticating immediately.");
         AssertEx.Equal(expected: 1, store.Rows.Count, "Revocation is SOFT: execution and audit rows reference the prefix, so the row must survive.");
         AssertEx.True(store.Rows.Single().RevokedAtUtc is not null);
-        AssertEx.True((await service.ListAsync().ConfigureAwait(false)).Single().RevokedAt is not null);
+        AssertEx.True((await service.ListAsync()).Single().RevokedAt is not null);
     }
 
     [Test]
@@ -176,19 +176,19 @@ public sealed class IntegrationApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.False(await service.RevokeAsync(Guid.NewGuid()).ConfigureAwait(false));
+        AssertEx.False(await service.RevokeAsync(Guid.NewGuid()));
     }
 
     [Test]
     public async Task ValidateAsync_StampsLastUsedOnSuccessOnly()
     {
         var service = CreateService(out var store);
-        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null).ConfigureAwait(false);
+        var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
 
-        AssertEx.Null(await service.ValidateAsync(generated.View.KeyPrefix + "wrong-secret-material-here").ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(generated.View.KeyPrefix + "wrong-secret-material-here"));
         AssertEx.Null(store.Rows.Single().LastUsedAtUtc, "A failed validation must not record a use.");
 
-        AssertEx.NotNull(await service.ValidateAsync(generated.Key).ConfigureAwait(false));
+        AssertEx.NotNull(await service.ValidateAsync(generated.Key));
         AssertEx.Equal(SeedUnixMilliseconds, store.Rows.Single().LastUsedAtUtc);
     }
 

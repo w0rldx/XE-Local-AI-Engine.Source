@@ -21,7 +21,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(subject);
-        var state = await ResolveAsync(subject, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var state = await ResolveAsync(subject, repositoryRoot, cancellationToken);
         return state.State;
     }
 
@@ -30,7 +30,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(subject);
-        var before = await ResolveAsync(subject, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var before = await ResolveAsync(subject, repositoryRoot, cancellationToken);
         if (before.State != DevelopmentHostApplyState.UnappliedBaseUnchanged)
         {
             throw new DevelopmentInvalidTransitionException("The trusted host repository is not at the exact approved unapplied base.");
@@ -39,13 +39,13 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         var apply = await RunGitAsync(before.RepositoryRoot,
             ["apply", "--index", "--whitespace=error-all", "-"],
             before.Patch,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (apply.ExitCode != 0)
         {
             throw new InvalidOperationException("The exact approved Development patch could not be applied to the trusted host repository.");
         }
 
-        var after = await ResolveAsync(subject, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var after = await ResolveAsync(subject, repositoryRoot, cancellationToken);
         if (after.State != DevelopmentHostApplyState.ExactApprovedResultPresent)
         {
             throw new InvalidOperationException("The trusted host repository did not reach the exact approved result after apply.");
@@ -70,17 +70,17 @@ internal sealed class TrustedDevelopmentHostApplyPort(
             subject.PatchArtifactReference,
             subject.PatchHash,
             subject.PatchByteCount,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         _ = await ReadArtifactAsync(subject.ProjectId,
             subject.ManifestArtifactId,
             subject.ManifestArtifactReference,
             subject.ManifestHash,
             subject.ManifestByteCount,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
-        var topLevel = await RunGitAsync(canonicalRoot, ["rev-parse", "--show-toplevel"], null, cancellationToken).ConfigureAwait(false);
-        var branch = await RunGitAsync(canonicalRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], null, cancellationToken).ConfigureAwait(false);
-        var head = await RunGitAsync(canonicalRoot, ["rev-parse", "--verify", "HEAD^{commit}"], null, cancellationToken).ConfigureAwait(false);
+        var topLevel = await RunGitAsync(canonicalRoot, ["rev-parse", "--show-toplevel"], null, cancellationToken);
+        var branch = await RunGitAsync(canonicalRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], null, cancellationToken);
+        var head = await RunGitAsync(canonicalRoot, ["rev-parse", "--verify", "HEAD^{commit}"], null, cancellationToken);
         if (topLevel.ExitCode != 0
             || branch.ExitCode != 0
             || head.ExitCode != 0
@@ -91,8 +91,8 @@ internal sealed class TrustedDevelopmentHostApplyPort(
             return new ResolvedApplyState(DevelopmentHostApplyState.Ambiguous, canonicalRoot, patch);
         }
 
-        var resultTree = await RunGitAsync(canonicalRoot, ["write-tree"], null, cancellationToken).ConfigureAwait(false);
-        var unstaged = await RunGitAsync(canonicalRoot, ["diff", "--quiet", "--", "."], null, cancellationToken).ConfigureAwait(false);
+        var resultTree = await RunGitAsync(canonicalRoot, ["write-tree"], null, cancellationToken);
+        var unstaged = await RunGitAsync(canonicalRoot, ["diff", "--quiet", "--", "."], null, cancellationToken);
         if (resultTree.ExitCode == 0
             && unstaged.ExitCode == 0
             && string.Equals(resultTree.StandardOutputText.Trim(), subject.ExpectedResultHash, StringComparison.OrdinalIgnoreCase))
@@ -100,7 +100,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
             var appliedPatch = await RunGitAsync(canonicalRoot,
                 ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--", "."],
                 null,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
             if (appliedPatch.ExitCode == 0
                 && string.Equals(Hash(appliedPatch.StandardOutput), subject.PatchHash, StringComparison.OrdinalIgnoreCase))
             {
@@ -108,7 +108,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
             }
         }
 
-        var status = await RunGitAsync(canonicalRoot, ["status", "--porcelain=v1", "--untracked-files=all"], null, cancellationToken).ConfigureAwait(false);
+        var status = await RunGitAsync(canonicalRoot, ["status", "--porcelain=v1", "--untracked-files=all"], null, cancellationToken);
         if (status.ExitCode != 0 || status.StandardOutput.Length != 0)
         {
             return new ResolvedApplyState(DevelopmentHostApplyState.Ambiguous, canonicalRoot, patch);
@@ -117,7 +117,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         var check = await RunGitAsync(canonicalRoot,
             ["apply", "--check", "--whitespace=error-all", "-"],
             patch,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         return new ResolvedApplyState(check.ExitCode == 0
                 ? DevelopmentHostApplyState.UnappliedBaseUnchanged
                 : DevelopmentHostApplyState.Ambiguous,
@@ -142,7 +142,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
             artifactId,
             expectedHash,
             expectedByteCount,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (read.Status != DevelopmentArtifactReadStatus.Found)
         {
             throw new DevelopmentInvalidTransitionException($"The approved artifact failed immutable verification ({read.Status}).");
@@ -211,16 +211,16 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         {
             if (standardInput is { } input)
             {
-                await process.StandardInput.BaseStream.WriteAsync(input, timeout.Token).ConfigureAwait(false);
+                await process.StandardInput.BaseStream.WriteAsync(input, timeout.Token);
                 process.StandardInput.Close();
             }
 
             var outputTask = ReadBoundedAsync(process.StandardOutput.BaseStream, _options.MaxPatchBytes, timeout.Token);
             var errorTask = ReadBoundedAsync(process.StandardError.BaseStream, _options.MaxCommandOutputBytes, timeout.Token);
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeout.Token);
             return new GitBytesResult(process.ExitCode,
-                await outputTask.ConfigureAwait(false),
-                await errorTask.ConfigureAwait(false));
+                await outputTask,
+                await errorTask);
         }
         catch
         {
@@ -235,7 +235,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         using var output = new MemoryStream();
         while (true)
         {
-            var read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            var read = await stream.ReadAsync(buffer, cancellationToken);
             if (read == 0)
             {
                 return output.ToArray();
@@ -246,7 +246,7 @@ internal sealed class TrustedDevelopmentHostApplyPort(
                 throw new InvalidDataException("The trusted Development host Git output exceeded its configured bound.");
             }
 
-            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
         }
     }
 

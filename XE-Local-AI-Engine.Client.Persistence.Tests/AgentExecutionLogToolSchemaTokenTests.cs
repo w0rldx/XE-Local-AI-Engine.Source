@@ -34,12 +34,12 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
     [Test]
     public async Task ListRunEnvelopesAsync_ProjectsToolSchemaTokens()
     {
-        await using var context = await CreateDatabaseAsync("envelope-tokens-project.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("envelope-tokens-project.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(toolSchemaTokens: 12_345L, maxToolSchemaTokens: 4_096));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10).ConfigureAwait(false)).Single();
+        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
         AssertEx.Equal(expected: 12_345L, envelope.ToolSchemaTokens);
         AssertEx.Equal(expected: 4_096, envelope.MaxToolSchemaTokens);
@@ -48,12 +48,12 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
     [Test]
     public async Task ListRunEnvelopesAsync_WhenNotReported_ProjectsNulls()
     {
-        await using var context = await CreateDatabaseAsync("envelope-tokens-null.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("envelope-tokens-null.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(toolSchemaTokens: null, maxToolSchemaTokens: null));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10).ConfigureAwait(false)).Single();
+        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
         AssertEx.Null(envelope.ToolSchemaTokens);
         AssertEx.Null(envelope.MaxToolSchemaTokens);
@@ -65,12 +65,12 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
         // The producing counter is a long and a whole session's worth of these is summed downstream, so a narrowing
         // anywhere along column -> entity -> record would truncate silently. This value is exactly one past int.MaxValue.
         const long wideEstimate = (long)int.MaxValue + 1;
-        await using var context = await CreateDatabaseAsync("envelope-tokens-wide.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("envelope-tokens-wide.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(wideEstimate, maxToolSchemaTokens: 8));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10).ConfigureAwait(false)).Single();
+        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
         AssertEx.Equal(wideEstimate, envelope.ToolSchemaTokens);
     }
@@ -80,7 +80,7 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
     {
         // The kind-0 diagnostics projection was deliberately left alone: these columns never carry a value on a memory
         // row, so widening that record would add two permanently-null fields to a different read view.
-        await using var context = await CreateDatabaseAsync("memory-projection-unchanged.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("memory-projection-unchanged.sqlite");
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
         var agentId = Guid.NewGuid();
 
@@ -93,10 +93,9 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
                            PromptTokens: 10,
                            CompletionTokens: 20,
                            Success: true,
-                           ErrorClass: null))
-                       .ConfigureAwait(false);
+                           ErrorClass: null));
 
-        var rows = await store.ListByAgentAsync(agentId, limit: 10).ConfigureAwait(false);
+        var rows = await store.ListByAgentAsync(agentId, limit: 10);
 
         AssertEx.Equal(expected: 1, rows.Count);
         AssertEx.Equal(expected: 10, rows[0].PromptTokens);
@@ -128,8 +127,8 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
-        await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
         return context;
     }
 

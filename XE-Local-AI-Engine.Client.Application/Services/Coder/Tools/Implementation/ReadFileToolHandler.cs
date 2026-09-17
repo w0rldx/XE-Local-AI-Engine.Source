@@ -63,6 +63,6 @@ internal sealed class ReadFileToolHandler : IClientLocalToolHandler
             return $"read_file arguments are invalid: {string.Join(" ", validationErrors)}";
         }
 
-        return await _reader.ReadFileAsync(request, cancellationToken).ConfigureAwait(false);
+        return await _reader.ReadFileAsync(request, cancellationToken);
     }
 }

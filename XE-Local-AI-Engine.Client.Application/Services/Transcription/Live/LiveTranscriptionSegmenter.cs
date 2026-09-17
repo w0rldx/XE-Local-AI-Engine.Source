@@ -173,7 +173,7 @@ public sealed class LiveTranscriptionSegmenter
                 learnedLanguage = await SubmitAsync(atCap: _audioEndMs - _tailStartMs >= _maxWindowMs,
                     flush: false,
                     commits,
-                    cancellationToken).ConfigureAwait(false) ?? learnedLanguage;
+                    cancellationToken) ?? learnedLanguage;
 
                 // Set from the caller and not inside the submission, so a submission that declines to run (an
                 // ordinary tick with less than a tick of new audio) still moves the boundary and cannot spin.
@@ -206,7 +206,7 @@ public sealed class LiveTranscriptionSegmenter
     public async ValueTask<LiveTick> FlushAsync(CancellationToken cancellationToken)
     {
         var commits = new List<LiveCommit>();
-        var learnedLanguage = await SubmitAsync(atCap: false, flush: true, commits, cancellationToken).ConfigureAwait(false);
+        var learnedLanguage = await SubmitAsync(atCap: false, flush: true, commits, cancellationToken);
         return new LiveTick(_partial, commits, learnedLanguage);
     }
 
@@ -242,7 +242,7 @@ public sealed class LiveTranscriptionSegmenter
             Translate = _translate,
             UseVoiceActivityDetection = true,
             DetectLanguage = _detectLanguage
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
 
         string? learnedLanguage = null;
         if (_detectedLanguageCode is null && !string.IsNullOrWhiteSpace(result.DetectedLanguageCode))

@@ -70,7 +70,7 @@ public sealed class BenchmarkPerplexityRunner : IBenchmarkPerplexityRunner
         process.BeginErrorReadLine();
         try
         {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -81,7 +81,7 @@ public sealed class BenchmarkPerplexityRunner : IBenchmarkPerplexityRunner
         }
 
         // Drains the async readers, so the tail below is the whole tail rather than whatever had been flushed.
-        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        await process.WaitForExitAsync(CancellationToken.None);
         lock (sink)
         {
             return new BenchmarkPerplexityProcessResult(process.ExitCode, output.ToString());

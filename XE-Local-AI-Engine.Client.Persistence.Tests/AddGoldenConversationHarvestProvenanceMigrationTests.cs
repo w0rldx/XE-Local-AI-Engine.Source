@@ -37,25 +37,25 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
         var goldenId = Guid.NewGuid();
         var agentId = Guid.NewGuid();
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreHarvestProvenanceMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreHarvestProvenanceMigrationId);
 
-        await InsertHistoricalGoldenRowAsync(databasePath, goldenId, agentId).ConfigureAwait(false);
+        await InsertHistoricalGoldenRowAsync(databasePath, goldenId, agentId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var goldenColumns = await GetGoldenConversationColumnsAsync(connection).ConfigureAwait(false);
+        var goldenColumns = await GetGoldenConversationColumnsAsync(connection);
         AssertEx.True(goldenColumns.Contains("source"), "Migration should add golden_conversations.source.");
         AssertEx.True(goldenColumns.Contains("source_message_id"), "Migration should add golden_conversations.source_message_id.");
         AssertEx.True(goldenColumns.Contains("source_conversation_id"), "Migration should add golden_conversations.source_conversation_id.");
 
-        AssertEx.Equal(expected: 0L, await ReadSourceAsync(connection, goldenId).ConfigureAwait(false), "Existing golden rows should default to source 0 (Manual).");
-        AssertEx.True(await IsSourceMessageIdNullAsync(connection, goldenId).ConfigureAwait(false), "Existing rows should have a null source_message_id.");
-        AssertEx.True(await IsSourceConversationIdNullAsync(connection, goldenId).ConfigureAwait(false), "Existing rows should have a null source_conversation_id.");
+        AssertEx.Equal(expected: 0L, await ReadSourceAsync(connection, goldenId), "Existing golden rows should default to source 0 (Manual).");
+        AssertEx.True(await IsSourceMessageIdNullAsync(connection, goldenId), "Existing rows should have a null source_message_id.");
+        AssertEx.True(await IsSourceConversationIdNullAsync(connection, goldenId), "Existing rows should have a null source_conversation_id.");
     }
 
     [Test]
@@ -63,16 +63,16 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
     {
         var databasePath = GetDatabasePath("provenance-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreHarvestProvenanceMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreHarvestProvenanceMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
-        var goldenColumns = await GetGoldenConversationColumnsAsync(connection).ConfigureAwait(false);
+        var goldenColumns = await GetGoldenConversationColumnsAsync(connection);
         AssertEx.False(goldenColumns.Contains("source"), "Rollback should drop golden_conversations.source.");
         AssertEx.False(goldenColumns.Contains("source_message_id"), "Rollback should drop golden_conversations.source_message_id.");
         AssertEx.False(goldenColumns.Contains("source_conversation_id"), "Rollback should drop golden_conversations.source_conversation_id.");
@@ -87,7 +87,7 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
 
     private static async Task InsertHistoricalGoldenRowAsync(string databasePath, Guid goldenId, Guid agentId)
     {
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
 
         // Insert the agent first — golden_conversations.agent_definition_id is a real FK with cascade delete.
         await using (var command = connection.CreateCommand())
@@ -111,7 +111,7 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
             command.Parameters.AddWithValue("$version", value: 1);
             command.Parameters.AddWithValue("$created", value: 1234L);
             command.Parameters.AddWithValue("$updated", value: 1234L);
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync();
         }
 
         // Insert only the pre-existing golden columns (no provenance) so the migration must back-fill the defaults.
@@ -134,14 +134,14 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
             command.Parameters.AddWithValue("$enabled", value: 1);
             command.Parameters.AddWithValue("$created", value: 1234L);
             command.Parameters.AddWithValue("$updated", value: 1234L);
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync();
         }
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -149,7 +149,7 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM golden_conversations LIMIT 0;";
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync();
         return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
@@ -160,7 +160,7 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT source FROM golden_conversations WHERE id = $id;";
         command.Parameters.AddWithValue("$id", goldenId.ToString());
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is long source ? source : throw new AssertionException("Expected a non-null source value.");
     }
 
@@ -168,20 +168,20 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT source_message_id FROM golden_conversations WHERE id = $id;";
-        return await IsScalarNullAsync(command, goldenId).ConfigureAwait(false);
+        return await IsScalarNullAsync(command, goldenId);
     }
 
     private static async Task<bool> IsSourceConversationIdNullAsync(SqliteConnection connection, Guid goldenId)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT source_conversation_id FROM golden_conversations WHERE id = $id;";
-        return await IsScalarNullAsync(command, goldenId).ConfigureAwait(false);
+        return await IsScalarNullAsync(command, goldenId);
     }
 
     private static async Task<bool> IsScalarNullAsync(SqliteCommand command, Guid goldenId)
     {
         command.Parameters.AddWithValue("$id", goldenId.ToString());
-        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = await command.ExecuteScalarAsync();
         return value is null or DBNull;
     }
 

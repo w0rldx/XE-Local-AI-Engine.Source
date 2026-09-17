@@ -35,7 +35,7 @@ public sealed class LocalModelProxyForwarderTests
         var forwarder = CreateForwarder(out _, out _, upstream);
         var context = BuildContext(body: string.Empty, out var responseBody);
 
-        await forwarder.WriteModelsAsync(context).ConfigureAwait(false);
+        await forwarder.WriteModelsAsync(context);
 
         using var document = JsonDocument.Parse(responseBody.ToArray());
         AssertEx.Equal("list", document.RootElement.GetProperty("object").GetString());
@@ -53,7 +53,7 @@ public sealed class LocalModelProxyForwarderTests
         var forwarder = CreateForwarder(out _, out var supervisor, upstream);
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}", out var responseBody);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         _ = supervisor.Received(1).EnsureRunningAsync(InstalledModel, ModelRole.Chat, Arg.Any<CancellationToken>());
         AssertEx.NotNull(upstream.LastRequest);
@@ -70,7 +70,7 @@ public sealed class LocalModelProxyForwarderTests
         var forwarder = CreateForwarder(out _, out _, upstream);
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
     }
@@ -83,7 +83,7 @@ public sealed class LocalModelProxyForwarderTests
         // A cloud-ish / unmapped model name is exactly the case that must never reach any other provider.
         var context = BuildContext("{\"model\":\"gpt-5.6-terra\",\"messages\":[]}", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         AssertEx.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
         AssertEx.Null(upstream.LastRequest);
@@ -97,7 +97,7 @@ public sealed class LocalModelProxyForwarderTests
         var forwarder = CreateForwarder(out _, out _, upstream);
         var context = BuildContext("{\"messages\":[]}", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
     }
@@ -109,7 +109,7 @@ public sealed class LocalModelProxyForwarderTests
         var forwarder = CreateForwarder(out _, out _, upstream);
         var context = BuildContext("not json at all", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
     }
@@ -123,7 +123,7 @@ public sealed class LocalModelProxyForwarderTests
                   .Returns<Task<LlamaServerEndpoint>>(_ => throw new LlamaRuntimeException("At capacity."));
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         AssertEx.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
         AssertEx.Equal("5", context.Response.Headers.RetryAfter.ToString());
@@ -137,7 +137,7 @@ public sealed class LocalModelProxyForwarderTests
         supervisor.TryAcquireInferenceLease(InstalledModel, ModelRole.Chat).Returns(LlamaServerLeaseAcquisition.Evicting);
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         AssertEx.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
         AssertEx.Null(upstream.LastRequest);
@@ -154,7 +154,7 @@ public sealed class LocalModelProxyForwarderTests
                   .Returns(LlamaServerLeaseAcquisition.ProfilingOwned, LlamaServerLeaseAcquisition.NotRunning);
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         _ = supervisor.Received(2).EnsureRunningAsync(InstalledModel, ModelRole.Chat, Arg.Any<CancellationToken>());
         AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
@@ -169,7 +169,7 @@ public sealed class LocalModelProxyForwarderTests
         supervisor.TryAcquireInferenceLease(InstalledModel, ModelRole.Chat).Returns(LlamaServerLeaseAcquisition.ProfilingOwned);
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         AssertEx.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
         AssertEx.Null(upstream.LastRequest, "Nothing may be forwarded to the measurement process.");
@@ -184,7 +184,7 @@ public sealed class LocalModelProxyForwarderTests
                   .Returns(new LlamaServerEndpoint(InstalledModel, ModelRole.Embedding, ChildEndpoint));
         var context = BuildContext("{\"model\":\"test-model\",\"input\":\"hi\"}", out _);
 
-        await forwarder.ForwardEmbeddingsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardEmbeddingsAsync(context);
 
         _ = supervisor.Received(1).EnsureRunningAsync(InstalledModel, ModelRole.Embedding, Arg.Any<CancellationToken>());
         AssertEx.Equal("http://127.0.0.1:18100/v1/embeddings", upstream.LastRequest!.RequestUri!.AbsoluteUri);
@@ -199,7 +199,7 @@ public sealed class LocalModelProxyForwarderTests
         var forwarder = CreateForwarder(out _, out _, upstream);
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
-        await forwarder.ForwardChatCompletionsAsync(context).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context);
 
         AssertEx.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
         AssertEx.Equal("5", context.Response.Headers.RetryAfter.ToString());
@@ -215,7 +215,7 @@ public sealed class LocalModelProxyForwarderTests
         var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out _);
 
         // WaitAsync turns a regression (the hang returning) into a fast, legible failure instead of a stuck test run.
-        await forwarder.ForwardChatCompletionsAsync(context).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await forwarder.ForwardChatCompletionsAsync(context).WaitAsync(TimeSpan.FromSeconds(5));
 
         AssertEx.True(context.RequestAborted.IsCancellationRequested,
             "The idle watchdog must abort the request when the upstream goes silent, so the inference lease is released.");
@@ -303,7 +303,7 @@ public sealed class LocalModelProxyForwarderTests
             LastRequest = request;
             LastRequestBody = request.Content is null
                 ? null
-                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                : await request.Content.ReadAsStringAsync(cancellationToken);
 
             var response = new HttpResponseMessage(statusCode)
             {
@@ -356,7 +356,7 @@ public sealed class LocalModelProxyForwarderTests
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(Timeout.Infinite, cancellationToken);
             return 0;
         }
 

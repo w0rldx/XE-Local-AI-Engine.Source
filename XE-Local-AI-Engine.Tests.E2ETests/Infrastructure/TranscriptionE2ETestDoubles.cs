@@ -105,7 +105,7 @@ internal sealed class FakeJfkWhisperTranscriber : IWhisperTranscriber
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var wav = await ReadAndRewindAsync(request.Audio, ct).ConfigureAwait(false);
+        var wav = await ReadAndRewindAsync(request.Audio, ct);
         var (offset, length) = FindDataChunk(wav);
         var pcm = wav.AsSpan(offset, length);
         var durationSeconds = (length / 2) / (double)WavSampleRate;
@@ -152,7 +152,7 @@ internal sealed class FakeJfkWhisperTranscriber : IWhisperTranscriber
         // The stream belongs to the segmenter, which reuses it: read it whole, then put the cursor back where it was.
         var start = audio.Position;
         using var buffer = new MemoryStream();
-        await audio.CopyToAsync(buffer, ct).ConfigureAwait(false);
+        await audio.CopyToAsync(buffer, ct);
         audio.Position = start;
         return buffer.ToArray();
     }

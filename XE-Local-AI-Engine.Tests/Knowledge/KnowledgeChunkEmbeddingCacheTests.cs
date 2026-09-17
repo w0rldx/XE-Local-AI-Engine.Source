@@ -26,10 +26,9 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
         {
             factoryCalls++;
             return Task.FromResult<IReadOnlyList<byte[]>>([Vector(9f, 9f)]);
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         first[0][0] = 0;
-        var second = await cache.GetOrCreateManyAsync([key], (_, _) => throw new InvalidOperationException("must not run"), CancellationToken.None)
-                                .ConfigureAwait(false);
+        var second = await cache.GetOrCreateManyAsync([key], (_, _) => throw new InvalidOperationException("must not run"), CancellationToken.None);
 
         AssertEx.Equal(0, factoryCalls, "An exact committed vector must avoid embedding generation.");
         AssertEx.Equal(1, store.CallCount, "The hot working set must avoid a second durable lookup.");
@@ -58,7 +57,7 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
         {
             factoryKeys = keys;
             return Task.FromResult<IReadOnlyList<byte[]>>(keys.Select(key => new byte[key.Dimension * sizeof(float)]).ToArray());
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
 
         AssertEx.Equal(changedKeys.Length, factoryKeys?.Count ?? 0,
             "Parser, chunker, vector identity, and dimension changes must each invalidate reuse.");
@@ -82,9 +81,8 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
             return Task.FromResult<IReadOnlyList<byte[]>>([Vector(3f, 4f)]);
         };
 
-        _ = await AssertEx.ThrowsAsync<IOException>(() => cache.GetOrCreateManyAsync([key], factory, CancellationToken.None))
-                          .ConfigureAwait(false);
-        var result = await cache.GetOrCreateManyAsync([key], factory, CancellationToken.None).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<IOException>(() => cache.GetOrCreateManyAsync([key], factory, CancellationToken.None));
+        var result = await cache.GetOrCreateManyAsync([key], factory, CancellationToken.None);
 
         AssertEx.Equal(2, attempts, "A failed factory must leave the key unresolved for the next attempt.");
         AssertEx.True(result[0].SequenceEqual(Vector(3f, 4f)));
@@ -105,9 +103,9 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
             return Task.FromResult<IReadOnlyList<byte[]>>([Vector(factoryCalls, 0f)]);
         }
 
-        _ = await cache.GetOrCreateManyAsync([key], Factory, CancellationToken.None).ConfigureAwait(false);
+        _ = await cache.GetOrCreateManyAsync([key], Factory, CancellationToken.None);
         clock.Advance(TimeSpan.FromSeconds(11));
-        var afterExpiry = await cache.GetOrCreateManyAsync([key], Factory, CancellationToken.None).ConfigureAwait(false);
+        var afterExpiry = await cache.GetOrCreateManyAsync([key], Factory, CancellationToken.None);
 
         AssertEx.Equal(2, factoryCalls, "An expired hot entry must be regenerated when no durable match exists.");
         AssertEx.Equal(2, store.CallCount, "TTL expiry must also re-check the durable committed-vector layer.");
@@ -129,9 +127,9 @@ public sealed class KnowledgeChunkEmbeddingCacheTests
             return Task.FromResult<IReadOnlyList<byte[]>>(keys.Select(_ => Vector(calls, 0f)).ToArray());
         }
 
-        _ = await cache.GetOrCreateManyAsync([first], Factory, CancellationToken.None).ConfigureAwait(false);
-        _ = await cache.GetOrCreateManyAsync([second], Factory, CancellationToken.None).ConfigureAwait(false);
-        _ = await cache.GetOrCreateManyAsync([first], Factory, CancellationToken.None).ConfigureAwait(false);
+        _ = await cache.GetOrCreateManyAsync([first], Factory, CancellationToken.None);
+        _ = await cache.GetOrCreateManyAsync([second], Factory, CancellationToken.None);
+        _ = await cache.GetOrCreateManyAsync([first], Factory, CancellationToken.None);
 
         AssertEx.Equal(3, calls, "The coldest key must be regenerated after the entry bound evicts it.");
     }

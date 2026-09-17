@@ -67,7 +67,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         IReadOnlyList<LocalModelDescriptor> installed;
         try
         {
-            installed = await provider.ListModelsAsync(cancellationToken).ConfigureAwait(false);
+            installed = await provider.ListModelsAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {

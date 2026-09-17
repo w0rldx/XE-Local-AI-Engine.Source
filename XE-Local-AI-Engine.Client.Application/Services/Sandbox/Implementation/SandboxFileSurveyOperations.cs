@@ -50,7 +50,7 @@ internal static class SandboxFileSurveyOperations
 
         // No-follow create on Linux: if the leaf was swapped for a symlink between the component check and the write,
         // O_NOFOLLOW makes the create fail rather than write through the link.
-        await SandboxJailPathGuard.WriteJailFileNoFollowAsync(destination, content, cancellationToken).ConfigureAwait(false);
+        await SandboxJailPathGuard.WriteJailFileNoFollowAsync(destination, content, cancellationToken);
     }
 
     public static void ResetDirectory(string jailRoot, string sandboxPath)
@@ -90,7 +90,7 @@ internal static class SandboxFileSurveyOperations
             throw new FileNotFoundException($"Sandbox path '{sandboxPath}' was not found.", sandboxPath);
         }
 
-        var bytes = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(resolved, maxBytes, cancellationToken).ConfigureAwait(false);
+        var bytes = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(resolved, maxBytes, cancellationToken);
         return Encoding.UTF8.GetString(bytes);
     }
 
@@ -143,8 +143,8 @@ internal static class SandboxFileSurveyOperations
 
         // Read the raw bytes from inside the jail and write them to the host destination so a binary artifact survives
         // the round trip unchanged (parity with the container provider's copy-out).
-        var content = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(source, int.MaxValue, cancellationToken).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(request.DestinationPath, content, cancellationToken).ConfigureAwait(false);
+        var content = await SandboxJailPathGuard.ReadJailFileBytesNoFollowAsync(source, int.MaxValue, cancellationToken);
+        await File.WriteAllBytesAsync(request.DestinationPath, content, cancellationToken);
     }
 
     /// <summary>

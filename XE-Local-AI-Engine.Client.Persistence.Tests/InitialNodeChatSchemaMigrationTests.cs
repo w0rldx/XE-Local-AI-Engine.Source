@@ -17,7 +17,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CreatesTheConversationTranscriptTables()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-schema.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-schema.sqlite", ThisMigrationId);
 
         foreach (var table in new[]
                  {
@@ -27,10 +27,10 @@ public sealed class InitialNodeChatSchemaMigrationTests
                      "purged_tombstones"
                  })
         {
-            AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist.");
+            AssertEx.True(await probe.TableExistsAsync(table), $"{table} must exist.");
         }
 
-        AssertEx.True((await probe.ColumnsAsync("conversations").ConfigureAwait(false)).SetEquals(new[]
+        AssertEx.True((await probe.ColumnsAsync("conversations")).SetEquals(new[]
         {
             "conversation_id",
             "title",
@@ -40,7 +40,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
             "purged"
         }), "conversations must expose exactly the columns this migration created.");
 
-        AssertEx.True((await probe.ColumnsAsync("messages").ConfigureAwait(false)).SetEquals(new[]
+        AssertEx.True((await probe.ColumnsAsync("messages")).SetEquals(new[]
         {
             "message_id",
             "conversation_id",
@@ -51,7 +51,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
             "created_at_utc"
         }), "messages must expose exactly the columns this migration created.");
 
-        AssertEx.True((await probe.ColumnsAsync("tool_events").ConfigureAwait(false)).SetEquals(new[]
+        AssertEx.True((await probe.ColumnsAsync("tool_events")).SetEquals(new[]
         {
             "tool_call_id",
             "conversation_id",
@@ -62,7 +62,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
             "created_at_utc"
         }), "tool_events must expose exactly the columns this migration created.");
 
-        AssertEx.True((await probe.ColumnsAsync("purged_tombstones").ConfigureAwait(false)).SetEquals(new[]
+        AssertEx.True((await probe.ColumnsAsync("purged_tombstones")).SetEquals(new[]
         {
             "conversation_id",
             "purged_at_utc",
@@ -73,35 +73,35 @@ public sealed class InitialNodeChatSchemaMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CascadesTheTranscriptOffTheConversation()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-cascade.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-cascade.sqlite", ThisMigrationId);
 
-        AssertEx.True(await probe.ForeignKeyExistsAsync("messages", "conversation_id", "conversations").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("messages", "conversation_id", "conversations"),
             "Messages must be foreign-keyed to their conversation.");
-        AssertEx.True(await probe.ForeignKeyExistsAsync("tool_events", "conversation_id", "conversations").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("tool_events", "conversation_id", "conversations"),
             "Tool events must be foreign-keyed to their conversation.");
 
         // Deleting a conversation has to take the whole transcript with it — a stranded message row would keep user
         // content alive past the delete that was supposed to remove it.
-        await probe.ExecuteAsync("PRAGMA foreign_keys = ON;").ConfigureAwait(false);
-        await SeedTranscriptAsync(probe).ConfigureAwait(false);
-        await probe.ExecuteAsync("DELETE FROM conversations;").ConfigureAwait(false);
+        await probe.ExecuteAsync("PRAGMA foreign_keys = ON;");
+        await SeedTranscriptAsync(probe);
+        await probe.ExecuteAsync("DELETE FROM conversations;");
 
-        AssertEx.Equal(expected: 0L, (await probe.LongsAsync("SELECT COUNT(*) FROM messages;").ConfigureAwait(false)).Single(),
+        AssertEx.Equal(expected: 0L, (await probe.LongsAsync("SELECT COUNT(*) FROM messages;")).Single(),
             "Deleting the conversation must cascade to its messages.");
-        AssertEx.Equal(expected: 0L, (await probe.LongsAsync("SELECT COUNT(*) FROM tool_events;").ConfigureAwait(false)).Single(),
+        AssertEx.Equal(expected: 0L, (await probe.LongsAsync("SELECT COUNT(*) FROM tool_events;")).Single(),
             "Deleting the conversation must cascade to its tool events.");
     }
 
     [Test]
     public async Task Migrate_ToThisMigration_IndexesTheTranscriptByConversation()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-indexes.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-indexes.sqlite", ThisMigrationId);
 
         // Non-unique at this point in the chain; RepairAndUniqueMessageSequence later replaces the message index with a
         // unique (conversation_id, sequence) one, and that suite asserts the swap.
-        AssertEx.True(await probe.IndexExistsAsync("messages", "IX_messages_conversation_id", unique: false, "conversation_id").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("messages", "IX_messages_conversation_id", unique: false, "conversation_id"),
             "Messages must be indexed by conversation.");
-        AssertEx.True(await probe.IndexExistsAsync("tool_events", "IX_tool_events_conversation_id", unique: false, "conversation_id").ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("tool_events", "IX_tool_events_conversation_id", unique: false, "conversation_id"),
             "Tool events must be indexed by conversation.");
     }
 
@@ -113,7 +113,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
                                  INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
                                  VALUES ($conversation_id, 'Historical', 'node', 1234, 1234, 0);
                                  """,
-            command => command.Parameters.AddWithValue("$conversation_id", conversationId)).ConfigureAwait(false);
+            command => command.Parameters.AddWithValue("$conversation_id", conversationId));
 
         await probe.ExecuteAsync("""
                                  INSERT INTO messages (message_id, conversation_id, sequence, role, content, created_at_utc)
@@ -123,7 +123,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
             {
                 command.Parameters.AddWithValue("$message_id", Guid.NewGuid().ToString());
                 command.Parameters.AddWithValue("$conversation_id", conversationId);
-            }).ConfigureAwait(false);
+            });
 
         await probe.ExecuteAsync("""
                                  INSERT INTO tool_events (tool_call_id, conversation_id, tool_name, status, created_at_utc)
@@ -133,6 +133,6 @@ public sealed class InitialNodeChatSchemaMigrationTests
             {
                 command.Parameters.AddWithValue("$tool_call_id", Guid.NewGuid().ToString());
                 command.Parameters.AddWithValue("$conversation_id", conversationId);
-            }).ConfigureAwait(false);
+            });
     }
 }

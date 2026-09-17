@@ -21,7 +21,7 @@ public interface INodeSettingsStore
     /// </remarks>
     async Task<StoredNodeSettings?> LoadStrictAsync(CancellationToken cancellationToken = default)
     {
-        return await LoadAsync(cancellationToken).ConfigureAwait(false);
+        return await LoadAsync(cancellationToken);
     }
 
     /// <summary>

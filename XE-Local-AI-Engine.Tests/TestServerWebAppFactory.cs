@@ -236,8 +236,8 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         {
             if (_app is { } app)
             {
-                await app.StopAsync().ConfigureAwait(false);
-                await app.DisposeAsync().ConfigureAwait(false);
+                await app.StopAsync();
+                await app.DisposeAsync();
             }
         }
         finally
@@ -246,7 +246,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             {
                 if (_fakeOllamaServer is not null)
                 {
-                    await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
+                    await _fakeOllamaServer.DisposeAsync();
                 }
             }
             finally

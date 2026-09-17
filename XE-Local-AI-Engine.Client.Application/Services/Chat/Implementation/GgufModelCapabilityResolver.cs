@@ -21,7 +21,7 @@ internal sealed class GgufModelCapabilityResolver(IGgufModelStore ggufModelStore
         }
 
         // The list reuses the store's per-file header cache, so this never re-reads a model file on a cache hit.
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);
 
         var descriptor = installed.FirstOrDefault(model =>
             string.Equals(model.ModelName, modelName, StringComparison.OrdinalIgnoreCase));

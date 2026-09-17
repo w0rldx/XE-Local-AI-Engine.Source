@@ -22,54 +22,54 @@ public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
     [Test]
     public async Task Migrate_OverALegacyDocument_BackfillsTheDefaultCollectionAndLegacyProvenance()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections.sqlite", PreCollectionsMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections.sqlite", PreCollectionsMigrationId);
 
-        await InsertLegacyDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a").ConfigureAwait(false);
+        await InsertLegacyDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a");
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
         // The database carries exactly the one seeded document, so each read needs no predicate.
-        AssertEx.Equal("DEFAULT", await TextAsync(probe, "SELECT collection_id FROM knowledge_documents;").ConfigureAwait(false),
+        AssertEx.Equal("DEFAULT", await TextAsync(probe, "SELECT collection_id FROM knowledge_documents;"),
             "A document that predates collections belongs to the default one.");
-        AssertEx.Equal("upload", await TextAsync(probe, "SELECT source_kind FROM knowledge_documents;").ConfigureAwait(false),
+        AssertEx.Equal("upload", await TextAsync(probe, "SELECT source_kind FROM knowledge_documents;"),
             "Everything ingested before repository sources existed arrived as an upload.");
-        AssertEx.Equal("legacy", await TextAsync(probe, "SELECT parser_version FROM knowledge_documents;").ConfigureAwait(false),
+        AssertEx.Equal("legacy", await TextAsync(probe, "SELECT parser_version FROM knowledge_documents;"),
             "A historical document must not claim to have been produced by the current parser.");
-        AssertEx.Equal("legacy", await TextAsync(probe, "SELECT chunker_version FROM knowledge_documents;").ConfigureAwait(false),
+        AssertEx.Equal("legacy", await TextAsync(probe, "SELECT chunker_version FROM knowledge_documents;"),
             "A historical document must not claim to have been produced by the current chunker.");
     }
 
     [Test]
     public async Task Migrate_ToThisMigration_ScopesDedupeToTheCollection()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections-dedupe.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections-dedupe.sqlite", ThisMigrationId);
 
-        AssertEx.False(await probe.IndexExistsAsync("knowledge_documents", "IX_knowledge_documents_content_hash", unique: true, "content_hash").ConfigureAwait(false),
+        AssertEx.False(await probe.IndexExistsAsync("knowledge_documents", "IX_knowledge_documents_content_hash", unique: true, "content_hash"),
             "The corpus-wide content-hash index must be gone, or a file could never be added to a second collection.");
         AssertEx.True(await probe.IndexExistsAsync("knowledge_documents",
                 "IX_knowledge_documents_collection_id_content_hash",
                 unique: true,
                 "collection_id",
-                "content_hash").ConfigureAwait(false),
+                "content_hash"),
             "Dedupe must be uniquely indexed per collection.");
 
-        await InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "DEFAULT").ConfigureAwait(false);
-        await InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "project-a").ConfigureAwait(false);
+        await InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "DEFAULT");
+        await InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "project-a");
 
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a", collectionId: "project-a"),
-            "The same file must still be rejected as a duplicate within one collection.").ConfigureAwait(false);
+            "The same file must still be rejected as a duplicate within one collection.");
     }
 
     [Test]
     public async Task Migrate_ToThisMigration_RebuildsTheChunkIndexOverTheProvenanceColumns()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections-fts.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections-fts.sqlite", ThisMigrationId);
 
-        AssertEx.True(await probe.TableExistsAsync("chunk_fts").ConfigureAwait(false), "The full-text index must exist.");
+        AssertEx.True(await probe.TableExistsAsync("chunk_fts"), "The full-text index must exist.");
 
         // The rebuild is what makes a path or symbol query reach the index at all; a chunk_fts left at its old shape
         // would still answer content queries, so the missing columns are the only thing that would show the miss.
-        AssertEx.True((await probe.ColumnsAsync("chunk_fts").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("chunk_fts")).IsSupersetOf(new[]
         {
             "chunk_id",
             "document_id",
@@ -79,7 +79,7 @@ public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
             "content"
         }), "chunk_fts must index the provenance columns this migration added.");
 
-        AssertEx.True((await probe.ColumnsAsync("knowledge_document_chunks").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("knowledge_document_chunks")).IsSupersetOf(new[]
         {
             "content_hash",
             "content_kind",
@@ -131,7 +131,7 @@ public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
 
     private static async Task<string> TextAsync(MigrationSchemaProbe probe, string sql)
     {
-        return AssertEx.NotNull(await probe.ScalarAsync(sql).ConfigureAwait(false) as string,
+        return AssertEx.NotNull(await probe.ScalarAsync(sql) as string,
             "The column must be non-null after the backfill.");
     }
 }

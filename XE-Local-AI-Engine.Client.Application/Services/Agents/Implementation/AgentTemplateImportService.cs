@@ -18,7 +18,7 @@ internal sealed class AgentTemplateImportService(IAgentTemplateCatalog catalog, 
                              .Distinct(StringComparer.Ordinal)
                              .ToArray();
 
-        var alreadySeeded = await _store.ListSeededSlugsAsync(cancellationToken).ConfigureAwait(false);
+        var alreadySeeded = await _store.ListSeededSlugsAsync(cancellationToken);
 
         var imported = new List<string>();
         var skippedExisting = new List<string>();
@@ -39,7 +39,7 @@ internal sealed class AgentTemplateImportService(IAgentTemplateCatalog catalog, 
                 continue;
             }
 
-            _ = await _store.AddSeededAsync(ToInput(template), slug, cancellationToken).ConfigureAwait(false);
+            _ = await _store.AddSeededAsync(ToInput(template), slug, cancellationToken);
             imported.Add(slug);
         }
 

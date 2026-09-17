@@ -33,8 +33,8 @@ public sealed class CommitSkillImportEndpoint(ISkillImportService importService)
                 req.SkillNames ?? [],
                 req.ConflictResolution,
                 req.Acknowledged),
-            ct).ConfigureAwait(false);
+            ct);
 
-        await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(result.ToResponse(), ct);
     }
 }

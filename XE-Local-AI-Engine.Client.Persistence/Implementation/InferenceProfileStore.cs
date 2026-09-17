@@ -29,8 +29,7 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
                                                profile.ModelName == input.ModelName &&
                                                profile.Role == input.Role &&
                                                profile.Backend == input.Backend,
-                                           cancellationToken)
-                                       .ConfigureAwait(false);
+                                           cancellationToken);
 
         if (existing is null)
         {
@@ -47,7 +46,7 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
             ApplyExploredFields(entity, input, now);
 
             _ = _dbContext.InferenceProfiles.Add(entity);
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
             return ToRecord(entity);
         }
@@ -60,7 +59,7 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
         existing.ProcessBudgetVramAtFreezeBytes = null;
         ApplyExploredFields(existing, input, now);
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(existing);
     }
@@ -74,11 +73,10 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
         // Freezing is the meaningful promotion (analogue of a Succeeded snapshot), so it runs inside a single
         // transaction. The freeze gate only promotes a row still in Explored — a successful benchmark is the sole
         // justification; a re-explored or already-frozen row is left untouched.
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var entity = await _dbContext.InferenceProfiles
-                                     .FirstOrDefaultAsync(profile => profile.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(profile => profile.Id == id, cancellationToken);
 
         if (entity is null || entity.Status != InferenceProfileStatus.Explored)
         {
@@ -91,8 +89,8 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
         entity.ProcessBudgetVramAtFreezeBytes = processBudgetVramAtFreezeBytes;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -100,8 +98,7 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
     public async Task<InferenceProfileRecord?> MarkStaleAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.InferenceProfiles
-                                     .FirstOrDefaultAsync(profile => profile.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(profile => profile.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -111,7 +108,7 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
         entity.Status = InferenceProfileStatus.Stale;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -133,8 +130,7 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
                                              profile.ModelName == modelName &&
                                              profile.Role == role &&
                                              profile.Backend == backend,
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
+                                         cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -145,8 +141,7 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
                                        .AsNoTracking()
                                        .OrderBy(profile => profile.ModelName)
                                        .ThenBy(profile => profile.Role)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

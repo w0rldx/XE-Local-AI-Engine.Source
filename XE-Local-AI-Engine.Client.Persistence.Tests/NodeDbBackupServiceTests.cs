@@ -31,7 +31,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
     public async Task BackupBeforeMigrationAsync_WhenMigrationsPending_CreatesSnapshot()
     {
         var databasePath = GetDatabasePath("pending.sqlite");
-        await SeedRawDataAsync(databasePath).ConfigureAwait(false);
+        await SeedRawDataAsync(databasePath);
 
         await using var serviceProvider = BuildServiceProvider(databasePath);
         var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
@@ -41,7 +41,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         var snapshots = ListSnapshots();
         AssertEx.Equal(1, snapshots.Length, "Exactly one snapshot should be written when migrations are pending.");
         AssertEx.True(new FileInfo(snapshots[0]).Length > 0, "The snapshot should be a non-empty SQLite file.");
-        AssertEx.True(await ProbeTableExistsAsync(snapshots[0]).ConfigureAwait(false), "The snapshot should contain the seeded source data.");
+        AssertEx.True(await ProbeTableExistsAsync(snapshots[0]), "The snapshot should contain the seeded source data.");
     }
 
     [Test]
@@ -68,7 +68,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
     public async Task BackupBeforeMigrationAsync_PrunesToRetainCount()
     {
         var databasePath = GetDatabasePath("prune.sqlite");
-        await SeedRawDataAsync(databasePath).ConfigureAwait(false);
+        await SeedRawDataAsync(databasePath);
 
         var backupDirectory = Path.Combine(_rootPath, "backups");
         Directory.CreateDirectory(backupDirectory);
@@ -83,7 +83,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         };
         foreach (var stamp in older)
         {
-            await File.WriteAllTextAsync(Path.Combine(backupDirectory, $"{BackupFilePrefix}{stamp}{BackupFileExtension}"), "stale").ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Combine(backupDirectory, $"{BackupFilePrefix}{stamp}{BackupFileExtension}"), "stale");
         }
 
         // Fixed clock at 2026-01-01T00:00:00Z → the new snapshot's timestamp sorts after all four pre-existing ones.
@@ -104,12 +104,12 @@ public sealed class NodeDbBackupServiceTests : IDisposable
     public async Task BackupBeforeMigrationAsync_WhenBackupFails_SwallowsAndDoesNotThrow()
     {
         var databasePath = GetDatabasePath("failure.sqlite");
-        await SeedRawDataAsync(databasePath).ConfigureAwait(false);
+        await SeedRawDataAsync(databasePath);
 
         // Plant a FILE where the backup directory is expected: Directory.CreateDirectory then throws IOException, exercising
         // the swallow-and-continue failure policy.
         var collidingPath = Path.Combine(_rootPath, "backup-collision");
-        await File.WriteAllTextAsync(collidingPath, "not a directory").ConfigureAwait(false);
+        await File.WriteAllTextAsync(collidingPath, "not a directory");
 
         await using var serviceProvider = BuildServiceProvider(databasePath, backupDirectoryOverride: collidingPath);
         var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
@@ -173,22 +173,22 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               CREATE TABLE "probe" ("Id" INTEGER NOT NULL PRIMARY KEY, "Value" TEXT NOT NULL);
                               INSERT INTO "probe" ("Id", "Value") VALUES (1, 'seed');
                               """;
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<bool> ProbeTableExistsAsync(string databasePath)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'probe';";
-        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, CultureInfo.InvariantCulture) > 0;
     }
 

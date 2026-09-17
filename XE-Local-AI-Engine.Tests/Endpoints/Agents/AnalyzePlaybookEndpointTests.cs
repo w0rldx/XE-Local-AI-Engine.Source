@@ -26,7 +26,7 @@ public sealed class AnalyzePlaybookEndpointTests
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(Guid.NewGuid()));
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -45,7 +45,7 @@ public sealed class AnalyzePlaybookEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -60,17 +60,17 @@ public sealed class AnalyzePlaybookEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Body-less Analysis Agent").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Body-less Analysis Agent");
 
         // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(agentId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, "Body-less analyze POST must not return 415.");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.Equal(expected: 0, document.RootElement.GetProperty("items").GetArrayLength());
     }
@@ -81,7 +81,7 @@ public sealed class AnalyzePlaybookEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Analysis Agent").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Analysis Agent");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(agentId))
         {
@@ -90,11 +90,11 @@ public sealed class AnalyzePlaybookEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -114,7 +114,7 @@ public sealed class AnalyzePlaybookEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 }

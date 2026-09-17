@@ -11,7 +11,7 @@ internal static class TestControlEndpoints
             return Results.Unauthorized();
         }
 
-        var request = await context.Request.ReadFromJsonAsync(FakeOllamaJsonContext.Default.FakeOllamaFailureRequest, context.RequestAborted).ConfigureAwait(false);
+        var request = await context.Request.ReadFromJsonAsync(FakeOllamaJsonContext.Default.FakeOllamaFailureRequest, context.RequestAborted);
         if (request is null || !Enum.TryParse<FakeOllamaFailure>(request.Failure, ignoreCase: true, out var failure))
         {
             return Results.BadRequest(new
@@ -63,7 +63,7 @@ internal static class TestControlEndpoints
             return Results.Unauthorized();
         }
 
-        var request = await context.Request.ReadFromJsonAsync(FakeOllamaJsonContext.Default.FakeOllamaScriptRequest, context.RequestAborted).ConfigureAwait(false);
+        var request = await context.Request.ReadFromJsonAsync(FakeOllamaJsonContext.Default.FakeOllamaScriptRequest, context.RequestAborted);
         if (request is null)
         {
             return Results.BadRequest(new

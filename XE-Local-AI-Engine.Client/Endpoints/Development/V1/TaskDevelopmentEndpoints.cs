@@ -19,7 +19,7 @@ public sealed class GetDevelopmentTaskEndpoint(IDevelopmentManagementService ser
 
     public override async Task HandleAsync(DevelopmentTaskRequest req, CancellationToken ct)
     {
-        await Send.OkAsync((await _service.GetTaskAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync((await _service.GetTaskAsync(req.ProjectId, req.TaskId, ct)).ToResponse(), ct);
     }
 }
 
@@ -41,19 +41,19 @@ public sealed class StartDevelopmentNextActionEndpoint(IDevelopmentManagementSer
     {
         try
         {
-            var result = await _service.StartNextActionAsync(req.ProjectId, req.TaskId, req.OperationId, ct).ConfigureAwait(false);
+            var result = await _service.StartNextActionAsync(req.ProjectId, req.TaskId, req.OperationId, ct);
             await Send.OkAsync(new DevelopmentNextActionResponse(result.Action,
                     result.ProjectId,
                     result.TaskId,
                     result.AttemptId,
                     result.TaskStatus.ToString(),
                     result.Role?.ToString()),
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (DevelopmentWorkspaceSecurityException exception)
         {
             AddError(exception.Message);
-            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct);
         }
     }
 }
@@ -74,7 +74,7 @@ public sealed class CancelDevelopmentAttemptEndpoint(IDevelopmentManagementServi
     {
         // Cancelling an attempt that had already finished is not an error — both outcomes are 204. A missing
         // project/task/attempt throws DevelopmentNotFoundException, which the global handler answers 404.
-        _ = await _service.CancelAttemptAsync(req.ProjectId, req.TaskId, req.AttemptId, ct).ConfigureAwait(false);
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        _ = await _service.CancelAttemptAsync(req.ProjectId, req.TaskId, req.AttemptId, ct);
+        await Send.NoContentAsync(ct);
     }
 }

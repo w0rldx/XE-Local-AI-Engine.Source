@@ -20,21 +20,21 @@ public sealed class ExternalAppOperationRunnerTests
     [Test]
     public async Task Install_ReturnsTheAdmittedSnapshot_WhileThePullIsStillBlocked()
     {
-        await using var harness = await NewHarnessAsync().ConfigureAwait(false);
+        await using var harness = await NewHarnessAsync();
         harness.Gated.PullGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var admitted = await harness.Service.InstallAsync(Command()).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command());
 
         // The call returned. The pull has not.
         AssertEx.Equal(ExternalAppInstanceStatus.Installing, admitted.Status);
         AssertEx.Equal(expected: 0L, admitted.Version);
-        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(admitted.Id).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(admitted.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Installing, row.Status);
 
         _ = harness.Gated.PullGate.TrySetResult();
-        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
     }
 
     /// <summary>
@@ -44,37 +44,37 @@ public sealed class ExternalAppOperationRunnerTests
     [Test]
     public async Task Install_WhenTheCallersTokenIsCancelled_KeepsRunning()
     {
-        await using var harness = await NewHarnessAsync().ConfigureAwait(false);
+        await using var harness = await NewHarnessAsync();
         harness.Gated.PullGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         using var callerCancellation = new CancellationTokenSource();
-        var admitted = await harness.Service.InstallAsync(Command(), callerCancellation.Token).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command(), callerCancellation.Token);
 
-        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
-        await callerCancellation.CancelAsync().ConfigureAwait(false);
+        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
+        await callerCancellation.CancelAsync();
         _ = harness.Gated.PullGate.TrySetResult();
 
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
         AssertEx.Equal(ExternalAppDesiredState.Running, row.DesiredState);
     }
 
     [Test]
     public async Task ASecondCommandWhileTheRunnerHoldsTheGate_Is409OperationInFlight()
     {
-        await using var harness = await NewHarnessAsync().ConfigureAwait(false);
+        await using var harness = await NewHarnessAsync();
         harness.Gated.PullGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var admitted = await harness.Service.InstallAsync(Command()).ConfigureAwait(false);
-        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command());
+        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
 
         // The gate is keyed by instance, so the second attempt at the same APPLICATION is refused by the
         // one-per-application rule rather than by the gate; both are 409s a caller can act on.
-        _ = await AssertEx.ThrowsAsync<ExternalAppAlreadyInstalledException>(() => harness.Service.InstallAsync(Command())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ExternalAppAlreadyInstalledException>(() => harness.Service.InstallAsync(Command()));
 
         AssertEx.True(harness.Runner.IsRunning(admitted.Id), "The install must still hold its instance entry.");
 
         _ = harness.Gated.PullGate.TrySetResult();
-        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
     }
 
     /// <summary>
@@ -84,35 +84,35 @@ public sealed class ExternalAppOperationRunnerTests
     [Test]
     public async Task WhileAnInstallRuns_TheInstanceGateIsHeldAndCannotBeEnteredElsewhere()
     {
-        await using var harness = await NewHarnessAsync().ConfigureAwait(false);
+        await using var harness = await NewHarnessAsync();
         harness.Gated.PullGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var admitted = await harness.Service.InstallAsync(Command()).ConfigureAwait(false);
-        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command());
+        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
 
         var key = ExternalAppInstanceGate.InstanceKey(admitted.Id);
-        AssertEx.Null(await harness.Gate.TryEnterAsync(key).ConfigureAwait(false),
+        AssertEx.Null(await harness.Gate.TryEnterAsync(key),
             "A reconcile pass must not be able to take a gate a live install is standing behind.");
 
         _ = harness.Gated.PullGate.TrySetResult();
-        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+        _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
 
-        using var afterwards = AssertEx.NotNull(await harness.Gate.TryEnterAsync(key).ConfigureAwait(false),
+        using var afterwards = AssertEx.NotNull(await harness.Gate.TryEnterAsync(key),
             "The lease is released in the operation's finally, which SettleAsync has already waited for.");
     }
 
     [Test]
     public async Task Cancel_DuringAPull_SettlesToFailedAndKeepsTheStorage()
     {
-        await using var harness = await NewHarnessAsync().ConfigureAwait(false);
+        await using var harness = await NewHarnessAsync();
         harness.Gated.PullGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var admitted = await harness.Service.InstallAsync(Command()).ConfigureAwait(false);
-        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command());
+        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
 
         AssertEx.True(harness.Runner.Cancel(admitted.Id), "An install that is running has an entry to cancel.");
 
-        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
         AssertEx.Contains(row.FailureSummary, "cancelled");
         AssertEx.Empty(harness.Runtime.CreatedContainerIds, "A cancel during the pull creates nothing.");
     }
@@ -124,16 +124,16 @@ public sealed class ExternalAppOperationRunnerTests
     [Test]
     public async Task ApplicationStopping_CancelsInFlightOperationsAndLeavesTheRowTransient()
     {
-        await using var harness = await NewHarnessAsync().ConfigureAwait(false);
+        await using var harness = await NewHarnessAsync();
         harness.Gated.PullGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var admitted = await harness.Service.InstallAsync(Command()).ConfigureAwait(false);
-        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        var admitted = await harness.Service.InstallAsync(Command());
+        await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
 
         harness.StopHost();
-        await harness.WaitUntilIdleAsync(admitted.Id).ConfigureAwait(false);
+        await harness.WaitUntilIdleAsync(admitted.Id);
 
-        var row = AssertEx.NotNull(await harness.ReadAsync(admitted.Id).ConfigureAwait(false));
+        var row = AssertEx.NotNull(await harness.ReadAsync(admitted.Id));
         AssertEx.Equal(ExternalAppInstanceStatus.Installing, row.Status);
         AssertEx.Null(row.FailureCategory);
         AssertEx.Empty(harness.Runtime.RemovedContainerIds, "A shutdown must not remove anything.");
@@ -154,7 +154,7 @@ public sealed class ExternalAppOperationRunnerTests
     {
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", storage: [new ApplicationStorage("data", "/var/lib/app")])]);
 
-        return await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        return await ExternalAppServiceHarness.CreateAsync(manifest);
     }
 
     private static InstallCommand Command()

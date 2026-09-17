@@ -22,20 +22,19 @@ public sealed class EjectImageRuntimeEndpoint(ImageRuntimeOrchestrationService i
     public override async Task HandleAsync(ImageRuntimeActionRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var result = await imageRuntime.EvictAllAsync(ct).ConfigureAwait(false);
+        var result = await imageRuntime.EvictAllAsync(ct);
         if (!result.Evicted)
         {
             await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy("Wait for active image jobs, image-runtime startup, or runtime mutation to finish before ejecting image processes.",
-                          result.Activity))
-                      .ConfigureAwait(false);
+                          result.Activity));
             return;
         }
 
-        var installed = await imageRuntime.ReadInstalledRuntimeAsync(ct).ConfigureAwait(false);
+        var installed = await imageRuntime.ReadInstalledRuntimeAsync(ct);
         await Send.OkAsync(new ImageRuntimeStatusResponse
         {
             ManagedRuntime = installed?.ToResponse(),
             Activity = result.Activity.ToResponse()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

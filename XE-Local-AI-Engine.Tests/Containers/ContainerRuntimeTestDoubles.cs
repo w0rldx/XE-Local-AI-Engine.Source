@@ -88,7 +88,7 @@ internal static class DisclosingEndpointRefusal
             NullLogger<ContainerRuntimeResolver>.Instance,
             _ => endpoint);
 
-        return await resolver.ResolveAsync().ConfigureAwait(false);
+        return await resolver.ResolveAsync();
     }
 
     /// <summary>A factory that cannot be used, so a refusal that reached it fails here rather than silently.</summary>

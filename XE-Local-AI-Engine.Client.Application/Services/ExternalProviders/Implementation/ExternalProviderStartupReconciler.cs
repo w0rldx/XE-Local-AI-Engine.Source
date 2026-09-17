@@ -29,8 +29,8 @@ public sealed class ExternalProviderStartupReconciler(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             _ = await scope.ServiceProvider.GetRequiredService<IExternalProviderReconciler>()
-                           .ReconcileAsync(cancellationToken).ConfigureAwait(false);
-            await registryCache.PrimeAsync(cancellationToken).ConfigureAwait(false);
+                           .ReconcileAsync(cancellationToken);
+            await registryCache.PrimeAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

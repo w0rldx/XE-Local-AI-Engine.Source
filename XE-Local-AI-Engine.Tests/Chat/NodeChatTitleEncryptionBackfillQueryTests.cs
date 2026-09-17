@@ -32,11 +32,11 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
     [Test]
     public async Task NullTitleConversationQuery_ExecutesWithoutSqlSyntaxError()
     {
-        await using var provider = await BuildProviderAsync("backfill-null-title.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("backfill-null-title.sqlite");
         var service = CreateService(provider);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "hello world", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", CreatedAtUtc: 10));
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "hello world", CreatedAtUtc: 11));
 
         await using (var scope = provider.CreateAsyncScope())
         {
@@ -44,14 +44,12 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
 
             // Reproduce the EncryptConversationTitle migration's effect: NULL the title so the backfill query has a row.
             await dbContext.Database
-                           .ExecuteSqlRawAsync("UPDATE conversations SET title = NULL WHERE conversation_id = {0}", conversation.ConversationId)
-                           .ConfigureAwait(false);
+                           .ExecuteSqlRawAsync("UPDATE conversations SET title = NULL WHERE conversation_id = {0}", conversation.ConversationId);
 
             // The exact query from NodeChatTitleEncryptionBackfillService — a trailing ';' breaks EF subquery wrapping.
             var conversationIds = await dbContext.Database
                                                  .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL")
-                                                 .ToListAsync()
-                                                 .ConfigureAwait(false);
+                                                 .ToListAsync();
 
             AssertEx.Contains(conversationIds, conversation.ConversationId);
         }
@@ -60,12 +58,12 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
     [Test]
     public async Task FirstUserMessageQuery_ExecutesWithoutSqlSyntaxError()
     {
-        await using var provider = await BuildProviderAsync("backfill-first-user-message.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("backfill-first-user-message.sqlite");
         var service = CreateService(provider);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", CreatedAtUtc: 10));
         var messageId = Guid.NewGuid();
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "hello world", CreatedAtUtc: 11)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "hello world", CreatedAtUtc: 11));
 
         await using (var scope = provider.CreateAsyncScope())
         {
@@ -76,8 +74,7 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
                                      .SqlQueryRaw<MessageIdAndContent>(
                                          "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",
                                          conversation.ConversationId)
-                                     .FirstOrDefaultAsync()
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync();
 
             var materialized = AssertEx.NotNull(row);
             AssertEx.Equal(messageId, materialized.MessageId);
@@ -100,8 +97,8 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }

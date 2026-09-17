@@ -28,7 +28,7 @@ public sealed class IntegrationPriorOutputsTests
     {
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
-        await SeedCommittedOutputsAsync(harness, """{"contentType":"application/json","payload":{"door":"opened"}}""").ConfigureAwait(false);
+        await SeedCommittedOutputsAsync(harness, """{"contentType":"application/json","payload":{"door":"opened"}}""");
 
         await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
 
@@ -42,7 +42,7 @@ public sealed class IntegrationPriorOutputsTests
     {
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
-        await SeedCommittedOutputsAsync(harness, """{"contentType":"application/json","payload":{"a":1}}""").ConfigureAwait(false);
+        await SeedCommittedOutputsAsync(harness, """{"contentType":"application/json","payload":{"a":1}}""");
 
         await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
 
@@ -173,7 +173,7 @@ public sealed class IntegrationPriorOutputsTests
         // A per-invocation run is byte-identical to what it was before this block existed, which is the property that
         // keeps the feature from changing the path it does not apply to.
         using var perInvocation = new Harness();
-        await SeedCommittedOutputsAsync(perInvocation, """{"contentType":"application/json","payload":{"a":1}}""").ConfigureAwait(false);
+        await SeedCommittedOutputsAsync(perInvocation, """{"contentType":"application/json","payload":{"a":1}}""");
         await perInvocation.Coordinator.ProcessOneAsync(perInvocation.SeedAccepted(), CancellationToken.None);
         AssertEx.False(LeadingContext(perInvocation).Contains(IntegrationPriorOutputsComposer.Preamble, StringComparison.Ordinal),
             "A per-invocation execution has no earlier turn to replay.");
@@ -192,7 +192,7 @@ public sealed class IntegrationPriorOutputsTests
         // replay match what the caller actually received rather than what the model attempted.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
-        var earlier = await SeedCommittedOutputsAsync(harness, """{"contentType":"application/json","payload":{"committed":true}}""").ConfigureAwait(false);
+        var earlier = await SeedCommittedOutputsAsync(harness, """{"contentType":"application/json","payload":{"committed":true}}""");
 
         // The refused call: over the store's cap, so it writes no row and charges no bytes.
         harness.Executions.OutputCapOverride = 1;
@@ -202,8 +202,7 @@ public sealed class IntegrationPriorOutputsTests
                                  IntegrationStreamEventTypes.ExternalOutput,
                                  """{"contentType":"application/json","payload":{"abandoned":true}}""",
                                  OccurredAtUtc: 5),
-                             maxOutputBytesPerExecution: 1_048_576)
-                         .ConfigureAwait(false);
+                             maxOutputBytesPerExecution: 1_048_576);
         harness.Executions.OutputCapOverride = null;
 
         await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
@@ -218,7 +217,7 @@ public sealed class IntegrationPriorOutputsTests
     {
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
-        await SeedCommittedOutputsAsync(harness, """{"contentType":"application/json","payload":{"mine":true}}""").ConfigureAwait(false);
+        await SeedCommittedOutputsAsync(harness, """{"contentType":"application/json","payload":{"mine":true}}""");
 
         // A second session under the same principal, whose output must not cross over.
         var otherSession = Guid.NewGuid();
@@ -229,8 +228,7 @@ public sealed class IntegrationPriorOutputsTests
                                  IntegrationStreamEventTypes.ExternalOutput,
                                  """{"contentType":"application/json","payload":{"theirs":true}}""",
                                  OccurredAtUtc: 2),
-                             maxOutputBytesPerExecution: 1_048_576)
-                         .ConfigureAwait(false);
+                             maxOutputBytesPerExecution: 1_048_576);
 
         await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);
 
@@ -257,8 +255,7 @@ public sealed class IntegrationPriorOutputsTests
                                                IntegrationStreamEventTypes.ExternalOutput,
                                                Envelope(index),
                                                OccurredAtUtc: oldest + index),
-                                           maxOutputBytesPerExecution: 1_048_576)
-                                       .ConfigureAwait(false),
+                                           maxOutputBytesPerExecution: 1_048_576),
                 "Seeding a committed output must succeed.");
         }
 
@@ -287,8 +284,7 @@ public sealed class IntegrationPriorOutputsTests
                                                 IntegrationStreamEventTypes.ExternalOutput,
                                                 envelope,
                                                 OccurredAtUtc: sequence),
-                                            maxOutputBytesPerExecution: 1_048_576)
-                                        .ConfigureAwait(false);
+                                            maxOutputBytesPerExecution: 1_048_576);
             AssertEx.True(recorded, "Seeding a committed output must succeed.");
         }
 

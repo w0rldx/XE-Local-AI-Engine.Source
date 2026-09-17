@@ -24,7 +24,7 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
         int? ctxTarget = null,
         CancellationToken cancellationToken = default)
     {
-        var definition = await _scheduledJobManagementService.GetJobAsync(scheduledJobId, cancellationToken).ConfigureAwait(false);
+        var definition = await _scheduledJobManagementService.GetJobAsync(scheduledJobId, cancellationToken);
 
         // Template guard: reject a missing job and any job that is not a model-recommendation-check job, so this facade
         // can fire only model-fit refresh jobs — never an arbitrary scheduled job of another template.
@@ -82,6 +82,6 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
         // path. The dispatcher → model-fit handler does the work and owns the run history.
         await _scheduledJobManagementService.TriggerNowAsync(scheduledJobId,
             parameterOverrides.Count == 0 ? null : parameterOverrides,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 }

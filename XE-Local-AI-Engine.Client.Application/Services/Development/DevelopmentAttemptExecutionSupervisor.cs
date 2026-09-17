@@ -67,7 +67,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             return false;
         }
 
-        await cancellation.CancelAsync().ConfigureAwait(false);
+        await cancellation.CancelAsync();
         return true;
     }
 
@@ -76,10 +76,10 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _shutdown.CancelAsync().ConfigureAwait(false);
+        await _shutdown.CancelAsync();
         foreach (var cancellation in _attempts.Values.Concat(_validations.Values))
         {
-            await cancellation.CancelAsync().ConfigureAwait(false);
+            await cancellation.CancelAsync();
         }
     }
 
@@ -90,7 +90,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             return;
         }
 
-        await _shutdown.CancelAsync().ConfigureAwait(false);
+        await _shutdown.CancelAsync();
         _shutdown.Dispose();
         foreach (var cancellation in _attempts.Values.Concat(_validations.Values))
         {
@@ -112,10 +112,9 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-            execution = await store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
+            execution = await store.GetExecutionSnapshotAsync(attemptId, cancellationToken);
             var repository = await scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>()
-                                        .ResolveExecutionAsync(execution, cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ResolveExecutionAsync(execution, cancellationToken);
             _ = _liveBroker.TryPublish(ToLiveUpdate(execution,
                 DevelopmentAttemptLiveUpdateKind.Activity,
                 DevelopmentAttemptStatus.Running,
@@ -124,19 +123,17 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             {
                 case DevelopmentAttemptRole.Coder:
                     _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                                   .RunAsync(attemptId, repository, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .RunAsync(attemptId, repository, cancellationToken);
                     break;
                 case DevelopmentAttemptRole.Reviewer:
                     _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentReviewerAttemptRunner>()
-                                   .RunAsync(attemptId, repository, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .RunAsync(attemptId, repository, cancellationToken);
                     break;
                 default:
                     throw new InvalidOperationException("The Development attempt role is not executable.");
             }
 
-            var completed = (await store.ListAttemptsAsync(execution.TaskId, CancellationToken.None).ConfigureAwait(false))
+            var completed = (await store.ListAttemptsAsync(execution.TaskId, CancellationToken.None))
                 .Single(attempt => attempt.Id == attemptId);
 
             // The literal words "attempt finished" open the message on purpose: they are what an operator greps the
@@ -198,9 +195,9 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
 
         try
         {
-            await foreach (var update in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var update in reader.ReadAllAsync(cancellationToken))
             {
-                await _livePublisher.PublishAsync(update, cancellationToken).ConfigureAwait(false);
+                await _livePublisher.PublishAsync(update, cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -240,14 +237,11 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var task = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
-                                  .GetTaskAsync(taskId, cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .GetTaskAsync(taskId, cancellationToken);
             var repository = await scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>()
-                                        .ResolveProjectAsync(task.ProjectId, cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .ResolveProjectAsync(task.ProjectId, cancellationToken);
             var result = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
-                                    .RunAsync(taskId, repository, cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .RunAsync(taskId, repository, cancellationToken);
 
             // The gate's verdict was computed and returned all along and then discarded here, which is why a live
             // scan of the backend log found zero hits for "Deterministic validation" across three full rounds. The

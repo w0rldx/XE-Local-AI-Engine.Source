@@ -20,7 +20,7 @@ public sealed class BenchmarkCancellationService(
         BenchmarkCancellationTarget target,
         CancellationToken cancellationToken = default)
     {
-        var current = await store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false)
+        var current = await store.GetRunAsync(runId, cancellationToken)
                       ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
         if (target == BenchmarkCancellationTarget.Primary
             && current.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded)
@@ -36,7 +36,7 @@ public sealed class BenchmarkCancellationService(
             throw new BenchmarkConflictException("JudgeNotCancellable");
         }
 
-        var updated = await store.CancelAsync(runId, expectedRunVersion, cancellationToken).ConfigureAwait(false);
+        var updated = await store.CancelAsync(runId, expectedRunVersion, cancellationToken);
         if (target == BenchmarkCancellationTarget.Primary && updated.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested)
         {
             _ = registry.TryCancel(runId, BenchmarkWorkKind.Primary);

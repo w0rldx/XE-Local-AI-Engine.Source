@@ -32,18 +32,18 @@ public sealed class DeleteIntegrationSessionEndpoint(IntegrationSessionService s
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var outcome = await _sessions.DeleteAsync(Route<Guid>("sessionId"), ct).ConfigureAwait(false);
+        var outcome = await _sessions.DeleteAsync(Route<Guid>("sessionId"), ct);
         switch (outcome)
         {
             case IntegrationSessionDeleteOutcome.Deleted:
-                await Send.NoContentAsync(ct).ConfigureAwait(false);
+                await Send.NoContentAsync(ct);
                 return;
             case IntegrationSessionDeleteOutcome.Busy:
                 AddError(IntegrationSessionService.BusyMessage);
-                await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct).ConfigureAwait(false);
+                await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct);
                 return;
             default:
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                await Send.NotFoundAsync(ct);
                 return;
         }
     }

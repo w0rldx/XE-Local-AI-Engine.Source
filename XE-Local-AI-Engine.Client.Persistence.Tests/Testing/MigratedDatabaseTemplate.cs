@@ -64,13 +64,13 @@ internal static class MigratedDatabaseTemplate
     /// <summary>Writes a <see cref="NodeChatDbContext" /> database migrated to head at <paramref name="databasePath" />.</summary>
     public static async Task CopyChatHeadAsync(string databasePath)
     {
-        Publish(await ChatHead.Value.ConfigureAwait(false), databasePath);
+        Publish(await ChatHead.Value, databasePath);
     }
 
     /// <summary>Writes a <see cref="NodeIdentityDbContext" /> database migrated to head at <paramref name="databasePath" />.</summary>
     public static async Task CopyIdentityHeadAsync(string databasePath)
     {
-        Publish(await IdentityHead.Value.ConfigureAwait(false), databasePath);
+        Publish(await IdentityHead.Value, databasePath);
     }
 
     /// <summary>
@@ -87,7 +87,7 @@ internal static class MigratedDatabaseTemplate
             static id => new Lazy<Task<string>>(() => BuildAsync($"chat-at-{id}", path => MigrationSchemaProbe.ApplyChatAsync(path, id)),
                 LazyThreadSafetyMode.ExecutionAndPublication));
 
-        Publish(await template.Value.ConfigureAwait(false), databasePath);
+        Publish(await template.Value, databasePath);
     }
 
     /// <summary>
@@ -145,8 +145,8 @@ internal static class MigratedDatabaseTemplate
         {
             var scratchDatabase = Path.Combine(scratchDirectory, "template.sqlite");
 
-            await applyAsync(scratchDatabase).ConfigureAwait(false);
-            await CheckpointAndReleaseAsync(scratchDatabase).ConfigureAwait(false);
+            await applyAsync(scratchDatabase);
+            await CheckpointAndReleaseAsync(scratchDatabase);
 
             foreach (var sidecar in new[]
                      {
@@ -205,13 +205,13 @@ internal static class MigratedDatabaseTemplate
     {
         await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync();
             await using (var command = connection.CreateCommand())
             {
                 // The migrated file is in WAL mode — EF Core's SqliteDatabaseCreator.Create enables it — so this is a
                 // real checkpoint, not a formality: it folds the log back into the main file the publish will copy.
                 command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-                _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+                _ = await command.ExecuteNonQueryAsync();
             }
 
             // Scoped to this connection string, never the process-global ClearAllPools: that one reaches every other

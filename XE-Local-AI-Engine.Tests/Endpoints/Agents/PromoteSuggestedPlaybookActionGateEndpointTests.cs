@@ -45,7 +45,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -61,18 +61,18 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
 
         // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, "Body-less promote POST must not return 415.");
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         AssertEx.Equal("EvalRequired", document.RootElement.GetProperty("status").GetString());
     }
@@ -83,8 +83,8 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
 
         // No eval has run since the suggestion was authored → the gate blocks the promote with EvalRequired.
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId))
@@ -94,11 +94,11 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -108,7 +108,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         // The blocked promote leaves the action Suggested (still inert).
         using var verifyScope = factory.Services.CreateScope();
         var service = verifyScope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId));
         AssertEx.Equal(PlaybookActionState.Suggested, stored.State);
     }
 
@@ -124,10 +124,10 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         };
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        await SeedEnabledActionAsync(factory, agentId).ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
-        await RecordPassingEvalAsync(factory, agentId, actionId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        await SeedEnabledActionAsync(factory, agentId);
+        var actionId = await SeedSuggestionAsync(factory, agentId);
+        await RecordPassingEvalAsync(factory, agentId, actionId);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId))
         {
@@ -136,11 +136,11 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -150,7 +150,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         // The blocked promote leaves the action Suggested (still inert).
         using var verifyScope = factory.Services.CreateScope();
         var service = verifyScope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId));
         AssertEx.Equal(PlaybookActionState.Suggested, stored.State);
     }
 
@@ -166,7 +166,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -180,7 +180,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             "search",
             Priority: 100,
             [Guid.NewGuid()],
-            Confidence: 0.8d)).ConfigureAwait(false);
+            Confidence: 0.8d));
         return created.Id;
     }
 
@@ -194,7 +194,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             TriggerCondition: null,
             "Always cite the tool you used.",
             Scope: null,
-            Priority: 50)).ConfigureAwait(false);
+            Priority: 50));
     }
 
     private static async Task RecordPassingEvalAsync(TestServerWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
@@ -202,18 +202,18 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         using var scope = factory.Services.CreateScope();
         var serviceProvider = scope.ServiceProvider;
         var service = serviceProvider.GetRequiredService<IPlaybookActionService>();
-        var current = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+        var current = AssertEx.NotNull(await service.GetByIdAsync(actionId));
 
         // The eval gate recomputes the fingerprint over the current behaviour-affecting context, so a fabricated
         // passing eval must carry a matching fingerprint (computed from the SAME services/model the gate reads) to reach
         // the cap check rather than being blocked as stale.
-        var agent = AssertEx.NotNull(await serviceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId).ConfigureAwait(false));
-        var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
-        var enabledGolden = await serviceProvider.GetRequiredService<IGoldenConversationStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
+        var agent = AssertEx.NotNull(await serviceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId));
+        var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId);
+        var enabledGolden = await serviceProvider.GetRequiredService<IGoldenConversationStore>().ListEnabledByAgentAsync(agentDefinitionId);
         var modelName = serviceProvider.GetRequiredService<IOptions<PlaybookEvalOptions>>().Value.ModelName;
         // Resolve the model identity through the SAME seam the gate uses so the fabricated fingerprint carries the
         // matching weight-identity token (an uninstalled eval model resolves to the unverified sentinel here).
-        var modelIdentity = await serviceProvider.GetRequiredService<IEvalModelIdentityResolver>().ResolveAsync(modelName).ConfigureAwait(false);
+        var modelIdentity = await serviceProvider.GetRequiredService<IEvalModelIdentityResolver>().ResolveAsync(modelName);
         var fingerprint = PlaybookEvalFingerprint.Compute(current.Id, current.Version, agent.Instructions, enabledActions, enabledGolden, modelName, modelIdentity.Token);
 
         // A passing eval pinned to the action's current Version so the eval gate lets the promote through to the cap check.
@@ -230,6 +230,6 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             [],
             fingerprint);
         var json = JsonSerializer.Serialize(eval, PlaybookEvalResult.SerializerOptions);
-        _ = AssertEx.NotNull(await service.RecordEvalResultAsync(agentDefinitionId, actionId, json).ConfigureAwait(false));
+        _ = AssertEx.NotNull(await service.RecordEvalResultAsync(agentDefinitionId, actionId, json));
     }
 }

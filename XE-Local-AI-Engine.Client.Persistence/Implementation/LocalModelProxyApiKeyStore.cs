@@ -15,8 +15,7 @@ public sealed class LocalModelProxyApiKeyStore(NodeChatDbContext dbContext, Time
     public async Task<LocalModelProxyApiKeyRecord?> GetAsync(CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.LocalModelProxyApiKeys
-                                     .FirstOrDefaultAsync(row => row.Id == LocalModelProxyApiKey.SingletonId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.Id == LocalModelProxyApiKey.SingletonId, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -35,8 +34,7 @@ public sealed class LocalModelProxyApiKeyStore(NodeChatDbContext dbContext, Time
         var storedHash = keyHash.ToArray();
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var entity = await _dbContext.LocalModelProxyApiKeys
-                                     .FirstOrDefaultAsync(row => row.Id == LocalModelProxyApiKey.SingletonId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.Id == LocalModelProxyApiKey.SingletonId, cancellationToken);
 
         if (entity is null)
         {
@@ -61,7 +59,7 @@ public sealed class LocalModelProxyApiKeyStore(NodeChatDbContext dbContext, Time
             entity.LastUsedAtUtc = null;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -69,8 +67,7 @@ public sealed class LocalModelProxyApiKeyStore(NodeChatDbContext dbContext, Time
     public async Task<bool> DeleteAsync(CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.LocalModelProxyApiKeys
-                                     .FirstOrDefaultAsync(row => row.Id == LocalModelProxyApiKey.SingletonId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.Id == LocalModelProxyApiKey.SingletonId, cancellationToken);
 
         if (entity is null)
         {
@@ -78,7 +75,7 @@ public sealed class LocalModelProxyApiKeyStore(NodeChatDbContext dbContext, Time
         }
 
         _ = _dbContext.LocalModelProxyApiKeys.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -89,8 +86,7 @@ public sealed class LocalModelProxyApiKeyStore(NodeChatDbContext dbContext, Time
         // credential through the interceptors on every single authenticated proxy request.
         _ = await _dbContext.LocalModelProxyApiKeys
                             .Where(row => row.Id == LocalModelProxyApiKey.SingletonId)
-                            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, timestampUtc), cancellationToken)
-                            .ConfigureAwait(false);
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, timestampUtc), cancellationToken);
     }
 
     private static LocalModelProxyApiKeyRecord ToRecord(LocalModelProxyApiKey entity)

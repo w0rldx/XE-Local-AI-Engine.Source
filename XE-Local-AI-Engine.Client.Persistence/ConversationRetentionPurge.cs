@@ -24,7 +24,7 @@ public static class ConversationRetentionPurge
     {
         ArgumentNullException.ThrowIfNull(dbContext);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         // Re-evaluate eligibility against the committed row inside the transaction. The predicate mirrors the candidate
         // selection exactly (soft-purged OR aged past the cutoff); a row touched after selection now carries a newer
@@ -33,15 +33,14 @@ public static class ConversationRetentionPurge
                                            .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE conversation_id = {0} AND (purged <> 0 OR last_seen_utc <= {1})",
                                                conversationId,
                                                cutoffUtc)
-                                           .AnyAsync(cancellationToken)
-                                           .ConfigureAwait(false);
+                                           .AnyAsync(cancellationToken);
         if (!stillEligible)
         {
             return false;
         }
 
-        await ConversationFootprintPurge.DeleteAsync(dbContext, conversationId, cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await ConversationFootprintPurge.DeleteAsync(dbContext, conversationId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 }

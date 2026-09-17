@@ -13,13 +13,13 @@ public sealed class AddModelProviderMapRevisionMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsRevisionDefaultedToLegacy()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("model-provider-map-revision.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("model-provider-map-revision.sqlite");
 
-        var columns = await probe.ColumnsAsync("model_provider_map").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("model_provider_map");
 
         AssertEx.True(columns.Contains("revision"), "model_provider_map must carry the revision column.");
 
-        var declaredDefault = await probe.ColumnDefaultAsync("model_provider_map", "revision").ConfigureAwait(false);
+        var declaredDefault = await probe.ColumnDefaultAsync("model_provider_map", "revision");
         AssertEx.True(declaredDefault?.Contains("legacy", StringComparison.Ordinal) == true,
             $"Existing rows must be stamped 'legacy'; the declared default is '{declaredDefault}'.");
     }

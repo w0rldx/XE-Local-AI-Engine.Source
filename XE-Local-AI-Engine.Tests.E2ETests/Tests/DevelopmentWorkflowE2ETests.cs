@@ -33,21 +33,21 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
         await Expect(accept).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
         {
             Timeout = 10_000
-        }).ConfigureAwait(false);
+        });
 
         // Continue stays disabled until the checkbox is ticked; checking it first is what makes the click land.
-        await Page.GetByTestId("development-consent-checkbox").CheckAsync().ConfigureAwait(false);
-        await accept.ClickAsync().ConfigureAwait(false);
+        await Page.GetByTestId("development-consent-checkbox").CheckAsync();
+        await accept.ClickAsync();
 
         // The gate is gone AND the page behind it rendered — the two halves of "acknowledging unblocks".
         await Expect(accept).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
         {
             Timeout = 10_000
-        }).ConfigureAwait(false);
+        });
         await Expect(Page.GetByTestId("development-open-register-repository")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
         {
             Timeout = 10_000
-        }).ConfigureAwait(false);
+        });
     }
 
     /// <summary>
@@ -64,24 +64,24 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
     {
         var alias = "e2e-" + Path.GetFileName(repositoryRoot);
 
-        await Page.GetByTestId("development-open-register-repository").ClickAsync().ConfigureAwait(false);
+        await Page.GetByTestId("development-open-register-repository").ClickAsync();
 
         var aliasInput = Page.GetByTestId("development-register-alias");
         await Expect(aliasInput).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
         {
             Timeout = 10_000
-        }).ConfigureAwait(false);
+        });
 
-        await aliasInput.FillAsync(alias).ConfigureAwait(false);
-        await Page.GetByTestId("development-register-path").FillAsync(repositoryRoot).ConfigureAwait(false);
-        await Page.GetByTestId("development-register-repository").ClickAsync().ConfigureAwait(false);
+        await aliasInput.FillAsync(alias);
+        await Page.GetByTestId("development-register-path").FillAsync(repositoryRoot);
+        await Page.GetByTestId("development-register-repository").ClickAsync();
 
         // The dialog closes and the picker shows the newly registered alias only once the POST succeeded.
         await Expect(Page.GetByTestId("development-repository-select"))
               .ToHaveValueAsync(alias, new LocatorAssertionsToHaveValueOptions
               {
                   Timeout = 10_000
-              }).ConfigureAwait(false);
+              });
     }
 
     [Test]
@@ -90,35 +90,34 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
         var repositoryRoot = Path.Combine(Path.GetTempPath(), "xe-development-e2e-" + Guid.NewGuid().ToString("N"));
         try
         {
-            await CreateRepositoryAsync(repositoryRoot).ConfigureAwait(false);
+            await CreateRepositoryAsync(repositoryRoot);
             await Page.GotoAsync($"{NodeAppUrl}/development", new PageGotoOptions
             {
                 WaitUntil = WaitUntilState.NetworkIdle
-            }).ConfigureAwait(false);
+            });
 
-            await AcknowledgeDevelopmentConsentAsync().ConfigureAwait(false);
+            await AcknowledgeDevelopmentConsentAsync();
 
             await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
                 Name = "Development Mode"
-            })).ToBeVisibleAsync().ConfigureAwait(false);
+            })).ToBeVisibleAsync();
 
             // The project form no longer takes a free-text repository root: d88237b8 ("Enable repository-bound
             // Development Mode by default") replaced it with a Select over repositories registered up front, so
             // the repository has to be registered through the dialog before it can be picked.
-            await RegisterRepositoryAsync(repositoryRoot).ConfigureAwait(false);
+            await RegisterRepositoryAsync(repositoryRoot);
 
-            await Page.GetByLabel("Project objective").FillAsync("Exercise the complete local Development workflow").ConfigureAwait(false);
-            await Page.GetByLabel("Initial task title").FillAsync("Add the deterministic feature file").ConfigureAwait(false);
-            await Page.GetByLabel("Requirements").FillAsync("Create feature.txt with the approved deterministic content.").ConfigureAwait(false);
-            await Page.GetByLabel("Acceptance criteria (JSON)").FillAsync("[\"feature.txt contains the approved content\"]")
-                      .ConfigureAwait(false);
-            await Page.GetByLabel("Coder model ID").FillAsync("qwen3.5:0.8b").ConfigureAwait(false);
-            await Page.GetByLabel("Reviewer model ID").FillAsync("qwen3.5:0.8b").ConfigureAwait(false);
+            await Page.GetByLabel("Project objective").FillAsync("Exercise the complete local Development workflow");
+            await Page.GetByLabel("Initial task title").FillAsync("Add the deterministic feature file");
+            await Page.GetByLabel("Requirements").FillAsync("Create feature.txt with the approved deterministic content.");
+            await Page.GetByLabel("Acceptance criteria (JSON)").FillAsync("[\"feature.txt contains the approved content\"]");
+            await Page.GetByLabel("Coder model ID").FillAsync("qwen3.5:0.8b");
+            await Page.GetByLabel("Reviewer model ID").FillAsync("qwen3.5:0.8b");
             // Target the checkbox by test id: the acknowledgement copy is reworded with the surface (it now reads
             // "I trust the selected repository to execute Development commands with my host-user permissions."),
             // and a label-text locator turns every such rewording into a 30 s timeout with no useful message.
-            await Page.GetByTestId("development-trust-acknowledgement").CheckAsync().ConfigureAwait(false);
+            await Page.GetByTestId("development-trust-acknowledgement").CheckAsync();
 
             // Wait for the command-profile confirmation and go through it, rather than racing it.
             //
@@ -136,61 +135,61 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             await Expect(profileConfirmation).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 30_000
-            }).ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-profile-id")).ToContainTextAsync("generic-git").ConfigureAwait(false);
-            await Page.GetByTestId("development-profile-confirm").CheckAsync().ConfigureAwait(false);
+            });
+            await Expect(Page.GetByTestId("development-profile-id")).ToContainTextAsync("generic-git");
+            await Page.GetByTestId("development-profile-confirm").CheckAsync();
 
-            await Page.GetByTestId("development-create-project").ClickAsync().ConfigureAwait(false);
+            await Page.GetByTestId("development-create-project").ClickAsync();
 
             var detail = Page.GetByTestId("development-project-detail");
             await Expect(detail).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 10_000
-            }).ConfigureAwait(false);
+            });
 
             var nextAction = Page.GetByTestId("development-start-next");
-            await nextAction.ClickAsync().ConfigureAwait(false);
+            await nextAction.ClickAsync();
             await Expect(Page.GetByTestId("development-live-panel")).ToContainTextAsync("Development E2E live output",
                 new LocatorAssertionsToContainTextOptions
                 {
                     Timeout = 10_000
-                }).ConfigureAwait(false);
+                });
             await Expect(detail.GetByText("InProgress", new LocatorGetByTextOptions
             {
                 Exact = true
             }).First).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 15_000
-            }).ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-apply-panel")).ToHaveCountAsync(0).ConfigureAwait(false);
+            });
+            await Expect(Page.GetByTestId("development-apply-panel")).ToHaveCountAsync(0);
 
             await Expect(nextAction).ToHaveTextAsync("Run deterministic validation", new LocatorAssertionsToHaveTextOptions
             {
                 Timeout = 10_000
-            }).ConfigureAwait(false);
-            await nextAction.ClickAsync().ConfigureAwait(false);
+            });
+            await nextAction.ClickAsync();
             await Expect(nextAction).ToHaveTextAsync("Start independent review", new LocatorAssertionsToHaveTextOptions
             {
                 Timeout = 15_000
-            }).ConfigureAwait(false);
-            await nextAction.ClickAsync().ConfigureAwait(false);
+            });
+            await nextAction.ClickAsync();
 
             var applyPanel = Page.GetByTestId("development-apply-panel");
             await Expect(applyPanel).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 15_000
-            }).ConfigureAwait(false);
+            });
             var applyButton = Page.GetByTestId("development-apply-patch");
-            await Expect(applyButton).ToBeDisabledAsync().ConfigureAwait(false);
+            await Expect(applyButton).ToBeDisabledAsync();
 
-            await Page.GetByTestId("development-preview-patch").ClickAsync().ConfigureAwait(false);
+            await Page.GetByTestId("development-preview-patch").ClickAsync();
             // Monaco applies the label to its empty native edit context, not the rendered diff.
             await Expect(Page.GetByTestId("development-patch-preview")).ToContainTextAsync("feature.txt", new LocatorAssertionsToContainTextOptions
             {
                 Timeout = 10_000
-            }).ConfigureAwait(false);
-            await Expect(applyButton).ToBeEnabledAsync().ConfigureAwait(false);
-            await applyButton.ClickAsync().ConfigureAwait(false);
+            });
+            await Expect(applyButton).ToBeEnabledAsync();
+            await applyButton.ClickAsync();
 
             await Expect(detail.GetByText("Completed", new LocatorGetByTextOptions
             {
@@ -198,15 +197,15 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             }).First).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 10_000
-            }).ConfigureAwait(false);
-            await Assert.That(await File.ReadAllTextAsync(Path.Combine(repositoryRoot, "feature.txt")).ConfigureAwait(false))
+            });
+            await Assert.That(await File.ReadAllTextAsync(Path.Combine(repositoryRoot, "feature.txt")))
                         .IsEqualTo("implemented by Development E2E\n");
 
             await Page.GotoAsync($"{NodeAppUrl}/chat", new PageGotoOptions
             {
                 WaitUntil = WaitUntilState.NetworkIdle
-            }).ConfigureAwait(false);
-            await Expect(Page.GetByPlaceholder("Type your message")).ToBeVisibleAsync().ConfigureAwait(false);
+            });
+            await Expect(Page.GetByPlaceholder("Type your message")).ToBeVisibleAsync();
         }
         finally
         {
@@ -237,23 +236,23 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
         var repositoryRoot = Path.Combine(Path.GetTempPath(), "xe-development-e2e-dotnet-" + Guid.NewGuid().ToString("N"));
         try
         {
-            await CreateDotnetRepositoryAsync(repositoryRoot).ConfigureAwait(false);
+            await CreateDotnetRepositoryAsync(repositoryRoot);
             await Page.GotoAsync($"{NodeAppUrl}/development", new PageGotoOptions
             {
                 WaitUntil = WaitUntilState.NetworkIdle
-            }).ConfigureAwait(false);
+            });
 
-            await AcknowledgeDevelopmentConsentAsync().ConfigureAwait(false);
+            await AcknowledgeDevelopmentConsentAsync();
 
-            await RegisterRepositoryAsync(repositoryRoot).ConfigureAwait(false);
+            await RegisterRepositoryAsync(repositoryRoot);
 
-            await Page.GetByLabel("Project objective").FillAsync("Surface deterministic test counts in the attempt view").ConfigureAwait(false);
-            await Page.GetByLabel("Initial task title").FillAsync("Add the deterministic feature file").ConfigureAwait(false);
-            await Page.GetByLabel("Requirements").FillAsync("Create feature.txt without disturbing the existing suite.").ConfigureAwait(false);
-            await Page.GetByLabel("Acceptance criteria (JSON)").FillAsync("[\"the existing suite still passes\"]").ConfigureAwait(false);
-            await Page.GetByLabel("Coder model ID").FillAsync("qwen3.5:0.8b").ConfigureAwait(false);
-            await Page.GetByLabel("Reviewer model ID").FillAsync("qwen3.5:0.8b").ConfigureAwait(false);
-            await Page.GetByTestId("development-trust-acknowledgement").CheckAsync().ConfigureAwait(false);
+            await Page.GetByLabel("Project objective").FillAsync("Surface deterministic test counts in the attempt view");
+            await Page.GetByLabel("Initial task title").FillAsync("Add the deterministic feature file");
+            await Page.GetByLabel("Requirements").FillAsync("Create feature.txt without disturbing the existing suite.");
+            await Page.GetByLabel("Acceptance criteria (JSON)").FillAsync("[\"the existing suite still passes\"]");
+            await Page.GetByLabel("Coder model ID").FillAsync("qwen3.5:0.8b");
+            await Page.GetByLabel("Reviewer model ID").FillAsync("qwen3.5:0.8b");
+            await Page.GetByTestId("development-trust-acknowledgement").CheckAsync();
 
             // A positive assertion, not a wait: if detection ever stopped resolving a .slnx repository to the .NET
             // profile, this test would still go green against a gate that ran only the whitespace check — proving
@@ -261,23 +260,23 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             await Expect(Page.GetByTestId("development-profile-confirmation")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 30_000
-            }).ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-profile-id")).ToContainTextAsync("dotnet-slnx").ConfigureAwait(false);
-            await Page.GetByTestId("development-profile-confirm").CheckAsync().ConfigureAwait(false);
-            await Page.GetByTestId("development-create-project").ClickAsync().ConfigureAwait(false);
+            });
+            await Expect(Page.GetByTestId("development-profile-id")).ToContainTextAsync("dotnet-slnx");
+            await Page.GetByTestId("development-profile-confirm").CheckAsync();
+            await Page.GetByTestId("development-create-project").ClickAsync();
 
             await Expect(Page.GetByTestId("development-project-detail")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 10_000
-            }).ConfigureAwait(false);
+            });
 
             var nextAction = Page.GetByTestId("development-start-next");
-            await nextAction.ClickAsync().ConfigureAwait(false);
+            await nextAction.ClickAsync();
             await Expect(nextAction).ToHaveTextAsync("Run deterministic validation", new LocatorAssertionsToHaveTextOptions
             {
                 Timeout = 30_000
-            }).ConfigureAwait(false);
-            await nextAction.ClickAsync().ConfigureAwait(false);
+            });
+            await nextAction.ClickAsync();
 
             // Generous, because this validation genuinely restores, builds and tests a .NET solution inside the
             // sandbox rather than running one git command. Reaching the review action is the signal that all four
@@ -285,12 +284,12 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             await Expect(nextAction).ToHaveTextAsync("Start independent review", new LocatorAssertionsToHaveTextOptions
             {
                 Timeout = ValidationTimeoutMilliseconds
-            }).ConfigureAwait(false);
+            });
 
             await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
             {
                 Name = "Validation"
-            }).ClickAsync().ConfigureAwait(false);
+            }).ClickAsync();
 
             // The criterion itself. The counts come from the fixture's single passing test, so they are exact:
             // one discovered, one executed, one passed, none failed.
@@ -298,21 +297,21 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             await Expect(counts).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 30_000
-            }).ConfigureAwait(false);
+            });
             // The VALUES, not just the labels. Asserting only that a counts grid rendered would pass against four
             // zeroes — the false green this assertion prevents. The fixture has exactly one
             // test and it passes, so every number here is exact.
-            await Expect(Page.GetByTestId("development-validation-test-discovered")).ToHaveTextAsync("1").ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-validation-test-executed")).ToHaveTextAsync("1").ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-validation-test-passed")).ToHaveTextAsync("1").ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-validation-test-failed")).ToHaveTextAsync("0").ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-validation-test-discovered")).ToHaveTextAsync("1");
+            await Expect(Page.GetByTestId("development-validation-test-executed")).ToHaveTextAsync("1");
+            await Expect(Page.GetByTestId("development-validation-test-passed")).ToHaveTextAsync("1");
+            await Expect(Page.GetByTestId("development-validation-test-failed")).ToHaveTextAsync("0");
 
             // A parse failure renders instead of the counts, so its absence is part of the evidence that these
             // numbers were actually read rather than defaulted.
-            await Expect(Page.GetByTestId("development-validation-test-parse-failure")).ToHaveCountAsync(0).ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-validation-no-tests")).ToHaveCountAsync(0).ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-validation-failure")).ToHaveCountAsync(0).ConfigureAwait(false);
-            await Expect(Page.GetByTestId("development-validation-result")).ToContainTextAsync("Validation passed").ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-validation-test-parse-failure")).ToHaveCountAsync(0);
+            await Expect(Page.GetByTestId("development-validation-no-tests")).ToHaveCountAsync(0);
+            await Expect(Page.GetByTestId("development-validation-failure")).ToHaveCountAsync(0);
+            await Expect(Page.GetByTestId("development-validation-result")).ToContainTextAsync("Validation passed");
         }
         finally
         {
@@ -330,9 +329,9 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
     private static async Task CreateRepositoryAsync(string repositoryRoot)
     {
         Directory.CreateDirectory(repositoryRoot);
-        await File.WriteAllTextAsync(Path.Combine(repositoryRoot, "README.md"), "Development E2E fixture\n").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, "init", "--initial-branch=main").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, "add", "README.md").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(repositoryRoot, "README.md"), "Development E2E fixture\n");
+        await RunGitAsync(repositoryRoot, "init", "--initial-branch=main");
+        await RunGitAsync(repositoryRoot, "add", "README.md");
         await RunGitAsync(repositoryRoot,
                 "-c",
                 "user.name=Development E2E",
@@ -340,8 +339,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                 "user.email=development-e2e@example.test",
                 "commit",
                 "-m",
-                "initial fixture")
-            .ConfigureAwait(false);
+                "initial fixture");
     }
 
     /// <summary>
@@ -372,7 +370,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
               "test": { "runner": "Microsoft.Testing.Platform" }
             }
 
-            """).ConfigureAwait(false);
+            """);
 
         // Restore must succeed with no network: DevelopmentWorkspaceTools points NUGET_PACKAGES at a fresh
         // per-session directory, so the ambient cache is invisible. Clearing the sources and declaring the host
@@ -391,7 +389,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                </fallbackPackageFolders>
              </configuration>
 
-             """).ConfigureAwait(false);
+             """);
 
         // Build output must be ignored: the patch is exported with `git add -A`, so an un-ignored bin/ or obj/
         // produced by validation would change the subject hash between validation and review and block apply for a
@@ -403,7 +401,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             obj/
             TestResults/
 
-            """).ConfigureAwait(false);
+            """);
 
         await WriteAsync(repositoryRoot,
             "SyntheticFixture.slnx",
@@ -413,7 +411,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                 <Project Path="tests/Probe/Probe.csproj"/>
             </Solution>
 
-            """).ConfigureAwait(false);
+            """);
 
         await WriteAsync(repositoryRoot,
             "src/Lib/Lib.csproj",
@@ -426,7 +424,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
               </PropertyGroup>
             </Project>
 
-            """).ConfigureAwait(false);
+            """);
 
         await WriteAsync(repositoryRoot,
             "src/Lib/Feature.cs",
@@ -438,7 +436,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                 public static string Value() => "base";
             }
 
-            """).ConfigureAwait(false);
+            """);
 
         await WriteAsync(repositoryRoot,
             "tests/Probe/Probe.csproj",
@@ -456,7 +454,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                </ItemGroup>
              </Project>
 
-             """).ConfigureAwait(false);
+             """);
 
         // Exactly one test, and it passes at HEAD. The assertion in the test above depends on that count.
         await WriteAsync(repositoryRoot,
@@ -471,10 +469,10 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                     await Assert.That(Lib.Feature.Value()).IsEqualTo("base");
             }
 
-            """).ConfigureAwait(false);
+            """);
 
-        await RunGitAsync(repositoryRoot, "init", "--initial-branch=main").ConfigureAwait(false);
-        await RunGitAsync(repositoryRoot, "add", "-A", "--", ".").ConfigureAwait(false);
+        await RunGitAsync(repositoryRoot, "init", "--initial-branch=main");
+        await RunGitAsync(repositoryRoot, "add", "-A", "--", ".");
         await RunGitAsync(repositoryRoot,
                 "-c",
                 "user.name=Development E2E",
@@ -482,8 +480,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                 "user.email=development-e2e@example.test",
                 "commit",
                 "-m",
-                "synthetic dotnet fixture")
-            .ConfigureAwait(false);
+                "synthetic dotnet fixture");
     }
 
     /// <summary>
@@ -528,7 +525,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
     {
         var path = Path.Combine(repositoryRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, content).ConfigureAwait(false);
+        await File.WriteAllTextAsync(path, content);
     }
 
     private static async Task RunGitAsync(string workingDirectory, params string[] arguments)
@@ -553,9 +550,9 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
         process.Start();
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        var output = await standardOutput.ConfigureAwait(false);
-        var error = await standardError.ConfigureAwait(false);
+        await process.WaitForExitAsync();
+        var output = await standardOutput;
+        var error = await standardError;
         await Assert.That(process.ExitCode)
                     .IsEqualTo(0)
                     .Because($"git {string.Join(' ', arguments)} failed: {output}{error}");

@@ -52,7 +52,7 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
         {
             // Velopack 1.2.0's CheckForUpdatesAsync is parameterless — it takes no CancellationToken, so `ct` cannot be
             // flowed into the check itself (do not "fix" this by passing ct; the overload does not exist).
-            var updateInfo = await _updateManager.CheckForUpdatesAsync().ConfigureAwait(false);
+            var updateInfo = await _updateManager.CheckForUpdatesAsync();
             if (updateInfo is null)
             {
                 return new VelopackCheckResult(VelopackCheckOutcome.UpToDate, AvailableVersion: null);
@@ -81,13 +81,13 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
             return false;
         }
 
-        var updateInfo = await _updateManager.CheckForUpdatesAsync().ConfigureAwait(false);
+        var updateInfo = await _updateManager.CheckForUpdatesAsync();
         if (updateInfo is null)
         {
             return false;
         }
 
-        await _updateManager.DownloadUpdatesAsync(updateInfo, progress: null, ct).ConfigureAwait(false);
+        await _updateManager.DownloadUpdatesAsync(updateInfo, progress: null, ct);
 
         // Start the updater in wait-for-exit mode, but do NOT terminate this host here. ApplyUpdatesAndRestart exits the
         // process synchronously in Velopack 1.2.0, which aborts the HTTP response that tells React to begin restart

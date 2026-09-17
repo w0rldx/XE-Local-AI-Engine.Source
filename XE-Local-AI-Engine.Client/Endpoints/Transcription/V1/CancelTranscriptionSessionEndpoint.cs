@@ -31,13 +31,13 @@ public sealed class CancelTranscriptionSessionEndpoint(ITranscriptionService ses
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var cancelled = await _sessions.CancelAsync(req.SessionId, ct).ConfigureAwait(false);
+        var cancelled = await _sessions.CancelAsync(req.SessionId, ct);
         if (!cancelled)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.NoContentAsync(ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct);
     }
 }

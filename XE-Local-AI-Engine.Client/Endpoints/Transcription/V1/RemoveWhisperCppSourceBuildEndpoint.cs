@@ -35,13 +35,12 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrat
 
         try
         {
-            var result = await _whisperRuntime.RemoveAsync(ct).ConfigureAwait(false);
+            var result = await _whisperRuntime.RemoveAsync(ct);
             if (result.Outcome == WhisperCppSourceBuildRemoveOutcome.RuntimeBusy)
             {
                 await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy(
                               "Wait for active transcriptions and transcription-runtime processes to finish before removing the managed runtime.",
-                              result.Activity ?? _whisperRuntime.GetActivitySnapshot()))
-                          .ConfigureAwait(false);
+                              result.Activity ?? _whisperRuntime.GetActivitySnapshot()));
                 return;
             }
 
@@ -52,7 +51,7 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrat
                 throw new InvalidOperationException($"Unknown whisper.cpp source-build remove outcome: {result.Outcome}.");
             }
 
-            await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+            await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct);
         }
         catch (WhisperRuntimeException exception)
         {
@@ -61,8 +60,7 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrat
             // sanitized, so it is safe to surface.
             await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.Blocked("source-build-error",
                           exception.Message,
-                          _whisperRuntime.GetActivitySnapshot()))
-                      .ConfigureAwait(false);
+                          _whisperRuntime.GetActivitySnapshot()));
         }
     }
 }

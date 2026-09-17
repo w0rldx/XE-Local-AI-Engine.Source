@@ -53,7 +53,7 @@ internal sealed class ModelCapabilityProber
     /// <summary>Returns the installed model names (discovered + configured fallbacks), using the inventory cache.</summary>
     public async Task<IReadOnlyList<string>> GetInstalledModelNamesAsync(CancellationToken cancellationToken)
     {
-        var result = await GetInstalledModelInventoryAsync(cancellationToken).ConfigureAwait(false);
+        var result = await GetInstalledModelInventoryAsync(cancellationToken);
         return result.Models.Select(model => model.Name).ToArray();
     }
 
@@ -70,7 +70,7 @@ internal sealed class ModelCapabilityProber
 
         try
         {
-            var models = await _modelCapabilityClient.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+            var models = await _modelCapabilityClient.ListInstalledModelsAsync(cancellationToken);
             var discoveredModels = models
                                    .Select(model => new
                                    {
@@ -118,7 +118,7 @@ internal sealed class ModelCapabilityProber
         foreach (var installedModel in installedModels)
         {
             var maxContextTokens = installedModel.IsDiscovered && !string.IsNullOrWhiteSpace(installedModel.Digest)
-                ? await GetMaxContextTokensAsync(installedModel, cancellationToken).ConfigureAwait(false)
+                ? await GetMaxContextTokensAsync(installedModel, cancellationToken)
                 : null;
 
             metadata.Add(new ClientModelMetadata
@@ -139,13 +139,13 @@ internal sealed class ModelCapabilityProber
 
         try
         {
-            if (!await _modelCapabilityClient.IsRuntimeReachableAsync(cancellationToken).ConfigureAwait(false))
+            if (!await _modelCapabilityClient.IsRuntimeReachableAsync(cancellationToken))
             {
                 diagnostics.Add(DiagnosticOllamaUnreachable);
                 return new OllamaRuntimeStatus(Reachable: false, Version: null, diagnostics);
             }
 
-            var version = await _modelCapabilityClient.GetRuntimeVersionAsync(cancellationToken).ConfigureAwait(false);
+            var version = await _modelCapabilityClient.GetRuntimeVersionAsync(cancellationToken);
             return new OllamaRuntimeStatus(Reachable: true, NormalizeModelName(version), diagnostics);
         }
         catch (HttpRequestException exception)
@@ -163,7 +163,7 @@ internal sealed class ModelCapabilityProber
 
         try
         {
-            var runningModels = await _modelCapabilityClient.ListRunningModelsAsync(cancellationToken).ConfigureAwait(false);
+            var runningModels = await _modelCapabilityClient.ListRunningModelsAsync(cancellationToken);
             var active = runningModels.Count > 0 ? runningModels[0] : null;
             if (active is null)
             {
@@ -198,7 +198,7 @@ internal sealed class ModelCapabilityProber
 
         try
         {
-            var details = await _modelCapabilityClient.GetModelDetailAsync(installedModel.Name, cancellationToken).ConfigureAwait(false);
+            var details = await _modelCapabilityClient.GetModelDetailAsync(installedModel.Name, cancellationToken);
             if (details.MaxContextTokens is null)
             {
                 _logger.LogWarning("Ollama /api/show for model '{ModelName}' succeeded but did not include a supported *.context_length model_info key.",

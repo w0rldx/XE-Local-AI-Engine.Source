@@ -19,13 +19,13 @@ internal sealed class ModelUnloadCoordinator(
 
     public async Task<bool> UnloadAsync(string modelName, CancellationToken cancellationToken = default)
     {
-        var unloaded = await EjectEveryRoleAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var unloaded = await EjectEveryRoleAsync(modelName, cancellationToken);
 
         // The SAME gate AddOllamaRuntime uses to decide whether to register the Ollama provider (enabled unless
         // explicitly false). A node with the runtime switched off has no daemon to ask.
         if (_configuration.GetValue(OllamaRuntimeGate.RuntimeEnabledConfigurationKey, defaultValue: true))
         {
-            await UnloadFromOllamaAsync(modelName, cancellationToken).ConfigureAwait(false);
+            await UnloadFromOllamaAsync(modelName, cancellationToken);
         }
 
         return unloaded;
@@ -43,7 +43,7 @@ internal sealed class ModelUnloadCoordinator(
         var unloaded = true;
         foreach (var role in Enum.GetValues<ModelRole>())
         {
-            var outcome = await _supervisor.EjectAsync(modelName, role, force: false, cancellationToken).ConfigureAwait(false);
+            var outcome = await _supervisor.EjectAsync(modelName, role, force: false, cancellationToken);
             unloaded &= outcome is not LlamaServerEjectOutcome.TimedOutStillBusy;
         }
 
@@ -54,7 +54,7 @@ internal sealed class ModelUnloadCoordinator(
     {
         try
         {
-            await _modelService.UnloadModelAsync(modelName, cancellationToken).ConfigureAwait(false);
+            await _modelService.UnloadModelAsync(modelName, cancellationToken);
         }
         catch (HttpRequestException exception) when (exception.StatusCode is null)
         {

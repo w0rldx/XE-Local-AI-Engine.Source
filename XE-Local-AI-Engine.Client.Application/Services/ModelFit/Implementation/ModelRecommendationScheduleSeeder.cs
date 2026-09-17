@@ -59,7 +59,7 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var managementService = scope.ServiceProvider.GetRequiredService<IScheduledJobManagementService>();
 
-            var jobs = await managementService.ListJobsAsync(includeDeleted: false, cancellationToken).ConfigureAwait(false);
+            var jobs = await managementService.ListJobsAsync(includeDeleted: false, cancellationToken);
             if (jobs.Any(job => job.TemplateId == ModelRecommendationCheckHandler.TemplateIdValue))
             {
                 // A definition for this template already exists — nothing to seed (idempotent).
@@ -82,7 +82,7 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
                 SeedParametersJson);
 
             // CreateJobAsync persists the definition enabled, then registers the durable Manual Quartz job (no trigger).
-            var created = await managementService.CreateJobAsync(input, cancellationToken).ConfigureAwait(false);
+            var created = await managementService.CreateJobAsync(input, cancellationToken);
 
             _logger.LogInformation("Seeded on-demand {TemplateId} schedule {ScheduledJobId} (Manual, enabled).",
                 ModelRecommendationCheckHandler.TemplateIdValue,

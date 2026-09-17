@@ -128,7 +128,7 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         HttpListenerContext context;
         try
         {
-            context = await pendingContext.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+            context = await pendingContext.WaitAsync(timeoutCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -141,7 +141,7 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         var error = query["error"];
         var errorDescription = query["error_description"];
 
-        await WriteStaticResponseAsync(context.Response, cancellationToken).ConfigureAwait(false);
+        await WriteStaticResponseAsync(context.Response, cancellationToken);
 
         if (!string.Equals(state, expectedState, StringComparison.Ordinal))
         {
@@ -163,7 +163,7 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         response.ContentLength64 = buffer.Length;
         try
         {
-            await response.OutputStream.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
+            await response.OutputStream.WriteAsync(buffer, cancellationToken);
         }
         finally
         {

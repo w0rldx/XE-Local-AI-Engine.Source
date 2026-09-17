@@ -37,7 +37,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", content)],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         AssertEx.True(client.Requests.Count > 1, "An individually oversized message must be split across fold requests.");
@@ -77,7 +77,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", new string('a', 1400))],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.Equal("done", result);
         AssertEx.True(client.Requests.Count > 1);
@@ -96,7 +96,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", content)],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         var fragments = client.Requests.SelectMany(static request => PromptContents(request)).ToList();
@@ -116,7 +116,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", new string('a', 4000))],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         AssertEx.True(client.Options.Count > 1, "The oversized message must be folded in more than one pass.");
@@ -132,7 +132,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", new string('a', 4000))],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Options);
@@ -150,7 +150,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", new string('a', 6000))],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.Null(result, "A fold that yields no text must abort the summarization rather than return partial coverage.");
         AssertEx.Equal(expected: 2, client.Requests.Count, "No further fold may be attempted once one returned nothing.");
@@ -165,7 +165,7 @@ public sealed class ConversationSummarizerBoundaryTests
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", new string('a', 4000))],
             "model",
-            SupportsThinking: true)).ConfigureAwait(false);
+            SupportsThinking: true));
 
         AssertEx.NotNull(result);
         AssertEx.True(client.Options.Count > 1, "The oversized message must be folded in more than one pass.");
@@ -189,7 +189,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", new string('a', 4000))],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Options);
@@ -211,7 +211,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", han)],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Requests);
@@ -230,7 +230,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", "the node supervises llama-server")],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Requests);
@@ -263,7 +263,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", content)],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         AssertEx.Equal(expected: 1, client.Requests.Count,
@@ -281,7 +281,7 @@ public sealed class ConversationSummarizerBoundaryTests
 
         var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput(null,
             [new ConversationSummarizerMessage("user", "the node supervises llama-server")],
-            "model")).ConfigureAwait(false);
+            "model"));
 
         AssertEx.NotNull(result);
         AssertEx.NotEmpty(client.Requests);
@@ -342,7 +342,7 @@ public sealed class ConversationSummarizerBoundaryTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 

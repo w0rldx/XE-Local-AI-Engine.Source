@@ -53,7 +53,7 @@ public static class RecommendedRerankerModel
     {
         ArgumentNullException.ThrowIfNull(modelStore);
 
-        var installed = await modelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await modelStore.ListInstalledModelsAsync(cancellationToken);
         return installed.FirstOrDefault(model => Matches(model.ModelName));
     }
 

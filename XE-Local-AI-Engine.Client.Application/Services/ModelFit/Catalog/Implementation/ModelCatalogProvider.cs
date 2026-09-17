@@ -80,7 +80,7 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
         bool force,
         CancellationToken cancellationToken)
     {
-        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _refreshGate.WaitAsync(cancellationToken);
         try
         {
             // Re-check under the lock: a concurrent (TTL-triggered) caller may already have refreshed while this one
@@ -100,12 +100,12 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
             string raw;
             try
             {
-                raw = await client.GetStringAsync(refreshUrl, fetchCts.Token).ConfigureAwait(false);
+                raw = await client.GetStringAsync(refreshUrl, fetchCts.Token);
             }
             catch (Exception exception) when ((exception is HttpRequestException or TaskCanceledException or OperationCanceledException) && !cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning(exception, "Remote model catalog fetch failed; falling back to last-good/bundled.");
-                return await FallbackToLastGoodAsync(cancellationToken).ConfigureAwait(false);
+                return await FallbackToLastGoodAsync(cancellationToken);
             }
 
             var validation = ModelCatalogValidator.Validate(raw);
@@ -114,13 +114,13 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
                 _logger.LogWarning("Remote model catalog failed validation ({ErrorCount} error(s)); falling back to last-good/bundled. First error: {FirstError}",
                     validation.Errors.Count,
                     validation.Errors.Count > 0 ? validation.Errors[0] : "(none)");
-                return await FallbackToLastGoodAsync(cancellationToken).ConfigureAwait(false);
+                return await FallbackToLastGoodAsync(cancellationToken);
             }
 
             var snapshot = new ModelCatalogSnapshot(validation.Document!, ModelCatalogSource.Remote, attemptAtUtc, refreshUrl);
             _current = snapshot;
 
-            await _cacheStore.SaveAsync(new StoredModelCatalogCache(raw, attemptAtUtc, refreshUrl), cancellationToken).ConfigureAwait(false);
+            await _cacheStore.SaveAsync(new StoredModelCatalogCache(raw, attemptAtUtc, refreshUrl), cancellationToken);
             return snapshot;
         }
         finally
@@ -139,7 +139,7 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
             return _current;
         }
 
-        var stored = await _cacheStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await _cacheStore.LoadAsync(cancellationToken);
         if (stored is null)
         {
             return _current;

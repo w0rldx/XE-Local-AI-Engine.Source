@@ -20,22 +20,22 @@ public sealed class DeleteNodeChatConversationEndpoint(
 
     public override async Task HandleAsync(DeleteNodeChatConversationRequest req, CancellationToken ct)
     {
-        var existing = await _chatPersistence.GetConversationAsync(req.ConversationId, ct).ConfigureAwait(false);
+        var existing = await _chatPersistence.GetConversationAsync(req.ConversationId, ct);
         if (existing is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         var deletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var result = await _chatPersistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(req.ConversationId, deletedAtUtc, req.PurgeImmediately),
-            ct).ConfigureAwait(false);
+            ct);
 
         await Send.OkAsync(new NodeChatDeleteConversationResponse
         {
             ConversationId = result.ConversationId,
             CancelRequested = result.CancelRequested,
             Purged = result.Purged
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

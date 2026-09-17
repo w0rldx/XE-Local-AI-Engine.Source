@@ -41,7 +41,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
         };
 
         _ = _dbContext.McpServers.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -53,8 +53,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
         // Load tracked (not AsNoTracking) so SaveChanges re-encrypts; the materialization interceptor has already
         // decrypted ArgumentsJson/EnvJson/Description on load, so the comparison below is plaintext-vs-plaintext.
         var entity = await _dbContext.McpServers
-                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -95,7 +94,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
             entity.Version++;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -103,8 +102,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
     public async Task<McpServerRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.McpServers
-                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -123,7 +121,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
             entity.Version++;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToRecord(entity);
     }
@@ -131,8 +129,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.McpServers
-                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken);
 
         if (entity is null)
         {
@@ -140,7 +137,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         _ = _dbContext.McpServers.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return true;
     }
@@ -149,8 +146,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
     {
         var entity = await _dbContext.McpServers
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(server => server.Id == id, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -160,8 +156,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
         var entities = await _dbContext.McpServers
                                        .AsNoTracking()
                                        .OrderBy(server => server.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -172,8 +167,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
                                        .AsNoTracking()
                                        .Where(server => server.Enabled)
                                        .OrderBy(server => server.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

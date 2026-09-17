@@ -14,10 +14,9 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var work = await _dbContext.BenchmarkWorkItems.AsNoTracking()
-                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken);
 
         // Running at the claimed version is the ordinary case; Cancelled at its successor is the proven cancel-first
         // ordering, where the work item was terminalized (Version + 1) while this launch was still coming up.
@@ -30,7 +29,7 @@ public sealed partial class BenchmarkStore
             return false;
         }
 
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         if (run.PrimaryLaunchReceiptJson is not null || run.PrimaryEnvironmentFactsJson is not null)
         {
             return false;
@@ -50,8 +49,8 @@ public sealed partial class BenchmarkStore
 
         // The run's own version is deliberately left alone: the checkpoint is evidence, not a lifecycle transition,
         // and bumping it would 409 an operator cancellation that is holding the version it just read.
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
@@ -63,10 +62,9 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var work = await _dbContext.BenchmarkWorkItems.AsNoTracking()
-                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken)
-                                   .ConfigureAwait(false);
+                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken);
 
         // Same CAS as the primary: Running at the claimed version, or Cancelled at its successor — the proven
         // cancel-first ordering, where the work item was terminalized while this launch was still coming up.
@@ -79,7 +77,7 @@ public sealed partial class BenchmarkStore
             return false;
         }
 
-        var attempt = await RequireJudgeAttemptAsync(attemptId, cancellationToken).ConfigureAwait(false);
+        var attempt = await RequireJudgeAttemptAsync(attemptId, cancellationToken);
         if (attempt.LaunchReceiptJson is not null || attempt.EnvironmentFactsJson is not null)
         {
             return false;
@@ -103,27 +101,27 @@ public sealed partial class BenchmarkStore
 
         // The attempt's own version is deliberately left alone: the checkpoint is evidence, not a lifecycle
         // transition, and bumping it would invalidate the completion token the executor is holding.
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return true;
     }
 
     public async Task<BenchmarkRunRecord> CancelAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         if (run.PrimaryStatus is BenchmarkPrimaryStatus.CancelRequested or BenchmarkPrimaryStatus.Cancelled)
         {
-            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
+            return await ToRecordWithJudgeAsync(run, cancellationToken);
         }
 
         var currentAttempt = run.CurrentJudgeAttemptId is { } currentAttemptId
-            ? await RequireJudgeAttemptAsync(currentAttemptId, cancellationToken).ConfigureAwait(false)
+            ? await RequireJudgeAttemptAsync(currentAttemptId, cancellationToken)
             : null;
         if (run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
             && currentAttempt?.Status == BenchmarkJudgeAttemptStatus.Cancelled)
         {
-            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
+            return await ToRecordWithJudgeAsync(run, cancellationToken);
         }
 
         EnsureVersion(run.Version, expectedRunVersion);
@@ -132,7 +130,7 @@ public sealed partial class BenchmarkStore
         {
             run.PrimaryStatus = BenchmarkPrimaryStatus.Cancelled;
             run.PrimaryCompletedAtUtc = now;
-            var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken).ConfigureAwait(false);
+            var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken);
             TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, now);
         }
         else if (run.PrimaryStatus == BenchmarkPrimaryStatus.Running)
@@ -142,9 +140,9 @@ public sealed partial class BenchmarkStore
         else if (run.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
                  && currentAttempt?.Status is BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running)
         {
-            var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken).ConfigureAwait(false);
+            var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Judge, cancellationToken);
             TerminalizeWork(work, BenchmarkWorkStatus.Cancelled, errorMessage: null, now);
-            _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Cancelled, errorMessage: null, now, cancellationToken).ConfigureAwait(false);
+            _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Cancelled, errorMessage: null, now, cancellationToken);
         }
         else
         {
@@ -153,9 +151,9 @@ public sealed partial class BenchmarkStore
 
         run.Version++;
         run.UpdatedAtUtc = now;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await ToRecordWithJudgeAsync(run, cancellationToken);
     }
 
     public async Task<BenchmarkRunRecord> SetUserScoreAsync(Guid runId,
@@ -168,7 +166,7 @@ public sealed partial class BenchmarkStore
             throw new BenchmarkValidationException("Score must be between 0 and 100.");
         }
 
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         EnsureVersion(run.Version, expectedRunVersion);
         if (run.PrimaryStatus != BenchmarkPrimaryStatus.Succeeded)
         {
@@ -178,18 +176,18 @@ public sealed partial class BenchmarkStore
         run.UserScore = score;
         run.Version++;
         run.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        return await ToRecordWithJudgeAsync(run, cancellationToken);
     }
 
     public async Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default) =>
-        (await RecoverRunsOnStartupAsync(cancellationToken).ConfigureAwait(false)).Count;
+        (await RecoverRunsOnStartupAsync(cancellationToken)).Count;
 
     public async Task<IReadOnlyList<BenchmarkRunRecord>> RecoverRunsOnStartupAsync(CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var activeWork = await _dbContext.BenchmarkWorkItems.Where(entity => entity.Status == BenchmarkWorkStatus.Running).ToListAsync(cancellationToken).ConfigureAwait(false);
-        var cancelRequested = await _dbContext.BenchmarkRuns.Where(entity => entity.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested).ToListAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var activeWork = await _dbContext.BenchmarkWorkItems.Where(entity => entity.Status == BenchmarkWorkStatus.Running).ToListAsync(cancellationToken);
+        var cancelRequested = await _dbContext.BenchmarkRuns.Where(entity => entity.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested).ToListAsync(cancellationToken);
         var recoveredRunIds = new HashSet<Guid>();
         var now = Now();
 
@@ -197,8 +195,7 @@ public sealed partial class BenchmarkStore
         // only an attempt still marked Running — i.e. one whose judging died with the process — is touched.
         var interruptedAttempts = await _dbContext.BenchmarkJudgeAttempts
                                                   .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
-                                                  .ToListAsync(cancellationToken)
-                                                  .ConfigureAwait(false);
+                                                  .ToListAsync(cancellationToken);
         foreach (var attempt in interruptedAttempts)
         {
             attempt.Status = BenchmarkJudgeAttemptStatus.Failed;
@@ -212,8 +209,7 @@ public sealed partial class BenchmarkStore
         // forever, with nothing left to reach it.
         var interruptedFidelity = await _dbContext.BenchmarkFidelityAttempts
                                                   .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
-                                                  .ToListAsync(cancellationToken)
-                                                  .ConfigureAwait(false);
+                                                  .ToListAsync(cancellationToken);
         foreach (var attempt in interruptedFidelity)
         {
             attempt.Status = BenchmarkJudgeAttemptStatus.Failed;
@@ -225,7 +221,7 @@ public sealed partial class BenchmarkStore
             // stands. Its STATUS is not: left reading 'queued'/'running' with no attempt and no work item behind it,
             // every API reports an active measurement forever, the poller never stops and the UI keeps re-measure
             // disabled on a run nothing is measuring.
-            var owner = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == attempt.RunId, cancellationToken).ConfigureAwait(false);
+            var owner = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == attempt.RunId, cancellationToken);
             owner.FidelityStatus = ToFidelityStatus(BenchmarkJudgeAttemptStatus.Failed);
             owner.FidelityErrorMessage = InterruptedMessage;
             owner.Version++;
@@ -236,8 +232,7 @@ public sealed partial class BenchmarkStore
 
         var interruptedComparisons = await _dbContext.BenchmarkComparisons
                                                      .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
-                                                     .ToListAsync(cancellationToken)
-                                                     .ConfigureAwait(false);
+                                                     .ToListAsync(cancellationToken);
         foreach (var comparison in interruptedComparisons)
         {
             comparison.Status = BenchmarkJudgeAttemptStatus.Failed;
@@ -248,7 +243,7 @@ public sealed partial class BenchmarkStore
 
         foreach (var work in activeWork)
         {
-            var run = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == work.RunId, cancellationToken).ConfigureAwait(false);
+            var run = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == work.RunId, cancellationToken);
             var cancelledPrimary = work.Kind == BenchmarkWorkKind.Primary
                                    && run.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested;
             work.Status = cancelledPrimary ? BenchmarkWorkStatus.Cancelled : BenchmarkWorkStatus.Failed;
@@ -263,15 +258,13 @@ public sealed partial class BenchmarkStore
                     run.PrimaryCompletedAtUtc = now;
                     break;
                 case BenchmarkWorkKind.Judge:
-                    _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken).ConfigureAwait(false);
+                    _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken);
                     break;
                 case BenchmarkWorkKind.Fidelity:
-                    _ = await TerminalizeFidelityAttemptAsync(work.FidelityAttemptId, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken)
-                        .ConfigureAwait(false);
+                    _ = await TerminalizeFidelityAttemptAsync(work.FidelityAttemptId, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken);
                     break;
                 case BenchmarkWorkKind.Comparison:
-                    _ = await TerminalizeComparisonAsync(work.ComparisonId, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken)
-                        .ConfigureAwait(false);
+                    _ = await TerminalizeComparisonAsync(work.ComparisonId, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken);
                     break;
                 default:
                     throw new BenchmarkConflictException("UnknownWorkKind");
@@ -293,8 +286,8 @@ public sealed partial class BenchmarkStore
             recoveredRunIds.Add(run.Id);
         }
 
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return recoveredRunIds
                .Select(id => ToRecord(_dbContext.BenchmarkRuns.Local.Single(run => run.Id == id)))
                .ToArray();
@@ -302,25 +295,22 @@ public sealed partial class BenchmarkStore
 
     public async Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         EnsureVersion(run.Version, expectedRunVersion);
         if (!IsPrimaryTerminal(run.PrimaryStatus)
             || await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
                                                                       && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running), cancellationToken)
-                               .ConfigureAwait(false)
             || await _dbContext.BenchmarkJudgeAttempts.AnyAsync(entity => entity.RunId == runId
                                                                           && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
                                                                               || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken)
-                               .ConfigureAwait(false)
 
             // A comparison names TWO runs and its work item names only the canonical first, so the work-item guard
             // above sees a live comparison when this run is the A side and is blind to it when the run is the B side.
             // Asking the comparison rows themselves is the only guard that covers both.
             || await _dbContext.BenchmarkComparisons.AnyAsync(entity => (entity.RunAId == runId || entity.RunBId == runId)
                                                                         && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
-                                                                            || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken)
-                               .ConfigureAwait(false))
+                                                                            || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken))
         {
             throw new BenchmarkConflictException("ActiveRun");
         }
@@ -330,25 +320,25 @@ public sealed partial class BenchmarkStore
         // itself. Anything left out of that list does not error — it simply outlives its run for good.
         var projectId = run.ProjectId;
         run.CurrentJudgeAttemptId = null;
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await DeleteComparisonsOfAsync(runId, projectId, cancellationToken).ConfigureAwait(false);
-        await _dbContext.BenchmarkWorkItems.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        await _dbContext.BenchmarkJudgeAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        await _dbContext.BenchmarkFidelityAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await DeleteComparisonsOfAsync(runId, projectId, cancellationToken);
+        await _dbContext.BenchmarkWorkItems.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.BenchmarkJudgeAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.BenchmarkFidelityAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
         // The deletes intentionally bypass the tracker: this scope may have materialized the required work/run
         // relationship earlier, and mixing ExecuteDelete for the child with tracked Remove for the parent makes EF
         // interpret the already-deleted child as a severed required association.
         _dbContext.ChangeTracker.Clear();
-        _ = await _dbContext.BenchmarkRuns.Where(entity => entity.Id == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.BenchmarkRuns.Where(entity => entity.Id == runId).ExecuteDeleteAsync(cancellationToken);
 
         // The cohort was defined by runs that no longer exist. Leaving the reference key behind would silently keep
         // the next run's judging out of the ranking for a runtime nothing is measured against any more.
-        if (!await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken).ConfigureAwait(false))
+        if (!await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken))
         {
-            await ResetCurrentCohortAsync(projectId, cancellationToken).ConfigureAwait(false);
+            await ResetCurrentCohortAsync(projectId, cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>
@@ -372,8 +362,7 @@ public sealed partial class BenchmarkStore
                                            entity.Id,
                                            entity.PolicyRevisionId
                                        })
-                                       .ToArrayAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToArrayAsync(cancellationToken);
         if (affected.Length == 0)
         {
             return;
@@ -383,19 +372,15 @@ public sealed partial class BenchmarkStore
         var revisionIds = affected.Select(static entry => entry.PolicyRevisionId).Distinct().ToArray();
         _ = await _dbContext.BenchmarkWorkItems
                             .Where(entity => entity.ComparisonId != null && comparisonIds.Contains(entity.ComparisonId.Value))
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
+                            .ExecuteDeleteAsync(cancellationToken);
         _ = await _dbContext.BenchmarkComparisons.Where(entity => comparisonIds.Contains(entity.Id))
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
+                            .ExecuteDeleteAsync(cancellationToken);
         _ = await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => revisionIds.Contains(entity.Id))
                             .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.ComparisonSetVersion, entity => entity.ComparisonSetVersion + 1),
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                                cancellationToken);
         _ = await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId && entity.IsActive)
                             .ExecuteUpdateAsync(setters => setters
                                                            .SetProperty(entity => entity.IsActive, false)
-                                                           .SetProperty(entity => entity.Version, entity => entity.Version + 1), cancellationToken)
-                            .ConfigureAwait(false);
+                                                           .SetProperty(entity => entity.Version, entity => entity.Version + 1), cancellationToken);
     }
 }

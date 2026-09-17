@@ -44,15 +44,15 @@ internal sealed class DevelopmentApplyService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(repository);
-        var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var task = await _store.GetTaskAsync(taskId, cancellationToken);
         if (task.Status != DevelopmentTaskStatus.AwaitingApply || string.IsNullOrWhiteSpace(task.ApprovedSubjectHash))
         {
             throw new DevelopmentInvalidTransitionException("Patch preview requires an independently approved task awaiting explicit apply.");
         }
 
-        var project = await _store.GetProjectAsync(task.ProjectId, cancellationToken).ConfigureAwait(false);
+        var project = await _store.GetProjectAsync(task.ProjectId, cancellationToken);
         DevelopmentTrustPolicy.EnsureCurrent(project, _timeProvider);
-        var attempts = await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var attempts = await _store.ListAttemptsAsync(taskId, cancellationToken);
         var reviewerAttempt = attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Reviewer
                                                                 && attempt.Status == DevelopmentAttemptStatus.Succeeded)
                               ?? throw new DevelopmentInvalidTransitionException("Patch preview requires a successful independent reviewer attempt.");
@@ -65,16 +65,16 @@ internal sealed class DevelopmentApplyService(
         var coderAttempt = attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
                                                              && attempt.Status == DevelopmentAttemptStatus.Succeeded)
                            ?? throw new DevelopmentInvalidTransitionException("Patch preview requires a successful coder attempt.");
-        var coderSnapshot = await _store.GetExecutionSnapshotAsync(coderAttempt.Id, cancellationToken).ConfigureAwait(false);
-        var snapshot = await _store.GetExecutionSnapshotAsync(reviewerAttempt.Id, cancellationToken).ConfigureAwait(false);
-        var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
+        var coderSnapshot = await _store.GetExecutionSnapshotAsync(coderAttempt.Id, cancellationToken);
+        var snapshot = await _store.GetExecutionSnapshotAsync(reviewerAttempt.Id, cancellationToken);
+        var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken);
         DevelopmentEvidenceSet current;
         try
         {
-            current = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken).ConfigureAwait(false);
+            current = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken);
             var expectedProfileDigest = DevelopmentCommandProfileCatalog.ResolveStored(coderSnapshot.CommandProfileJson).ComputeDigest();
-            var (validationArtifact, _) = await ReadValidationAsync(taskId, current, expectedProfileDigest, cancellationToken).ConfigureAwait(false);
-            var (reviewArtifact, reviewReport) = await ReadReviewAsync(taskId, current, validationArtifact.Id, expectedProfileDigest, cancellationToken).ConfigureAwait(false);
+            var (validationArtifact, _) = await ReadValidationAsync(taskId, current, expectedProfileDigest, cancellationToken);
+            var (reviewArtifact, reviewReport) = await ReadReviewAsync(taskId, current, validationArtifact.Id, expectedProfileDigest, cancellationToken);
 
             if (!string.Equals(task.ApprovedSubjectHash, current.Current.SubjectHash, StringComparison.OrdinalIgnoreCase)
                 || reviewReport.Disposition != DevelopmentReviewDisposition.Approved
@@ -88,7 +88,7 @@ internal sealed class DevelopmentApplyService(
         {
             await _evidence.InvalidateApprovalEvidenceAsync(taskId,
                 "The exact Development apply evidence is no longer authoritative.",
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
             throw;
         }
 
@@ -121,11 +121,11 @@ internal sealed class DevelopmentApplyService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(repository);
-        var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        var task = await _store.GetTaskAsync(taskId, cancellationToken);
         var completed = await _store.FindOperationAsync(task.ProjectId,
             operationId,
             DevelopmentOperationPhases.ApplyCompleted,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (completed is not null)
         {
             return completed;
@@ -134,26 +134,26 @@ internal sealed class DevelopmentApplyService(
         var blocked = await _store.FindOperationAsync(task.ProjectId,
             operationId,
             DevelopmentOperationPhases.ApplyBlocked,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         if (blocked is not null)
         {
             return blocked;
         }
 
-        var preview = await PreviewAsync(taskId, repository, cancellationToken).ConfigureAwait(false);
+        var preview = await PreviewAsync(taskId, repository, cancellationToken);
         return await _coordinator.ApplyRevalidatedAsync(operationId,
             preview.Subject,
             repository,
             async revalidationToken =>
             {
-                var revalidatedRepository = await _repositoryBindings.ResolveProjectAsync(preview.Subject.ProjectId, revalidationToken).ConfigureAwait(false);
-                var revalidated = await PreviewAsync(taskId, revalidatedRepository, revalidationToken).ConfigureAwait(false);
+                var revalidatedRepository = await _repositoryBindings.ResolveProjectAsync(preview.Subject.ProjectId, revalidationToken);
+                var revalidated = await PreviewAsync(taskId, revalidatedRepository, revalidationToken);
                 if (!Equals(preview.Subject, revalidated.Subject))
                 {
                     throw new DevelopmentInvalidTransitionException("The exact approved workspace subject changed before host mutation.");
                 }
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private async Task<DevelopmentArtifactWith<DevelopmentValidationReport>> ReadValidationAsync(Guid taskId,
@@ -164,11 +164,11 @@ internal sealed class DevelopmentApplyService(
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedProfileDigest);
         var (artifact, content) = await _evidence.ReadLatestAsync(taskId,
             DevelopmentArtifactKind.ValidationReport,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var report = JsonSerializer.Deserialize<DevelopmentValidationReport>(content.Span, JsonOptions)
                      ?? throw new DevelopmentInvalidTransitionException("The approved validation report is invalid.");
         EnsureEvidenceMatches(artifact, report.BaseCommit, report.SubjectHash, report.ManifestHash, current);
-        var latestCoder = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
+        var latestCoder = (await _store.ListAttemptsAsync(taskId, cancellationToken))
             .LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder
                                       && attempt.Status == DevelopmentAttemptStatus.Succeeded);
         if (!report.Passed
@@ -202,7 +202,7 @@ internal sealed class DevelopmentApplyService(
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedProfileDigest);
         var (artifact, content) = await _evidence.ReadLatestAsync(taskId,
             DevelopmentArtifactKind.ReviewReport,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
         var report = JsonSerializer.Deserialize<DevelopmentReviewReport>(content.Span, JsonOptions)
                      ?? throw new DevelopmentInvalidTransitionException("The approved review report is invalid.");
         EnsureEvidenceMatches(artifact, report.BaseCommit, report.SubjectHash, report.ManifestHash, current);

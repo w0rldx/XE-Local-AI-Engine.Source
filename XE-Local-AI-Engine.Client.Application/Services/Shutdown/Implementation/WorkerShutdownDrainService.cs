@@ -73,8 +73,7 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
         {
             var activeCountAtStart = _invocationRunner.ActiveInvocationCount;
             activeInvocationsDrained = await _invocationRunner
-                                             .DrainActiveInvocationsAsync(drainTimeout, drainToken)
-                                             .ConfigureAwait(false);
+                                             .DrainActiveInvocationsAsync(drainTimeout, drainToken);
 
             diagnostics.Add(activeInvocationsDrained
                 ? "await-active-invocations:completed"
@@ -109,7 +108,7 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
 
         try
         {
-            await _deadLetterFlushService.FlushAsync(drainToken).ConfigureAwait(false);
+            await _deadLetterFlushService.FlushAsync(drainToken);
             deadLetterFlushCompleted = true;
             diagnostics.Add("flush-dead-letter-outbox:completed");
             _logger.LogInformation("Worker shutdown drain flushed the dead-letter outbox path.");
@@ -128,7 +127,7 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
 
         try
         {
-            await _workerHubConnection.DisconnectAsync(drainToken).ConfigureAwait(false);
+            await _workerHubConnection.DisconnectAsync(drainToken);
             workerHubDisconnected = true;
             diagnostics.Add("disconnect-worker-hub:completed");
             _logger.LogInformation("Worker shutdown drain disconnected WorkerHub.");

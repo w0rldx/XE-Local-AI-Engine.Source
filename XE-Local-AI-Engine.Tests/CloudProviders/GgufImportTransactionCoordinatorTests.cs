@@ -452,7 +452,7 @@ public sealed class GgufImportTransactionCoordinatorTests
         {
             if (Interlocked.Increment(ref _callCount) > 1)
             {
-                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(Timeout.Infinite, cancellationToken);
             }
 
             var request = new InstalledModelMutationRequest(identity.CanonicalModelName,
@@ -600,7 +600,7 @@ public sealed class GgufImportTransactionCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             ClaimEntered.SetResult();
-            await ReleaseClaim.Task.ConfigureAwait(false);
+            await ReleaseClaim.Task;
             return new ProviderMapClaimResult.Created(_receipt);
         }
 

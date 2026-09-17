@@ -52,7 +52,7 @@ public sealed class McpServerInboundAuthTests
         using var client = factory.CreateClient();
 
         using var content = EmptyRpcContent();
-        using var response = await client.PostAsync(new Uri(McpEndpointRoute, UriKind.Relative), content).ConfigureAwait(false);
+        using var response = await client.PostAsync(new Uri(McpEndpointRoute, UriKind.Relative), content);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -64,7 +64,7 @@ public sealed class McpServerInboundAuthTests
         using var client = factory.CreateClient();
 
         using var content = EmptyRpcContent();
-        using var response = await client.PostAsync(new Uri(McpEndpointRoute, UriKind.Relative), content).ConfigureAwait(false);
+        using var response = await client.PostAsync(new Uri(McpEndpointRoute, UriKind.Relative), content);
 
         AssertEx.True(response.Headers.WwwAuthenticate.Any(static header => string.Equals(header.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)),
             "A 401 from the MCP endpoint must carry an RFC 6750 Bearer challenge so a client knows how to authenticate.");
@@ -81,7 +81,7 @@ public sealed class McpServerInboundAuthTests
             Content = EmptyRpcContent()
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "xemcp_wrong-key");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -99,7 +99,7 @@ public sealed class McpServerInboundAuthTests
             Content = EmptyRpcContent()
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -115,7 +115,7 @@ public sealed class McpServerInboundAuthTests
             Content = EmptyRpcContent()
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ValidKey);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // The body is deliberately not a valid JSON-RPC call, so the transport may answer 4xx/2xx — what matters is
         // that it is NOT 401/403, i.e. the credential was accepted and the request reached the MCP transport.
@@ -133,7 +133,7 @@ public sealed class McpServerInboundAuthTests
         };
         context.Request.Headers.Authorization = $"Bearer {ValidKey}";
 
-        var result = await context.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName).ConfigureAwait(false);
+        var result = await context.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName);
 
         AssertEx.True(result.Succeeded, "A valid key must produce an authenticated MCP principal.");
         var principal = AssertEx.NotNull(result.Principal);
@@ -151,11 +151,11 @@ public sealed class McpServerInboundAuthTests
             RequestServices = delegateFactory.Services
         };
         delegateContext.Request.Headers.Authorization = $"Bearer {ValidKey}";
-        var delegateAuthentication = await delegateContext.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName).ConfigureAwait(false);
+        var delegateAuthentication = await delegateContext.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName);
         var authorization = delegateFactory.Services.GetRequiredService<IAuthorizationService>();
         var delegateAuthorization = await authorization.AuthorizeAsync(AssertEx.NotNull(delegateAuthentication.Principal),
             resource: null,
-            NodeAuthorizationPolicies.McpAgentic).ConfigureAwait(false);
+            NodeAuthorizationPolicies.McpAgentic);
 
         AssertEx.True(delegateAuthentication.Succeeded, "A delegate key is authenticated, so an agentic endpoint rejects it as forbidden rather than unauthorized.");
         AssertEx.False(delegateAuthorization.Succeeded, "A delegate principal must not satisfy the agentic policy.");
@@ -166,12 +166,11 @@ public sealed class McpServerInboundAuthTests
             RequestServices = agenticFactory.Services
         };
         agenticContext.Request.Headers.Authorization = $"Bearer {ValidKey}";
-        var agenticAuthentication = await agenticContext.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName).ConfigureAwait(false);
+        var agenticAuthentication = await agenticContext.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName);
         var agenticAuthorization = await agenticFactory.Services.GetRequiredService<IAuthorizationService>()
                                                        .AuthorizeAsync(AssertEx.NotNull(agenticAuthentication.Principal),
                                                            resource: null,
-                                                           NodeAuthorizationPolicies.McpAgentic)
-                                                       .ConfigureAwait(false);
+                                                           NodeAuthorizationPolicies.McpAgentic);
 
         AssertEx.True(agenticAuthorization.Succeeded, "Only the exact agentic scope claim may satisfy the policy.");
     }
@@ -192,8 +191,8 @@ public sealed class McpServerInboundAuthTests
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", "2025-06-18");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
         var toolNames = Regex.Matches(body, "\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
                              .Select(static match => match.Groups[1].Value)
                              .Where(static name => name is "list_agents"
@@ -224,13 +223,13 @@ public sealed class McpServerInboundAuthTests
         await using var delegateFactory = CreateFactory(ValidKey, McpServerApiKeyScope.Delegate);
         var delegateBody = await SendRpcAsync(delegateFactory,
             ValidKey,
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}").ConfigureAwait(false);
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}");
         var delegateNames = ExtractToolNames(delegateBody);
 
         await using var agenticFactory = CreateFactory(ValidKey, McpServerApiKeyScope.Agentic);
         var agenticBody = await SendRpcAsync(agenticFactory,
             ValidKey,
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}").ConfigureAwait(false);
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}");
         var agenticNames = ExtractToolNames(agenticBody);
 
         AssertEx.Equal("cancel_agent_run|get_agent_run|list_agent_runs|list_agents|list_models|list_workspaces|run_agent|start_agent_run",
@@ -245,21 +244,21 @@ public sealed class McpServerInboundAuthTests
     {
         const string call = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_status\",\"arguments\":{}}}";
         await using var delegateFactory = CreateFactory(ValidKey, McpServerApiKeyScope.Delegate);
-        var delegateBody = await SendRpcAsync(delegateFactory, ValidKey, call).ConfigureAwait(false);
+        var delegateBody = await SendRpcAsync(delegateFactory, ValidKey, call);
         AssertEx.True(delegateBody.Contains("forbidden", StringComparison.OrdinalIgnoreCase)
                       || delegateBody.Contains("-32600", StringComparison.Ordinal)
                       || delegateBody.Contains("InvalidRequest", StringComparison.OrdinalIgnoreCase),
             $"A delegate direct admin call must be a protocol authorization failure; body: {delegateBody}");
 
         await using var agenticFactory = CreateFactory(ValidKey, McpServerApiKeyScope.Agentic);
-        var agenticBody = await SendRpcAsync(agenticFactory, ValidKey, call).ConfigureAwait(false);
+        var agenticBody = await SendRpcAsync(agenticFactory, ValidKey, call);
         AssertEx.Contains(agenticBody, "loadedProcessCount");
         AssertEx.False(agenticBody.Contains("forbidden", StringComparison.OrdinalIgnoreCase));
 
         // And the same for the observe tools: read-only is not delegate-visible, because what a workflow run is doing
         // is exactly the kind of thing an outside delegate key has no business polling.
         const string observeCall = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_workflow_runs\",\"arguments\":{}}}";
-        var delegateObserveBody = await SendRpcAsync(delegateFactory, ValidKey, observeCall).ConfigureAwait(false);
+        var delegateObserveBody = await SendRpcAsync(delegateFactory, ValidKey, observeCall);
         AssertEx.True(delegateObserveBody.Contains("forbidden", StringComparison.OrdinalIgnoreCase)
                       || delegateObserveBody.Contains("-32600", StringComparison.Ordinal)
                       || delegateObserveBody.Contains("InvalidRequest", StringComparison.OrdinalIgnoreCase),
@@ -274,15 +273,15 @@ public sealed class McpServerInboundAuthTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        var agentic = await GenerateRealKeyAsync(factory, client, "agentic").ConfigureAwait(false);
-        var agenticNames = ExtractToolNames(await SendRpcAsync(factory, agentic.Key, list).ConfigureAwait(false));
-        var agenticCall = await SendRpcAsync(factory, agentic.Key, call).ConfigureAwait(false);
+        var agentic = await GenerateRealKeyAsync(factory, client, "agentic");
+        var agenticNames = ExtractToolNames(await SendRpcAsync(factory, agentic.Key, list));
+        var agenticCall = await SendRpcAsync(factory, agentic.Key, call);
         AssertEx.Equal(25, agenticNames.Length);
         AssertEx.Contains(agenticCall, "loadedProcessCount");
 
-        var delegateKey = await GenerateRealKeyAsync(factory, client, "delegate").ConfigureAwait(false);
-        var delegateNames = ExtractToolNames(await SendRpcAsync(factory, delegateKey.Key, list).ConfigureAwait(false));
-        var delegateCall = await SendRpcAsync(factory, delegateKey.Key, call).ConfigureAwait(false);
+        var delegateKey = await GenerateRealKeyAsync(factory, client, "delegate");
+        var delegateNames = ExtractToolNames(await SendRpcAsync(factory, delegateKey.Key, list));
+        var delegateCall = await SendRpcAsync(factory, delegateKey.Key, call);
         AssertEx.Equal(8, delegateNames.Length);
         AssertEx.False(delegateNames.Contains("get_status", StringComparer.Ordinal));
         AssertEx.True(delegateCall.Contains("forbidden", StringComparison.OrdinalIgnoreCase)
@@ -296,8 +295,8 @@ public sealed class McpServerInboundAuthTests
         var factory = Host.Factory;
         using var client = factory.CreateClient();
 
-        using var getResponse = await client.GetAsync(new Uri(KeyManagementRoute, UriKind.Relative)).ConfigureAwait(false);
-        using var deleteResponse = await client.DeleteAsync(new Uri(KeyManagementRoute, UriKind.Relative)).ConfigureAwait(false);
+        using var getResponse = await client.GetAsync(new Uri(KeyManagementRoute, UriKind.Relative));
+        using var deleteResponse = await client.DeleteAsync(new Uri(KeyManagementRoute, UriKind.Relative));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, getResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, deleteResponse.StatusCode);
@@ -312,7 +311,7 @@ public sealed class McpServerInboundAuthTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, KeyManagementRoute);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ValidKey);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -326,8 +325,8 @@ public sealed class McpServerInboundAuthTests
         using var request = new HttpRequestMessage(HttpMethod.Get, KeyManagementRoute);
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<KeyStatusBody>().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<KeyStatusBody>());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(body.Configured, "An ungenerated key must report configured=false rather than 404.");
@@ -352,8 +351,8 @@ public sealed class McpServerInboundAuthTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedKeyBody>().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedKeyBody>());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(expectedScope == McpServerApiKeyScope.Agentic ? "agentic" : "delegate", body.ApiKey.Scope);
@@ -369,11 +368,11 @@ public sealed class McpServerInboundAuthTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var responseText = await response.Content.ReadAsStringAsync();
         AssertEx.True(response.StatusCode == HttpStatusCode.OK,
             $"A legacy bodyless POST must generate a delegate key; got {(int)response.StatusCode} {response.StatusCode}: {responseText}");
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedKeyBody>().ConfigureAwait(false));
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedKeyBody>());
 
         AssertEx.Equal("delegate", body.ApiKey.Scope);
     }
@@ -391,8 +390,8 @@ public sealed class McpServerInboundAuthTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedKeyBody>().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedKeyBody>());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("delegate", body.ApiKey.Scope);
@@ -410,8 +409,8 @@ public sealed class McpServerInboundAuthTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var responseBody = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         AssertEx.True(!string.IsNullOrWhiteSpace(responseBody), "Unsupported content must return an explicit validation response, not an empty server failure.");
@@ -423,8 +422,8 @@ public sealed class McpServerInboundAuthTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(new Uri("/openapi/local/v1/v1.json", UriKind.Relative)).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ConfigureAwait(false);
+        using var response = await client.GetAsync(new Uri("/openapi/local/v1/v1.json", UriKind.Relative));
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         var requestBody = document.RootElement.GetProperty("paths")
                                   .GetProperty(KeyManagementRoute)
                                   .GetProperty("post")
@@ -445,32 +444,32 @@ public sealed class McpServerInboundAuthTests
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 
-        var agentic = await GenerateRealKeyAsync(factory, client, "agentic").ConfigureAwait(false);
+        var agentic = await GenerateRealKeyAsync(factory, client, "agentic");
         using var statusRequest = new HttpRequestMessage(HttpMethod.Get, KeyManagementRoute);
         factory.AddNodeBearerToken(statusRequest);
         statusRequest.Headers.Add("Origin", "http://localhost");
-        using var statusResponse = await client.SendAsync(statusRequest).ConfigureAwait(false);
-        var status = AssertEx.NotNull(await statusResponse.Content.ReadFromJsonAsync<KeyStatusBody>().ConfigureAwait(false));
+        using var statusResponse = await client.SendAsync(statusRequest);
+        var status = AssertEx.NotNull(await statusResponse.Content.ReadFromJsonAsync<KeyStatusBody>());
         AssertEx.Equal(HttpStatusCode.OK, statusResponse.StatusCode);
         AssertEx.Equal("agentic", AssertEx.NotNull(status.ApiKey).Scope);
 
-        var agenticAuthentication = await AuthenticateAsync(factory, agentic.Key).ConfigureAwait(false);
+        var agenticAuthentication = await AuthenticateAsync(factory, agentic.Key);
         AssertEx.True(agenticAuthentication.Succeeded);
         await using var authorizationScope = factory.Services.CreateAsyncScope();
         var authorization = authorizationScope.ServiceProvider.GetRequiredService<IAuthorizationService>();
         AssertEx.True((await authorization.AuthorizeAsync(AssertEx.NotNull(agenticAuthentication.Principal),
             resource: null,
-            NodeAuthorizationPolicies.McpAgentic).ConfigureAwait(false)).Succeeded);
+            NodeAuthorizationPolicies.McpAgentic)).Succeeded);
 
-        var delegateKey = await GenerateRealKeyAsync(factory, client, "delegate").ConfigureAwait(false);
-        var rotatedAuthentication = await AuthenticateAsync(factory, agentic.Key).ConfigureAwait(false);
+        var delegateKey = await GenerateRealKeyAsync(factory, client, "delegate");
+        var rotatedAuthentication = await AuthenticateAsync(factory, agentic.Key);
         AssertEx.False(rotatedAuthentication.Succeeded, "Rotation must immediately invalidate the previous agentic key.");
 
-        var delegateAuthentication = await AuthenticateAsync(factory, delegateKey.Key).ConfigureAwait(false);
+        var delegateAuthentication = await AuthenticateAsync(factory, delegateKey.Key);
         AssertEx.True(delegateAuthentication.Succeeded);
         AssertEx.False((await authorization.AuthorizeAsync(AssertEx.NotNull(delegateAuthentication.Principal),
                 resource: null,
-                NodeAuthorizationPolicies.McpAgentic).ConfigureAwait(false)).Succeeded,
+                NodeAuthorizationPolicies.McpAgentic)).Succeeded,
             "A valid delegate key must authenticate but remain forbidden by the agentic policy.");
     }
 
@@ -488,7 +487,7 @@ public sealed class McpServerInboundAuthTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -517,8 +516,8 @@ public sealed class McpServerInboundAuthTests
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", "2025-06-18");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
+        var responseBody = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         return responseBody;
     }
@@ -534,9 +533,9 @@ public sealed class McpServerInboundAuthTests
         };
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedKeyBody>().ConfigureAwait(false));
+        return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedKeyBody>());
     }
 
     private static async Task<AuthenticateResult> AuthenticateAsync(TestServerWebAppFactory factory, string key)
@@ -547,7 +546,7 @@ public sealed class McpServerInboundAuthTests
             RequestServices = scope.ServiceProvider
         };
         context.Request.Headers.Authorization = $"Bearer {key}";
-        return await context.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName).ConfigureAwait(false);
+        return await context.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName);
     }
 
     internal static TestServerWebAppFactory CreateFactory(string? storedKey,

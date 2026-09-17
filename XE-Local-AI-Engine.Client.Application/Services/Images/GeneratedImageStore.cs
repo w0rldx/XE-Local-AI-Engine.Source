@@ -46,7 +46,7 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
 
         var bytesPath = BytesPath(jobDirectory, imageId);
         var encrypted = _blobProtector.Encrypt(jobId, imageId, ImageBlobProtector.ImageBytesColumn, pngBytes.Span);
-        await File.WriteAllBytesAsync(bytesPath, encrypted, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(bytesPath, encrypted, cancellationToken);
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var sizeBytes = (long)encrypted.Length;
@@ -67,8 +67,8 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         AddParameter(command, "$size_bytes", sizeBytes);
         AddParameter(command, "$storage_path", bytesPath);
         AddParameter(command, "$created_at_utc", createdAtUtc);
-        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
+        await command.ExecuteNonQueryAsync(cancellationToken);
 
         return new GeneratedImageInfo(imageId, jobId, metadata.MimeType, metadata.Width, metadata.Height, sizeBytes, createdAtUtc);
     }
@@ -85,16 +85,16 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
                               WHERE image_id = $image_id;
                               """;
         AddParameter(command, "$image_id", imageId);
-        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
 
         Guid jobId;
         string mimeType;
         int width;
         int height;
         string storagePath;
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            if (!await reader.ReadAsync(cancellationToken))
             {
                 return null;
             }
@@ -111,7 +111,7 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
             return null;
         }
 
-        var encrypted = await File.ReadAllBytesAsync(storagePath, cancellationToken).ConfigureAwait(false);
+        var encrypted = await File.ReadAllBytesAsync(storagePath, cancellationToken);
         var plaintext = _blobProtector.Decrypt(jobId, imageId, ImageBlobProtector.ImageBytesColumn, encrypted);
         return new GeneratedImageContent(plaintext, mimeType, width, height);
     }

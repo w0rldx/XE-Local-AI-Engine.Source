@@ -85,7 +85,7 @@ internal sealed class IntegrationApiHandler
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var caller = await AuthorizeAsync(context).ConfigureAwait(false);
+        var caller = await AuthorizeAsync(context);
         if (caller is null)
         {
             return;
@@ -93,14 +93,14 @@ internal sealed class IntegrationApiHandler
 
         if (!TryReadGuidRoute(context, "sessionId", out var sessionId))
         {
-            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedSessionMessage).ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedSessionMessage);
             return;
         }
 
-        var session = await _sessions.GetForExternalCallerAsync(sessionId, caller, context.RequestAborted).ConfigureAwait(false);
+        var session = await _sessions.GetForExternalCallerAsync(sessionId, caller, context.RequestAborted);
         if (session is null)
         {
-            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedSessionMessage).ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedSessionMessage);
             return;
         }
 
@@ -109,7 +109,7 @@ internal sealed class IntegrationApiHandler
                 SessionStatusName(session.Status),
                 session.ExecutionCount,
                 session.LastActivityUtc),
-            context.RequestAborted).ConfigureAwait(false);
+            context.RequestAborted);
     }
 
     /// <summary>
@@ -128,7 +128,7 @@ internal sealed class IntegrationApiHandler
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var caller = await AuthorizeAsync(context).ConfigureAwait(false);
+        var caller = await AuthorizeAsync(context);
         if (caller is null)
         {
             return;
@@ -152,7 +152,7 @@ internal sealed class IntegrationApiHandler
         // A cheap early exit, never the limit: Content-Length is never trusted alone.
         if (context.Request.ContentLength > cap)
         {
-            await WriteMessageAsync(context, StatusCodes.Status413PayloadTooLarge, "The request body is larger than this node accepts.").ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status413PayloadTooLarge, "The request body is larger than this node accepts.");
             return;
         }
 
@@ -161,10 +161,10 @@ internal sealed class IntegrationApiHandler
         {
             // Mechanism 3: the bounded read. The only one that works where no body-size feature exists at all, and the
             // only one provable without a real Kestrel connection.
-            var read = await ReadBoundedBodyAsync(context, cap).ConfigureAwait(false);
+            var read = await ReadBoundedBodyAsync(context, cap);
             if (read is null)
             {
-                await WriteMessageAsync(context, StatusCodes.Status413PayloadTooLarge, "The request body is larger than this node accepts.").ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status413PayloadTooLarge, "The request body is larger than this node accepts.");
                 return;
             }
 
@@ -173,7 +173,7 @@ internal sealed class IntegrationApiHandler
         catch (BadHttpRequestException)
         {
             // Mechanism 2 firing: Kestrel refused the body as it was consumed.
-            await WriteMessageAsync(context, StatusCodes.Status413PayloadTooLarge, "The request body is larger than this node accepts.").ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status413PayloadTooLarge, "The request body is larger than this node accepts.");
             return;
         }
 
@@ -187,19 +187,19 @@ internal sealed class IntegrationApiHandler
         catch (JsonException)
         {
             // A distinct failure with a distinct code: malformed is 400, oversized is 413.
-            await WriteMessageAsync(context, StatusCodes.Status400BadRequest, "The request body is not valid JSON.").ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status400BadRequest, "The request body is not valid JSON.");
             return;
         }
 
         if (parsed?.RequestId is not { } requestId || requestId == Guid.Empty)
         {
-            await WriteMessageAsync(context, StatusCodes.Status400BadRequest, "Send a requestId so a retry can be recognised.").ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status400BadRequest, "Send a requestId so a retry can be recognised.");
             return;
         }
 
         if (!TryMapInputs(parsed.Inputs, out var inputs))
         {
-            await WriteMessageAsync(context, StatusCodes.Status422UnprocessableEntity, "Each input must name a supported kind and carry its content.").ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status422UnprocessableEntity, "Each input must name a supported kind and carry its content.");
             return;
         }
 
@@ -211,8 +211,7 @@ internal sealed class IntegrationApiHandler
                                                parsed.SessionId,
                                                inputs,
                                                body),
-                                           context.RequestAborted)
-                                       .ConfigureAwait(false);
+                                           context.RequestAborted);
 
         // The stream is offered only for an admitted execution. Every rejection above answered with a real status on a
         // response that has not started, which is the property that lets a 503 or a 409 still be JSON even when the
@@ -224,13 +223,13 @@ internal sealed class IntegrationApiHandler
         if (result.Outcome is IntegrationAcceptOutcome.Accepted or IntegrationAcceptOutcome.Duplicate
             && WantsEventStream(context)
             && result.ExecutionId is { } admitted
-            && await _writer.WriteAsync(context, admitted, sinceSequence: 0, context.RequestAborted).ConfigureAwait(false)
+            && await _writer.WriteAsync(context, admitted, sinceSequence: 0, context.RequestAborted)
             == IntegrationSseWriteOutcome.Streamed)
         {
             return;
         }
 
-        await WriteAcceptOutcomeAsync(context, result).ConfigureAwait(false);
+        await WriteAcceptOutcomeAsync(context, result);
     }
 
     /// <summary>
@@ -242,7 +241,7 @@ internal sealed class IntegrationApiHandler
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var caller = await AuthorizeAsync(context).ConfigureAwait(false);
+        var caller = await AuthorizeAsync(context);
         if (caller is null)
         {
             return;
@@ -250,20 +249,20 @@ internal sealed class IntegrationApiHandler
 
         if (!TryReadExecutionId(context, out var executionId))
         {
-            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage);
             return;
         }
 
-        var access = await _access.ResolveExecutionAsync(executionId, caller, context.RequestAborted).ConfigureAwait(false);
+        var access = await _access.ResolveExecutionAsync(executionId, caller, context.RequestAborted);
         if (access.Outcome == IntegrationAccessOutcome.Masked)
         {
-            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage);
             return;
         }
 
         if (WantsEventStream(context))
         {
-            await WriteStreamAsync(context, executionId, ReadLastEventId(context)).ConfigureAwait(false);
+            await WriteStreamAsync(context, executionId, ReadLastEventId(context));
             return;
         }
 
@@ -273,10 +272,9 @@ internal sealed class IntegrationApiHandler
         var rows = await _executions.ListEventsAsync(executionId,
                                         Math.Max(ReadLong(context, "sinceSeq"), val2: 0),
                                         IntegrationEventPage.ClampLimit(ReadLimit(context)),
-                                        context.RequestAborted)
-                                    .ConfigureAwait(false);
+                                        context.RequestAborted);
 
-        await context.Response.WriteAsJsonAsync(rows.Select(IntegrationMapper.ToEventDto).ToArray(), context.RequestAborted).ConfigureAwait(false);
+        await context.Response.WriteAsJsonAsync(rows.Select(IntegrationMapper.ToEventDto).ToArray(), context.RequestAborted);
     }
 
     /// <summary>A query value as a long, or 0. Never arithmetic on a sequence — holes make counting meaningless.</summary>
@@ -293,18 +291,17 @@ internal sealed class IntegrationApiHandler
     /// </summary>
     private async Task WriteStreamAsync(HttpContext context, Guid executionId, long sinceSequence)
     {
-        var outcome = await _writer.WriteAsync(context, executionId, sinceSequence, context.RequestAborted).ConfigureAwait(false);
+        var outcome = await _writer.WriteAsync(context, executionId, sinceSequence, context.RequestAborted);
         switch (outcome)
         {
             case IntegrationSseWriteOutcome.Gone:
                 await WriteMessageAsync(context,
                         StatusCodes.Status410Gone,
-                        $"The live stream no longer holds this position. Read the committed events from {EventsPath(executionId)} and the status from {SelfPath(executionId)}.")
-                    .ConfigureAwait(false);
+                        $"The live stream no longer holds this position. Read the committed events from {EventsPath(executionId)} and the status from {SelfPath(executionId)}.");
                 return;
             case IntegrationSseWriteOutcome.Busy:
                 context.Response.Headers.RetryAfter = "5";
-                await WriteMessageAsync(context, StatusCodes.Status503ServiceUnavailable, "Too many streams are open on this node. Try again shortly.").ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status503ServiceUnavailable, "Too many streams are open on this node. Try again shortly.");
                 return;
             default:
                 // Streamed: the 200, the headers and every frame are already on the wire.
@@ -336,7 +333,7 @@ internal sealed class IntegrationApiHandler
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var caller = await AuthorizeAsync(context).ConfigureAwait(false);
+        var caller = await AuthorizeAsync(context);
         if (caller is null)
         {
             return;
@@ -344,14 +341,14 @@ internal sealed class IntegrationApiHandler
 
         if (!TryReadExecutionId(context, out var executionId))
         {
-            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage);
             return;
         }
 
-        var access = await _access.ResolveExecutionAsync(executionId, caller, context.RequestAborted).ConfigureAwait(false);
+        var access = await _access.ResolveExecutionAsync(executionId, caller, context.RequestAborted);
         if (access.Outcome == IntegrationAccessOutcome.Masked || access.Execution is not { } execution)
         {
-            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage);
             return;
         }
 
@@ -365,14 +362,14 @@ internal sealed class IntegrationApiHandler
                 execution.EndedAtUtc,
                 execution.OutputCount,
                 Links(execution.Id)),
-            context.RequestAborted).ConfigureAwait(false);
+            context.RequestAborted);
     }
 
     public async Task CancelExecutionAsync(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var caller = await AuthorizeAsync(context).ConfigureAwait(false);
+        var caller = await AuthorizeAsync(context);
         if (caller is null)
         {
             return;
@@ -380,20 +377,20 @@ internal sealed class IntegrationApiHandler
 
         if (!TryReadExecutionId(context, out var executionId))
         {
-            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage);
             return;
         }
 
         // Authorisation, not a read: the masked cancel must leave no trace at all, so this runs BEFORE the marker is
         // stamped.
-        var access = await _access.ResolveExecutionAsync(executionId, caller, context.RequestAborted).ConfigureAwait(false);
+        var access = await _access.ResolveExecutionAsync(executionId, caller, context.RequestAborted);
         if (access.Outcome == IntegrationAccessOutcome.Masked)
         {
-            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage);
             return;
         }
 
-        var outcome = await _executions.RequestCancelAsync(executionId, context.RequestAborted).ConfigureAwait(false);
+        var outcome = await _executions.RequestCancelAsync(executionId, context.RequestAborted);
         switch (outcome)
         {
             case IntegrationCancelOutcome.Requested:
@@ -401,13 +398,13 @@ internal sealed class IntegrationApiHandler
                 await context.Response.WriteAsJsonAsync(new
                 {
                     message = "Cancellation requested."
-                }, context.RequestAborted).ConfigureAwait(false);
+                }, context.RequestAborted);
                 return;
             case IntegrationCancelOutcome.AlreadyTerminal:
-                await WriteMessageAsync(context, StatusCodes.Status409Conflict, "The execution has already finished.").ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status409Conflict, "The execution has already finished.");
                 return;
             default:
-                await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage).ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status404NotFound, MaskedExecutionMessage);
                 return;
         }
     }
@@ -424,14 +421,14 @@ internal sealed class IntegrationApiHandler
         var caller = IntegrationCallerIdentity.FromPrincipal(context.User);
         if (caller is null)
         {
-            await WriteUnauthorizedAsync(context).ConfigureAwait(false);
+            await WriteUnauthorizedAsync(context);
             return null;
         }
 
         if (!_rateLimiter.TryAcquire(caller.PrincipalId.ToString("D")))
         {
             context.Response.Headers.RetryAfter = "60";
-            await WriteMessageAsync(context, StatusCodes.Status429TooManyRequests, "Too many integration requests. Try again shortly.").ConfigureAwait(false);
+            await WriteMessageAsync(context, StatusCodes.Status429TooManyRequests, "Too many integration requests. Try again shortly.");
             return null;
         }
 
@@ -449,32 +446,32 @@ internal sealed class IntegrationApiHandler
                         result.SessionId!.Value,
                         StatusName(result.Status ?? IntegrationExecutionStatus.Accepted),
                         Links(result.ExecutionId.Value)),
-                    context.RequestAborted).ConfigureAwait(false);
+                    context.RequestAborted);
                 return;
             case IntegrationAcceptOutcome.TriggerNotFound:
             case IntegrationAcceptOutcome.SessionNotFound:
-                await WriteMessageAsync(context, StatusCodes.Status404NotFound, result.Message).ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status404NotFound, result.Message);
                 return;
             case IntegrationAcceptOutcome.RequestConflict:
-                await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message).ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message);
                 return;
             case IntegrationAcceptOutcome.SessionClosed:
-                await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message, SessionClosedCode).ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message, SessionClosedCode);
                 return;
             case IntegrationAcceptOutcome.SessionBusy:
-                await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message, SessionBusyCode).ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status409Conflict, result.Message, SessionBusyCode);
                 return;
             case IntegrationAcceptOutcome.InputsRejected:
-                await WriteMessageAsync(context, StatusCodes.Status422UnprocessableEntity, result.Message).ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status422UnprocessableEntity, result.Message);
                 return;
             case IntegrationAcceptOutcome.QueueFull:
                 context.Response.Headers.RetryAfter = "5";
-                await WriteMessageAsync(context, StatusCodes.Status503ServiceUnavailable, result.Message).ConfigureAwait(false);
+                await WriteMessageAsync(context, StatusCodes.Status503ServiceUnavailable, result.Message);
                 return;
             default:
                 // The credential was revoked between authentication and admission. It must not be distinguishable from
                 // one that was already revoked when the request arrived, so this is the challenge's own answer.
-                await WriteUnauthorizedAsync(context).ConfigureAwait(false);
+                await WriteUnauthorizedAsync(context);
                 return;
         }
     }
@@ -490,7 +487,7 @@ internal sealed class IntegrationApiHandler
         var writer = new ArrayBufferWriter<byte>();
         while (true)
         {
-            var result = await reader.ReadAsync(context.RequestAborted).ConfigureAwait(false);
+            var result = await reader.ReadAsync(context.RequestAborted);
             var sequence = result.Buffer;
             foreach (var segment in sequence)
             {

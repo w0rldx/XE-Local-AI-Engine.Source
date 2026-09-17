@@ -42,23 +42,22 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AnApprovedTaskCanBeSentBackForRework_AndStopsCarryingTheApprovedSubject()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
-        AssertEx.Equal("subject", await ApprovedSubjectHashAsync(dbContext, seed.TaskId).ConfigureAwait(false));
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
+        AssertEx.Equal("subject", await ApprovedSubjectHashAsync(dbContext, seed.TaskId));
 
         var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                    Guid.NewGuid(),
                                    DevelopmentTaskStatus.ChangesRequested,
                                    version,
-                                   Reason))
-                               .ConfigureAwait(false);
+                                   Reason));
 
         AssertEx.Equal(nameof(DevelopmentTaskStatus.ChangesRequested), moved.Status);
-        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
-        AssertEx.Null(await ApprovedSubjectHashAsync(dbContext, seed.TaskId).ConfigureAwait(false),
+        AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, (await store.GetTaskAsync(seed.TaskId)).Status);
+        AssertEx.Null(await ApprovedSubjectHashAsync(dbContext, seed.TaskId),
             "a task asked for rework is not an approved one, so it stops carrying the subject a review approved.");
 
         // Completion is still the apply port's alone: widening AwaitingApply must not have opened a generic route to it.
@@ -66,8 +65,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                               store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                   Guid.NewGuid(),
                                   DevelopmentTaskStatus.Completed,
-                                  moved.Version)))
-                          .ConfigureAwait(false);
+                                  moved.Version)));
     }
 
     /// <summary>
@@ -77,24 +75,22 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task TheReworkReasonIsWrittenInCamelCaseAndBecomesTheNextRoundsFeedback()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
 
         var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                    Guid.NewGuid(),
                                    DevelopmentTaskStatus.ChangesRequested,
                                    version,
-                                   Reason))
-                               .ConfigureAwait(false);
+                                   Reason));
 
         var written = await dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.TaskId == seed.TaskId && entity.EventType == "TaskTransitioned")
                                      .OrderByDescending(entity => entity.Sequence)
-                                     .FirstAsync()
-                                     .ConfigureAwait(false);
+                                     .FirstAsync();
         AssertEx.Equal($$"""{"reason":"{{Reason}}"}""", Encoding.UTF8.GetString(written.DetailJson!));
         var ledger = Encoding.UTF8.GetString(written.ResultMetadataJson!);
         AssertEx.True(ledger.Contains("\"projectId\":", StringComparison.Ordinal) && ledger.Contains("\"status\":\"ChangesRequested\"", StringComparison.Ordinal),
@@ -107,11 +103,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           moved.Version))
-                       .ConfigureAwait(false);
+                           moved.Version));
 
         AssertEx.Equal(Reason,
-            (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).PreviousRoundFeedback,
+            (await store.GetExecutionSnapshotAsync(attemptId)).PreviousRoundFeedback,
             "the rework round's own execution snapshot is where the coder prompt reads the previous round from.");
     }
 
@@ -129,18 +124,17 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AnOperatorsAmendmentReachesTheReviewersSnapshotAndIsNotTheRoundsFeedback()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
 
         var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                    Guid.NewGuid(),
                                    DevelopmentTaskStatus.ChangesRequested,
                                    version,
                                    OperatorReason,
-                                   OperatorDirected: true))
-                               .ConfigureAwait(false);
+                                   OperatorDirected: true));
 
         // The whole way round to the next review: the coder round the retry asked for, its gate, and the review.
         foreach (var status in new[]
@@ -150,7 +144,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                      DevelopmentTaskStatus.InReview
                  })
         {
-            asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), status, asked.Version)).ConfigureAwait(false);
+            asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), status, asked.Version));
         }
 
         var attemptId = Guid.NewGuid();
@@ -160,10 +154,9 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            DevelopmentAttemptRole.Reviewer,
                            "local-model",
                            "local",
-                           asked.Version))
-                       .ConfigureAwait(false);
+                           asked.Version));
 
-        var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
+        var snapshot = await store.GetExecutionSnapshotAsync(attemptId);
         AssertEx.Equal(OperatorReason,
             snapshot.OperatorInstruction,
             "the reviewer judged against requirements the operator had already amended, and sent the amendment straight back.");
@@ -180,27 +173,27 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AnOperatorsAmendmentStopsGoverningWhenTheNodeRunThatMadeItSettles()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
         var ruleSets = new[]
         {
             new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")
         };
 
         // The node run's dispatch, then the operator's Retry inside it, then the round it asked for.
-        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets).ConfigureAwait(false);
-        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: true).ConfigureAwait(false);
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets);
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: true);
 
         AssertEx.Equal(OperatorReason,
-            (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction,
+            (await store.GetExecutionSnapshotAsync(attemptId)).OperatorInstruction,
             "the round the operator paid for is inside the node run that wrote the instruction.");
 
         // The clear every terminal path of a node run writes.
-        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, []).ConfigureAwait(false);
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, []);
 
-        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction,
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId)).OperatorInstruction,
             "what a person told one node run must not go on outranking the requirements of every round after it.");
     }
 
@@ -213,42 +206,39 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task ABlankReasonOperatorRowWithdrawsTheInstructionBeforeIt()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
 
-        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: true).ConfigureAwait(false);
-        AssertEx.Equal(OperatorReason, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction);
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: true);
+        AssertEx.Equal(OperatorReason, (await store.GetExecutionSnapshotAsync(attemptId)).OperatorInstruction);
 
         // What an empty Retry box writes: the same operator-directed transition, with nothing said in it.
         var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                    Guid.NewGuid(),
                                    DevelopmentTaskStatus.ChangesRequested,
-                                   (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                                   (await store.GetTaskAsync(seed.TaskId)).Version,
                                    Reason: null,
-                                   OperatorDirected: true))
-                               .ConfigureAwait(false);
+                                   OperatorDirected: true));
 
-        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction,
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId)).OperatorInstruction,
             "a person who takes their amendment back must stop outranking the requirements from that moment on.");
-        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).PreviousRoundFeedback,
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId)).PreviousRoundFeedback,
             "and the withdrawal is not itself feedback for the round to answer.");
 
         // A LATER instruction still governs: the withdrawal is not a permanent kill, exactly as a blank policy is not.
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.InProgress,
-                           asked.Version))
-                       .ConfigureAwait(false);
+                           asked.Version));
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.ChangesRequested,
-                           (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                           (await store.GetTaskAsync(seed.TaskId)).Version,
                            OperatorReason,
-                           OperatorDirected: true))
-                       .ConfigureAwait(false);
-        AssertEx.Equal(OperatorReason, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).OperatorInstruction);
+                           OperatorDirected: true));
+        AssertEx.Equal(OperatorReason, (await store.GetExecutionSnapshotAsync(attemptId)).OperatorInstruction);
     }
 
     /// <summary>
@@ -261,19 +251,18 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task TheCoderRoundStartingClearsTheReasonThatAskedForIt()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
 
         var asked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                    Guid.NewGuid(),
                                    DevelopmentTaskStatus.ChangesRequested,
                                    version,
-                                   GateReason))
-                               .ConfigureAwait(false);
+                                   GateReason));
         AssertEx.Equal(GateReason,
-            (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).BlockedReason,
+            (await store.GetTaskAsync(seed.TaskId)).BlockedReason,
             "the reason is the operator's answer to 'why is this being reworked' right up to the round that answers it.");
 
         // The coder round the change request asked for, started the way the chain starts one: straight off
@@ -284,10 +273,9 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           asked.Version))
-                       .ConfigureAwait(false);
+                           asked.Version));
 
-        var reworking = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var reworking = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, reworking.Status);
         AssertEx.Null(reworking.BlockedReason, "the round that acts on the complaint is where it stops being the current one.");
     }
@@ -300,10 +288,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AnOperatorsAmendmentDoesNotShadowTheReviewerComplaintItOverrides()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
 
         // Round N: the reviewer asks for changes. Round N's coder round runs and is refused, leaving the task where a
         // Retry can reach it, and the operator overrides the reviewer.
@@ -311,16 +299,14 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                       Guid.NewGuid(),
                                       DevelopmentTaskStatus.ChangesRequested,
                                       version,
-                                      Reason))
-                                  .ConfigureAwait(false);
+                                      Reason));
         var refused = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                      Guid.NewGuid(),
                                      DevelopmentTaskStatus.InProgress,
-                                     reviewed.Version))
-                                 .ConfigureAwait(false);
-        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, refused.Version, OperatorReason, operatorDirected: true).ConfigureAwait(false);
+                                     reviewed.Version));
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, refused.Version, OperatorReason, operatorDirected: true);
 
-        var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
+        var snapshot = await store.GetExecutionSnapshotAsync(attemptId);
         AssertEx.Equal(OperatorReason, snapshot.OperatorInstruction);
         AssertEx.Equal(Reason,
             snapshot.PreviousRoundFeedback,
@@ -336,18 +322,17 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AnOperatorRetryWidensTheRoundCapByOne_AndIsTheOnlyEdgeOutOfBlocked()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
         var blocked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                      Guid.NewGuid(),
                                      DevelopmentTaskStatus.Blocked,
                                      version,
-                                     RoundLimitReason))
-                                 .ConfigureAwait(false);
-        AssertEx.Equal(expected: 3, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).MaxReviewRounds);
+                                     RoundLimitReason));
+        AssertEx.Equal(expected: 3, (await store.GetTaskAsync(seed.TaskId)).MaxReviewRounds);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() =>
                               store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
@@ -355,8 +340,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                   DevelopmentTaskStatus.ChangesRequested,
                                   blocked.Version,
                                   OperatorReason,
-                                  OperatorDirected: true)))
-                          .ConfigureAwait(false);
+                                  OperatorDirected: true)));
 
         var widened = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                      Guid.NewGuid(),
@@ -364,10 +348,9 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                      blocked.Version,
                                      OperatorReason,
                                      OperatorDirected: true,
-                                     WidenReviewRounds: true))
-                                 .ConfigureAwait(false);
+                                     WidenReviewRounds: true));
 
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
         AssertEx.Equal(expected: 4, task.MaxReviewRounds, "the Retry bought one round, not an exemption from the budget.");
         AssertEx.Equal(OperatorReason, task.BlockedReason, "the sentence the round has to act on is the operator's, and it replaces the cap's.");
@@ -376,8 +359,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         var written = await dbContext.DevelopmentEvents.AsNoTracking()
                                      .Where(entity => entity.TaskId == seed.TaskId && entity.EventType == "TaskTransitioned")
                                      .OrderByDescending(entity => entity.Sequence)
-                                     .FirstAsync()
-                                     .ConfigureAwait(false);
+                                     .FirstAsync();
         AssertEx.Equal(nameof(DevelopmentTaskStatus.ChangesRequested), widened.Status);
         AssertEx.Equal("TransitionedByOperator", written.Outcome, "a widening is a person's decision, and the audit row says whose.");
         var detail = Encoding.UTF8.GetString(written.DetailJson!);
@@ -392,16 +374,15 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AWideningOnAStaleVersion_IsRefusedAndLeavesTheCapWhereItWas()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
         var blocked = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                      Guid.NewGuid(),
                                      DevelopmentTaskStatus.Blocked,
                                      version,
-                                     RoundLimitReason))
-                                 .ConfigureAwait(false);
+                                     RoundLimitReason));
 
         _ = await AssertEx.ThrowsAsync<DevelopmentConcurrencyException>(() =>
                               store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
@@ -410,10 +391,9 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                   blocked.Version - 1,
                                   OperatorReason,
                                   OperatorDirected: true,
-                                  WidenReviewRounds: true)))
-                          .ConfigureAwait(false);
+                                  WidenReviewRounds: true)));
 
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, task.Status);
         AssertEx.Equal(expected: 3, task.MaxReviewRounds, "a refused write buys nothing.");
     }
@@ -426,15 +406,15 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task ARetryRecordedBeforeThisChangeIsStillReadAsTheRoundsFeedback()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
 
         // Byte-for-byte what the older build wrote: the same operator sentence, without the flag that marks it.
-        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: false).ConfigureAwait(false);
+        var attemptId = await ReworkThenStartCoderAttemptAsync(store, seed.TaskId, version, OperatorReason, operatorDirected: false);
 
-        var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
+        var snapshot = await store.GetExecutionSnapshotAsync(attemptId);
         AssertEx.Null(snapshot.OperatorInstruction, "nothing recorded it as a person's, and this store does not guess from the sentence.");
         AssertEx.Equal(OperatorReason, snapshot.PreviousRoundFeedback, "so it keeps reaching the round exactly as it did before.");
     }
@@ -451,13 +431,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                    DevelopmentTaskStatus.ChangesRequested,
                                    version,
                                    reason,
-                                   OperatorDirected: operatorDirected))
-                               .ConfigureAwait(false);
+                                   OperatorDirected: operatorDirected));
         var running = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
                                      Guid.NewGuid(),
                                      DevelopmentTaskStatus.InProgress,
-                                     asked.Version))
-                                 .ConfigureAwait(false);
+                                     asked.Version));
         var attemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
                            attemptId,
@@ -465,8 +443,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           running.Version))
-                       .ConfigureAwait(false);
+                           running.Version));
         return attemptId;
     }
 
@@ -478,29 +455,27 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task TheReworkReasonIsKeptOnTheTaskUntilTheNextRoundStarts()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
 
         var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                    Guid.NewGuid(),
                                    DevelopmentTaskStatus.ChangesRequested,
                                    version,
-                                   Reason))
-                               .ConfigureAwait(false);
+                                   Reason));
 
-        var reworked = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var reworked = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(Reason, reworked.BlockedReason, "a task asked for rework carries why it was asked, not only an event row saying so.");
         AssertEx.Null(reworked.BlockedAtUtc, "asking for rework is not a stand-down, so nothing times one.");
 
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.InProgress,
-                           moved.Version))
-                       .ConfigureAwait(false);
+                           moved.Version));
 
-        AssertEx.Null((await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).BlockedReason,
+        AssertEx.Null((await store.GetTaskAsync(seed.TaskId)).BlockedReason,
             "the round that acts on the complaint is where it stops being the current one.");
     }
 
@@ -512,34 +487,31 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AWorkflowsPolicyIsRecordedOncePerOperationAndBecomesTheRoundsPolicyText()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
         var operationId = Guid.NewGuid();
         var ruleSets = new[]
         {
             new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")
         };
 
-        var first = await store.RecordWorkflowPolicyAsync(seed.TaskId, operationId, Policy, ruleSets).ConfigureAwait(false);
-        var replayed = await store.RecordWorkflowPolicyAsync(seed.TaskId, operationId, "Something else entirely.", ruleSets).ConfigureAwait(false);
+        var first = await store.RecordWorkflowPolicyAsync(seed.TaskId, operationId, Policy, ruleSets);
+        var replayed = await store.RecordWorkflowPolicyAsync(seed.TaskId, operationId, "Something else entirely.", ruleSets);
 
         AssertEx.Equal(first.Sequence, replayed.Sequence, "the same operation id answers with what it already did rather than injecting a second policy.");
         AssertEx.Equal(expected: 1,
-            await dbContext.DevelopmentEvents.AsNoTracking().CountAsync(entity => entity.TaskId == seed.TaskId && entity.EventType == "WorkflowPolicyApplied")
-                           .ConfigureAwait(false),
+            await dbContext.DevelopmentEvents.AsNoTracking().CountAsync(entity => entity.TaskId == seed.TaskId && entity.EventType == "WorkflowPolicyApplied"),
             "one row, whatever the replay was handed.");
 
         // The round the policy governs: a coder attempt only starts once the task is back where one runs.
-        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.ChangesRequested, version))
-                                   .ConfigureAwait(false);
+        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.ChangesRequested, version));
         var inProgress = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                         Guid.NewGuid(),
                                         DevelopmentTaskStatus.InProgress,
-                                        reworking.Version))
-                                    .ConfigureAwait(false);
+                                        reworking.Version));
 
         var attemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
@@ -548,11 +520,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           inProgress.Version))
-                       .ConfigureAwait(false);
+                           inProgress.Version));
 
         AssertEx.Equal(Policy,
-            (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+            (await store.GetExecutionSnapshotAsync(attemptId)).WorkflowPolicyText,
             "the round's own execution snapshot is where the coder and reviewer prompts read the workflow's policy from.");
     }
 
@@ -565,22 +536,20 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task ABlankWorkflowPolicyRevokesTheOneBeforeItAndCannotNameRuleSets()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
         var ruleSets = new[]
         {
             new DevelopmentWorkflowRuleSetReference(Guid.NewGuid(), "House rules", "content-hash")
         };
 
-        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.ChangesRequested, version))
-                                   .ConfigureAwait(false);
+        var reworking = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.ChangesRequested, version));
         var inProgress = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                         Guid.NewGuid(),
                                         DevelopmentTaskStatus.InProgress,
-                                        reworking.Version))
-                                    .ConfigureAwait(false);
+                                        reworking.Version));
         var attemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                            attemptId,
@@ -588,32 +557,29 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           inProgress.Version))
-                       .ConfigureAwait(false);
+                           inProgress.Version));
 
-        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets).ConfigureAwait(false);
-        AssertEx.Equal(Policy, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText);
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets);
+        AssertEx.Equal(Policy, (await store.GetExecutionSnapshotAsync(attemptId)).WorkflowPolicyText);
 
         // The clear a settling node run writes.
-        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, []).ConfigureAwait(false);
-        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, []);
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId)).WorkflowPolicyText,
             "a cleared policy governs nothing that comes after it.");
 
         // A later node run that DOES resolve one governs again — the clear is not a permanent kill.
-        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets).ConfigureAwait(false);
-        AssertEx.Equal(Policy, (await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText);
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, ruleSets);
+        AssertEx.Equal(Policy, (await store.GetExecutionSnapshotAsync(attemptId)).WorkflowPolicyText);
 
         // And a later node run that resolves NOTHING records an empty applied event, which reads the same as a clear.
-        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), "   ", []).ConfigureAwait(false);
-        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false)).WorkflowPolicyText,
+        _ = await store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), "   ", []);
+        AssertEx.Null((await store.GetExecutionSnapshotAsync(attemptId)).WorkflowPolicyText,
             "a workflow that resolved no policy must not leave the previous one governing.");
 
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), string.Empty, ruleSets),
-                              "a clear that named rule sets would be claiming an injection it is not making.")
-                          .ConfigureAwait(false);
+                              "a clear that named rule sets would be claiming an injection it is not making.");
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() => store.RecordWorkflowPolicyAsync(seed.TaskId, Guid.NewGuid(), Policy, []),
-                              "and an injection still has to name what composed it.")
-                          .ConfigureAwait(false);
+                              "and an injection still has to name what composed it.");
     }
 
     /// <summary>
@@ -625,11 +591,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task TheHopIntoTheNewRoundInvalidatesTheStaleEvidenceBeforeAnAttemptCanReadIt()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store);
         var artifactId = Guid.NewGuid();
         _ = await store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
                            seed.ProjectId,
@@ -640,25 +606,22 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            SchemaVersion: 1,
                            "content-hash",
                            ByteCount: 2,
-                           ContentJson: Encoding.UTF8.GetBytes("{}")))
-                       .ConfigureAwait(false);
+                           ContentJson: Encoding.UTF8.GetBytes("{}")));
 
         var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                    Guid.NewGuid(),
                                    DevelopmentTaskStatus.ChangesRequested,
                                    version,
-                                   Reason))
-                               .ConfigureAwait(false);
-        AssertEx.True(await IsValidAsync(dbContext, artifactId).ConfigureAwait(false),
+                                   Reason));
+        AssertEx.True(await IsValidAsync(dbContext, artifactId),
             "a task waiting for a new round has not produced anything to supersede the old report with yet.");
 
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.InProgress,
-                           moved.Version))
-                       .ConfigureAwait(false);
+                           moved.Version));
 
-        AssertEx.False(await IsValidAsync(dbContext, artifactId).ConfigureAwait(false),
+        AssertEx.False(await IsValidAsync(dbContext, artifactId),
             "the previous round's validation report describes an implementation that is being replaced.");
     }
 
@@ -671,32 +634,31 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AValidationFailureAfterAReviewersReworkIsWhatTheNextRoundIsTold()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
 
         async Task<long> VersionAsync() =>
-            (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version;
+            (await store.GetTaskAsync(seed.TaskId)).Version;
 
         async Task MoveAsync(DevelopmentTaskStatus target, string? reason = null) =>
             _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                Guid.NewGuid(),
                                target,
-                               await VersionAsync().ConfigureAwait(false),
-                               reason))
-                           .ConfigureAwait(false);
+                               await VersionAsync(),
+                               reason));
 
         // Round one reaches review, and the reviewer asks for changes.
-        await MoveAsync(DevelopmentTaskStatus.Ready).ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.InProgress).ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.Validation).ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.InReview).ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.ChangesRequested, "The reviewer wants the inverted range covered.").ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.Ready);
+        await MoveAsync(DevelopmentTaskStatus.InProgress);
+        await MoveAsync(DevelopmentTaskStatus.Validation);
+        await MoveAsync(DevelopmentTaskStatus.InReview);
+        await MoveAsync(DevelopmentTaskStatus.ChangesRequested, "The reviewer wants the inverted range covered.");
 
         // Round two produces a patch the deterministic gate then rejects.
-        await MoveAsync(DevelopmentTaskStatus.InProgress).ConfigureAwait(false);
+        await MoveAsync(DevelopmentTaskStatus.InProgress);
         var attemptId = Guid.NewGuid();
         var attempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                      attemptId,
@@ -704,14 +666,12 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                      DevelopmentAttemptRole.Coder,
                                      "local-model",
                                      "local",
-                                     await VersionAsync().ConfigureAwait(false)))
-                                 .ConfigureAwait(false);
+                                     await VersionAsync()));
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
                            Guid.NewGuid(),
                            DevelopmentAttemptStatus.Succeeded,
-                           attempt.Version))
-                       .ConfigureAwait(false);
-        await MoveAsync(DevelopmentTaskStatus.Validation).ConfigureAwait(false);
+                           attempt.Version));
+        await MoveAsync(DevelopmentTaskStatus.Validation);
         _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
                                seed.ProjectId,
                                seed.TaskId,
@@ -723,10 +683,9 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                ByteCount: 2,
                                ContentJson: Encoding.UTF8.GetBytes("{}")),
                            Guid.NewGuid(),
-                           await VersionAsync().ConfigureAwait(false),
+                           await VersionAsync(),
                            DevelopmentTaskStatus.ChangesRequested,
-                           "The release test command reported 3 failing tests."))
-                       .ConfigureAwait(false);
+                           "The release test command reported 3 failing tests."));
 
         var next = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
@@ -735,11 +694,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           await VersionAsync().ConfigureAwait(false)))
-                       .ConfigureAwait(false);
+                           await VersionAsync()));
 
         AssertEx.Equal("The release test command reported 3 failing tests.",
-            (await store.GetExecutionSnapshotAsync(next).ConfigureAwait(false)).PreviousRoundFeedback,
+            (await store.GetExecutionSnapshotAsync(next)).PreviousRoundFeedback,
             "the gate's complaint is newer than the reviewer's, so it is the one the round has to act on.");
     }
 
@@ -755,34 +713,33 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AFailedDeterministicGateAsksTheCoderForANewRoundAndSpendsAReviewRound()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var (seed, attemptId) = await SeedTaskInValidationAsync(store).ConfigureAwait(false);
+        var (seed, attemptId) = await SeedTaskInValidationAsync(store);
 
         // An earlier round's report, valid until this hop supersedes it.
         var staleId = Guid.NewGuid();
-        _ = await store.AttachArtifactAsync(ValidationArtifact(staleId, seed, attemptId)).ConfigureAwait(false);
+        _ = await store.AttachArtifactAsync(ValidationArtifact(staleId, seed, attemptId));
 
         var reportId = Guid.NewGuid();
         var finalized = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(ValidationArtifact(reportId, seed, attemptId),
                                        Guid.NewGuid(),
-                                       (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                                       (await store.GetTaskAsync(seed.TaskId)).Version,
                                        DevelopmentTaskStatus.ChangesRequested,
-                                       GateReason))
-                                   .ConfigureAwait(false);
+                                       GateReason));
 
         AssertEx.Equal(nameof(DevelopmentTaskStatus.ChangesRequested), finalized.Status);
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested,
             task.Status,
             "a failed gate hands the failure to the coder; InProgress asked for the same validation again.");
         AssertEx.Equal(expected: 1, task.CurrentReviewRound, "and it spends a round, exactly as a reviewer's rejection does.");
         AssertEx.Equal(GateReason, task.BlockedReason, "the operator-facing copy of the reason names what the gate found.");
         AssertEx.Null(task.ApprovedSubjectHash);
-        AssertEx.False(await IsValidAsync(dbContext, staleId).ConfigureAwait(false), "the superseded report is marked stale on this hop.");
-        AssertEx.False(await IsValidAsync(dbContext, reportId).ConfigureAwait(false), "and a failing report is never current evidence.");
+        AssertEx.False(await IsValidAsync(dbContext, staleId), "the superseded report is marked stale on this hop.");
+        AssertEx.False(await IsValidAsync(dbContext, reportId), "and a failing report is never current evidence.");
 
         // The whole point of the hop: the next action off this status is a CODER round, which is the one thing the
         // old target could not be. The reviewer still cannot start, because nothing has been validated.
@@ -793,10 +750,9 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                            DevelopmentAttemptRole.Coder,
                            "local-model",
                            "local",
-                           task.Version))
-                       .ConfigureAwait(false);
+                           task.Version));
         AssertEx.Equal(GateReason,
-            (await store.GetExecutionSnapshotAsync(next).ConfigureAwait(false)).PreviousRoundFeedback,
+            (await store.GetExecutionSnapshotAsync(next)).PreviousRoundFeedback,
             "and the round is told what the gate found, or it re-implements blind.");
     }
 
@@ -809,28 +765,27 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AFailedGateNeverSpendsMoreRoundsThanTheTaskHas()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, attemptId) = await SeedTaskInValidationAsync(store, maxReviewRounds: 1).ConfigureAwait(false);
+        var (seed, attemptId) = await SeedTaskInValidationAsync(store, maxReviewRounds: 1);
 
         for (var round = 0; round < 2; round++)
         {
             if (round > 0)
             {
                 // Back through the coder round the previous failure asked for, and into the gate again.
-                await MoveToValidationAsync(store, seed.TaskId, attemptId).ConfigureAwait(false);
+                await MoveToValidationAsync(store, seed.TaskId, attemptId);
             }
 
             _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(ValidationArtifact(Guid.NewGuid(), seed, attemptId),
                                Guid.NewGuid(),
-                               (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                               (await store.GetTaskAsync(seed.TaskId)).Version,
                                DevelopmentTaskStatus.ChangesRequested,
-                               GateReason))
-                           .ConfigureAwait(false);
+                               GateReason));
         }
 
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, task.Status);
         AssertEx.Equal(expected: 1, task.CurrentReviewRound, "the count stops at the budget rather than running past it.");
         AssertEx.Equal(task.MaxReviewRounds, task.CurrentReviewRound);
@@ -840,24 +795,23 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task APassingDeterministicGateStillEntersReviewWithItsEvidenceCurrent()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var (seed, attemptId) = await SeedTaskInValidationAsync(store).ConfigureAwait(false);
+        var (seed, attemptId) = await SeedTaskInValidationAsync(store);
 
         var reportId = Guid.NewGuid();
         _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(ValidationArtifact(reportId, seed, attemptId),
                            Guid.NewGuid(),
-                           (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
-                           DevelopmentTaskStatus.InReview))
-                       .ConfigureAwait(false);
+                           (await store.GetTaskAsync(seed.TaskId)).Version,
+                           DevelopmentTaskStatus.InReview));
 
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
         AssertEx.Equal(expected: 1, task.CurrentReviewRound);
         AssertEx.Null(task.BlockedReason);
-        AssertEx.True(await IsValidAsync(dbContext, reportId).ConfigureAwait(false), "a passing report IS the evidence the review reads.");
+        AssertEx.True(await IsValidAsync(dbContext, reportId), "a passing report IS the evidence the review reads.");
     }
 
     /// <summary>
@@ -867,10 +821,10 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task AValidationCannotFinalizeBackIntoTheStateThatMeansValidateMe()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, attemptId) = await SeedTaskInValidationAsync(store).ConfigureAwait(false);
+        var (seed, attemptId) = await SeedTaskInValidationAsync(store);
 
         _ = await AssertEx.ThrowsAsync<ArgumentException>(() =>
                               store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(ValidationArtifact(Guid.NewGuid(), seed, attemptId),
@@ -878,8 +832,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                   // Any value: the argument guard fires before EnsureVersion ever reads it.
                                   ExpectedTaskVersion: 0,
                                   DevelopmentTaskStatus.InProgress,
-                                  GateReason)))
-                          .ConfigureAwait(false);
+                                  GateReason)));
     }
 
     /// <summary>
@@ -892,28 +845,26 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     [Test]
     public async Task ThePassingGateClearsTheFailureSentenceTheFailingOneWrote()
     {
-        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await _fixture.BuildProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, attemptId) = await SeedTaskInValidationAsync(store).ConfigureAwait(false);
+        var (seed, attemptId) = await SeedTaskInValidationAsync(store);
 
         _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(ValidationArtifact(Guid.NewGuid(), seed, attemptId),
                            Guid.NewGuid(),
-                           (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
+                           (await store.GetTaskAsync(seed.TaskId)).Version,
                            DevelopmentTaskStatus.ChangesRequested,
-                           GateReason))
-                       .ConfigureAwait(false);
-        AssertEx.Equal(GateReason, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).BlockedReason);
+                           GateReason));
+        AssertEx.Equal(GateReason, (await store.GetTaskAsync(seed.TaskId)).BlockedReason);
 
         // The rework round, then a gate that passes.
-        await MoveToValidationAsync(store, seed.TaskId, attemptId).ConfigureAwait(false);
+        await MoveToValidationAsync(store, seed.TaskId, attemptId);
         _ = await store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(ValidationArtifact(Guid.NewGuid(), seed, attemptId),
                            Guid.NewGuid(),
-                           (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Version,
-                           DevelopmentTaskStatus.InReview))
-                       .ConfigureAwait(false);
+                           (await store.GetTaskAsync(seed.TaskId)).Version,
+                           DevelopmentTaskStatus.InReview));
 
-        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        var task = await store.GetTaskAsync(seed.TaskId);
         AssertEx.Equal(DevelopmentTaskStatus.InReview, task.Status);
         AssertEx.Null(task.BlockedReason, "an operator reading an approved task must not be shown the failure it recovered from.");
     }
@@ -926,14 +877,13 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         {
             MaxReviewRounds = maxReviewRounds
         };
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        _ = await store.CreateProjectAsync(seed);
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                            Guid.NewGuid(),
                            DevelopmentTaskStatus.Ready,
-                           ExpectedTaskVersion: 1))
-                       .ConfigureAwait(false);
+                           ExpectedTaskVersion: 1));
         var attemptId = Guid.NewGuid();
-        await MoveToValidationAsync(store, seed.TaskId, attemptId).ConfigureAwait(false);
+        await MoveToValidationAsync(store, seed.TaskId, attemptId);
         return (seed, attemptId);
     }
 
@@ -943,7 +893,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     /// </summary>
     private static async Task MoveToValidationAsync(IDevelopmentStore store, Guid taskId, Guid attemptId)
     {
-        if ((await store.ListAttemptsAsync(taskId).ConfigureAwait(false)).All(attempt => attempt.Id != attemptId))
+        if ((await store.ListAttemptsAsync(taskId)).All(attempt => attempt.Id != attemptId))
         {
             var attempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
                                          attemptId,
@@ -951,27 +901,23 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
                                          DevelopmentAttemptRole.Coder,
                                          "local-model",
                                          "local",
-                                         (await store.GetTaskAsync(taskId).ConfigureAwait(false)).Version))
-                                     .ConfigureAwait(false);
+                                         (await store.GetTaskAsync(taskId)).Version));
             _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
                                Guid.NewGuid(),
                                DevelopmentAttemptStatus.Succeeded,
-                               attempt.Version))
-                           .ConfigureAwait(false);
+                               attempt.Version));
         }
         else
         {
             _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
                                Guid.NewGuid(),
                                DevelopmentTaskStatus.InProgress,
-                               (await store.GetTaskAsync(taskId).ConfigureAwait(false)).Version))
-                           .ConfigureAwait(false);
+                               (await store.GetTaskAsync(taskId)).Version));
         }
 
         _ = await store.StartValidationAsync(new DevelopmentStartValidationCommand(taskId,
                            Guid.NewGuid(),
-                           (await store.GetTaskAsync(taskId).ConfigureAwait(false)).Version))
-                       .ConfigureAwait(false);
+                           (await store.GetTaskAsync(taskId)).Version));
     }
 
     private static DevelopmentAttachArtifactCommand ValidationArtifact(Guid artifactId, DevelopmentCreateProjectCommand seed, Guid attemptId) =>
@@ -990,13 +936,11 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
         await dbContext.DevelopmentTasks.AsNoTracking()
                        .Where(entity => entity.Id == taskId)
                        .Select(entity => entity.ApprovedSubjectHash)
-                       .SingleAsync()
-                       .ConfigureAwait(false);
+                       .SingleAsync();
 
     private static async Task<bool> IsValidAsync(NodeChatDbContext dbContext, Guid artifactId) =>
         await dbContext.DevelopmentArtifacts.AsNoTracking()
                        .Where(entity => entity.Id == artifactId)
                        .Select(entity => entity.IsValid)
-                       .SingleAsync()
-                       .ConfigureAwait(false);
+                       .SingleAsync();
 }

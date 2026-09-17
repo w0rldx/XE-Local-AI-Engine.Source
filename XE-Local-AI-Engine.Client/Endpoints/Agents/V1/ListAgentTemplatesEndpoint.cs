@@ -19,7 +19,7 @@ public sealed class ListAgentTemplatesEndpoint(IAgentTemplateCatalog catalog, IA
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var alreadySeeded = await _agentDefinitions.ListSeededSlugsAsync(ct).ConfigureAwait(false);
+        var alreadySeeded = await _agentDefinitions.ListSeededSlugsAsync(ct);
 
         var items = _catalog.List()
                             .Select(template => new AgentTemplateSummary
@@ -38,6 +38,6 @@ public sealed class ListAgentTemplatesEndpoint(IAgentTemplateCatalog catalog, IA
             {
                 Items = items
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

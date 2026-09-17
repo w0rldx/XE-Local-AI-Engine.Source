@@ -24,7 +24,7 @@ internal static class RequestBodyTooLargeAssert
             response.Content.Headers.ContentType?.ToString(),
             $"{because} must answer the one Content-Type the shared writer sends, header string and all.");
 
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var body = document.RootElement;
 
         AssertEx.Equal(expected: 413, body.GetProperty("status").GetInt32(), because);

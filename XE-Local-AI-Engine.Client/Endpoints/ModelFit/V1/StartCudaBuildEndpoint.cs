@@ -35,22 +35,21 @@ public sealed class StartCudaBuildEndpoint(
         // Linux gate (server-side, not UI-only).
         if (!OperatingSystem.IsLinux())
         {
-            await BlockAsync("not-linux", "The in-app CUDA build is available on Linux only.").ConfigureAwait(false);
+            await BlockAsync("not-linux", "The in-app CUDA build is available on Linux only.");
             return;
         }
 
         if (await LlamaCppPrebuiltRuntimeMutationGuard
-                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct)
-                  .ConfigureAwait(false))
+                  .IsKeepModelWarmEnabledAsync(nodeRuntimeSettings, ct))
         {
-            await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage).ConfigureAwait(false);
+            await BlockAsync("keep-model-warm-enabled", LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage);
             return;
         }
 
         try
         {
             var result = await _runtime.StartSourceBuildAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
-                LlamaCppSourceSelection.Official), ct).ConfigureAwait(false);
+                LlamaCppSourceSelection.Official), ct);
             var blocked = LlamaCppSourceBuildStartEndpointSupport.MapBlocked(result.Outcome,
                 LlamaCppSourceBuildStartEndpointSupport.CudaBuildKind);
             if (blocked is not null)
@@ -65,7 +64,7 @@ public sealed class StartCudaBuildEndpoint(
                     RunningProcessCount = result.Outcome == LlamaCppSourceBuildStartOutcome.ProcessesRunning
                         ? result.RunningProcessCount
                         : null
-                })).ConfigureAwait(false);
+                }));
                 return;
             }
 
@@ -74,12 +73,12 @@ public sealed class StartCudaBuildEndpoint(
                     Started = true,
                     Status = _runtime.GetCudaBuildStatus().ToResponse()
                 },
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (LlamaRuntimeException exception)
         {
             // A race lost the prerequisite/disk re-check inside the service — surface the sanitized reason as a 409.
-            await BlockAsync("prerequisites", exception.Message).ConfigureAwait(false);
+            await BlockAsync("prerequisites", exception.Message);
         }
     }
 

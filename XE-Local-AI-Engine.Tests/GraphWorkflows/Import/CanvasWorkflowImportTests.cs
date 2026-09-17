@@ -31,9 +31,9 @@ public sealed class CanvasWorkflowImportTests
         await using var factory = NewHost();
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([], FailedCount: 0), logger).ConfigureAwait(false);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([], FailedCount: 0), logger);
 
-        AssertEx.Empty(await ListDefinitionsAsync(factory).ConfigureAwait(false));
+        AssertEx.Empty(await ListDefinitionsAsync(factory));
         AssertEx.Empty(logger.Entries, "a fresh install runs this on every first start; a summary there would be noise forever.");
     }
 
@@ -48,9 +48,9 @@ public sealed class CanvasWorkflowImportTests
         var candidate = new CanvasWorkflowImportCandidate(Guid.NewGuid(), "Release notes", CanvasGraphs.Linear, CreatedAtUtc: 1);
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), logger).ConfigureAwait(false);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), logger);
 
-        var summaries = await ListDefinitionsAsync(factory).ConfigureAwait(false);
+        var summaries = await ListDefinitionsAsync(factory);
         var summary = summaries.Single();
         AssertEx.Equal("Release notes", summary.Name);
         AssertEx.Equal($"Imported from Open Canvas (canvas workflow {candidate.Id}).", summary.Description,
@@ -58,7 +58,7 @@ public sealed class CanvasWorkflowImportTests
         AssertEx.Equal(expected: 3, summary.NodeCount);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var definition = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(summary.Id).ConfigureAwait(false);
+        var definition = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(summary.Id);
         AssertEx.Equal(expected: 3, GraphWorkflowGraphContract.ValidateAndCountNodes(definition.GraphJson, maxNodes: 200),
             "what round-trips out of the store is a definition a run could start.");
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "1 imported, 0 need attention, 0 failed"));
@@ -76,16 +76,16 @@ public sealed class CanvasWorkflowImportTests
         var candidate = new CanvasWorkflowImportCandidate(Guid.NewGuid(), "Odd one", CanvasGraphs.UnknownKind, CreatedAtUtc: 1);
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), logger).ConfigureAwait(false);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), logger);
 
-        var summary = (await ListDefinitionsAsync(factory).ConfigureAwait(false)).Single();
+        var summary = (await ListDefinitionsAsync(factory)).Single();
         AssertEx.True(summary.Description?.StartsWith("IMPORT NEEDS ATTENTION: ", StringComparison.Ordinal) is true,
             $"the description an operator greps for is missing: '{summary.Description}'.");
         AssertEx.Contains(summary.Description, $"canvas workflow {candidate.Id}", message: "and it still says where the row came from.");
         AssertEx.Equal(expected: 3, summary.NodeCount, "the count is what the mapper wrote, because there is no parse to take it from.");
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var definition = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(summary.Id).ConfigureAwait(false);
+        var definition = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetDefinitionAsync(summary.Id);
         AssertEx.Equal(GraphHash(definition.GraphJson), definition.GraphHash, "the store hashed it exactly as it hashes a clean save.");
         _ = AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraphContract.ValidateAndCountNodes(definition.GraphJson, maxNodes: 200),
             "which is the whole point: it is preserved, and it cannot run until an operator edits it.");
@@ -108,9 +108,9 @@ public sealed class CanvasWorkflowImportTests
         ];
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot(candidates, FailedCount: 1), logger).ConfigureAwait(false);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot(candidates, FailedCount: 1), logger);
 
-        var summaries = await ListDefinitionsAsync(factory).ConfigureAwait(false);
+        var summaries = await ListDefinitionsAsync(factory);
         AssertEx.Equal("First, Odd one, Third", string.Join(", ", summaries.Select(static summary => summary.Name).Order(StringComparer.Ordinal)),
             "nothing is dropped for being invalid — the row travels and the operator decides.");
         AssertEx.Equal(expected: 1, summaries.Count(static summary => summary.Description?.StartsWith("IMPORT NEEDS ATTENTION", StringComparison.Ordinal) is true));
@@ -131,9 +131,9 @@ public sealed class CanvasWorkflowImportTests
         await using var factory = GraphWorkflowHostFixture.NewFactory(("GraphWorkflows:Enabled", "false"));
         var candidate = new CanvasWorkflowImportCandidate(Guid.NewGuid(), "Imported while off", CanvasGraphs.Linear, CreatedAtUtc: 1);
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), new RecordingLogger<CanvasWorkflowImportTests>()).ConfigureAwait(false);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot([candidate], FailedCount: 0), new RecordingLogger<CanvasWorkflowImportTests>());
 
-        AssertEx.Equal("Imported while off", (await ListDefinitionsAsync(factory).ConfigureAwait(false)).Single().Name);
+        AssertEx.Equal("Imported while off", (await ListDefinitionsAsync(factory)).Single().Name);
     }
 
     /// <summary>A host of this test's own, because every definition count here is an absolute one.</summary>
@@ -146,14 +146,13 @@ public sealed class CanvasWorkflowImportTests
         await CanvasWorkflowImport.ImportAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>(),
                                       scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(),
                                       snapshot,
-                                      logger)
-                                  .ConfigureAwait(false);
+                                      logger);
     }
 
     private static async Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListDefinitionsAsync(TestServerWebAppFactory factory)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().ListDefinitionsAsync().ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().ListDefinitionsAsync();
     }
 
     /// <summary>The hash the store writes beside every graph, spelled out here so the column is pinned to the blob.</summary>

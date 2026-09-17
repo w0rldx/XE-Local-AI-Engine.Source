@@ -451,7 +451,7 @@ public sealed class IntegrationStreamEventMapperTests
             using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             try
             {
-                await foreach (var streamEvent in _buffer.ReadAsync(_executionId, sinceSequence: 0, cancellation.Token).ConfigureAwait(false))
+                await foreach (var streamEvent in _buffer.ReadAsync(_executionId, sinceSequence: 0, cancellation.Token))
                 {
                     events.Add(streamEvent);
                     if (streamEvent.Sequence >= head)

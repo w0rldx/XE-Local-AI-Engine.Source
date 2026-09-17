@@ -85,7 +85,7 @@ public static class RecommendedEmbeddingModel
     {
         ArgumentNullException.ThrowIfNull(modelStore);
 
-        var installed = await modelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var installed = await modelStore.ListInstalledModelsAsync(cancellationToken);
         return installed.FirstOrDefault(model => Matches(model.ModelName))
                ?? installed
                   .Where(model => !string.IsNullOrWhiteSpace(model.ModelName)

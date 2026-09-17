@@ -33,11 +33,11 @@ public sealed class CloudModelResolver(
         // never render as "it stays on the machine".
         if (ExternalModelId.HasExternalScheme(modelName))
         {
-            return await _modelTrustResolver.ResolveAsync(modelName, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local;
+            return await _modelTrustResolver.ResolveAsync(modelName, cancellationToken) != ModelTrustLocality.Local;
         }
 
         return CodexModelCatalog.IsCodexModel(modelName)
-               || await IsAzureFoundryDeploymentAsync(modelName, cancellationToken).ConfigureAwait(false);
+               || await IsAzureFoundryDeploymentAsync(modelName, cancellationToken);
     }
 
     public async Task<bool> IsAzureFoundryDeploymentAsync(string? modelName, CancellationToken cancellationToken = default)
@@ -49,7 +49,7 @@ public sealed class CloudModelResolver(
 
         try
         {
-            var config = await _cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+            var config = await _cloudCredentialStore.LoadConfigAsync(cancellationToken);
             var connection = config?.AzureFoundry;
             return connection is { Models.Count: > 0 }
                    && connection.Models.Any(model => string.Equals(model.DeploymentName, modelName, StringComparison.OrdinalIgnoreCase));
@@ -69,7 +69,7 @@ public sealed class CloudModelResolver(
     {
         try
         {
-            var config = await _cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+            var config = await _cloudCredentialStore.LoadConfigAsync(cancellationToken);
             return config?.AzureFoundry;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -39,24 +39,24 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("vram-at-load-up.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreVramMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreVramMigrationId);
 
-        await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
+        await using (var connection = await OpenConnectionAsync(databasePath))
         {
             // The precondition the rest of this test rests on: the table had neither column before the migration ran,
             // so their presence below is this migration's doing and not the previous one's.
-            var before = await GetNodeRunColumnNamesAsync(connection).ConfigureAwait(false);
+            var before = await GetNodeRunColumnNamesAsync(connection);
             AssertEx.False(before.Contains(FreeColumn), "dev_workflow_node_runs must not carry the free-VRAM column before this migration.");
             AssertEx.False(before.Contains(AdmittedColumn), "dev_workflow_node_runs must not carry the admitted-VRAM column before this migration.");
         }
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var upgraded = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var after = await GetNodeRunColumnNamesAsync(upgraded).ConfigureAwait(false);
+        await using var upgraded = await OpenConnectionAsync(databasePath);
+        var after = await GetNodeRunColumnNamesAsync(upgraded);
         AssertEx.True(after.Contains(FreeColumn), "dev_workflow_node_runs should expose the free-VRAM column after the migration.");
         AssertEx.True(after.Contains(AdmittedColumn), "dev_workflow_node_runs should expose the admitted-VRAM column after the migration.");
     }
@@ -66,10 +66,10 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("vram-at-load-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetNodeRunColumnNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetNodeRunColumnNamesAsync(connection);
         AssertEx.True(columns.Contains(FreeColumn), "A fresh migrate-to-head should expose the free-VRAM column.");
         AssertEx.True(columns.Contains(AdmittedColumn), "A fresh migrate-to-head should expose the admitted-VRAM column.");
     }
@@ -79,15 +79,15 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("vram-at-load-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreVramMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreVramMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetNodeRunColumnNamesAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetNodeRunColumnNamesAsync(connection);
 
         AssertEx.False(columns.Contains(FreeColumn), "Rolling back one migration should drop the free-VRAM column.");
         AssertEx.False(columns.Contains(AdmittedColumn), "Rolling back one migration should drop the admitted-VRAM column.");
@@ -118,7 +118,7 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -129,8 +129,8 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
         command.CommandText = "PRAGMA table_info(dev_workflow_node_runs);";
 
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             columns.Add(reader.GetString(reader.GetOrdinal("name")));
         }

@@ -23,12 +23,11 @@ public sealed class RemoveStableDiffusionCppSourceBuildEndpoint(ImageRuntimeOrch
     public override async Task HandleAsync(ImageRuntimeActionRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var result = await imageRuntime.RemoveAsync(ct).ConfigureAwait(false);
+        var result = await imageRuntime.RemoveAsync(ct);
         if (result.Outcome == StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy)
         {
             await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy("Wait for active image jobs and image-runtime processes to finish before removing the managed runtime.",
-                          result.Activity ?? imageRuntime.GetActivitySnapshot()))
-                      .ConfigureAwait(false);
+                          result.Activity ?? imageRuntime.GetActivitySnapshot()));
             return;
         }
 
@@ -38,11 +37,11 @@ public sealed class RemoveStableDiffusionCppSourceBuildEndpoint(ImageRuntimeOrch
             throw new InvalidOperationException($"Unknown stable-diffusion.cpp source-build remove outcome: {result.Outcome}.");
         }
 
-        var installed = await imageRuntime.ReadInstalledRuntimeAsync(ct).ConfigureAwait(false);
+        var installed = await imageRuntime.ReadInstalledRuntimeAsync(ct);
         await Send.OkAsync(new ImageRuntimeStatusResponse
         {
             ManagedRuntime = installed?.ToResponse(),
             Activity = imageRuntime.GetActivitySnapshot().ToResponse()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

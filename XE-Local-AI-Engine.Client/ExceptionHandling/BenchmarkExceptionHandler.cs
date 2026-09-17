@@ -19,7 +19,7 @@ public sealed class BenchmarkExceptionHandler : IExceptionHandler
             return false;
         }
 
-        await BenchmarkEndpointSupport.Error(exception).ExecuteAsync(httpContext).ConfigureAwait(false);
+        await BenchmarkEndpointSupport.Error(exception).ExecuteAsync(httpContext);
         return true;
     }
 }

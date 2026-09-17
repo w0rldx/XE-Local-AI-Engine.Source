@@ -29,7 +29,7 @@ public sealed class GeneratedImageStoreTests : IDisposable
     [Test]
     public async Task AddAsync_ThenOpenRead_RoundTripsBytesEncryptedAtRest()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
 
         var jobId = Guid.NewGuid();
@@ -52,7 +52,7 @@ public sealed class GeneratedImageStoreTests : IDisposable
                 Sampler = "euler_a",
                 CfgScale = 7.0,
                 CreatedAtUtc = 100
-            }, CancellationToken.None).ConfigureAwait(false);
+            }, CancellationToken.None);
         }
 
         using var keyHolder = new NullNodeSqliteKeyHolder();
@@ -65,19 +65,19 @@ public sealed class GeneratedImageStoreTests : IDisposable
         {
             Width = 512,
             Height = 512
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
         AssertEx.Equal(imageId, info.ImageId);
         AssertEx.Equal("image/png", info.MimeType);
 
         // At-rest: the on-disk blob must NOT be the plaintext PNG (nonce||ciphertext||tag framing, so also longer).
         var onDiskPath = Path.Combine(_rootPath, "generated-images", jobId.ToString("D"), string.Concat(imageId.ToString("D"), ".png"));
         AssertEx.True(File.Exists(onDiskPath), "The encrypted blob must be written to disk.");
-        var onDisk = await File.ReadAllBytesAsync(onDiskPath).ConfigureAwait(false);
+        var onDisk = await File.ReadAllBytesAsync(onDiskPath);
         AssertEx.True(onDisk.Length > pngBytes.Length, "The encrypted blob carries nonce + tag overhead.");
         AssertEx.False(ContainsSubsequence(onDisk, pngBytes), "The plaintext PNG bytes must not appear in the on-disk blob.");
 
         // Round-trip: the decrypt path returns the exact original bytes.
-        var content = AssertEx.NotNull(await store.OpenReadAsync(imageId, CancellationToken.None).ConfigureAwait(false));
+        var content = AssertEx.NotNull(await store.OpenReadAsync(imageId, CancellationToken.None));
         AssertEx.Equal("image/png", content.MimeType);
         AssertEx.True(content.Bytes.Span.SequenceEqual(pngBytes), "OpenRead must decrypt back to the original PNG bytes.");
     }
@@ -85,14 +85,14 @@ public sealed class GeneratedImageStoreTests : IDisposable
     [Test]
     public async Task OpenReadAsync_WhenImageUnknown_ReturnsNull()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         using var keyHolder = new NullNodeSqliteKeyHolder();
         var store = new GeneratedImageStore(provider.GetRequiredService<IServiceScopeFactory>(),
             new FakeNodeDataDirectory(_rootPath),
             keyHolder,
             TimeProvider.System);
 
-        var content = await store.OpenReadAsync(Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+        var content = await store.OpenReadAsync(Guid.NewGuid(), CancellationToken.None);
         AssertEx.Null(content);
     }
 
@@ -108,8 +108,8 @@ public sealed class GeneratedImageStoreTests : IDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }

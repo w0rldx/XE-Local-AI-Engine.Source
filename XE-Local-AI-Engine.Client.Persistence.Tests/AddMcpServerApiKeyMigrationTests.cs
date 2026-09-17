@@ -16,11 +16,11 @@ public sealed class AddMcpServerApiKeyMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CreatesMcpServerApiKeysWithMaterialColumn()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("mcp-server-api-key.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("mcp-server-api-key.sqlite", ThisMigrationId);
 
-        AssertEx.True(await probe.TableExistsAsync("mcp_server_api_keys").ConfigureAwait(false), "mcp_server_api_keys must exist.");
+        AssertEx.True(await probe.TableExistsAsync("mcp_server_api_keys"), "mcp_server_api_keys must exist.");
 
-        var columns = await probe.ColumnsAsync("mcp_server_api_keys").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("mcp_server_api_keys");
         AssertEx.True(columns.SetEquals(new[]
         {
             "id",
@@ -34,9 +34,9 @@ public sealed class AddMcpServerApiKeyMigrationTests
     [Test]
     public async Task Migrate_ToLatest_LeavesTheDigestColumnAndNoPlaintextColumn()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("mcp-server-api-key-latest.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("mcp-server-api-key-latest.sqlite");
 
-        var columns = await probe.ColumnsAsync("mcp_server_api_keys").ConfigureAwait(false);
+        var columns = await probe.ColumnsAsync("mcp_server_api_keys");
         AssertEx.True(columns.Contains("key_hash"), "HashMcpServerApiKey must have renamed material to key_hash.");
         AssertEx.False(columns.Contains("material"), "The recoverable-secret column must be gone.");
         AssertEx.False(columns.Contains("key"), "There must be no column the plaintext MCP key could be stored in.");

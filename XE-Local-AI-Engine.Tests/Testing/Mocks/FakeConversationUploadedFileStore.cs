@@ -90,7 +90,7 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         foreach (var file in files)
         {
             var fileName = Path.GetFileNameWithoutExtension(file.Info.OriginalFileName) + ".md";
-            await File.WriteAllTextAsync(Path.Combine(hostPath, fileName), file.Markdown, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Combine(hostPath, fileName), file.Markdown, cancellationToken);
             stagedNames.Add(fileName);
         }
 

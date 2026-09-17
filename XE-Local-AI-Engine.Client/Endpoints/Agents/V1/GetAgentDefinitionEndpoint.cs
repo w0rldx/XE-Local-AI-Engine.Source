@@ -19,13 +19,13 @@ public sealed class GetAgentDefinitionEndpoint(IAgentDefinitionService agentDefi
 
     public override async Task HandleAsync(GetAgentDefinitionRequest req, CancellationToken ct)
     {
-        var record = await _agentDefinitionService.GetByIdAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
+        var record = await _agentDefinitionService.GetByIdAsync(req.AgentDefinitionId, ct);
         if (record is null)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

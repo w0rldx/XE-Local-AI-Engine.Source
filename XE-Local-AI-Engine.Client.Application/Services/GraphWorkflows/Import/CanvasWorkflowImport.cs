@@ -76,8 +76,7 @@ public static class CanvasWorkflowImport
         // The table is gone on every start after the first, which is what makes this import one-shot.
         var tables = await dbContext.Database
                                     .SqlQueryRaw<string>("SELECT name AS Value FROM sqlite_master WHERE type='table' AND name='canvas_workflows'")
-                                    .ToListAsync(cancellationToken)
-                                    .ConfigureAwait(false);
+                                    .ToListAsync(cancellationToken);
         if (tables.Count == 0)
         {
             return new CanvasWorkflowImportSnapshot([], FailedCount: 0);
@@ -86,8 +85,7 @@ public static class CanvasWorkflowImport
         var rows = await dbContext.Database
                                   .SqlQueryRaw<CanvasWorkflowRow>("SELECT id AS Id, name AS Name, graph_json AS GraphJson, created_at_utc AS CreatedAtUtc "
                                                                   + "FROM canvas_workflows ORDER BY created_at_utc ASC, id ASC")
-                                  .ToListAsync(cancellationToken)
-                                  .ConfigureAwait(false);
+                                  .ToListAsync(cancellationToken);
 
         logger.LogInformation("Open Canvas one-shot import: {CanvasWorkflowCount} saved workflow(s) read before migrations.", rows.Count);
 
@@ -158,7 +156,7 @@ public static class CanvasWorkflowImport
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var outcome = await ImportOneAsync(definitions, store, candidate, logger, cancellationToken).ConfigureAwait(false);
+            var outcome = await ImportOneAsync(definitions, store, candidate, logger, cancellationToken);
             switch (outcome)
             {
                 case ImportOutcome.Imported:
@@ -306,7 +304,7 @@ public static class CanvasWorkflowImport
 
         try
         {
-            var created = await definitions.CreateAsync(name, provenance, graphJson, cancellationToken).ConfigureAwait(false);
+            var created = await definitions.CreateAsync(name, provenance, graphJson, cancellationToken);
             logger.LogInformation("Open Canvas workflow {CanvasWorkflowId} -> graph workflow definition {DefinitionId}, {NodeCount} nodes.",
                 candidate.Id,
                 created.Id,
@@ -321,7 +319,7 @@ public static class CanvasWorkflowImport
         }
         catch (GraphWorkflowValidationException refusal)
         {
-            return await SaveUnvalidatedAsync(store, candidate, map, graphJson, name, provenance, refusal, logger, cancellationToken).ConfigureAwait(false);
+            return await SaveUnvalidatedAsync(store, candidate, map, graphJson, name, provenance, refusal, logger, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -353,8 +351,7 @@ public static class CanvasWorkflowImport
         try
         {
             var created = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand(Guid.NewGuid(), name, graphJson, nodeCount, Description: description),
-                                         cancellationToken)
-                                     .ConfigureAwait(false);
+                                         cancellationToken);
 
             logger.LogWarning("Open Canvas workflow {CanvasWorkflowId} ('{CanvasWorkflowName}') was imported as graph workflow definition {DefinitionId} "
                               + "but will not run until it is edited: {Reason}",

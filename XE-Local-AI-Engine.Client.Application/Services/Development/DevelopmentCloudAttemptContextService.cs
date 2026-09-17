@@ -87,7 +87,7 @@ internal sealed class DevelopmentCloudAttemptContextService(
             bundle.SecretScanPassed
         }, JsonOptions);
         var artifactId = Guid.NewGuid();
-        var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken).ConfigureAwait(false);
+        var written = await _blobStore.WriteAsync(snapshot.ProjectId, artifactId, content, cancellationToken);
         _ = await _store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
                                 snapshot.ProjectId,
                                 snapshot.TaskId,
@@ -101,8 +101,7 @@ internal sealed class DevelopmentCloudAttemptContextService(
                                 InputArtifactIdsJson: inputArtifactIds is null
                                     ? null
                                     : JsonSerializer.SerializeToUtf8Bytes(inputArtifactIds, JsonOptions)),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+                            cancellationToken);
 
         return new DevelopmentCloudAttemptContext(_routeFactory.Create(bundle), artifactId);
     }

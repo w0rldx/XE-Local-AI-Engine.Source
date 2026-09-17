@@ -14,7 +14,7 @@ public sealed class AddDevelopmentModeFoundationMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesTheProjectTaskAttemptArtifactEventChain()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-mode-foundation.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-mode-foundation.sqlite");
 
         foreach (var table in new[]
                  {
@@ -25,10 +25,10 @@ public sealed class AddDevelopmentModeFoundationMigrationTests
                      "development_events"
                  })
         {
-            AssertEx.True(await probe.TableExistsAsync(table).ConfigureAwait(false), $"{table} must exist.");
+            AssertEx.True(await probe.TableExistsAsync(table), $"{table} must exist.");
         }
 
-        AssertEx.True((await probe.ColumnsAsync("development_projects").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("development_projects")).IsSupersetOf(new[]
         {
             "id",
             "objective",
@@ -41,7 +41,7 @@ public sealed class AddDevelopmentModeFoundationMigrationTests
             "version"
         }), "development_projects must expose the mapped columns, including the trusted-repository acknowledgement.");
 
-        AssertEx.True((await probe.ColumnsAsync("development_attempts").ConfigureAwait(false)).IsSupersetOf(new[]
+        AssertEx.True((await probe.ColumnsAsync("development_attempts")).IsSupersetOf(new[]
         {
             "id",
             "task_id",
@@ -53,23 +53,23 @@ public sealed class AddDevelopmentModeFoundationMigrationTests
             "start_operation_id"
         }), "development_attempts must expose the mapped columns.");
 
-        AssertEx.True(await probe.ForeignKeyExistsAsync("development_tasks", "project_id", "development_projects").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("development_tasks", "project_id", "development_projects"),
             "Tasks must be foreign-keyed to their project.");
-        AssertEx.True(await probe.ForeignKeyExistsAsync("development_attempts", "task_id", "development_tasks").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("development_attempts", "task_id", "development_tasks"),
             "Attempts must be foreign-keyed to their task.");
-        AssertEx.True(await probe.ForeignKeyExistsAsync("development_artifacts", "attempt_id", "development_attempts").ConfigureAwait(false),
+        AssertEx.True(await probe.ForeignKeyExistsAsync("development_artifacts", "attempt_id", "development_attempts"),
             "Artifacts must be foreign-keyed to their attempt.");
 
         AssertEx.True(await probe.IndexExistsAsync("development_attempts",
                 "ux_development_attempts_one_active_per_task",
                 unique: true,
-                "task_id").ConfigureAwait(false),
+                "task_id"),
             "At most one active attempt per task must be enforced by a unique index, not by application code alone.");
 
         AssertEx.True(await probe.IndexExistsAsync("development_attempts",
                 "ux_development_attempts_start_operation_id",
                 unique: true,
-                "start_operation_id").ConfigureAwait(false),
+                "start_operation_id"),
             "The start-operation idempotency key must be unique.");
 
         AssertEx.True(await probe.IndexExistsAsync("development_events",
@@ -77,20 +77,20 @@ public sealed class AddDevelopmentModeFoundationMigrationTests
                 unique: true,
                 "project_id",
                 "operation_id",
-                "operation_phase").ConfigureAwait(false),
+                "operation_phase"),
             "A retried operation phase must collide on a unique index rather than duplicate the ledger.");
 
         AssertEx.True(await probe.IndexExistsAsync("development_events",
                 "ux_development_events_project_sequence",
                 unique: true,
                 "project_id",
-                "sequence").ConfigureAwait(false),
+                "sequence"),
             "The per-project event sequence must be unique.");
 
         AssertEx.True(await probe.IndexExistsAsync("development_tasks",
                 "ix_development_tasks_project_id",
                 unique: false,
-                "project_id").ConfigureAwait(false),
+                "project_id"),
             "A project's tasks are indexed but not capped at one: decomposition gives each child node its own task in the same project.");
     }
 }

@@ -22,8 +22,7 @@ internal static class ImagePullEndpoint
 
         if (string.IsNullOrWhiteSpace(fromImage))
         {
-            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status400BadRequest, "fromImage is required")
-                                          .ConfigureAwait(false);
+            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status400BadRequest, "fromImage is required");
             return;
         }
 
@@ -39,9 +38,9 @@ internal static class ImagePullEndpoint
         {
             failed |= line.Error is not null;
 
-            await context.Response.WriteAsync(ToJson(line).ToJsonString(), context.RequestAborted).ConfigureAwait(false);
-            await context.Response.WriteAsync("\n", context.RequestAborted).ConfigureAwait(false);
-            await context.Response.Body.FlushAsync(context.RequestAborted).ConfigureAwait(false);
+            await context.Response.WriteAsync(ToJson(line).ToJsonString(), context.RequestAborted);
+            await context.Response.WriteAsync("\n", context.RequestAborted);
+            await context.Response.Body.FlushAsync(context.RequestAborted);
         }
 
         if (!failed)

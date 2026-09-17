@@ -40,10 +40,10 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
 
     public async Task<CertificatePin?> GetPinAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
-            return await ReadPinLockedAsync(cancellationToken).ConfigureAwait(false);
+            return await ReadPinLockedAsync(cancellationToken);
         }
         finally
         {
@@ -58,11 +58,11 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
         var pin = CreatePin(certificate);
         var directory = Path.GetDirectoryName(_pinPath) ?? throw new InvalidOperationException("Certificate pin directory could not be determined.");
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             Directory.CreateDirectory(directory);
-            await File.WriteAllTextAsync(_pinPath, Serialize(pin), cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(_pinPath, Serialize(pin), cancellationToken);
             ApplyPlatformFileSecurity();
         }
         finally
@@ -75,7 +75,7 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
     {
         ArgumentNullException.ThrowIfNull(certificate);
 
-        var existing = await GetPinAsync(cancellationToken).ConfigureAwait(false);
+        var existing = await GetPinAsync(cancellationToken);
         if (existing is null)
         {
             return false;
@@ -87,7 +87,7 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
 
     public async Task ClearPinAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             if (File.Exists(_pinPath))
@@ -115,7 +115,7 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
 
         try
         {
-            var payload = await File.ReadAllTextAsync(_pinPath, cancellationToken).ConfigureAwait(false);
+            var payload = await File.ReadAllTextAsync(_pinPath, cancellationToken);
             return Deserialize(payload);
         }
         catch (Exception exception)

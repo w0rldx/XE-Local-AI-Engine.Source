@@ -37,19 +37,19 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
     [Test]
     public async Task StartAsync_WithInterruptedAndTerminalJobs_FailsOnlyInterruptedAndPublishes()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
 
-        var queuedId = await SeedJobAsync(scopeFactory, ImageJobStatus.Queued).ConfigureAwait(false);
-        var generatingId = await SeedJobAsync(scopeFactory, ImageJobStatus.Generating).ConfigureAwait(false);
-        var succeededId = await SeedJobAsync(scopeFactory, ImageJobStatus.Succeeded).ConfigureAwait(false);
-        var cancelledId = await SeedJobAsync(scopeFactory, ImageJobStatus.Cancelled).ConfigureAwait(false);
-        var failedId = await SeedJobAsync(scopeFactory, ImageJobStatus.Failed).ConfigureAwait(false);
+        var queuedId = await SeedJobAsync(scopeFactory, ImageJobStatus.Queued);
+        var generatingId = await SeedJobAsync(scopeFactory, ImageJobStatus.Generating);
+        var succeededId = await SeedJobAsync(scopeFactory, ImageJobStatus.Succeeded);
+        var cancelledId = await SeedJobAsync(scopeFactory, ImageJobStatus.Cancelled);
+        var failedId = await SeedJobAsync(scopeFactory, ImageJobStatus.Failed);
 
         var publisher = new RecordingImageJobEventPublisher();
         var reconciler = NewReconciler(scopeFactory, publisher);
 
-        await reconciler.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await reconciler.StartAsync(CancellationToken.None);
 
         // Queued + Generating are terminalized with the content-free interrupted reason and a completion timestamp.
         foreach (var interruptedId in new[]
@@ -58,7 +58,7 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
                      generatingId
                  })
         {
-            var view = AssertEx.NotNull(await GetAsync(scopeFactory, interruptedId).ConfigureAwait(false));
+            var view = AssertEx.NotNull(await GetAsync(scopeFactory, interruptedId));
             AssertEx.Equal(ImageJobStatus.Failed, view.Status);
             AssertEx.Equal(ImageJobStartupReconciler.InterruptedReason, view.SanitizedError);
             AssertEx.NotNull((object?)view.CompletedAtUtc, "A reconciled job records its completion time.");
@@ -66,9 +66,9 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
         }
 
         // Terminal jobs are untouched (status preserved, pre-existing error preserved).
-        AssertEx.Equal(ImageJobStatus.Succeeded, AssertEx.NotNull(await GetAsync(scopeFactory, succeededId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(ImageJobStatus.Cancelled, AssertEx.NotNull(await GetAsync(scopeFactory, cancelledId).ConfigureAwait(false)).Status);
-        var preFailed = AssertEx.NotNull(await GetAsync(scopeFactory, failedId).ConfigureAwait(false));
+        AssertEx.Equal(ImageJobStatus.Succeeded, AssertEx.NotNull(await GetAsync(scopeFactory, succeededId)).Status);
+        AssertEx.Equal(ImageJobStatus.Cancelled, AssertEx.NotNull(await GetAsync(scopeFactory, cancelledId)).Status);
+        var preFailed = AssertEx.NotNull(await GetAsync(scopeFactory, failedId));
         AssertEx.Equal(ImageJobStatus.Failed, preFailed.Status);
         AssertEx.Equal("pre-existing failure", preFailed.SanitizedError);
 
@@ -89,30 +89,30 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
     [Test]
     public async Task StartAsync_WhenOnlyTerminalJobsExist_TouchesNothingAndPublishesNothing()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
 
-        var succeededId = await SeedJobAsync(scopeFactory, ImageJobStatus.Succeeded).ConfigureAwait(false);
+        var succeededId = await SeedJobAsync(scopeFactory, ImageJobStatus.Succeeded);
 
         var publisher = new RecordingImageJobEventPublisher();
         var reconciler = NewReconciler(scopeFactory, publisher);
 
-        await reconciler.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await reconciler.StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(ImageJobStatus.Succeeded, AssertEx.NotNull(await GetAsync(scopeFactory, succeededId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(ImageJobStatus.Succeeded, AssertEx.NotNull(await GetAsync(scopeFactory, succeededId)).Status);
         AssertEx.Empty(publisher.Published);
     }
 
     [Test]
     public async Task StartAsync_WhenTheStoreIsEmpty_NoOps()
     {
-        await using var provider = await BuildProviderAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
 
         var publisher = new RecordingImageJobEventPublisher();
         var reconciler = NewReconciler(scopeFactory, publisher);
 
-        await reconciler.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await reconciler.StartAsync(CancellationToken.None);
 
         AssertEx.Empty(publisher.Published);
     }
@@ -133,7 +133,7 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
         var publisher = new RecordingImageJobEventPublisher();
         var reconciler = NewReconciler(scopeFactory, publisher);
 
-        await reconciler.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await reconciler.StartAsync(CancellationToken.None);
 
         AssertEx.Empty(publisher.Published);
     }
@@ -164,25 +164,24 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
             Sampler = "euler_a",
             CfgScale = 7.0,
             CreatedAtUtc = 1
-        }, CancellationToken.None).ConfigureAwait(false);
+        }, CancellationToken.None);
 
         switch (status)
         {
             case ImageJobStatus.Queued:
                 break;
             case ImageJobStatus.Generating:
-                await store.MarkGeneratingAsync(jobId, startedAtUtc: 2, CancellationToken.None).ConfigureAwait(false);
+                await store.MarkGeneratingAsync(jobId, startedAtUtc: 2, CancellationToken.None);
                 break;
             case ImageJobStatus.Succeeded:
-                await store.MarkGeneratingAsync(jobId, startedAtUtc: 2, CancellationToken.None).ConfigureAwait(false);
-                await store.MarkSucceededAsync(jobId, Guid.NewGuid(), completedAtUtc: 3, durationMs: 1, outputWidth: 512, outputHeight: 512, resolvedSeed: 42, CancellationToken.None)
-                           .ConfigureAwait(false);
+                await store.MarkGeneratingAsync(jobId, startedAtUtc: 2, CancellationToken.None);
+                await store.MarkSucceededAsync(jobId, Guid.NewGuid(), completedAtUtc: 3, durationMs: 1, outputWidth: 512, outputHeight: 512, resolvedSeed: 42, CancellationToken.None);
                 break;
             case ImageJobStatus.Failed:
-                await store.MarkFailedAsync(jobId, "pre-existing failure", completedAtUtc: 3, CancellationToken.None).ConfigureAwait(false);
+                await store.MarkFailedAsync(jobId, "pre-existing failure", completedAtUtc: 3, CancellationToken.None);
                 break;
             case ImageJobStatus.Cancelled:
-                await store.MarkCancelledAsync(jobId, completedAtUtc: 3, CancellationToken.None).ConfigureAwait(false);
+                await store.MarkCancelledAsync(jobId, completedAtUtc: 3, CancellationToken.None);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(status), status, message: null);
@@ -195,7 +194,7 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
-        return await store.GetAsync(jobId, CancellationToken.None).ConfigureAwait(false);
+        return await store.GetAsync(jobId, CancellationToken.None);
     }
 
     private async Task<ServiceProvider> BuildProviderAsync()
@@ -211,8 +210,8 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
 
         return provider;
     }

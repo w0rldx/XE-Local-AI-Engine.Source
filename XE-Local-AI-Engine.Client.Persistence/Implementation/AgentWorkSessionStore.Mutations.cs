@@ -23,7 +23,7 @@ internal sealed partial class AgentWorkSessionStore
             {
                 foreach (var change in command.Changes)
                 {
-                    await ApplyPlanChangeAsync(session, command.Origin, change, cancellationToken).ConfigureAwait(false);
+                    await ApplyPlanChangeAsync(session, command.Origin, change, cancellationToken);
                 }
 
                 return new MutationOutcome("WorkPlanApplied", $"{command.Changes.Count} change(s)", DetailJson: null);
@@ -43,14 +43,13 @@ internal sealed partial class AgentWorkSessionStore
             {
                 if (command.TaskId is { } taskId)
                 {
-                    await EnsureTaskBelongsAsync(session.Id, taskId, cancellationToken).ConfigureAwait(false);
+                    await EnsureTaskBelongsAsync(session.Id, taskId, cancellationToken);
                 }
 
                 if (command.SupersedesFindingId is { } supersedesId)
                 {
                     var superseded = await _dbContext.AgentWorkSessionFindings
                                                      .SingleOrDefaultAsync(entity => entity.Id == supersedesId && entity.SessionId == session.Id, cancellationToken)
-                                                     .ConfigureAwait(false)
                                      ?? throw new WorkSessionNotFoundException($"Work session finding '{supersedesId}' was not found on session '{session.Id}'.");
                     superseded.Superseded = true;
                     superseded.Sequence = NextSequence(session);
@@ -90,14 +89,13 @@ internal sealed partial class AgentWorkSessionStore
             command.OperationId,
             async session =>
             {
-                if (await _dbContext.AgentWorkSessionArtifacts.AnyAsync(entity => entity.Id == command.ArtifactId, cancellationToken).ConfigureAwait(false))
+                if (await _dbContext.AgentWorkSessionArtifacts.AnyAsync(entity => entity.Id == command.ArtifactId, cancellationToken))
                 {
                     throw new WorkSessionConcurrencyException($"Work session artifact '{command.ArtifactId}' already exists.");
                 }
 
                 var existing = await _dbContext.AgentWorkSessionArtifacts
-                                               .SingleOrDefaultAsync(entity => entity.SessionId == session.Id && entity.Name == command.Name, cancellationToken)
-                                               .ConfigureAwait(false);
+                                               .SingleOrDefaultAsync(entity => entity.SessionId == session.Id && entity.Name == command.Name, cancellationToken);
                 byte[]? detail = null;
                 Guid? supersededId = null;
                 if (existing is not null)
@@ -195,13 +193,13 @@ internal sealed partial class AgentWorkSessionStore
                 throw new ArgumentException($"Work plan task '{change.TaskId}' cannot be its own parent.", nameof(change));
             }
 
-            await EnsureTaskBelongsAsync(session.Id, parentTaskId, cancellationToken).ConfigureAwait(false);
+            await EnsureTaskBelongsAsync(session.Id, parentTaskId, cancellationToken);
         }
 
         if (change.Operation == WorkPlanTaskOperation.Add)
         {
             EnsureNotBlank(change.Title, nameof(change.Title));
-            if (await _dbContext.AgentWorkSessionTasks.AnyAsync(entity => entity.Id == change.TaskId, cancellationToken).ConfigureAwait(false))
+            if (await _dbContext.AgentWorkSessionTasks.AnyAsync(entity => entity.Id == change.TaskId, cancellationToken))
             {
                 throw new WorkSessionConcurrencyException($"Work session task '{change.TaskId}' already exists.");
             }
@@ -225,7 +223,6 @@ internal sealed partial class AgentWorkSessionStore
         }
 
         var task = await _dbContext.AgentWorkSessionTasks.SingleOrDefaultAsync(entity => entity.Id == change.TaskId && entity.SessionId == session.Id, cancellationToken)
-                                   .ConfigureAwait(false)
                    ?? throw new WorkSessionNotFoundException($"Work session task '{change.TaskId}' was not found on session '{session.Id}'.");
 
         if (change.ParentTaskId is { } newParent)
@@ -287,7 +284,7 @@ internal sealed partial class AgentWorkSessionStore
     private async Task EnsureTaskBelongsAsync(Guid sessionId, Guid taskId, CancellationToken cancellationToken)
     {
         // Checked here rather than left to the foreign key: cascades and restrictions do not fire on this connection.
-        if (!await _dbContext.AgentWorkSessionTasks.AnyAsync(entity => entity.Id == taskId && entity.SessionId == sessionId, cancellationToken).ConfigureAwait(false))
+        if (!await _dbContext.AgentWorkSessionTasks.AnyAsync(entity => entity.Id == taskId && entity.SessionId == sessionId, cancellationToken))
         {
             throw new WorkSessionNotFoundException($"Work session task '{taskId}' was not found on session '{sessionId}'.");
         }

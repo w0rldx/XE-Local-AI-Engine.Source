@@ -70,11 +70,11 @@ public sealed class CanvasWorkflowImportReadTests
     [Test]
     public async Task ReadAsync_OverEncryptedRows_AnswersEveryCanvasInPlaintextBeforeTheDropTakesTheTable()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-round-trip.sqlite", PreDropMigrationId).ConfigureAwait(false);
-        var first = await SeedAsync(probe, "Release notes", LinearGraph, createdAtUtc: 1).ConfigureAwait(false);
-        var second = await SeedAsync(probe, "Sign off", PauseGraph, createdAtUtc: 2).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-round-trip.sqlite", PreDropMigrationId);
+        var first = await SeedAsync(probe, "Release notes", LinearGraph, createdAtUtc: 1);
+        var second = await SeedAsync(probe, "Sign off", PauseGraph, createdAtUtc: 2);
 
-        var (snapshot, logger) = await ReadAsync(probe).ConfigureAwait(false);
+        var (snapshot, logger) = await ReadAsync(probe);
 
         AssertEx.Equal(expected: 2, snapshot.Candidates.Count, "the candidate count is what catches a column that silently failed to bind.");
         AssertEx.Equal(expected: 0, snapshot.FailedCount);
@@ -86,9 +86,9 @@ public sealed class CanvasWorkflowImportReadTests
             "the graph comes back decrypted, not as the stored ciphertext.");
         AssertEx.True(logger.HasEntry(LogLevel.Information, "2 saved workflow(s) read before migrations"));
 
-        await probe.MigrateToAsync(targetMigration: null).ConfigureAwait(false);
+        await probe.MigrateToAsync(targetMigration: null);
 
-        AssertEx.False(await probe.TableExistsAsync("canvas_workflows").ConfigureAwait(false),
+        AssertEx.False(await probe.TableExistsAsync("canvas_workflows"),
             "the read happens before migrations precisely because the drop that follows it is unconditional.");
     }
 
@@ -99,11 +99,11 @@ public sealed class CanvasWorkflowImportReadTests
     [Test]
     public async Task ReadAsync_AtHeadWhereTheTableIsAlreadyDropped_AnswersAnEmptySnapshotWithoutThrowing()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-no-table.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-no-table.sqlite");
 
-        AssertEx.False(await probe.TableExistsAsync("canvas_workflows").ConfigureAwait(false), "head is the state every start after the first sees.");
+        AssertEx.False(await probe.TableExistsAsync("canvas_workflows"), "head is the state every start after the first sees.");
 
-        var (snapshot, _) = await ReadAsync(probe).ConfigureAwait(false);
+        var (snapshot, _) = await ReadAsync(probe);
 
         AssertEx.Empty(snapshot.Candidates);
         AssertEx.Equal(expected: 0, snapshot.FailedCount);
@@ -117,9 +117,9 @@ public sealed class CanvasWorkflowImportReadTests
     [Test]
     public async Task ReadAsync_WithARowThatWillNotDecrypt_CountsItAndStillReturnsTheOthers()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-damaged.sqlite", PreDropMigrationId).ConfigureAwait(false);
-        var damaged = await SeedAsync(probe, "Damaged", LinearGraph, createdAtUtc: 1).ConfigureAwait(false);
-        _ = await SeedAsync(probe, "Intact", PauseGraph, createdAtUtc: 2).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-damaged.sqlite", PreDropMigrationId);
+        var damaged = await SeedAsync(probe, "Damaged", LinearGraph, createdAtUtc: 1);
+        _ = await SeedAsync(probe, "Intact", PauseGraph, createdAtUtc: 2);
         await probe.ExecuteAsync("UPDATE canvas_workflows SET graph_json = $graph WHERE id = $id;", command =>
         {
             command.Parameters.AddWithValue("$graph", new byte[]
@@ -129,9 +129,9 @@ public sealed class CanvasWorkflowImportReadTests
                 0x02
             });
             command.Parameters.AddWithValue("$id", damaged.ToString());
-        }).ConfigureAwait(false);
+        });
 
-        var (snapshot, logger) = await ReadAsync(probe).ConfigureAwait(false);
+        var (snapshot, logger) = await ReadAsync(probe);
 
         AssertEx.Equal(expected: 1, snapshot.FailedCount);
         AssertEx.Equal("Intact", string.Join(", ", snapshot.Candidates.Select(static candidate => candidate.Name)),
@@ -147,13 +147,13 @@ public sealed class CanvasWorkflowImportReadTests
     [Test]
     public async Task ReadAsync_WithMoreRowsThanAnyReasonableCap_ReadsEveryOne()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-sixty.sqlite", PreDropMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-sixty.sqlite", PreDropMigrationId);
         for (var index = 0; index < 60; index++)
         {
-            _ = await SeedAsync(probe, $"Canvas {index}", LinearGraph, index + 1).ConfigureAwait(false);
+            _ = await SeedAsync(probe, $"Canvas {index}", LinearGraph, index + 1);
         }
 
-        var (snapshot, _) = await ReadAsync(probe).ConfigureAwait(false);
+        var (snapshot, _) = await ReadAsync(probe);
 
         AssertEx.Equal(expected: 60, snapshot.Candidates.Count);
     }
@@ -177,7 +177,7 @@ public sealed class CanvasWorkflowImportReadTests
                 command.Parameters.AddWithValue("$name", name);
                 command.Parameters.AddWithValue("$graph", encrypted);
                 command.Parameters.AddWithValue("$created", createdAtUtc.ToString(CultureInfo.InvariantCulture));
-            }).ConfigureAwait(false);
+            });
 
         return id;
     }
@@ -187,7 +187,7 @@ public sealed class CanvasWorkflowImportReadTests
         var logger = new RecordingLogger();
         using var keyHolder = new NullNodeSqliteKeyHolder();
         await using var dbContext = AgentDefinitionTestContextFactory.CreateForMigration(probe.DatabasePath, keyHolder);
-        return (await CanvasWorkflowImport.ReadAsync(dbContext, logger).ConfigureAwait(false), logger);
+        return (await CanvasWorkflowImport.ReadAsync(dbContext, logger), logger);
     }
 
     /// <summary>Records the rendered message of every entry, so the log assertions above can name what an operator reads.</summary>

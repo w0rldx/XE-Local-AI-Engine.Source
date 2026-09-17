@@ -50,15 +50,15 @@ public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
 
         // Bring the schema up to exactly the migration before this one, then apply the rest, so this migration's Up is
         // exercised as an in-place upgrade of an existing agent_execution_logs table, not just a fresh create.
-        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRunEnvelopeMigrationId).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRunEnvelopeMigrationId);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
+            await context.Database.MigrateAsync();
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnInfoAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnInfoAsync(connection);
 
         foreach (var column in EnvelopeColumns)
         {
@@ -76,10 +76,10 @@ public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-fresh.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnInfoAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnInfoAsync(connection);
 
         foreach (var column in EnvelopeColumns)
         {
@@ -92,15 +92,15 @@ public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-rollback.sqlite");
 
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreRunEnvelopeMigrationId).ConfigureAwait(false);
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreRunEnvelopeMigrationId);
         }
 
-        await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
-        var columns = await GetColumnInfoAsync(connection).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(databasePath);
+        var columns = await GetColumnInfoAsync(connection);
 
         foreach (var column in EnvelopeColumns)
         {
@@ -128,7 +128,7 @@ public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
         return connection;
     }
 
@@ -140,8 +140,8 @@ public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
         command.CommandText = "PRAGMA table_info(agent_execution_logs);";
 
         var columns = new Dictionary<string, (bool NotNull, bool IsPrimaryKey)>(StringComparer.Ordinal);
-        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             var name = reader.GetString(reader.GetOrdinal("name"));
             var notNull = reader.GetInt64(reader.GetOrdinal("notnull")) != 0L;

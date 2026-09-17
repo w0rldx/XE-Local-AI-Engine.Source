@@ -30,14 +30,14 @@ public sealed class ManagedWorkSessionArtifactBlobStoreTests : IDisposable
         var artifactId = Guid.NewGuid();
         ReadOnlyMemory<byte> content = "bounded work session artifact"u8.ToArray();
 
-        var written = await store.WriteAsync(sessionId, artifactId, content).ConfigureAwait(false);
-        var replay = await store.WriteAsync(sessionId, artifactId, content).ConfigureAwait(false);
+        var written = await store.WriteAsync(sessionId, artifactId, content);
+        var replay = await store.WriteAsync(sessionId, artifactId, content);
         AssertEx.Equal(written, replay);
-        _ = await AssertEx.ThrowsAsync<IOException>(() => store.WriteAsync(sessionId, artifactId, "different"u8.ToArray())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<IOException>(() => store.WriteAsync(sessionId, artifactId, "different"u8.ToArray()));
         AssertEx.False(Path.IsPathRooted(written.OpaqueReference));
         AssertEx.False(written.OpaqueReference.Contains("..", StringComparison.Ordinal));
 
-        var read = await store.ReadAsync(sessionId, artifactId, written.ContentHash, written.ByteCount).ConfigureAwait(false);
+        var read = await store.ReadAsync(sessionId, artifactId, written.ContentHash, written.ByteCount);
         AssertEx.Equal(WorkSessionArtifactReadStatus.Found, read.Status);
         AssertEx.True(read.Content.Span.SequenceEqual(content.Span));
 
@@ -46,17 +46,17 @@ public sealed class ManagedWorkSessionArtifactBlobStoreTests : IDisposable
         AssertEx.True(File.Exists(path), $"The blob must live at {path}.");
 
         AssertEx.Equal(WorkSessionArtifactReadStatus.HashMismatch,
-            (await store.ReadAsync(sessionId, artifactId, new string('0', count: 64), written.ByteCount).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(sessionId, artifactId, new string('0', count: 64), written.ByteCount)).Status);
         AssertEx.Equal(WorkSessionArtifactReadStatus.SizeMismatch,
-            (await store.ReadAsync(sessionId, artifactId, written.ContentHash, written.ByteCount + 1).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(sessionId, artifactId, written.ContentHash, written.ByteCount + 1)).Status);
         AssertEx.Equal(WorkSessionArtifactReadStatus.Missing,
-            (await store.ReadAsync(sessionId, Guid.NewGuid(), written.ContentHash, written.ByteCount).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(sessionId, Guid.NewGuid(), written.ContentHash, written.ByteCount)).Status);
 
-        var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+        var bytes = await File.ReadAllBytesAsync(path);
         bytes[^1] ^= 0x5A;
-        await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(path, bytes);
         AssertEx.Equal(WorkSessionArtifactReadStatus.Tampered,
-            (await store.ReadAsync(sessionId, artifactId, written.ContentHash, written.ByteCount).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(sessionId, artifactId, written.ContentHash, written.ByteCount)).Status);
     }
 
     [Test]
@@ -64,7 +64,7 @@ public sealed class ManagedWorkSessionArtifactBlobStoreTests : IDisposable
     {
         var store = CreateStore(maxArtifactBytes: 4);
 
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[5])).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[5]));
         AssertEx.False(Directory.Exists(Path.Combine(_root, "work-sessions")), "A rejected write must not create the artifact tree.");
     }
 
@@ -75,8 +75,7 @@ public sealed class ManagedWorkSessionArtifactBlobStoreTests : IDisposable
         var options = new WorkSessionOptions();
         AssertEx.Equal(expected: 1024 * 1024, options.MaxArtifactBytes);
 
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[options.MaxArtifactBytes + 1]))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[options.MaxArtifactBytes + 1]));
     }
 
     [Test]
@@ -89,12 +88,12 @@ public sealed class ManagedWorkSessionArtifactBlobStoreTests : IDisposable
         store.Delete(sessionId, artifactId);
         store.DeleteSession(sessionId);
 
-        var written = await store.WriteAsync(sessionId, artifactId, "content"u8.ToArray()).ConfigureAwait(false);
+        var written = await store.WriteAsync(sessionId, artifactId, "content"u8.ToArray());
         store.Delete(sessionId, artifactId);
         AssertEx.Equal(WorkSessionArtifactReadStatus.Missing,
-            (await store.ReadAsync(sessionId, artifactId, written.ContentHash, written.ByteCount).ConfigureAwait(false)).Status);
+            (await store.ReadAsync(sessionId, artifactId, written.ContentHash, written.ByteCount)).Status);
 
-        _ = await store.WriteAsync(sessionId, artifactId, "content"u8.ToArray()).ConfigureAwait(false);
+        _ = await store.WriteAsync(sessionId, artifactId, "content"u8.ToArray());
         store.DeleteSession(sessionId);
         AssertEx.False(Directory.Exists(Path.Combine(_root, "work-sessions", "artifacts", sessionId.ToString("N"))),
             "Deleting a session must take its whole artifact directory.");

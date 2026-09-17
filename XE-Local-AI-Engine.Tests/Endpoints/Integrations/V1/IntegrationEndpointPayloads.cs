@@ -111,10 +111,10 @@ internal static class IntegrationEndpointPayloads
             client,
             HttpMethod.Post,
             TriggersRoute,
-            TriggerBody(name, targetAgentDefinitionId, sessionPolicy: sessionPolicy)).ConfigureAwait(false);
+            TriggerBody(name, targetAgentDefinitionId, sessionPolicy: sessionPolicy));
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode, $"Seeding the trigger '{name}' must succeed.");
-        return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(Json).ConfigureAwait(false));
+        return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(Json));
     }
 
     /// <summary>
@@ -127,9 +127,9 @@ internal static class IntegrationEndpointPayloads
         Guid[]? allowedTriggerIds = null,
         Guid? principalId = null)
     {
-        using var response = await SendAsOperatorAsync(factory, client, HttpMethod.Post, KeysRoute, KeyBody(label, allowedTriggerIds, principalId)).ConfigureAwait(false);
+        using var response = await SendAsOperatorAsync(factory, client, HttpMethod.Post, KeysRoute, KeyBody(label, allowedTriggerIds, principalId));
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, $"Seeding the credential '{label}' must succeed.");
-        return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(Json).ConfigureAwait(false));
+        return AssertEx.NotNull(await response.Content.ReadFromJsonAsync<GeneratedIntegrationApiKeyBody>(Json));
     }
 
     /// <summary>
@@ -150,7 +150,7 @@ internal static class IntegrationEndpointPayloads
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(StringComparer.Ordinal),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -169,7 +169,7 @@ internal static class IntegrationEndpointPayloads
         }
 
         authenticate?.Invoke(request);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 }
 

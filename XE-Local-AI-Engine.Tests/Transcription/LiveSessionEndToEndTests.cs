@@ -60,7 +60,7 @@ public sealed class LiveSessionEndToEndTests
         await using var factory = FactoryWith(transcriber);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(client, factory).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(client, factory);
 
         var committed = new TaskCompletionSource<TranscriptSegmentCommittedPush>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var connection = Connect(factory);
@@ -71,28 +71,28 @@ public sealed class LiveSessionEndToEndTests
                 _ = committed.TrySetResult(push);
             }
         });
-        await connection.StartAsync().ConfigureAwait(false);
+        await connection.StartAsync();
 
-        var snapshot = await connection.InvokeAsync<TranscriptionSessionSubscriptionSnapshot>("SubscribeSession", sessionId, 0L).ConfigureAwait(false);
+        var snapshot = await connection.InvokeAsync<TranscriptionSessionSubscriptionSnapshot>("SubscribeSession", sessionId, 0L);
         AssertEx.Empty(snapshot.Segments, "a session that has heard nothing has no transcript to replay.");
         AssertEx.Equal(expected: 0L, snapshot.LastSeq);
         AssertEx.False(snapshot.ReplayTruncated);
 
-        using (var started = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start").ConfigureAwait(false))
+        using (var started = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start"))
         {
             AssertEx.Equal(HttpStatusCode.OK, started.StatusCode);
         }
 
-        await PushWindowAsync(connection, sessionId, fromMs: 0).ConfigureAwait(false);
+        await PushWindowAsync(connection, sessionId, fromMs: 0);
 
-        var push = await committed.Task.WaitAsync(TestBudgets.Contended).ConfigureAwait(false);
+        var push = await committed.Task.WaitAsync(TestBudgets.Contended);
         AssertEx.Equal(expected: 1L, push.Seq, "the first live commit of a session is sequence one, never zero.");
         AssertEx.Equal("Mono", push.Channel, "a microphone session carries one undifferentiated lane.");
         AssertEx.Equal("hello from the lane", push.Text);
 
         // The push is not the record: what reaches the operator's transcript is the row, read back over REST through
         // the real encrypted column.
-        var session = await ReadSessionAsync(client, factory, sessionId).ConfigureAwait(false);
+        var session = await ReadSessionAsync(client, factory, sessionId);
         var segments = session.GetProperty("segments");
         AssertEx.Equal(expected: 1, segments.GetArrayLength());
         AssertEx.Equal(expected: 1L, segments[0].GetProperty("seq").GetInt64());
@@ -112,7 +112,7 @@ public sealed class LiveSessionEndToEndTests
         await using var factory = FactoryWith(transcriber);
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(client, factory).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(client, factory);
 
         var pushes = new ConcurrentQueue<TranscriptSegmentCommittedPush>();
         await using var connection = Connect(factory);
@@ -123,29 +123,29 @@ public sealed class LiveSessionEndToEndTests
                 pushes.Enqueue(push);
             }
         });
-        await connection.StartAsync().ConfigureAwait(false);
-        _ = await connection.InvokeAsync<TranscriptionSessionSubscriptionSnapshot>("SubscribeSession", sessionId, 0L).ConfigureAwait(false);
+        await connection.StartAsync();
+        _ = await connection.InvokeAsync<TranscriptionSessionSubscriptionSnapshot>("SubscribeSession", sessionId, 0L);
 
         string firstBody;
         string secondBody;
-        using (var first = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start").ConfigureAwait(false))
+        using (var first = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start"))
         {
             AssertEx.Equal(HttpStatusCode.OK, first.StatusCode);
-            firstBody = await first.Content.ReadAsStringAsync().ConfigureAwait(false);
+            firstBody = await first.Content.ReadAsStringAsync();
         }
 
-        using (var second = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start").ConfigureAwait(false))
+        using (var second = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start"))
         {
             AssertEx.Equal(HttpStatusCode.OK, second.StatusCode, "the route is idempotent: starting a live session twice is not an error.");
-            secondBody = await second.Content.ReadAsStringAsync().ConfigureAwait(false);
+            secondBody = await second.Content.ReadAsStringAsync();
         }
 
         AssertEx.Equal(firstBody, secondBody, "the second start reports the state the first one left, verbatim.");
 
-        await PushWindowAsync(connection, sessionId, fromMs: 0).ConfigureAwait(false);
-        await AssertEx.EventuallyAsync(() => !pushes.IsEmpty, TestBudgets.Contended, "the session must still transcribe after the repeated start.").ConfigureAwait(false);
+        await PushWindowAsync(connection, sessionId, fromMs: 0);
+        await AssertEx.EventuallyAsync(() => !pushes.IsEmpty, TestBudgets.Contended, "the session must still transcribe after the repeated start.");
 
-        var session = await ReadSessionAsync(client, factory, sessionId).ConfigureAwait(false);
+        var session = await ReadSessionAsync(client, factory, sessionId);
         AssertEx.Equal(expected: 1,
             session.GetProperty("segments").GetArrayLength(),
             "one window of audio produced one row: a second set of lanes would have transcribed it again.");
@@ -170,14 +170,14 @@ public sealed class LiveSessionEndToEndTests
         });
         using var client = factory.CreateClient();
 
-        var sessionId = await CreateSessionAsync(client, factory).ConfigureAwait(false);
+        var sessionId = await CreateSessionAsync(client, factory);
 
-        using (var started = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start").ConfigureAwait(false))
+        using (var started = await SendAsync(client, factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{sessionId}/live/start"))
         {
             AssertEx.Equal(HttpStatusCode.InternalServerError, started.StatusCode, "the failure is surfaced, not swallowed.");
         }
 
-        var session = await ReadSessionAsync(client, factory, sessionId).ConfigureAwait(false);
+        var session = await ReadSessionAsync(client, factory, sessionId);
         AssertEx.Equal("Created",
             session.GetProperty("session").GetProperty("status").GetString(),
             "the row rolled back rather than being stranded in Transcribing with nothing behind it.");
@@ -202,7 +202,7 @@ public sealed class LiveSessionEndToEndTests
         {
             var frame = LivePcm.Range(fromMs + offset, fromMs + offset + FrameMs).ToArray();
             AssertEx.True(frame.Length <= TranscriptionHub.MaxFrameBytes, $"a {frame.Length}-byte frame is past the hub's ceiling.");
-            await connection.InvokeAsync("PushAudioFrame", sessionId, (int)TranscriptChannel.Mono, frame).ConfigureAwait(false);
+            await connection.InvokeAsync("PushAudioFrame", sessionId, (int)TranscriptChannel.Mono, frame);
         }
     }
 
@@ -227,24 +227,24 @@ public sealed class LiveSessionEndToEndTests
             modelId = "tiny",
             maxWindowSeconds = (int)(WindowMs / 1_000)
         });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
 
-        var body = await ReadJsonAsync(response).ConfigureAwait(false);
+        var body = await ReadJsonAsync(response);
         return body.GetProperty("session").GetProperty("id").GetGuid();
     }
 
     private static async Task<JsonElement> ReadSessionAsync(HttpClient client, TestServerWebAppFactory factory, Guid sessionId)
     {
-        using var response = await SendAsync(client, factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions/{sessionId}").ConfigureAwait(false);
+        using var response = await SendAsync(client, factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions/{sessionId}");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        return await ReadJsonAsync(response).ConfigureAwait(false);
+        return await ReadJsonAsync(response);
     }
 
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, TestServerWebAppFactory factory, HttpMethod method, string route)
     {
         using var request = Authorized(factory, method, route);
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string route)
@@ -257,7 +257,7 @@ public sealed class LiveSessionEndToEndTests
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
     {
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<JsonElement>(payload, JsonOptions);
     }
 

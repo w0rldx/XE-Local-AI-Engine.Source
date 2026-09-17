@@ -32,20 +32,20 @@ public sealed class SetHfTokenEndpoint(IHfTokenStore tokenStore)
         // encrypted. The raw value is never logged or echoed — only the resulting presence flag is returned.
         if (string.IsNullOrWhiteSpace(req.Token))
         {
-            await _tokenStore.ClearTokenAsync(ct).ConfigureAwait(false);
+            await _tokenStore.ClearTokenAsync(ct);
             await Send.OkAsync(new HfTokenStatusResponse
                 {
                     HasToken = false
                 },
-                ct).ConfigureAwait(false);
+                ct);
             return;
         }
 
-        await _tokenStore.SetTokenAsync(req.Token.Trim(), ct).ConfigureAwait(false);
+        await _tokenStore.SetTokenAsync(req.Token.Trim(), ct);
         await Send.OkAsync(new HfTokenStatusResponse
             {
                 HasToken = true
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

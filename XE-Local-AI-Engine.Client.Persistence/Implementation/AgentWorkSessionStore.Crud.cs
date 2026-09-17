@@ -23,11 +23,10 @@ internal sealed partial class AgentWorkSessionStore
             throw new ArgumentOutOfRangeException(nameof(command), "The configuration version must be positive.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            if (await _dbContext.AgentWorkSessions.AnyAsync(entity => entity.Id == command.SessionId || entity.ConversationId == command.ConversationId, cancellationToken)
-                                .ConfigureAwait(false))
+            if (await _dbContext.AgentWorkSessions.AnyAsync(entity => entity.Id == command.SessionId || entity.ConversationId == command.ConversationId, cancellationToken))
             {
                 throw new WorkSessionConcurrencyException($"A work session already exists for id '{command.SessionId}' or its conversation.");
             }
@@ -51,18 +50,18 @@ internal sealed partial class AgentWorkSessionStore
             };
             _dbContext.AgentWorkSessions.Add(session);
             AddEvent(session, "SessionCreated", session.Status.ToString(), operationId: null, detailJson: null);
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return Snapshot(session);
         }
         catch (DbUpdateException exception)
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw new WorkSessionConcurrencyException("A concurrent writer won the race before the work session was created.", exception);
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -104,8 +103,7 @@ internal sealed partial class AgentWorkSessionStore
                     updated = session;
                     return Task.FromResult(new MutationOutcome("SessionUpdated", session.Status.ToString(), DetailJson: null));
                 },
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         return Snapshot(updated!);
     }
 
@@ -129,8 +127,7 @@ internal sealed partial class AgentWorkSessionStore
                     updated = session;
                     return Task.FromResult(new MutationOutcome("SessionStatusChanged", command.TargetStatus.ToString(), ReasonDetail(command.SanitizedReason)));
                 },
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         return Snapshot(updated!);
     }
 
@@ -138,27 +135,27 @@ internal sealed partial class AgentWorkSessionStore
     {
         // Explicit ordered deletes: the node connection runs without PRAGMA foreign_keys, so the declared cascades are
         // documentation only and an EF-graph delete would leave every child table populated.
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            var removed = await _dbContext.AgentWorkSessionEvents.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-            removed += await _dbContext.AgentWorkSessionCheckpoints.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-            removed += await _dbContext.AgentWorkSessionArtifacts.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-            removed += await _dbContext.AgentWorkSessionFindings.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-            removed += await _dbContext.AgentWorkSessionTasks.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-            removed += await _dbContext.AgentWorkSessions.Where(entity => entity.Id == sessionId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            var removed = await _dbContext.AgentWorkSessionEvents.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
+            removed += await _dbContext.AgentWorkSessionCheckpoints.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
+            removed += await _dbContext.AgentWorkSessionArtifacts.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
+            removed += await _dbContext.AgentWorkSessionFindings.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
+            removed += await _dbContext.AgentWorkSessionTasks.Where(entity => entity.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
+            removed += await _dbContext.AgentWorkSessions.Where(entity => entity.Id == sessionId).ExecuteDeleteAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             _dbContext.ChangeTracker.Clear();
             return removed;
         }
         catch (DbUpdateException exception)
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw new WorkSessionConcurrencyException("The work session could not be deleted because a database constraint rejected the write.", exception);
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }
@@ -168,14 +165,13 @@ internal sealed partial class AgentWorkSessionStore
         var sessions = await _dbContext.AgentWorkSessions.AsNoTracking()
                                        .OrderByDescending(entity => entity.UpdatedAtUtc)
                                        .ThenBy(entity => entity.Id)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
         return [.. sessions.Select(Snapshot)];
     }
 
     public async Task<AgentWorkSessionSnapshot> GetAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var session = await _dbContext.AgentWorkSessions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == sessionId, cancellationToken).ConfigureAwait(false)
+        var session = await _dbContext.AgentWorkSessions.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == sessionId, cancellationToken)
                       ?? throw new WorkSessionNotFoundException($"Work session '{sessionId}' was not found.");
         return Snapshot(session);
     }
@@ -183,15 +179,14 @@ internal sealed partial class AgentWorkSessionStore
     public async Task<AgentWorkSessionSnapshot?> FindByConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         var session = await _dbContext.AgentWorkSessions.AsNoTracking()
-                                      .SingleOrDefaultAsync(entity => entity.ConversationId == conversationId, cancellationToken)
-                                      .ConfigureAwait(false);
+                                      .SingleOrDefaultAsync(entity => entity.ConversationId == conversationId, cancellationToken);
         return session is null ? null : Snapshot(session);
     }
 
     public async Task<int> ReconcileRunningSessionsAsync(string sanitizedReason, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             var sessions = await _dbContext.AgentWorkSessions.Where(entity => entity.Status == AgentWorkSessionStatus.Running
@@ -199,11 +194,10 @@ internal sealed partial class AgentWorkSessionStore
                                                                               || entity.Status == AgentWorkSessionStatus.WaitingForInput)
                                            .OrderBy(entity => entity.CreatedAtUtc)
                                            .ThenBy(entity => entity.Id)
-                                           .ToListAsync(cancellationToken)
-                                           .ConfigureAwait(false);
+                                           .ToListAsync(cancellationToken);
             if (sessions.Count == 0)
             {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken);
                 return 0;
             }
 
@@ -216,18 +210,18 @@ internal sealed partial class AgentWorkSessionStore
                 AddEvent(session, "SessionInterrupted", AgentWorkSessionStatus.Interrupted.ToString(), operationId: null, ReasonDetail(sanitizedReason));
             }
 
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return sessions.Count;
         }
         catch (DbUpdateException exception)
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw new WorkSessionConcurrencyException("A concurrent writer won the race before the interrupted sessions were reconciled.", exception);
         }
         catch
         {
-            await RollbackAsync(transaction).ConfigureAwait(false);
+            await RollbackAsync(transaction);
             throw;
         }
     }

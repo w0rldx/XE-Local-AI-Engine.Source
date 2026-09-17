@@ -194,7 +194,7 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
     {
         // A feedback row FKs to its message (FK enforcement is on for this context), so the rated message must exist
         // first — mirroring production, where the assistant placeholder precedes the feedback upsert.
-        await InsertMessageAsync(connection, messageId, conversationId, createdAtUtc).ConfigureAwait(false);
+        await InsertMessageAsync(connection, messageId, conversationId, createdAtUtc);
 
         await using var command = connection.CreateCommand();
         command.CommandText = """

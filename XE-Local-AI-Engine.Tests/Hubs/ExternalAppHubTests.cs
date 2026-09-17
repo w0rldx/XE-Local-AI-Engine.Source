@@ -35,7 +35,7 @@ public sealed class ExternalAppHubTests
         var apps = Apps();
         using var fixture = CreateHub(apps);
 
-        _ = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0).ConfigureAwait(false);
+        _ = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0);
 
         // The other order leaves a window in which a change published between the read and the join reaches nobody.
         Received.InOrder(() =>
@@ -50,7 +50,7 @@ public sealed class ExternalAppHubTests
     {
         using var fixture = CreateHub(Apps(events: [Event(8), Event(9)]));
 
-        var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 7).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 7);
 
         AssertEx.Equal(InstanceId, snapshot.InstanceId);
         AssertEx.Equal("Running", snapshot.Status);
@@ -71,7 +71,7 @@ public sealed class ExternalAppHubTests
         };
         using var fixture = CreateHub(Apps(summary));
 
-        var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0);
 
         AssertEx.Equal("Failed", snapshot.Status);
         AssertEx.Equal("ImagePullFailed", snapshot.FailureCategory);
@@ -82,7 +82,7 @@ public sealed class ExternalAppHubTests
     {
         using var fixture = CreateHub(Apps(events: [.. Enumerable.Range(1, ReplayCap).Select(sequence => Event(sequence))]));
 
-        var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0);
 
         AssertEx.Equal(ReplayCap, snapshot.Events.Count);
         AssertEx.False(snapshot.ReplayTruncated);
@@ -93,7 +93,7 @@ public sealed class ExternalAppHubTests
     {
         using var fixture = CreateHub(Apps(events: [.. Enumerable.Range(1, ReplayCap + 1).Select(sequence => Event(sequence))]));
 
-        var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0).ConfigureAwait(false);
+        var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0);
 
         AssertEx.Equal(ReplayCap, snapshot.Events.Count);
         AssertEx.True(snapshot.ReplayTruncated, "the cap is observed one row over it, never inferred from a full page.");
@@ -106,7 +106,7 @@ public sealed class ExternalAppHubTests
         apps.GetAsync(InstanceId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new ExternalAppNotFoundException("gone"));
         using var fixture = CreateHub(apps);
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -116,7 +116,7 @@ public sealed class ExternalAppHubTests
     {
         using var fixture = CreateHub(Apps());
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(Guid.Empty, afterSequence: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(Guid.Empty, afterSequence: 0));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -126,7 +126,7 @@ public sealed class ExternalAppHubTests
     {
         using var fixture = CreateHub(Apps());
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: -1)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: -1));
 
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
@@ -138,7 +138,7 @@ public sealed class ExternalAppHubTests
         var apps = Apps();
         using var fixture = CreateHub(apps, enabled: false);
 
-        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0));
 
         AssertEx.Empty(apps.ReceivedCalls());
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
@@ -157,8 +157,7 @@ public sealed class ExternalAppHubTests
             .ThrowsAsyncForAnyArgs(new InvalidOperationException("the replay read failed."));
         using var fixture = CreateHub(apps);
 
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0))
-                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0));
 
         Received.InOrder(() =>
         {
@@ -181,7 +180,7 @@ public sealed class ExternalAppHubTests
             .ThrowsAsyncForAnyArgs(new ExternalAppNotFoundException("gone"));
         using var fixture = CreateHub(apps);
 
-        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0)).ConfigureAwait(false);
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0));
 
         AssertEx.Equal("External app instance was not found.", error.Message);
         await fixture.Groups.Received(1).RemoveFromGroupAsync("connection", $"external-app-{InstanceId:N}", Arg.Any<CancellationToken>());
@@ -192,7 +191,7 @@ public sealed class ExternalAppHubTests
     {
         using var fixture = CreateHub(Apps());
 
-        await fixture.Hub.Unsubscribe(InstanceId).ConfigureAwait(false);
+        await fixture.Hub.Unsubscribe(InstanceId);
 
         await fixture.Groups.Received(1).RemoveFromGroupAsync("connection", $"external-app-{InstanceId:N}", Arg.Any<CancellationToken>());
     }

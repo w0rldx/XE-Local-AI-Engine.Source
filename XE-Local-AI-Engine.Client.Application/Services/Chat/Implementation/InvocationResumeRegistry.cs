@@ -185,7 +185,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 yield break;
             }
 
-            await foreach (var item in subscriber.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var item in subscriber.Reader.ReadAllAsync(cancellationToken))
             {
                 // This consumer's own queue overflowed, so its stream is no longer contiguous — an approval or a tool
                 // result may have been the item that fell off. Tell it to re-resume rather than guessing which kind

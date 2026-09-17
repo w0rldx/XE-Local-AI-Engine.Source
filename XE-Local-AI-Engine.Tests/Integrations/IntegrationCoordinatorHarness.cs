@@ -583,16 +583,16 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     private async Task<IAsyncDisposable> AcquireLeaseAsync(CancellationToken cancellationToken)
     {
         LeaseRequested = true;
-        await _leaseGate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _leaseGate.Task.WaitAsync(cancellationToken);
 
         // The permit wait is the cancellable part, exactly as the dispatcher's SemaphoreSlim is.
-        await _leaseSlot.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _leaseSlot.WaitAsync(cancellationToken);
         if (LeaseDelay > TimeSpan.Zero)
         {
             // real-timer: arriving late is the input. Deliberately NOT linked to the deadline token — the lease has to
             // arrive after the coordinator's own deadline elapses, not be cancelled by it, and that deadline is real
             // wall clock inside the coordinator.
-            await Task.Delay(LeaseDelay, CancellationToken.None).ConfigureAwait(false);
+            await Task.Delay(LeaseDelay, CancellationToken.None);
         }
 
         LeaseAcquired = true;

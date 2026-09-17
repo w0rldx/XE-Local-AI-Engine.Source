@@ -30,7 +30,7 @@ public sealed class LocalModelProxyInboundAuthTests
         await using var factory = CreateFactory(ValidKey);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(new Uri(ModelsRoute, UriKind.Relative)).ConfigureAwait(false);
+        using var response = await client.GetAsync(new Uri(ModelsRoute, UriKind.Relative));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -41,7 +41,7 @@ public sealed class LocalModelProxyInboundAuthTests
         await using var factory = CreateFactory(ValidKey);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(new Uri(ModelsRoute, UriKind.Relative)).ConfigureAwait(false);
+        using var response = await client.GetAsync(new Uri(ModelsRoute, UriKind.Relative));
 
         AssertEx.True(response.Headers.WwwAuthenticate.Any(static header => string.Equals(header.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)),
             "A 401 from the model proxy must carry an RFC 6750 Bearer challenge so a client knows how to authenticate.");
@@ -55,7 +55,7 @@ public sealed class LocalModelProxyInboundAuthTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ModelsRoute);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "xeprx_wrong-key");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -70,7 +70,7 @@ public sealed class LocalModelProxyInboundAuthTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ModelsRoute);
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -83,7 +83,7 @@ public sealed class LocalModelProxyInboundAuthTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ModelsRoute);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ValidKey);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         // What matters is that the credential was accepted and the request reached the forwarder — not 401/403.
         AssertEx.True(response.StatusCode is not HttpStatusCode.Unauthorized and not HttpStatusCode.Forbidden,
@@ -96,8 +96,8 @@ public sealed class LocalModelProxyInboundAuthTests
         await using var factory = CreateFactory(ValidKey);
         using var client = factory.CreateClient();
 
-        using var getResponse = await client.GetAsync(new Uri(KeyManagementRoute, UriKind.Relative)).ConfigureAwait(false);
-        using var deleteResponse = await client.DeleteAsync(new Uri(KeyManagementRoute, UriKind.Relative)).ConfigureAwait(false);
+        using var getResponse = await client.GetAsync(new Uri(KeyManagementRoute, UriKind.Relative));
+        using var deleteResponse = await client.DeleteAsync(new Uri(KeyManagementRoute, UriKind.Relative));
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, getResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, deleteResponse.StatusCode);
@@ -112,7 +112,7 @@ public sealed class LocalModelProxyInboundAuthTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, KeyManagementRoute);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ValidKey);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -126,8 +126,8 @@ public sealed class LocalModelProxyInboundAuthTests
         using var request = new HttpRequestMessage(HttpMethod.Get, KeyManagementRoute);
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<KeyStatusBody>().ConfigureAwait(false));
+        using var response = await client.SendAsync(request);
+        var body = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<KeyStatusBody>());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(body.Configured, "An ungenerated key must report configured=false rather than 404.");

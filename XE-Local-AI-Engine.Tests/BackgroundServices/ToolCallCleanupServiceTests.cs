@@ -20,7 +20,7 @@ public sealed class ToolCallCleanupServiceTests
         using var service = CreateService(runner, maxAgeMinutes: 5, cleanupIntervalSeconds: 0);
 
         await service.StartAsync(CancellationToken.None);
-        AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
+        AssertEx.True(await runner.WaitForCleanupAsync());
         await service.StopAsync(CancellationToken.None);
 
         AssertEx.True(runner.CleanupCallCount > 0);
@@ -33,7 +33,7 @@ public sealed class ToolCallCleanupServiceTests
         using var service = CreateService(runner, maxAgeMinutes: 7, cleanupIntervalSeconds: 0);
 
         await service.StartAsync(CancellationToken.None);
-        AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
+        AssertEx.True(await runner.WaitForCleanupAsync());
         await service.StopAsync(CancellationToken.None);
 
         AssertEx.Equal(TimeSpan.FromMinutes(7), runner.LastCleanupMaxAge);
@@ -49,7 +49,7 @@ public sealed class ToolCallCleanupServiceTests
         using var service = CreateService(runner, maxAgeMinutes: 5, cleanupIntervalSeconds: 0);
 
         await service.StartAsync(CancellationToken.None);
-        AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
+        AssertEx.True(await runner.WaitForCleanupAsync());
         await service.StopAsync(CancellationToken.None);
 
         AssertEx.True(runner.CleanupCallCount > 0);

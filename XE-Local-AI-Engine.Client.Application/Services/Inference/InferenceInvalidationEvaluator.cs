@@ -47,21 +47,21 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
         ArgumentNullException.ThrowIfNull(profile);
 
         // (a) Build drift is the cheapest and most decisive axis — check it first and short-circuit.
-        if (await HasBuildDriftedAsync(profile, ct).ConfigureAwait(false))
+        if (await HasBuildDriftedAsync(profile, ct))
         {
             return true;
         }
 
         // (b) The versioned launch-policy identity is authoritative. Legacy/missing fingerprints are stale rather than
         // being interpreted as equivalent to today's defaults.
-        if (await HasLaunchPolicyDriftedAsync(profile, ct).ConfigureAwait(false))
+        if (await HasLaunchPolicyDriftedAsync(profile, ct))
         {
             return true;
         }
 
         // (c) Re-probe under HardwareProfiler's bounded timeout so the global-free verdict cannot reuse an earlier
         // cached idle snapshot. The same refreshed profile supplies both hardware drift and live global-free VRAM.
-        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
+        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
         if (HasHardwareDrifted(profile, hardware))
         {
             return true;
@@ -75,7 +75,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
 
         // (e) The frozen placement contradicts today's expert-offload verdict. Last because it is the only axis that
         // prices the model against the current budgets; the cheap short-circuits above have already run.
-        return await ContradictsCurrentPlacementAsync(profile, ct).ConfigureAwait(false);
+        return await ContradictsCurrentPlacementAsync(profile, ct);
     }
 
     /// <inheritdoc />
@@ -103,8 +103,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
                 profile.KvTypeV,
                 profile.FlashAttn);
             var allocation = await _allocationResolver
-                                   .ResolveAsync(profile.ModelName, (ModelRole)profile.Role, variant, replay, ct)
-                                   .ConfigureAwait(false);
+                                   .ResolveAsync(profile.ModelName, (ModelRole)profile.Role, variant, replay, ct);
             if (allocation?.Placement != ProcessPlacementMode.ExpertOffload)
             {
                 return false;
@@ -131,7 +130,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
             return true;
         }
 
-        var path = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct).ConfigureAwait(false);
+        var path = await _ggufModelStore.ResolveModelFilePathAsync(profile.ModelName, ct);
         if (string.IsNullOrWhiteSpace(path))
         {
             return true;
@@ -139,7 +138,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
 
         try
         {
-            return !await _launchPolicyFingerprintProvider.MatchesAsync(profile, path, ct).ConfigureAwait(false);
+            return !await _launchPolicyFingerprintProvider.MatchesAsync(profile, path, ct);
         }
         catch (FileNotFoundException)
         {
@@ -151,7 +150,7 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
     // node, nothing installed yet) the build axis degrades to "no drift" rather than forcing a re-explore on missing data.
     private async Task<bool> HasBuildDriftedAsync(InferenceProfileRecord profile, CancellationToken ct)
     {
-        var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        var installed = await _installedRuntimeStore.ReadAsync(ct);
         var activeTag = installed?.Tag;
         return !string.IsNullOrWhiteSpace(activeTag)
                && !string.Equals(activeTag, profile.LlamacppBuild, StringComparison.OrdinalIgnoreCase);

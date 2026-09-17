@@ -60,8 +60,8 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var client = await ResolveClientAsync(options, cancellationToken).ConfigureAwait(false);
-        return await client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        var client = await ResolveClientAsync(options, cancellationToken);
+        return await client.GetResponseAsync(messages, options, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -71,8 +71,8 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        var client = await ResolveClientAsync(options, cancellationToken).ConfigureAwait(false);
-        await foreach (var update in client.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
+        var client = await ResolveClientAsync(options, cancellationToken);
+        await foreach (var update in client.GetStreamingResponseAsync(messages, options, cancellationToken))
         {
             yield return update;
         }
@@ -125,7 +125,7 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
     private async Task<IChatClient> ResolveClientAsync(ChatOptions? options, CancellationToken cancellationToken)
     {
         var modelName = string.IsNullOrWhiteSpace(options?.ModelId) ? _defaultModelName : options.ModelId;
-        var providerName = await _resolver.ResolveProviderNameForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
+        var providerName = await _resolver.ResolveProviderNameForModelAsync(modelName, cancellationToken);
 
         var cacheKey = new ProviderModelKey(providerName, modelName);
         if (_clientsByProviderAndModel.TryGetValue(cacheKey, out var cached))

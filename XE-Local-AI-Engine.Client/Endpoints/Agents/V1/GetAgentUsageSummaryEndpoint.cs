@@ -35,7 +35,7 @@ public sealed class GetAgentUsageSummaryEndpoint(
 
     public override async Task HandleAsync(AgentUsageSummaryRequest req, CancellationToken ct)
     {
-        var buckets = await _executionLogs.SummarizeTokenUsageAsync(req.FromEpochMs, req.ToEpochMs, ct).ConfigureAwait(false);
+        var buckets = await _executionLogs.SummarizeTokenUsageAsync(req.FromEpochMs, req.ToEpochMs, ct);
 
         await Send.OkAsync(new AgentUsageSummaryResponse
             {
@@ -44,6 +44,6 @@ public sealed class GetAgentUsageSummaryEndpoint(
                 ByProvider = buckets.ToByProvider(_rateResolver),
                 RetentionDays = _retentionOptions.Value.RetentionDays
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

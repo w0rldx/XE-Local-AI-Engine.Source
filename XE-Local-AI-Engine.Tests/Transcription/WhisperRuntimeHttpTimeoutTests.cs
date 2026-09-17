@@ -187,7 +187,7 @@ public sealed class WhisperRuntimeHttpTimeoutTests
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    var client = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
+                    var client = await _listener.AcceptTcpClientAsync(ct);
                     _ = Task.Run(() => ServeAsync(client, ct), ct);
                 }
             }
@@ -205,19 +205,19 @@ public sealed class WhisperRuntimeHttpTimeoutTests
                 {
                     var stream = client.GetStream();
                     var buffer = new byte[4096];
-                    _ = await stream.ReadAsync(buffer, ct).ConfigureAwait(false);
+                    _ = await stream.ReadAsync(buffer, ct);
                     Interlocked.Increment(ref _requestCount);
 
                     if (_delay > TimeSpan.Zero)
                     {
                         // real-timer: withholding the response for a real interval IS the subject — the point is that
                         // no handler in the pipeline aborts the request while the server is simply slow.
-                        await Task.Delay(_delay, ct).ConfigureAwait(false);
+                        await Task.Delay(_delay, ct);
                     }
 
                     var response = $"HTTP/1.1 {(int)_status} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                    await stream.WriteAsync(Encoding.ASCII.GetBytes(response), ct).ConfigureAwait(false);
-                    await stream.FlushAsync(ct).ConfigureAwait(false);
+                    await stream.WriteAsync(Encoding.ASCII.GetBytes(response), ct);
+                    await stream.FlushAsync(ct);
                 }
                 catch (Exception exception) when (exception is OperationCanceledException or IOException or SocketException or ObjectDisposedException)
                 {

@@ -15,16 +15,16 @@ public sealed partial class BenchmarkStore
         string? primaryStopReason,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Primary, expectedRunVersion, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Primary, expectedRunVersion, cancellationToken);
         _dbContext.ChangeTracker.Clear();
-        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken);
         if (run.PrimaryStatus == status)
         {
-            return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
+            return await ToRecordWithJudgeAsync(run, cancellationToken);
         }
 
-        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken).ConfigureAwait(false);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Primary, cancellationToken);
         EnsureVersion(work.Version, expectedRunVersion);
         if (run.PrimaryStatus is not (BenchmarkPrimaryStatus.Running or BenchmarkPrimaryStatus.CancelRequested))
         {
@@ -53,9 +53,9 @@ public sealed partial class BenchmarkStore
         run.Version++;
         run.UpdatedAtUtc = now;
         TerminalizeWork(work, reconciledWorkStatus, run.PrimaryErrorMessage, now);
-        await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await ToRecordWithJudgeAsync(run, cancellationToken);
     }
 
     /// <summary>
@@ -76,7 +76,6 @@ public sealed partial class BenchmarkStore
                                            .Where(entity => entity.RunId == run.Id)
                                            .Select(entity => (int?)entity.Sequence)
                                            .MaxAsync(cancellationToken)
-                                           .ConfigureAwait(false)
                            ?? 0;
         var unresolved = runtimeJson is null;
         var failure = unresolved ? Sanitize(runtimeUnresolvedReason ?? UnresolvedJudgeRuntimeMessage) : null;
@@ -134,7 +133,7 @@ public sealed partial class BenchmarkStore
             return null;
         }
 
-        var attempt = await _dbContext.BenchmarkJudgeAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false);
+        var attempt = await _dbContext.BenchmarkJudgeAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken);
         if (attempt is null
             || attempt.Status is BenchmarkJudgeAttemptStatus.Succeeded or BenchmarkJudgeAttemptStatus.Failed or BenchmarkJudgeAttemptStatus.Cancelled)
         {
@@ -164,7 +163,7 @@ public sealed partial class BenchmarkStore
             return null;
         }
 
-        var attempt = await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken).ConfigureAwait(false);
+        var attempt = await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken);
         if (attempt is null || IsAttemptTerminal(attempt.Status))
         {
             return null;
@@ -189,7 +188,7 @@ public sealed partial class BenchmarkStore
             return null;
         }
 
-        var comparison = await _dbContext.BenchmarkComparisons.SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken).ConfigureAwait(false);
+        var comparison = await _dbContext.BenchmarkComparisons.SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken);
         if (comparison is null || IsAttemptTerminal(comparison.Status))
         {
             return null;
@@ -204,8 +203,7 @@ public sealed partial class BenchmarkStore
         // terminalizing are the only two ways the fitted set can change, so a published fit's staleness is one
         // integer against this row rather than a re-hash of every verdict on every page read.
         var revision = await _dbContext.BenchmarkJudgePolicyRevisions
-                                       .SingleOrDefaultAsync(entity => entity.Id == comparison.PolicyRevisionId, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleOrDefaultAsync(entity => entity.Id == comparison.PolicyRevisionId, cancellationToken);
         if (revision is not null)
         {
             revision.ComparisonSetVersion = checked(revision.ComparisonSetVersion + 1);
@@ -228,8 +226,7 @@ public sealed partial class BenchmarkStore
         CancellationToken cancellationToken)
     {
         var existing = await _dbContext.BenchmarkJudgePolicyRevisions
-                                       .SingleOrDefaultAsync(entity => entity.ProjectId == projectId && entity.PolicyHash == policyHash, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .SingleOrDefaultAsync(entity => entity.ProjectId == projectId && entity.PolicyHash == policyHash, cancellationToken);
         if (existing is not null)
         {
             return (existing, false);
@@ -239,7 +236,6 @@ public sealed partial class BenchmarkStore
                                            .Where(entity => entity.ProjectId == projectId)
                                            .Select(entity => (int?)entity.Revision)
                                            .MaxAsync(cancellationToken)
-                                           .ConfigureAwait(false)
                            ?? 0;
         var revision = new BenchmarkJudgePolicyRevision
         {
@@ -257,14 +253,13 @@ public sealed partial class BenchmarkStore
         {
             // Staged save inside the caller's transaction: the revision must exist before the project points at it,
             // and a failure anywhere after this still rolls both rows back together.
-            await SaveAsync(cancellationToken).ConfigureAwait(false);
+            await SaveAsync(cancellationToken);
         }
         catch (BenchmarkConflictException conflict) when (string.Equals(conflict.Code, "DuplicateWork", StringComparison.Ordinal))
         {
             _dbContext.Entry(revision).State = EntityState.Detached;
             var raced = await _dbContext.BenchmarkJudgePolicyRevisions
-                                        .SingleOrDefaultAsync(entity => entity.ProjectId == projectId && entity.PolicyHash == policyHash, cancellationToken)
-                                        .ConfigureAwait(false);
+                                        .SingleOrDefaultAsync(entity => entity.ProjectId == projectId && entity.PolicyHash == policyHash, cancellationToken);
             if (raced is null)
             {
                 throw;

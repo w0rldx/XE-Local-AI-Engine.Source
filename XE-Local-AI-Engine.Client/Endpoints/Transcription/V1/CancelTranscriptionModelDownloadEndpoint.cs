@@ -36,6 +36,6 @@ public sealed class CancelTranscriptionModelDownloadEndpoint(IWhisperModelDownlo
             ModelId = request.ModelId,
             Accepted = cancelled,
             Status = _downloadCoordinator.GetStatus(request.ModelId)?.ToResponse()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

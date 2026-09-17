@@ -23,13 +23,13 @@ public sealed class CreateBaseArtifactEndpoint(IBaseArtifactService baseArtifact
     {
         try
         {
-            var artifact = await baseArtifactService.StartDownloadAsync(request.RepoId, request.Revision, ct).ConfigureAwait(false);
-            await Send.OkAsync(artifact.ToResponse(), ct).ConfigureAwait(false);
+            var artifact = await baseArtifactService.StartDownloadAsync(request.RepoId, request.Revision, ct);
+            await Send.OkAsync(artifact.ToResponse(), ct);
         }
         catch (BaseArtifactRejectedException exception)
         {
             // Rejection messages are operator-facing by construction (not trainable, or not enough disk).
-            await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("rejected", exception.Message)).ConfigureAwait(false);
+            await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("rejected", exception.Message));
         }
     }
 }

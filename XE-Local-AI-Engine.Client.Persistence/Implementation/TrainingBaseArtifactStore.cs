@@ -21,8 +21,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var existing = await _dbContext.TrainingBaseArtifacts
-                                       .FirstOrDefaultAsync(row => row.RepoId == repoId && row.Revision == revision, cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .FirstOrDefaultAsync(row => row.RepoId == repoId && row.Revision == revision, cancellationToken);
 
         if (existing is not null)
         {
@@ -41,7 +40,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
             existing.TotalBytes = 0;
             existing.Version++;
             existing.UpdatedAtUtc = now;
-            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _dbContext.SaveChangesAsync(cancellationToken);
             return ToRecord(existing);
         }
 
@@ -59,7 +58,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
         };
 
         _ = _dbContext.TrainingBaseArtifacts.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return ToRecord(entity);
     }
 
@@ -67,8 +66,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
     {
         var entity = await _dbContext.TrainingBaseArtifacts
                                      .AsNoTracking()
-                                     .FirstOrDefaultAsync(row => row.Id == artifactId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.Id == artifactId, cancellationToken);
 
         return entity is null ? null : ToRecord(entity);
     }
@@ -78,8 +76,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
         var entities = await _dbContext.TrainingBaseArtifacts
                                        .AsNoTracking()
                                        .OrderByDescending(row => row.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }
@@ -93,13 +90,13 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
     {
         ArgumentNullException.ThrowIfNull(filesJson);
 
-        var entity = await LoadForUpdateAsync(artifactId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadForUpdateAsync(artifactId, expectedVersion, cancellationToken);
         entity.Status = TrainingBaseArtifactStatus.Ready;
         entity.FilesJson = filesJson;
         entity.TotalBytes = totalBytes;
         entity.LicenseJson = licenseJson;
         entity.ErrorMessage = null;
-        return await SaveAsync(entity, cancellationToken).ConfigureAwait(false);
+        return await SaveAsync(entity, cancellationToken);
     }
 
     public async Task<TrainingBaseArtifactRecord> MarkFailedAsync(Guid artifactId,
@@ -109,10 +106,10 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(errorMessage);
 
-        var entity = await LoadForUpdateAsync(artifactId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadForUpdateAsync(artifactId, expectedVersion, cancellationToken);
         entity.Status = TrainingBaseArtifactStatus.Failed;
         entity.ErrorMessage = errorMessage;
-        return await SaveAsync(entity, cancellationToken).ConfigureAwait(false);
+        return await SaveAsync(entity, cancellationToken);
     }
 
     public async Task<TrainingBaseArtifactRecord> SetRevisionAsync(Guid artifactId,
@@ -122,16 +119,15 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(revision);
 
-        var entity = await LoadForUpdateAsync(artifactId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        var entity = await LoadForUpdateAsync(artifactId, expectedVersion, cancellationToken);
         entity.Revision = revision;
-        return await SaveAsync(entity, cancellationToken).ConfigureAwait(false);
+        return await SaveAsync(entity, cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.TrainingBaseArtifacts
-                                     .FirstOrDefaultAsync(row => row.Id == artifactId, cancellationToken)
-                                     .ConfigureAwait(false);
+                                     .FirstOrDefaultAsync(row => row.Id == artifactId, cancellationToken);
 
         if (entity is null)
         {
@@ -144,7 +140,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
         }
 
         _ = _dbContext.TrainingBaseArtifacts.Remove(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -152,8 +148,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
     {
         var stranded = await _dbContext.TrainingBaseArtifacts
                                        .Where(row => row.Status == TrainingBaseArtifactStatus.Downloading)
-                                       .ToListAsync(cancellationToken)
-                                       .ConfigureAwait(false);
+                                       .ToListAsync(cancellationToken);
 
         if (stranded.Count == 0)
         {
@@ -169,7 +164,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
             entity.UpdatedAtUtc = now;
         }
 
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return stranded.Count;
     }
 
@@ -177,7 +172,6 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
     {
         var entity = await _dbContext.TrainingBaseArtifacts
                                      .FirstOrDefaultAsync(row => row.Id == artifactId, cancellationToken)
-                                     .ConfigureAwait(false)
                      ?? throw new TrainingBaseArtifactConcurrencyException("The base checkpoint no longer exists.");
 
         if (entity.Version != expectedVersion)
@@ -192,7 +186,7 @@ public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeP
     {
         entity.Version++;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
         return ToRecord(entity);
     }
 

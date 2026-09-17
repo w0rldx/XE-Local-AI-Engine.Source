@@ -44,7 +44,7 @@ internal abstract class HubEventRelay<TEvent, THub>(
     {
         Unsubscribe();
         _ = _channel.Writer.TryComplete();
-        await base.StopAsync(cancellationToken).ConfigureAwait(false);
+        await base.StopAsync(cancellationToken);
     }
 
     /// <summary>Attaches this relay's handler to its buffer; the exact mirror of <see cref="Unsubscribe" />.</summary>
@@ -65,9 +65,9 @@ internal abstract class HubEventRelay<TEvent, THub>(
     {
         try
         {
-            await foreach (var published in _channel.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+            await foreach (var published in _channel.Reader.ReadAllAsync(stoppingToken))
             {
-                await _hubContext.Clients.Group(_group(published)).SendAsync(_method, published, stoppingToken).ConfigureAwait(false);
+                await _hubContext.Clients.Group(_group(published)).SendAsync(_method, published, stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

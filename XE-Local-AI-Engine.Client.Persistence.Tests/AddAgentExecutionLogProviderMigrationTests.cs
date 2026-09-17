@@ -18,7 +18,7 @@ public sealed class AddAgentExecutionLogProviderMigrationTests
     [Test]
     public async Task Migrate_OverHistoricalLogs_AttributesThemToAnUnknownProvider()
     {
-        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("execution-log-provider.sqlite", PreProviderMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("execution-log-provider.sqlite", PreProviderMigrationId);
 
         var logId = Guid.NewGuid().ToString();
         await probe.ExecuteAsync("""
@@ -30,16 +30,16 @@ public sealed class AddAgentExecutionLogProviderMigrationTests
             {
                 command.Parameters.AddWithValue("$id", logId);
                 command.Parameters.AddWithValue("$agent_definition_id", Guid.NewGuid().ToString());
-            }).ConfigureAwait(false);
+            });
 
-        await probe.MigrateToAsync(ThisMigrationId).ConfigureAwait(false);
+        await probe.MigrateToAsync(ThisMigrationId);
 
         var provider = await probe.ScalarAsync("SELECT provider FROM agent_execution_logs WHERE id = $id;",
-            command => command.Parameters.AddWithValue("$id", logId)).ConfigureAwait(false);
+            command => command.Parameters.AddWithValue("$id", logId));
 
         AssertEx.Equal("unknown", AssertEx.NotNull(provider as string, "The provider column must be non-null for historical rows."),
             "A pre-migration turn must be attributed to 'unknown', never to the provider configured at migration time.");
 
-        AssertEx.Equal("'unknown'", await probe.ColumnDefaultAsync("agent_execution_logs", "provider").ConfigureAwait(false));
+        AssertEx.Equal("'unknown'", await probe.ColumnDefaultAsync("agent_execution_logs", "provider"));
     }
 }

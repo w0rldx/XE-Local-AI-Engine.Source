@@ -213,7 +213,7 @@ public sealed class GgufDiscoveryPerfTests
                     {
                         // real-timer: per-request latency is the input of a parallelism measurement — the observed
                         // concurrency above is only meaningful while requests genuinely overlap in time.
-                        await Task.Delay(headerDelay, cancellationToken).ConfigureAwait(false);
+                        await Task.Delay(headerDelay, cancellationToken);
                     }
 
                     var index = Array.IndexOf(QuantTokens, fileName.Replace("model-", "", StringComparison.Ordinal).Replace(".gguf", "", StringComparison.Ordinal));

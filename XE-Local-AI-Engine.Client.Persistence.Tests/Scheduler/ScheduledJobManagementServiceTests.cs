@@ -44,14 +44,14 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task CreateJobAsync_WithUnknownTemplateId_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("val-unknown-template.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
         var input = ValidCronInput("does-not-exist");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
     [Test]
@@ -59,7 +59,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     {
         // TestEchoScheduledJobHandler only supports OneShot and Cron — SimpleInterval is not allowed.
         var dbPath = GetDatabasePath("val-bad-kind.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
@@ -79,35 +79,35 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             MaxRuntimeSeconds: null,
             Parameters: null);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
     [Test]
     public async Task CreateJobAsync_WithEmptyCronExpression_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("val-empty-cron.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
         var input = ValidCronInput("");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
     [Test]
     public async Task CreateJobAsync_WithInvalidCronExpression_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("val-bad-cron.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
         var input = ValidCronInput("not-a-valid-cron");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
     [Test]
@@ -115,7 +115,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     {
         // Need a handler that supports SimpleInterval — build one ad-hoc.
         var dbPath = GetDatabasePath("val-bad-interval.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath, new SimpleIntervalOnlyHandler());
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
@@ -135,14 +135,14 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             MaxRuntimeSeconds: null,
             Parameters: null);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
     [Test]
     public async Task CreateJobAsync_WithMissingStartAtForOneShot_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("val-oneshot-no-start.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
@@ -162,49 +162,49 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             MaxRuntimeSeconds: null,
             Parameters: null);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
     [Test]
     public async Task CreateJobAsync_WithUnresolvableTimeZone_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("val-bad-tz.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
         var input = ValidCronInput(timeZoneId: "Not/A/Real/Zone");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
     [Test]
     public async Task CreateJobAsync_WithNonPositiveMaxRuntimeSeconds_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("val-bad-maxruntime.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
         var input = ValidCronInput(maxRuntimeSeconds: 0); // must be > 0 or null
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
     [Test]
     public async Task CreateJobAsync_WithBlankDisplayName_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("val-blank-name.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
         var input = ValidCronInput(displayName: "   ");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
 
@@ -212,16 +212,16 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task CreateJobAsync_ValidCronInput_PersistsDefinitionAndSchedulesQuartzJob()
     {
         var dbPath = GetDatabasePath("create-cron.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
         var input = ValidCronInput();
-        var record = await service.CreateJobAsync(input).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(input);
 
         // Store: definition persisted with Enabled=true and CreatedBy=User.
         AssertEx.Equal(TestEchoScheduledJobHandler.Id, record.TemplateId);
@@ -232,14 +232,14 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         // Quartz: job exists in the ADO store.
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Quartz job must be scheduled after CreateJobAsync.");
 
         // Quartz: at least one trigger attached.
-        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None);
         AssertEx.True(triggers.Count > 0, "At least one trigger must be created.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
@@ -249,55 +249,55 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // we verify the PreventOverlap flag is persisted on the record and the Quartz job carries the
         // ScheduledJobIdKey data-map entry, which is the observable contract from this test assembly.
         var dbPath = GetDatabasePath("create-no-overlap.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
         var input = ValidCronInput(preventOverlap: true);
-        var record = await service.CreateJobAsync(input).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(input);
 
         // Store: PreventOverlap persisted.
         AssertEx.Equal(expected: true, record.PreventOverlap, "PreventOverlap must be persisted as true.");
 
         // Quartz: job exists and carries the ScheduledJobIdKey data map entry.
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        var jobDetail = await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false);
+        var jobDetail = await scheduler.GetJobDetail(jobKey, CancellationToken.None);
         AssertEx.NotNull(jobDetail, "Job detail must be retrievable.");
         AssertEx.Equal(record.Id.ToString(),
             jobDetail!.JobDataMap.GetString(SchedulerJobKeys.ScheduledJobIdKey),
             "Job data map must carry the definition id.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task CreateJobAsync_WithPreventOverlapFalse_JobDetailStoredWithCorrectDataMapKey()
     {
         var dbPath = GetDatabasePath("create-allow-overlap.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
         var input = ValidCronInput(preventOverlap: false);
-        var record = await service.CreateJobAsync(input).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(input);
 
         // Store: PreventOverlap persisted as false.
         AssertEx.Equal(expected: false, record.PreventOverlap, "PreventOverlap must be persisted as false.");
 
         // Quartz: job exists.
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Quartz job must be scheduled for a non-overlapping job.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
 
@@ -307,66 +307,66 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // A Manual definition must validate with null cron/interval/repeat/start — CreateJobAsync runs validation
         // first, so a successful create proves ValidateScheduleFields accepted Manual.
         var dbPath = GetDatabasePath("manual-validate.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ManualInput());
 
         AssertEx.Equal(ScheduleKind.Manual, record.ScheduleKind);
         AssertEx.Null(record.CronExpression, "A Manual job has no cron expression.");
         AssertEx.Null(record.IntervalSeconds, "A Manual job has no interval.");
         AssertEx.Null(record.StartAtUtc, "A Manual job has no start time.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task CreateJobAsync_ManualInput_RegistersDurableJobWithNoTrigger()
     {
         var dbPath = GetDatabasePath("manual-durable.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ManualInput());
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
         // The durable job exists ...
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "A Manual job must be registered as a durable Quartz job.");
 
         // ... but it has NO trigger (a Manual job never auto-fires).
-        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None);
         AssertEx.Equal(expected: 0, triggers.Count, "A Manual job must have no trigger — it never auto-fires.");
 
         // The job detail is durable, which is what AddJob requires.
-        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
         AssertEx.True(jobDetail.Durable, "A Manual job detail must be stored durably.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task TriggerNowAsync_OnManualJob_Succeeds()
     {
         var dbPath = GetDatabasePath("manual-trigger.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ManualInput());
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
         // TriggerNowAsync must SUCCEED for a durable Manual job that has no trigger: it passes the CheckExists guard and
@@ -375,9 +375,9 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // single-writer contention between the Quartz worker thread and the store deadlocks the test. The end-to-end fire
         // (dispatcher → handler → snapshot) is covered deterministically by ModelRecommendationCheckSchedulerPathTests
         // Here we assert the manual-trigger path succeeds and the durable job stays registered/triggerable.
-        await service.TriggerNowAsync(record.Id).ConfigureAwait(false);
+        await service.TriggerNowAsync(record.Id);
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "The durable Manual job must remain registered and triggerable after TriggerNowAsync.");
     }
 
@@ -385,28 +385,28 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task SetEnabledAsync_WhenDisablingManualJob_RemovesDurableJob()
     {
         var dbPath = GetDatabasePath("manual-disable.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ManualInput());
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Manual job must be registered before disabling.");
 
-        var disabled = await service.SetEnabledAsync(record.Id, enabled: false).ConfigureAwait(false);
+        var disabled = await service.SetEnabledAsync(record.Id, enabled: false);
         AssertEx.NotNull(disabled, "SetEnabledAsync must return the updated record.");
         AssertEx.Equal(expected: false, disabled!.Enabled);
 
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Disabling a Manual job must remove the durable Quartz job.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     // Self-heal — a persisted JobDetail whose class name no longer resolves is
@@ -416,95 +416,93 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task TriggerNowAsync_WhenPersistedJobClassNameIsStale_HealsAndSucceeds()
     {
         var dbPath = GetDatabasePath("heal-trigger-stale-class.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ManualInput());
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
         // Simulate the namespace-move regression: rewrite the persisted JOB_CLASS_NAME to a type that no longer exists,
         // exactly as an install upgraded across the dispatch-job move would have on disk.
         await CorruptJobClassNameAsync(dbPath, record.Id,
-                "XE_Local_AI_Engine.Client.Services.Scheduler.NonOverlappingSchedulerDispatchJob, XE-Local-AI-Engine.Client.Application")
-            .ConfigureAwait(false);
+                "XE_Local_AI_Engine.Client.Services.Scheduler.NonOverlappingSchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
 
         // Before the heal, Quartz cannot materialize the job detail because its stored type does not resolve.
         _ = await AssertEx.ThrowsAsync<JobPersistenceException>(() =>
-            scheduler.GetJobDetail(jobKey, CancellationToken.None)).ConfigureAwait(false);
+            scheduler.GetJobDetail(jobKey, CancellationToken.None));
 
         // TriggerNowAsync re-adds the durable detail with the current type, then fires — it must NOT throw a type-load error.
-        await service.TriggerNowAsync(record.Id).ConfigureAwait(false);
+        await service.TriggerNowAsync(record.Id);
 
         // After the heal the detail resolves again and the durable job remains registered.
-        var healedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        var healedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
         AssertEx.True(healedDetail.Durable, "The healed Manual job detail must remain durable.");
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "The job must remain registered after healing.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task ReconcileDurableJobsAsync_RefreshesStaleClassNameWithoutFiring()
     {
         var dbPath = GetDatabasePath("heal-reconcile-stale-class.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ValidCronInput());
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
         await CorruptJobClassNameAsync(dbPath, record.Id,
-                "XE_Local_AI_Engine.Client.Services.Scheduler.SchedulerDispatchJob, XE-Local-AI-Engine.Client.Application")
-            .ConfigureAwait(false);
+                "XE_Local_AI_Engine.Client.Services.Scheduler.SchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
 
         // Stale detail does not resolve before reconciliation.
         _ = await AssertEx.ThrowsAsync<JobPersistenceException>(() =>
-            scheduler.GetJobDetail(jobKey, CancellationToken.None)).ConfigureAwait(false);
+            scheduler.GetJobDetail(jobKey, CancellationToken.None));
 
-        var healed = await service.ReconcileDurableJobsAsync().ConfigureAwait(false);
+        var healed = await service.ReconcileDurableJobsAsync();
         AssertEx.Equal(expected: 1, healed, "Exactly one stale durable job detail must be reconciled.");
 
         // The detail resolves again, the job is still registered, and its trigger schedule is untouched (still present).
-        var healedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        var healedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
         AssertEx.True(healedDetail.Durable, "The healed job detail must be durable.");
 
-        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None);
         AssertEx.True(triggers.Count > 0, "Reconciliation must not remove the existing trigger.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task ReconcileDurableJobsAsync_SkipsDisabledDefinitions()
     {
         var dbPath = GetDatabasePath("heal-reconcile-skips-disabled.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ValidCronInput());
         // Disabling removes the Quartz job entirely, so reconciliation has nothing to refresh for it.
-        await service.SetEnabledAsync(record.Id, enabled: false).ConfigureAwait(false);
+        await service.SetEnabledAsync(record.Id, enabled: false);
 
-        var healed = await service.ReconcileDurableJobsAsync().ConfigureAwait(false);
+        var healed = await service.ReconcileDurableJobsAsync();
         AssertEx.Equal(expected: 0, healed, "A disabled definition has no durable Quartz job and must not be reconciled.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
 
@@ -512,51 +510,51 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task UpdateJobAsync_ChangesDisplayNameAndReschedulesQuartzJob()
     {
         var dbPath = GetDatabasePath("update-remap.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var created = await service.CreateJobAsync(ValidCronInput("0 0 6 * * ?")).ConfigureAwait(false);
+        var created = await service.CreateJobAsync(ValidCronInput("0 0 6 * * ?"));
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
 
         // Update: change cron expression.
         var updatedInput = ValidCronInput("0 0 12 * * ?", "Updated Job");
-        var updated = await service.UpdateJobAsync(created.Id, updatedInput).ConfigureAwait(false);
+        var updated = await service.UpdateJobAsync(created.Id, updatedInput);
         AssertEx.NotNull(updated, "UpdateJobAsync must return the updated record.");
         AssertEx.Equal("Updated Job", updated!.DisplayName);
 
         // Quartz: job still exists (rescheduled, not removed).
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Quartz job must still exist after update.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task UpdateJobAsync_PreservesEnabledState()
     {
         var dbPath = GetDatabasePath("update-preserves-enabled.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var created = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var created = await service.CreateJobAsync(ValidCronInput());
 
         // Disable then update; enabled state must stay false.
-        await service.SetEnabledAsync(created.Id, enabled: false).ConfigureAwait(false);
-        var updated = await service.UpdateJobAsync(created.Id, ValidCronInput()).ConfigureAwait(false);
+        await service.SetEnabledAsync(created.Id, enabled: false);
+        var updated = await service.UpdateJobAsync(created.Id, ValidCronInput());
         AssertEx.NotNull(updated, "UpdateJobAsync must return the updated record.");
         AssertEx.Equal(expected: false, updated!.Enabled, "Update must preserve the disabled state.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
 
@@ -564,60 +562,60 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task SetEnabledAsync_WhenDisabling_UnschedulesQuartzJobAndStampsDisabledAtUtc()
     {
         var dbPath = GetDatabasePath("disable-unschedule.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var created = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var created = await service.CreateJobAsync(ValidCronInput());
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Job must be scheduled before disabling.");
 
-        var disabled = await service.SetEnabledAsync(created.Id, enabled: false).ConfigureAwait(false);
+        var disabled = await service.SetEnabledAsync(created.Id, enabled: false);
         AssertEx.NotNull(disabled, "SetEnabledAsync must return the updated record.");
         AssertEx.Equal(expected: false, disabled!.Enabled, "Disabled record must have Enabled=false.");
         AssertEx.True(disabled.DisabledAtUtc.HasValue, "DisabledAtUtc must be stamped on disable.");
 
         // Quartz: job must be removed.
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Quartz job must be unscheduled after SetEnabled(false).");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task SetEnabledAsync_WhenEnabling_ReschedulesQuartzJob()
     {
         var dbPath = GetDatabasePath("enable-reschedule.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var created = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var created = await service.CreateJobAsync(ValidCronInput());
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        await service.SetEnabledAsync(created.Id, enabled: false).ConfigureAwait(false);
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        await service.SetEnabledAsync(created.Id, enabled: false);
+        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Job must be unscheduled after disable.");
 
-        var enabled = await service.SetEnabledAsync(created.Id, enabled: true).ConfigureAwait(false);
+        var enabled = await service.SetEnabledAsync(created.Id, enabled: true);
         AssertEx.NotNull(enabled, "SetEnabledAsync must return the updated record.");
         AssertEx.Equal(expected: true, enabled!.Enabled);
         AssertEx.Null(enabled.DisabledAtUtc, "DisabledAtUtc must be cleared on re-enable.");
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Quartz job must be rescheduled after SetEnabled(true).");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
@@ -627,14 +625,14 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // read as enabled but was never scheduled. The definition is written straight to the store (CreateJobAsync
         // would reject the unknown template) so only SetEnabledAsync is under test.
         var dbPath = GetDatabasePath("enable-unknown-template.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var store = provider.GetRequiredService<IScheduledJobDefinitionStore>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
         var stored = await store.AddAsync(new ScheduledJobDefinitionInput("does-not-exist",
                                     "Orphaned template job",
@@ -651,20 +649,18 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
                                     PreventOverlap: false,
                                     MaxRuntimeSeconds: null,
                                     ParameterJson: null,
-                                    ScheduledJobCreator.User))
-                                .ConfigureAwait(false);
+                                    ScheduledJobCreator.User));
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.SetEnabledAsync(stored.Id, enabled: true))
-                      .ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.SetEnabledAsync(stored.Id, enabled: true));
 
-        var reloaded = await store.GetByIdAsync(stored.Id).ConfigureAwait(false);
+        var reloaded = await store.GetByIdAsync(stored.Id);
         AssertEx.NotNull(reloaded, "The definition must still exist after a rejected enable.");
         AssertEx.Equal(expected: false, reloaded!.Enabled, "A rejected enable must not persist Enabled=true.");
 
-        AssertEx.False(await scheduler.CheckExists(new JobKey(stored.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None).ConfigureAwait(false),
+        AssertEx.False(await scheduler.CheckExists(new JobKey(stored.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None),
             "A rejected enable must not schedule anything in Quartz.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
 
@@ -672,38 +668,38 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task DeleteJobAsync_UnschedulesAndSoftDeletesDefinition()
     {
         var dbPath = GetDatabasePath("delete-soft.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var created = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var created = await service.CreateJobAsync(ValidCronInput());
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Job must be scheduled before delete.");
 
-        await service.DeleteJobAsync(created.Id).ConfigureAwait(false);
+        await service.DeleteJobAsync(created.Id);
 
         // Quartz: job removed.
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Quartz job must be removed after DeleteJobAsync.");
 
         // Store: definition excluded from default list (soft-deleted).
-        var jobs = await service.ListJobsAsync().ConfigureAwait(false);
+        var jobs = await service.ListJobsAsync();
         AssertEx.False(jobs.Any(j => j.Id == created.Id),
             "Soft-deleted definition must not appear in default ListJobsAsync.");
 
         // Store: definition visible when includeDeleted=true.
-        var allJobs = await service.ListJobsAsync(true).ConfigureAwait(false);
+        var allJobs = await service.ListJobsAsync(true);
         var deletedRecord = allJobs.FirstOrDefault(j => j.Id == created.Id);
         AssertEx.NotNull(deletedRecord, "Soft-deleted definition must appear with includeDeleted=true.");
         AssertEx.True(deletedRecord!.DeletedAtUtc.HasValue, "DeletedAtUtc must be stamped.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
 
@@ -711,37 +707,37 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task TriggerNowAsync_WhenJobIsDisabled_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("trigger-disabled.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var created = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
-        await service.SetEnabledAsync(created.Id, enabled: false).ConfigureAwait(false);
+        var created = await service.CreateJobAsync(ValidCronInput());
+        await service.SetEnabledAsync(created.Id, enabled: false);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.TriggerNowAsync(created.Id)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.TriggerNowAsync(created.Id));
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task TriggerNowAsync_WhenJobNotFound_ThrowsValidation()
     {
         var dbPath = GetDatabasePath("trigger-notfound.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.TriggerNowAsync(Guid.NewGuid())).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.TriggerNowAsync(Guid.NewGuid()));
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
 
@@ -749,7 +745,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task ListTemplatesAsync_ReturnsRegisteredTemplates()
     {
         var dbPath = GetDatabasePath("list-templates.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
@@ -766,65 +762,65 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task CreateJobAsync_OptsJobIntoAutoInterrupt()
     {
         var dbPath = GetDatabasePath("create-autointerrupt.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ValidCronInput());
 
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
         AssertEx.Equal("true",
             jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable),
             "Every dispatch job must opt into the auto-interrupt monitor, else max-runtime enforcement is a no-op.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task CreateJobAsync_WithMaxRuntimeSeconds_StoresPerJobMaxRunTimeInMilliseconds()
     {
         var dbPath = GetDatabasePath("create-maxruntime.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ValidCronInput(maxRuntimeSeconds: 120)).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ValidCronInput(maxRuntimeSeconds: 120));
 
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
         // The plugin parses MaxRunTime as a millisecond long from its string form: 120 s → "120000".
         AssertEx.Equal("120000",
             jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
             "Per-job max runtime must be persisted as milliseconds.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task CreateJobAsync_ForRunAgentWithoutMaxRuntime_DerivesTheCeilingFromTheNodeMessageTimeout()
     {
         var dbPath = GetDatabasePath("create-runagent-derived-maxruntime.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue)).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue));
 
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
         // (600 s node timeout × 2 turn budgets) + 300 s slack → 1 500 000 ms. Without this the job fell back to the
         // global 5-minute default and the auto-interrupt killed an unattended run long before its own invocation
         // deadline — which does not even start until the run holds the shared invocation slot.
@@ -832,42 +828,38 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
             "A run-agent schedule with no operator ceiling must derive one from the node message timeout.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
     public async Task CreateJobAsync_ForRunAgent_RaisedNodeTimeoutRaisesTheCeiling_AndAnOperatorValueStillWins()
     {
         var dbPath = GetDatabasePath("create-runagent-raised-maxruntime.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath, maxMessageRequestTimeoutSeconds: 1800);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
         var derived = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
-                                       displayName: "Derived ceiling"))
-                                   .ConfigureAwait(false);
+                                       displayName: "Derived ceiling"));
         var explicitCeiling = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
                                                displayName: "Operator ceiling",
-                                               maxRuntimeSeconds: 90))
-                                           .ConfigureAwait(false);
+                                               maxRuntimeSeconds: 90));
 
-        var derivedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(derived.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
-                                                            .ConfigureAwait(false));
+        var derivedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(derived.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("3900000",
             derivedDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
             "Raising the node message timeout must raise the run-agent ceiling with it ((1800 s × 2) + 300 s slack).");
 
-        var explicitDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(explicitCeiling.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
-                                                             .ConfigureAwait(false));
+        var explicitDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(explicitCeiling.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("90000",
             explicitDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
             "An operator-set per-schedule ceiling is authoritative and is never widened by the node setting.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
     [Test]
@@ -877,34 +869,31 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // pre-fill, which is indistinguishable from an operator typing 600. Honoring it would leave precisely the
         // schedules this fix exists for still capped below the node timeout, so 600 on THIS template reads as unset.
         var dbPath = GetDatabasePath("create-runagent-legacy-maxruntime.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
         var legacy = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
                                       displayName: "Legacy ceiling",
-                                      maxRuntimeSeconds: 600))
-                                  .ConfigureAwait(false);
+                                      maxRuntimeSeconds: 600));
         // The same 600 on ANOTHER template is a plain operator value and must survive untouched.
-        var otherTemplate = await service.CreateJobAsync(ValidCronInput(displayName: "Echo ceiling", maxRuntimeSeconds: 600)).ConfigureAwait(false);
+        var otherTemplate = await service.CreateJobAsync(ValidCronInput(displayName: "Echo ceiling", maxRuntimeSeconds: 600));
 
-        var legacyDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(legacy.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
-                                                           .ConfigureAwait(false));
+        var legacyDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(legacy.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("1500000",
             legacyDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
             "A stored 600 on run-agent is the removed template default and must be re-derived from the node timeout.");
 
-        var otherDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(otherTemplate.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None)
-                                                          .ConfigureAwait(false));
+        var otherDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(otherTemplate.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("600000",
             otherDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
             "The legacy-default carve-out belongs to the run-agent template alone.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
 
@@ -912,12 +901,12 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task CancelRunAsync_WhenRunNotFound_ReturnsNotFound()
     {
         var dbPath = GetDatabasePath("cancel-notfound.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var outcome = await service.CancelRunAsync(Guid.NewGuid()).ConfigureAwait(false);
+        var outcome = await service.CancelRunAsync(Guid.NewGuid());
 
         AssertEx.Equal(RunCancellationOutcome.NotFound, outcome);
     }
@@ -926,7 +915,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task CancelRunAsync_WhenRunAlreadyTerminal_ReturnsAlreadyTerminal()
     {
         var dbPath = GetDatabasePath("cancel-terminal.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
@@ -938,9 +927,9 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             ScheduledRunTrigger.Schedule,
             ScheduledRunStatus.Succeeded,
             ScheduledFireTimeUtc: null,
-            ActualFireTimeUtc: null)).ConfigureAwait(false);
+            ActualFireTimeUtc: null));
 
-        var outcome = await service.CancelRunAsync(run.Id).ConfigureAwait(false);
+        var outcome = await service.CancelRunAsync(run.Id);
 
         AssertEx.Equal(RunCancellationOutcome.AlreadyTerminal, outcome);
     }
@@ -949,14 +938,14 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task CancelRunAsync_WhenRunActiveButNotExecutingInQuartz_StampsRequestAndReportsNotRunning()
     {
         var dbPath = GetDatabasePath("cancel-not-running.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var runStore = provider.GetRequiredService<IScheduledJobRunStore>();
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
-        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
 
         // A Running row whose fire instance is not actually executing — Quartz.Interrupt finds nothing to interrupt.
         var run = await runStore.AddAsync(new ScheduledJobRunInput(Guid.NewGuid(),
@@ -965,18 +954,18 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             ScheduledRunTrigger.Schedule,
             ScheduledRunStatus.Running,
             ScheduledFireTimeUtc: null,
-            ActualFireTimeUtc: null)).ConfigureAwait(false);
+            ActualFireTimeUtc: null));
 
-        var outcome = await service.CancelRunAsync(run.Id).ConfigureAwait(false);
+        var outcome = await service.CancelRunAsync(run.Id);
 
         AssertEx.Equal(RunCancellationOutcome.RequestedButNotRunning, outcome);
 
         // The request must still be recorded even when there was no active fire to interrupt.
-        var reread = AssertEx.NotNull(await runStore.GetByIdAsync(run.Id).ConfigureAwait(false));
+        var reread = AssertEx.NotNull(await runStore.GetByIdAsync(run.Id));
         AssertEx.True(reread.CancellationRequestedAtUtc.HasValue,
             "CancellationRequestedAtUtc must be stamped even when the run is not actively executing.");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
 
 
@@ -984,13 +973,13 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     public async Task CreateJobAsync_PublishesJobDefinitionChanged()
     {
         var dbPath = GetDatabasePath("publish-created.sqlite");
-        await MigrateAsync(dbPath).ConfigureAwait(false);
+        await MigrateAsync(dbPath);
 
         var publisher = Substitute.For<ISchedulerEventPublisher>();
         await using var provider = BuildEnabledProvider(dbPath, eventPublisher: publisher);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var record = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var record = await service.CreateJobAsync(ValidCronInput());
 
         await publisher.Received(1).PublishDefinitionAsync(Arg.Is<SchedulerDefinitionHubEvent>(e =>
                 e.EventType == SchedulerHubEvents.JobDefinitionChanged &&
@@ -1011,7 +1000,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     private static async Task CorruptJobClassNameAsync(string dbPath, Guid definitionId, string staleClassName)
     {
         await using var connection = new SqliteConnection($"Data Source={dbPath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+        await connection.OpenAsync();
 
         await using var command = connection.CreateCommand();
         command.CommandText =
@@ -1020,7 +1009,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         command.Parameters.AddWithValue("$jobName", definitionId.ToString("N"));
         command.Parameters.AddWithValue("$jobGroup", SchedulerJobKeys.Group);
 
-        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        var affected = await command.ExecuteNonQueryAsync();
         AssertEx.Equal(expected: 1, affected, "The job-detail row to corrupt must exist before the heal test.");
     }
 
@@ -1028,7 +1017,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
     private static async Task MigrateAsync(string dbPath)
     {
-        await MigratedDatabaseTemplate.CopyChatHeadAsync(dbPath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(dbPath);
     }
 
     private static ServiceProvider BuildEnabledProvider(string dbPath,

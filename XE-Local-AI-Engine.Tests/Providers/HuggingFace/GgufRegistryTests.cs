@@ -227,8 +227,7 @@ public sealed class GgufRegistryTests
         var store = Infra.Store(downloadClient, Infra.DiscoveryWith(), registry, options);
 
         _ = await AssertEx.ThrowsAsync<NotSupportedException>(() =>
-                              store.DeleteModelAsync(deleteThroughAlias ? FilenameAliasName : Infra.ModelName, CancellationToken.None))
-                          .ConfigureAwait(false);
+                              store.DeleteModelAsync(deleteThroughAlias ? FilenameAliasName : Infra.ModelName, CancellationToken.None));
 
         AssertEx.True(File.Exists(filePath), "a bypass attempt must not delete the shared backing file");
         AssertEx.Equal(expected: 1, (await registry.ListAsync(CancellationToken.None)).Count);

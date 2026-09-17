@@ -21,10 +21,10 @@ public sealed class PlaybookActionServiceTests
         var stored = CreateRecord(input);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(stored);
 
-        var result = await service.CreateAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAsync(input);
 
         AssertEx.Equal(stored.Id, result.Id);
-        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -33,8 +33,8 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out var store, out _, agentExists: true);
         var input = CreateInput(behavior: "   ");
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -43,8 +43,8 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out var store, out _, agentExists: false);
         var input = CreateInput();
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -53,7 +53,7 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out _, out _, agentExists: true);
         var input = CreateInput(state: PlaybookActionState.Suggested);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input));
     }
 
     [Test]
@@ -62,7 +62,7 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out _, out _, agentExists: true);
         var input = CreateInput(state: PlaybookActionState.Archived);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input));
     }
 
     [Test]
@@ -71,7 +71,7 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out _, out _, agentExists: true);
         var input = CreateInput(source: PlaybookActionSource.Analysis);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input));
     }
 
     [Test]
@@ -92,11 +92,11 @@ public sealed class PlaybookActionServiceTests
         };
         store.UpdateAsync(actionId, input, Arg.Any<CancellationToken>()).Returns(stored);
 
-        var result = await service.UpdateAsync(actionId, input).ConfigureAwait(false);
+        var result = await service.UpdateAsync(actionId, input);
 
         AssertEx.NotNull(result);
         AssertEx.Equal(actionId, result!.Id);
-        await store.Received(1).UpdateAsync(actionId, input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).UpdateAsync(actionId, input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -114,10 +114,10 @@ public sealed class PlaybookActionServiceTests
                  Id = actionId
              });
 
-        var result = await service.UpdateAsync(actionId, input).ConfigureAwait(false);
+        var result = await service.UpdateAsync(actionId, input);
 
         AssertEx.Null(result, "Updating another agent's action via this agent's route must return null (404).");
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -128,10 +128,10 @@ public sealed class PlaybookActionServiceTests
         var input = CreateInput();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(Task.FromResult<PlaybookActionRecord?>(null));
 
-        var result = await service.UpdateAsync(actionId, input).ConfigureAwait(false);
+        var result = await service.UpdateAsync(actionId, input);
 
         AssertEx.Null(result, "Updating a missing action must return null (404).");
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -147,10 +147,10 @@ public sealed class PlaybookActionServiceTests
              });
         store.DeleteAsync(actionId, Arg.Any<CancellationToken>()).Returns(true);
 
-        var deleted = await service.DeleteAsync(agentId, actionId).ConfigureAwait(false);
+        var deleted = await service.DeleteAsync(agentId, actionId);
 
         AssertEx.True(deleted, "DeleteAsync should report the store result when the action belongs to the route agent.");
-        await store.Received(1).DeleteAsync(actionId, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).DeleteAsync(actionId, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -166,10 +166,10 @@ public sealed class PlaybookActionServiceTests
                  Id = actionId
              });
 
-        var deleted = await service.DeleteAsync(routeAgentId, actionId).ConfigureAwait(false);
+        var deleted = await service.DeleteAsync(routeAgentId, actionId);
 
         AssertEx.False(deleted, "Deleting another agent's action via this agent's route must return false (404).");
-        await store.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -180,10 +180,10 @@ public sealed class PlaybookActionServiceTests
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(Task.FromResult<PlaybookActionRecord?>(null));
 
-        var deleted = await service.DeleteAsync(agentId, actionId).ConfigureAwait(false);
+        var deleted = await service.DeleteAsync(agentId, actionId);
 
         AssertEx.False(deleted, "Deleting a missing action must return false (404).");
-        await store.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -194,7 +194,7 @@ public sealed class PlaybookActionServiceTests
         store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([CreateRecord(CreateInput(agentId))]));
 
-        var list = await service.ListByAgentAsync(agentId).ConfigureAwait(false);
+        var list = await service.ListByAgentAsync(agentId);
 
         AssertEx.Equal(expected: 1, list.Count);
     }
@@ -221,7 +221,7 @@ public sealed class PlaybookActionServiceTests
             input.Confidence));
         store.AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).Returns(stored);
 
-        var result = await service.CreateAnalysisSuggestionAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAnalysisSuggestionAsync(input);
 
         AssertEx.Equal(stored.Id, result.Id);
         await store.Received(1).AddAsync(Arg.Is<PlaybookActionInput>(stored =>
@@ -232,7 +232,7 @@ public sealed class PlaybookActionServiceTests
                 && stored.Confidence.HasValue && Math.Abs(stored.Confidence.Value - 0.7d) < 1e-9
                 && stored.SourceFeedbackIds != null
                 && stored.SourceFeedbackIds.Count == 2),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -241,8 +241,8 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out var store, out _, agentExists: true);
         var input = CreateSuggestionInput(Guid.NewGuid(), [], confidence: 0.5d);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -257,8 +257,8 @@ public sealed class PlaybookActionServiceTests
             Guid.NewGuid()
         }, confidence);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -270,8 +270,8 @@ public sealed class PlaybookActionServiceTests
             Guid.NewGuid()
         }, confidence: 0.5d);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -286,8 +286,8 @@ public sealed class PlaybookActionServiceTests
                 Behavior = "   "
             };
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -304,10 +304,10 @@ public sealed class PlaybookActionServiceTests
                  Id = actionId
              });
 
-        var result = await service.UpdateAsync(actionId, input).ConfigureAwait(false);
+        var result = await service.UpdateAsync(actionId, input);
 
         AssertEx.Null(result, "The manual route must not update an Analysis action (returns null/404).");
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -329,12 +329,12 @@ public sealed class PlaybookActionServiceTests
                  State = PlaybookActionState.Enabled
              }));
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.Promoted, result.Status);
         AssertEx.NotNull(result.Record, "A passing eval should promote the action and return the updated record.");
         // The write is conditioned on the exact validated Version (optimistic concurrency), carrying the eval for audit.
-        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), pending.EvalResult, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), pending.EvalResult, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -360,11 +360,11 @@ public sealed class PlaybookActionServiceTests
         store.PromoteSuggestedIfCurrentAsync(actionId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.CapReached, Record: null));
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.CapReached, result.Status);
         AssertEx.True(result.Record is null, "A cap-blocked promote returns no record.");
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -391,10 +391,10 @@ public sealed class PlaybookActionServiceTests
                  State = PlaybookActionState.Enabled
              }));
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.Promoted, result.Status);
-        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -415,12 +415,12 @@ public sealed class PlaybookActionServiceTests
         store.PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
              .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.VersionConflict, Record: null));
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
         AssertEx.Null(result.Record, "A version-conflicted promote returns no record.");
         // The CAS must have been asked to write only against the validated snapshot's Version.
-        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -432,8 +432,8 @@ public sealed class PlaybookActionServiceTests
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input));
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -447,10 +447,10 @@ public sealed class PlaybookActionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
 
-        var result = await service.CreateAsync(input).ConfigureAwait(false);
+        var result = await service.CreateAsync(input);
 
         AssertEx.NotNull(result);
-        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -469,8 +469,8 @@ public sealed class PlaybookActionServiceTests
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
         var input = CreateInput(agentId);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateAsync(actionId, input)).ConfigureAwait(false);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateAsync(actionId, input));
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -494,10 +494,10 @@ public sealed class PlaybookActionServiceTests
             Id = actionId
         });
 
-        var result = await service.UpdateAsync(actionId, input).ConfigureAwait(false);
+        var result = await service.UpdateAsync(actionId, input);
 
         AssertEx.NotNull(result);
-        await store.Received(1).UpdateAsync(actionId, input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).UpdateAsync(actionId, input, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -508,11 +508,11 @@ public sealed class PlaybookActionServiceTests
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(Task.FromResult<PlaybookActionRecord?>(null));
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.NotFound, result.Status);
         AssertEx.Null(result.Record, "A missing action must not return a record (404).");
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -524,10 +524,10 @@ public sealed class PlaybookActionServiceTests
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
 
-        var result = await service.PromoteSuggestedAsync(routeAgentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(routeAgentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.NotFound, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -542,10 +542,10 @@ public sealed class PlaybookActionServiceTests
                  State = PlaybookActionState.Enabled
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.NotFound, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -561,10 +561,10 @@ public sealed class PlaybookActionServiceTests
                  Source = PlaybookActionSource.Manual
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.NotFound, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -576,11 +576,11 @@ public sealed class PlaybookActionServiceTests
         // No EvalResult recorded (null) — the gate blocks with EvalRequired.
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(agentId, actionId));
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalRequired, result.Status);
         AssertEx.Null(result.Record);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -597,10 +597,10 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = FailingEvalResultJson(1, MatchingFingerprint(actionId, 1))
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalRegressed, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -618,10 +618,10 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = PassingButZeroCandidateEvalResultJson(1, MatchingFingerprint(actionId, 1))
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalRegressed, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -638,10 +638,10 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = PassingEvalResultJson(1)
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -659,10 +659,10 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = incompleteJson
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalIncomplete, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -680,10 +680,10 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = PassingEvalResultJson(1, staleFingerprint)
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -700,10 +700,10 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = PassingEvalResultJson(1, staleFingerprint)
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -720,10 +720,10 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = PassingEvalResultJson(1, staleFingerprint)
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -740,10 +740,10 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = PassingEvalResultJson(1, staleFingerprint)
              });
 
-        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.PromoteSuggestedAsync(agentId, actionId);
 
         AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -761,7 +761,7 @@ public sealed class PlaybookActionServiceTests
                  EvalResult = json
              });
 
-        var result = await service.RecordEvalResultAsync(agentId, actionId, json).ConfigureAwait(false);
+        var result = await service.RecordEvalResultAsync(agentId, actionId, json);
 
         AssertEx.NotNull(result, "Recording an eval on an owned pending suggestion should return the updated record.");
         await store.Received(1).UpdateAsync(actionId,
@@ -771,7 +771,7 @@ public sealed class PlaybookActionServiceTests
                 && stored.Behavior == pending.Behavior
                 && stored.Priority == pending.Priority
                 && stored.EvalResult == json),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -783,10 +783,10 @@ public sealed class PlaybookActionServiceTests
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
 
-        var result = await service.RecordEvalResultAsync(routeAgentId, actionId, PassingEvalResultJson(1)).ConfigureAwait(false);
+        var result = await service.RecordEvalResultAsync(routeAgentId, actionId, PassingEvalResultJson(1));
 
         AssertEx.Null(result, "Recording an eval on another agent's suggestion must return null (404).");
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -803,12 +803,12 @@ public sealed class PlaybookActionServiceTests
                  State = PlaybookActionState.Archived
              });
 
-        var result = await service.RejectSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+        var result = await service.RejectSuggestedAsync(agentId, actionId);
 
         AssertEx.NotNull(result, "Rejecting an owned pending suggestion should return the updated record.");
         await store.Received(1).UpdateAsync(actionId,
             Arg.Is<PlaybookActionInput>(stored => stored.State == PlaybookActionState.Archived && stored.Source == PlaybookActionSource.Analysis),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -820,10 +820,10 @@ public sealed class PlaybookActionServiceTests
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
 
-        var result = await service.RejectSuggestedAsync(routeAgentId, actionId).ConfigureAwait(false);
+        var result = await service.RejectSuggestedAsync(routeAgentId, actionId);
 
         AssertEx.Null(result, "Rejecting another agent's suggestion must return null (404).");
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -850,7 +850,7 @@ public sealed class PlaybookActionServiceTests
              });
         var input = new SuggestedActionEditInput(agentId, actionId, "Edited behavior.", "new trigger", "new-scope", Priority: 7);
 
-        var result = await service.UpdateSuggestedAsync(input).ConfigureAwait(false);
+        var result = await service.UpdateSuggestedAsync(input);
 
         AssertEx.NotNull(result, "Editing an owned pending suggestion should return the updated record.");
         await store.Received(1).UpdateAsync(actionId,
@@ -865,7 +865,7 @@ public sealed class PlaybookActionServiceTests
                 && stored.SourceFeedbackIds.Count == 2
                 // Editing invalidates any prior eval pass: the store input must clear EvalResult.
                 && stored.EvalResult == null),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -878,10 +878,10 @@ public sealed class PlaybookActionServiceTests
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
         var input = new SuggestedActionEditInput(routeAgentId, actionId, "Edited behavior.", TriggerCondition: null, Scope: null, Priority: 1);
 
-        var result = await service.UpdateSuggestedAsync(input).ConfigureAwait(false);
+        var result = await service.UpdateSuggestedAsync(input);
 
         AssertEx.Null(result, "Editing another agent's suggestion must return null (404).");
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -891,8 +891,8 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out var store, out _, agentExists: true);
         var input = new SuggestedActionEditInput(agentId, Guid.NewGuid(), "   ", TriggerCondition: null, Scope: null, Priority: 1);
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateSuggestedAsync(input)).ConfigureAwait(false);
-        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateSuggestedAsync(input));
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>());
     }
 
     private static PlaybookAnalysisSuggestionInput CreateSuggestionInput(Guid agentDefinitionId,

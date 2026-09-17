@@ -726,7 +726,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 
@@ -751,7 +751,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask.ConfigureAwait(false);
+            await Task.CompletedTask;
             yield break;
         }
 

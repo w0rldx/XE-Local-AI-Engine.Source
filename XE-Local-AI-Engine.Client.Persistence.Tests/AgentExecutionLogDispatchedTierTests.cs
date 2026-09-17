@@ -33,12 +33,12 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
     [Test]
     public async Task Envelope_WhenDispatched_StoresTierAndAuthoredEffort()
     {
-        await using var context = await CreateDatabaseAsync("envelope-dispatch-stores.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("envelope-dispatch-stores.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(dispatchedTier: "fast", authoredEffort: "auto"));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10).ConfigureAwait(false)).Single();
+        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
         AssertEx.Equal("fast", envelope.DispatchedTier);
         AssertEx.Equal("auto", envelope.AuthoredEffort);
@@ -48,12 +48,12 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
     [Test]
     public async Task Envelope_WhenNotAuto_StoresNulls()
     {
-        await using var context = await CreateDatabaseAsync("envelope-dispatch-nulls.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("envelope-dispatch-nulls.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(dispatchedTier: null, authoredEffort: null));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10).ConfigureAwait(false)).Single();
+        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
         AssertEx.Null(envelope.DispatchedTier);
         AssertEx.Null(envelope.AuthoredEffort);
@@ -67,12 +67,12 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
     {
         // Every label of the closed vocabulary survives the round trip: the measurement groups by this column, so a
         // label that did not reach it would silently collapse a whole tier's rows into "not measured".
-        await using var context = await CreateDatabaseAsync($"envelope-dispatch-{tier}.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync($"envelope-dispatch-{tier}.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(tier, authoredEffort: "auto"));
-        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        _ = await context.SaveChangesAsync();
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
 
-        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10).ConfigureAwait(false)).Single();
+        var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
         AssertEx.Equal(tier, envelope.DispatchedTier);
     }
@@ -82,7 +82,7 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
     {
         // The kind-0 diagnostics projection was deliberately left alone: these columns never carry a value on a memory
         // row, so widening that record would add two permanently-null fields to a different read view.
-        await using var context = await CreateDatabaseAsync("dispatch-memory-projection.sqlite").ConfigureAwait(false);
+        await using var context = await CreateDatabaseAsync("dispatch-memory-projection.sqlite");
         var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
         var agentId = Guid.NewGuid();
 
@@ -95,10 +95,9 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
                            PromptTokens: 10,
                            CompletionTokens: 20,
                            Success: true,
-                           ErrorClass: null))
-                       .ConfigureAwait(false);
+                           ErrorClass: null));
 
-        var rows = await store.ListByAgentAsync(agentId, limit: 10).ConfigureAwait(false);
+        var rows = await store.ListByAgentAsync(agentId, limit: 10);
 
         AssertEx.Equal(expected: 1, rows.Count);
         AssertEx.Equal(expected: 10, rows[0].PromptTokens);
@@ -130,8 +129,8 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
-        await context.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
         return context;
     }
 

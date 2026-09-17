@@ -26,7 +26,7 @@ public sealed class ExternalAppLifecycleEndpointTests
     {
         await using var factory = Factory(Substitute.For<IExternalAppService>());
 
-        using var response = await ExternalAppEndpointPayloads.SendAnonymousAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAnonymousAsync(factory, method, route);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require a token.");
     }
@@ -43,7 +43,7 @@ public sealed class ExternalAppLifecycleEndpointTests
     {
         await using var factory = Factory(Substitute.For<IExternalAppService>());
 
-        using var response = await ExternalAppEndpointPayloads.SendAsNonOperatorAsync(factory, method, route).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAsNonOperatorAsync(factory, method, route);
 
         AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode, $"{method} {route} is operator-only.");
     }
@@ -66,9 +66,8 @@ public sealed class ExternalAppLifecycleEndpointTests
                                    .SendAsOperatorAsync(factory, "POST", route, new
                                    {
                                        expectedVersion = 7L
-                                   })
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   });
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode, $"{route} admits and returns; the container work runs on the runner.");
         AssertEx.Equal(status, document.RootElement.GetProperty("status").GetString(), "the status set carries the transient values.");
@@ -105,17 +104,16 @@ public sealed class ExternalAppLifecycleEndpointTests
                                    .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStart, new
                                    {
                                        expectedVersion = 7L
-                                   })
-                                   .ConfigureAwait(false);
+                                   });
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        await admitted.Task.ConfigureAwait(false);
+        await admitted.Task;
         AssertEx.False(operation.IsCompleted, "the response is back while the operation behind it is still running.");
         AssertEx.False(observedToken.IsCancellationRequested,
             "the request token covers the admission only; the runner holds its own lifetime-linked token.");
 
         release.SetResult();
-        await operation.ConfigureAwait(false);
+        await operation;
     }
 
     [Test]
@@ -133,8 +131,8 @@ public sealed class ExternalAppLifecycleEndpointTests
             ? UpdateBody(expectedVersion: null)
             : new Dictionary<string, object?>(StringComparer.Ordinal);
 
-        using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, "POST", route, body).ConfigureAwait(false);
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, "POST", route, body);
+        var payload = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"{route} must not act at version 0 for a client that forgot the guard.");
         AssertEx.Contains(payload, "expectedVersion", StringComparison.Ordinal);
@@ -161,8 +159,8 @@ public sealed class ExternalAppLifecycleEndpointTests
                 ["expectedVersion"] = 3L
             };
 
-        using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, "POST", route, body).ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+        using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, "POST", route, body);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppVersionConflict", document.RootElement.GetProperty("conflictType").GetString());
@@ -199,8 +197,7 @@ public sealed class ExternalAppLifecycleEndpointTests
                                        new
                                        {
                                            expectedVersion = 7L
-                                       })
-                                   .ConfigureAwait(false);
+                                       });
 
         AssertEx.Equal(HttpStatusCode.BadRequest,
             response.StatusCode,
@@ -220,9 +217,8 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "DELETE", ExternalAppEndpointPayloads.Instance)
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "DELETE", ExternalAppEndpointPayloads.Instance);
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, "an omitted query must not delete at version 0.");
         AssertEx.Contains(body, "expectedVersion", StringComparison.Ordinal);
@@ -239,11 +235,10 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "DELETE", $"{ExternalAppEndpointPayloads.Instance}?expectedVersion=0")
-                                   .ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "DELETE", $"{ExternalAppEndpointPayloads.Instance}?expectedVersion=0");
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode, "zero is a version, not an absence.");
-        await apps.Received(1).UninstallAsync(ExternalAppEndpointPayloads.InstanceId, 0L, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await apps.Received(1).UninstallAsync(ExternalAppEndpointPayloads.InstanceId, 0L, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -256,9 +251,8 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "DELETE", $"{ExternalAppEndpointPayloads.Instance}?expectedVersion=3")
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "DELETE", $"{ExternalAppEndpointPayloads.Instance}?expectedVersion=3");
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppVersionConflict", document.RootElement.GetProperty("conflictType").GetString());
@@ -277,9 +271,8 @@ public sealed class ExternalAppLifecycleEndpointTests
                                    .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStop, new
                                    {
                                        expectedVersion = 7L
-                                   })
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   });
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppOperationInFlight", document.RootElement.GetProperty("conflictType").GetString());
@@ -302,9 +295,8 @@ public sealed class ExternalAppLifecycleEndpointTests
                                    .SendAsOperatorAsync(factory, "POST", route, new
                                    {
                                        expectedVersion = 7L
-                                   })
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   });
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.Empty(body);
@@ -323,11 +315,10 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceCancel)
-                                   .ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceCancel);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        await apps.Received(1).CancelAsync(ExternalAppEndpointPayloads.InstanceId, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await apps.Received(1).CancelAsync(ExternalAppEndpointPayloads.InstanceId, Arg.Any<CancellationToken>());
     }
 
     /// <summary>A transient status with no live operation is a crashed one, which the boot reconciler settles rather than a cancel.</summary>
@@ -341,9 +332,8 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceCancel)
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceCancel);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppInvalidTransition", document.RootElement.GetProperty("conflictType").GetString());
@@ -363,9 +353,8 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceUpdatePreview)
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceUpdatePreview);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
         var root = document.RootElement;
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -402,9 +391,8 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceUpdatePreview)
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceUpdatePreview);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         var currentValues = document.RootElement.GetProperty("currentValues");
         AssertEx.Equal(ExternalAppVariableMask.Value, currentValues.GetProperty(ExternalAppEndpointPayloads.SecretVariableName).GetString());
@@ -428,9 +416,8 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var preview = await ExternalAppEndpointPayloads
-                                  .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceUpdatePreview)
-                                  .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(preview).ConfigureAwait(false);
+                                  .SendAsOperatorAsync(factory, "GET", ExternalAppEndpointPayloads.InstanceUpdatePreview);
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(preview);
 
         AssertEx.Equal(HttpStatusCode.OK, preview.StatusCode);
         AssertEx.False(document.RootElement.GetProperty("canUpdate").GetBoolean());
@@ -438,8 +425,7 @@ public sealed class ExternalAppLifecycleEndpointTests
         AssertEx.Equal(0, document.RootElement.GetProperty("addedPermissions").GetArrayLength());
 
         using var command = await ExternalAppEndpointPayloads
-                                  .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceUpdate, UpdateBody(7L))
-                                  .ConfigureAwait(false);
+                                  .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceUpdate, UpdateBody(7L));
 
         AssertEx.Equal(HttpStatusCode.NotFound, command.StatusCode, "the preview explains; the command refuses.");
     }
@@ -462,9 +448,8 @@ public sealed class ExternalAppLifecycleEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.InstanceUpdate,
-                                       UpdateBody(7L, acceptPermissions: false))
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                       UpdateBody(7L, acceptPermissions: false));
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
         var root = document.RootElement;
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -490,9 +475,8 @@ public sealed class ExternalAppLifecycleEndpointTests
                                    .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStart, new
                                    {
                                        expectedVersion = 7L
-                                   })
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   });
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.False(document.RootElement.TryGetProperty("addedPermissions", out _),
             "the member is omitted when null, so the body is unchanged for every other conflict.");
@@ -510,9 +494,8 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceUpdate, UpdateBody(7L))
-                                   .ConfigureAwait(false);
-        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceUpdate, UpdateBody(7L));
+        using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         AssertEx.Equal("ExternalAppManifestChanged", document.RootElement.GetProperty("conflictType").GetString());
@@ -530,9 +513,8 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceUpdate, UpdateBody(7L))
-                                   .ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceUpdate, UpdateBody(7L));
+        var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         AssertEx.Contains(body, "SMTP_HOST", StringComparison.Ordinal);

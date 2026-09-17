@@ -38,7 +38,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
             {
             })
         };
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -54,13 +54,13 @@ public sealed class RunPlaybookActionEvalEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
 
         // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(agentId, actionId));
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, "Body-less eval POST must not return 415.");
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -72,7 +72,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(agentId, Guid.NewGuid()))
         {
@@ -81,7 +81,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -92,9 +92,9 @@ public sealed class RunPlaybookActionEvalEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var otherAgentId = await SeedAgentAsync(factory, "Other").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, ownerAgentId).ConfigureAwait(false);
+        var ownerAgentId = await SeedAgentAsync(factory, "Owner");
+        var otherAgentId = await SeedAgentAsync(factory, "Other");
+        var actionId = await SeedSuggestionAsync(factory, ownerAgentId);
 
         // Run eval on the owner's suggestion via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(otherAgentId, actionId))
@@ -104,7 +104,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -115,7 +115,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
 
         // A manual Enabled action is not a pending Suggested/Analysis action — the eval guard 404s.
         Guid enabledActionId;
@@ -128,7 +128,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
                 TriggerCondition: null,
                 "Always cite sources.",
                 Scope: null,
-                Priority: 10)).ConfigureAwait(false);
+                Priority: 10));
             enabledActionId = created.Id;
         }
 
@@ -139,7 +139,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -150,8 +150,8 @@ public sealed class RunPlaybookActionEvalEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
 
         // No golden cases seeded: the eval service records a failing result (no-regression unprovable with zero cases)
         // WITHOUT calling the model, so the full endpoint path runs with no Ollama dependency.
@@ -162,11 +162,11 @@ public sealed class RunPlaybookActionEvalEndpointTests
             })
         };
         factory.AddNodeBearerToken(request);
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -190,7 +190,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -204,7 +204,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
             "search",
             Priority: 100,
             [Guid.NewGuid()],
-            Confidence: 0.8d)).ConfigureAwait(false);
+            Confidence: 0.8d));
         return created.Id;
     }
 }

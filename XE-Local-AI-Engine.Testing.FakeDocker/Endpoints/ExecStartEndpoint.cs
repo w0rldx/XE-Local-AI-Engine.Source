@@ -23,8 +23,7 @@ internal static class ExecStartEndpoint
     {
         if (!state.ExecSessions.TryGetValue(id, out var session))
         {
-            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status404NotFound, $"No such exec instance: {id}")
-                                          .ConfigureAwait(false);
+            await FakeDockerEndpointMapper.WriteErrorAsync(context, StatusCodes.Status404NotFound, $"No such exec instance: {id}");
             return;
         }
 
@@ -45,8 +44,7 @@ internal static class ExecStartEndpoint
                                               new FakeDockerLogFrame(FakeDockerStreamKind.StandardOutput, outcome.StandardOutput),
                                               new FakeDockerLogFrame(FakeDockerStreamKind.StandardError, outcome.StandardError)
                                           ],
-                                          hijacked: true)
-                                      .ConfigureAwait(false);
+                                          hijacked: true);
     }
 
     /// <summary>

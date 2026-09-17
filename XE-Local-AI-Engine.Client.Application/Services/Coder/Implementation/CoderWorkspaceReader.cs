@@ -74,7 +74,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             return $"list_files rejected: {confined.RejectionReason}";
         }
 
-        using var access = await TryOpenAsync(cancellationToken).ConfigureAwait(false);
+        using var access = await TryOpenAsync(cancellationToken);
         if (access.IsBusy)
         {
             return WorkspaceBusyMessage;
@@ -104,8 +104,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
                         IsPathSuppressed = IsExcludedRelativePath
                     },
                     token),
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         if (survey.ErrorMessage is not null)
         {
             return $"list_files failed: {survey.ErrorMessage}";
@@ -162,7 +161,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             return $"read_file rejected: '{confined.RelativePath}' is excluded because files with that name commonly hold credentials.";
         }
 
-        using var access = await TryOpenAsync(cancellationToken).ConfigureAwait(false);
+        using var access = await TryOpenAsync(cancellationToken);
         if (access.IsBusy)
         {
             return WorkspaceBusyMessage;
@@ -181,7 +180,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             // The jail-guarded read: the provider re-applies ResolveJailPath + EnsureNoSymlinkComponentsUnderJail to the
             // sandbox-absolute path, so a symlink component or traversal is rejected here even though the guard already
             // confined the model string.
-            content = await _provider.ReadFileAsync(handle, confined.SandboxPath, cancellationToken).ConfigureAwait(false);
+            content = await _provider.ReadFileAsync(handle, confined.SandboxPath, cancellationToken);
         }
         catch (FileNotFoundException)
         {
@@ -217,7 +216,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             return $"search_text rejected: {confined.RejectionReason}";
         }
 
-        using var access = await TryOpenAsync(cancellationToken).ConfigureAwait(false);
+        using var access = await TryOpenAsync(cancellationToken);
         if (access.IsBusy)
         {
             return WorkspaceBusyMessage;
@@ -250,8 +249,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
                         IsPathSuppressed = IsExcludedRelativePath
                     },
                     token),
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
         if (survey.ErrorMessage is not null)
         {
             return $"search_text failed: {survey.ErrorMessage}";
@@ -276,7 +274,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
     private async Task<CoderWorkspaceAccess> TryOpenAsync(CancellationToken cancellationToken)
     {
-        var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+        var identity = await _identityProvider.GetAsync(cancellationToken);
         var lease = _leaseManager.TryAcquire(new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId));
         if (lease is null)
         {
@@ -295,7 +293,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         try
         {
             // The operation owns or ambiently borrows the same owner-node lease AgentHome preparation and execution use.
-            var handle = await _provider.ConnectAsync(attachKey, cancellationToken).ConfigureAwait(false);
+            var handle = await _provider.ConnectAsync(attachKey, cancellationToken);
             return new CoderWorkspaceAccess(handle, lease, IsBusy: false);
         }
         catch (SandboxHandleInvalidException)
@@ -330,7 +328,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 
         try
         {
-            return new SurveyOutcome(await survey(timeoutCts.Token).ConfigureAwait(false), ErrorMessage: null);
+            return new SurveyOutcome(await survey(timeoutCts.Token), ErrorMessage: null);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

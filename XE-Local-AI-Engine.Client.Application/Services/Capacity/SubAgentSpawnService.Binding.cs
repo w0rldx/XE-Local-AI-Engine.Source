@@ -18,7 +18,7 @@ internal sealed partial class SubAgentSpawnService
             return new ResolvedBinding(request.ModelId, instructions, Tools: null);
         }
 
-        var definition = await ResolveDefinitionAsync(request.SubAgentKey!, ct).ConfigureAwait(false);
+        var definition = await ResolveDefinitionAsync(request.SubAgentKey!, ct);
         if (definition is null || string.IsNullOrWhiteSpace(definition.ModelProfile))
         {
             return null;
@@ -33,8 +33,7 @@ internal sealed partial class SubAgentSpawnService
         // second time, and a concurrent edit landing between the two reads would assemble one child out of two
         // versions — its model from this read, its prompt/tools/reasoning/skills from the other.
         var resolved = await _agentDefinitionResolver
-                             .ResolveAsync(definition, definition.ModelProfile, cancellationToken: ct)
-                             .ConfigureAwait(false);
+                             .ResolveAsync(definition, definition.ModelProfile, cancellationToken: ct);
         if (resolved is null)
         {
             // The resolver seam is nullable for every caller, so guard it here too: reject with the sanitized
@@ -55,8 +54,7 @@ internal sealed partial class SubAgentSpawnService
         // pinned effective model, which for a spawned child IS definition.ModelProfile), so only the thinking bit is
         // taken here; the locality element is ignored.
         var childCapabilities = await _modelCapabilityResolver
-                                      .ResolveAsync(definition.ModelProfile, ct)
-                                      .ConfigureAwait(false);
+                                      .ResolveAsync(definition.ModelProfile, ct);
         var (supportsThinking, _, _) = childCapabilities;
 
         return new ResolvedBinding(definition.ModelProfile,
@@ -74,10 +72,10 @@ internal sealed partial class SubAgentSpawnService
     {
         if (Guid.TryParse(key, out var id))
         {
-            return await _definitionStore.GetByIdAsync(id, ct).ConfigureAwait(false);
+            return await _definitionStore.GetByIdAsync(id, ct);
         }
 
-        var all = await _definitionStore.ListAsync(ct).ConfigureAwait(false);
+        var all = await _definitionStore.ListAsync(ct);
         var match = all.FirstOrDefault(record => string.Equals(record.Name, key, StringComparison.Ordinal));
         if (match is null)
         {

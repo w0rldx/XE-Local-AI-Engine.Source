@@ -25,12 +25,12 @@ public sealed class ListInferenceProfilesEndpoint(IInferenceProfileService infer
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var profiles = await _inferenceProfileService.ListProfilesAsync(ct).ConfigureAwait(false);
+        var profiles = await _inferenceProfileService.ListProfilesAsync(ct);
 
         await Send.OkAsync(new ListInferenceProfilesResponse
             {
                 Items = [.. profiles.Select(static profile => profile.ToDto())]
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

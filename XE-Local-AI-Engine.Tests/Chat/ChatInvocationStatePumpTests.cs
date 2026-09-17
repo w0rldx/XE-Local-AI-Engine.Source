@@ -24,8 +24,7 @@ public sealed class ChatInvocationStatePumpTests
         // 50 ms between snapshots, comfortably past the 40 ms emit debounce, so every snapshot produces its own frame.
         var (events, _) = await DriveAsync(TimeSpan.FromMilliseconds(50),
                 ["Hel", "Hello", "Hello wo", "Hello world"],
-                terminalContent: "Hello world")
-            .ConfigureAwait(false);
+                terminalContent: "Hello world");
 
         var deltas = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
         AssertEx.Equal(expected: 4, deltas.Count);
@@ -68,8 +67,7 @@ public sealed class ChatInvocationStatePumpTests
         // correct itself on every single turn, rather than only after a real fault.
         var (events, _) = await DriveAsync(TimeSpan.FromMilliseconds(10),
                 ["Hello", "Hello world"],
-                terminalContent: "Hello world")
-            .ConfigureAwait(false);
+                terminalContent: "Hello world");
 
         var deltas = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
         AssertEx.Equal(expected: 2, deltas.Count);
@@ -89,7 +87,7 @@ public sealed class ChatInvocationStatePumpTests
         // Twenty snapshots, 10 chars each, one every 10 ms — 200 ms and 200 characters of turn.
         var snapshots = Enumerable.Range(1, 20).Select(chunk => new string('x', chunk * 10)).ToArray();
 
-        var (events, flushes) = await DriveAsync(TimeSpan.FromMilliseconds(10), snapshots, terminalContent: snapshots[^1]).ConfigureAwait(false);
+        var (events, flushes) = await DriveAsync(TimeSpan.FromMilliseconds(10), snapshots, terminalContent: snapshots[^1]);
 
         var deltas = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
 
@@ -126,7 +124,7 @@ public sealed class ChatInvocationStatePumpTests
             NewState(correlation, "Hi there", "Think harder", InvocationStatus.Completed)
         };
 
-        var events = await RunAsync(recordingPump, clock, correlation, states, TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+        var events = await RunAsync(recordingPump, clock, correlation, states, TimeSpan.FromMilliseconds(50));
         var deltas = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
 
         AssertEx.Equal(expected: 2, deltas.Count);
@@ -156,7 +154,7 @@ public sealed class ChatInvocationStatePumpTests
             NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
         };
 
-        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
 
         var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
         AssertEx.Equal(expected: 1, phases.Count);
@@ -179,7 +177,7 @@ public sealed class ChatInvocationStatePumpTests
             NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
         };
 
-        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
 
         var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
         AssertEx.Equal(expected: 1, phases.Count);
@@ -200,7 +198,7 @@ public sealed class ChatInvocationStatePumpTests
             NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
         };
 
-        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50));
 
         var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
         AssertEx.Equal(expected: 1, phases.Count);
@@ -219,7 +217,7 @@ public sealed class ChatInvocationStatePumpTests
         var states = contentSnapshots.Select(content => NewState(correlation, content, string.Empty, InvocationStatus.Running)).ToList();
         states.Add(NewState(correlation, terminalContent, string.Empty, InvocationStatus.Completed));
 
-        var events = await RunAsync(recordingPump, clock, correlation, states, step).ConfigureAwait(false);
+        var events = await RunAsync(recordingPump, clock, correlation, states, step);
         return (events, recordingPump.Flushes);
     }
 
@@ -239,8 +237,7 @@ public sealed class ChatInvocationStatePumpTests
                       new NodeChatStreamSequence(),
                       new NodeChatPartAccumulator(),
                       onTerminal: null,
-                      CancellationToken.None)
-                  .ConfigureAwait(false);
+                      CancellationToken.None);
 
         return sink.Events;
     }

@@ -102,7 +102,7 @@ public sealed class LinuxSandboxProcessGroupKiller : ISandboxProcessGroupKiller
                 return;
             }
 
-            await Task.Delay(ExitPollInterval, _timeProvider, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(ExitPollInterval, _timeProvider, cancellationToken);
         }
 
         _ = kill(-processGroupId, Sigkill);

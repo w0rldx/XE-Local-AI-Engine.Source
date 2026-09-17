@@ -47,7 +47,7 @@ public sealed class ConversationUploadEndpointTests
         using var client = factory.CreateClient();
 
         var oversized = new byte[2 * 1024 * 1024];
-        using var response = await UploadAsync(factory, client, Guid.NewGuid(), "big.txt", oversized, "text/plain").ConfigureAwait(false);
+        using var response = await UploadAsync(factory, client, Guid.NewGuid(), "big.txt", oversized, "text/plain");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -67,7 +67,7 @@ public sealed class ConversationUploadEndpointTests
             0x00,
             0x00
         };
-        using var response = await UploadAsync(factory, client, Guid.NewGuid(), "installer.exe", bytes, "application/octet-stream").ConfigureAwait(false);
+        using var response = await UploadAsync(factory, client, Guid.NewGuid(), "installer.exe", bytes, "application/octet-stream");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -78,7 +78,7 @@ public sealed class ConversationUploadEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var conversationId = await CreateConversationAsync(factory, client).ConfigureAwait(false);
+        var conversationId = await CreateConversationAsync(factory, client);
 
         // Minimal PNG signature — image bytes are stored as-is (no extraction), so content need not be a full image.
         var pngSignature = new byte[]
@@ -92,12 +92,12 @@ public sealed class ConversationUploadEndpointTests
             0x1A,
             0x0A
         };
-        using var response = await UploadAsync(factory, client, conversationId, "photo.png", pngSignature, "image/png").ConfigureAwait(false);
+        using var response = await UploadAsync(factory, client, conversationId, "photo.png", pngSignature, "image/png");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        var uploaded = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<UploadedFileWireDto>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        var uploaded = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<UploadedFileWireDto>(stream, JsonOptions));
 
         // An image is admitted for vision input and persisted with the Image status (no text extraction).
         AssertEx.Equal("photo.png", uploaded.OriginalFileName);
@@ -110,15 +110,15 @@ public sealed class ConversationUploadEndpointTests
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        var conversationId = await CreateConversationAsync(factory, client).ConfigureAwait(false);
+        var conversationId = await CreateConversationAsync(factory, client);
 
         var bytes = Encoding.UTF8.GetBytes("ground-truth content for the upload");
-        using var response = await UploadAsync(factory, client, conversationId, "../../etc/secret.txt", bytes, "text/plain").ConfigureAwait(false);
+        using var response = await UploadAsync(factory, client, conversationId, "../../etc/secret.txt", bytes, "text/plain");
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        var uploaded = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<UploadedFileWireDto>(stream, JsonOptions).ConfigureAwait(false));
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        var uploaded = AssertEx.NotNull(await JsonSerializer.DeserializeAsync<UploadedFileWireDto>(stream, JsonOptions));
 
         // The traversal segments are stripped to a leaf; the directory part never reaches storage.
         AssertEx.Equal("secret.txt", uploaded.OriginalFileName);
@@ -137,11 +137,11 @@ public sealed class ConversationUploadEndpointTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(stream);
         return document.RootElement.GetProperty("conversationId").GetGuid();
     }
 
@@ -164,7 +164,7 @@ public sealed class ConversationUploadEndpointTests
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
-        return await client.SendAsync(request).ConfigureAwait(false);
+        return await client.SendAsync(request);
     }
 
     // Local wire shapes — the endpoint DTOs are internal to the Client project's V1 namespace, so the test mirrors the

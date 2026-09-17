@@ -23,11 +23,11 @@ public sealed class ListIntegrationApiKeysEndpoint(IIntegrationApiKeyService api
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var keys = await _apiKeyService.ListAsync(ct).ConfigureAwait(false);
+        var keys = await _apiKeyService.ListAsync(ct);
         await Send.OkAsync(new ListIntegrationApiKeysResponse
             {
                 Items = keys.Select(IntegrationMapper.ToView).ToArray()
             },
-            ct).ConfigureAwait(false);
+            ct);
     }
 }

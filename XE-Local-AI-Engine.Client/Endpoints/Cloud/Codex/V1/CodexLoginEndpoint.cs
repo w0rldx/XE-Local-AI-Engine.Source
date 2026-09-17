@@ -28,6 +28,6 @@ public sealed class CodexLoginEndpoint(CodexSessionService session)
         await Send.OkAsync(new CodexLoginResponse
         {
             AuthorizeUrl = authorizeUrl.ToString()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

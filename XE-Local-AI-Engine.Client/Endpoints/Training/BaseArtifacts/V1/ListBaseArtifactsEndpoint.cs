@@ -18,10 +18,10 @@ public sealed class ListBaseArtifactsEndpoint(IBaseArtifactService baseArtifactS
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var artifacts = await baseArtifactService.ListAsync(ct).ConfigureAwait(false);
+        var artifacts = await baseArtifactService.ListAsync(ct);
         await Send.OkAsync(new BaseArtifactListResponse
         {
             Items = artifacts.Select(artifact => artifact.ToResponse()).ToArray()
-        }, ct).ConfigureAwait(false);
+        }, ct);
     }
 }

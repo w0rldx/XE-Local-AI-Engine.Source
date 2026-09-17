@@ -28,7 +28,7 @@ public sealed class SelectTranscriptionModelEndpoint(ITranscriptionRuntimeServic
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var catalog = await _runtimeService.SelectModelAsync(request.ModelId, ct).ConfigureAwait(false);
-        await Send.OkAsync(catalog.ToResponse(), ct).ConfigureAwait(false);
+        var catalog = await _runtimeService.SelectModelAsync(request.ModelId, ct);
+        await Send.OkAsync(catalog.ToResponse(), ct);
     }
 }

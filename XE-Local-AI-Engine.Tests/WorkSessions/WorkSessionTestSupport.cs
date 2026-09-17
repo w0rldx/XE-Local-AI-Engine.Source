@@ -69,8 +69,7 @@ public sealed class SeededWorkSessionAgentsFixture : IAsyncInitializer, IAsyncDi
     public async Task InitializeAsync()
     {
         await new WorkSessionAgentSeeder(Factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
-              .StartAsync(CancellationToken.None)
-              .ConfigureAwait(false);
+              .StartAsync(CancellationToken.None);
 
         // StartAsync reports success whether or not it seeded: it catches its own failures by contract, and this
         // fixture hands it a NullLogger, so the warning goes nowhere. Without this check a seeding failure would
@@ -83,7 +82,7 @@ public sealed class SeededWorkSessionAgentsFixture : IAsyncInitializer, IAsyncDi
                      AgentDefaults.WorkSessionResearchAgentSeedSlug
                  })
         {
-            _ = await store.GetBySeedSlugAsync(slug).ConfigureAwait(false)
+            _ = await store.GetBySeedSlugAsync(slug)
                 ?? throw new InvalidOperationException($"The work-session agent seeder did not create '{slug}'.");
         }
     }
@@ -166,8 +165,7 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
         {
             await using var gateScope = services.CreateAsyncScope();
             if (await gateScope.ServiceProvider.GetRequiredService<WorkSessionWriteDeclarationGuard>()
-                               .InspectAsync(bound, request.Model, cancellationToken)
-                               .ConfigureAwait(false) is { } refusal)
+                               .InspectAsync(bound, request.Model, cancellationToken) is { } refusal)
             {
                 throw new WorkSessionUndeclaredWriteException(refusal);
             }
@@ -191,7 +189,7 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
 
         if (script.DuringTurn is { } during)
         {
-            await during(services, sessionId).ConfigureAwait(false);
+            await during(services, sessionId);
         }
 
         if (script.ParkThenContinue)
@@ -204,7 +202,7 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
             yield return Event(correlation, script.ParkEventType, script.ParkToolName);
             try
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, turn.Token).ConfigureAwait(false);
+                await Task.Delay(Timeout.InfiniteTimeSpan, turn.Token);
             }
             catch (OperationCanceledException)
             {
@@ -321,40 +319,38 @@ internal static class WorkSessionTestSupport
     {
         await using var scope = services.CreateAsyncScope();
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
-                                      .CreateConversationAsync(new NodeChatCreateConversationRequest("Seeded session", UserId: null, CreatedAtUtc: 0))
-                                      .ConfigureAwait(false);
+                                      .CreateConversationAsync(new NodeChatCreateConversationRequest("Seeded session", UserId: null, CreatedAtUtc: 0));
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         return await store.CreateAsync(new CreateWorkSessionCommand(sessionId,
                               conversation.ConversationId,
                               agentDefinitionId ?? Guid.NewGuid(),
                               kind,
                               "Seeded session",
-                              objective))
-                          .ConfigureAwait(false);
+                              objective));
     }
 
     public static async Task<AgentWorkSessionSnapshot> ReadSessionAsync(IServiceProvider services, Guid sessionId)
     {
         await using var scope = services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId);
     }
 
     public static async Task<IReadOnlyList<WorkSessionEventSnapshot>> ReadEventsAsync(IServiceProvider services, Guid sessionId)
     {
         await using var scope = services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListEventsAsync(sessionId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListEventsAsync(sessionId);
     }
 
     public static async Task<IReadOnlyList<WorkSessionCheckpointSnapshot>> ReadCheckpointsAsync(IServiceProvider services, Guid sessionId)
     {
         await using var scope = services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListCheckpointsAsync(sessionId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListCheckpointsAsync(sessionId);
     }
 
     public static async Task<IReadOnlyList<WorkSessionFindingSnapshot>> ReadFindingsAsync(IServiceProvider services, Guid sessionId)
     {
         await using var scope = services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListFindingsAsync(sessionId).ConfigureAwait(false);
+        return await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().ListFindingsAsync(sessionId);
     }
 
     /// <summary>Waits for the supervisor to reach a settled status, so no test asserts against a half-run loop.</summary>
@@ -369,13 +365,13 @@ internal static class WorkSessionTestSupport
         AgentWorkSessionSnapshot session;
         do
         {
-            session = await ReadSessionAsync(services, sessionId).ConfigureAwait(false);
+            session = await ReadSessionAsync(services, sessionId);
             if (session.Status == expected)
             {
                 return session;
             }
 
-            await Task.Delay(25).ConfigureAwait(false);
+            await Task.Delay(25);
         } while (DateTimeOffset.UtcNow < deadline);
 
         throw new AssertionException($"Work session {sessionId} was {session.Status}, not {expected}, before the timeout.");

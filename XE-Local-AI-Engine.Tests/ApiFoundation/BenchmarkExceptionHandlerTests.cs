@@ -18,7 +18,7 @@ public sealed class BenchmarkExceptionHandlerTests
     {
         foreach (var testCase in ClaimedCases)
         {
-            var result = await HandleAsync(testCase.Exception).ConfigureAwait(false);
+            var result = await HandleAsync(testCase.Exception);
 
             AssertEx.True(result.Handled, $"{testCase.Name} must be claimed by the Benchmark handler.");
             AssertEx.Equal(testCase.StatusCode, result.StatusCode, testCase.Name);
@@ -45,7 +45,7 @@ public sealed class BenchmarkExceptionHandlerTests
     {
         foreach (var testCase in FallthroughCases)
         {
-            var result = await HandleAsync(testCase.Exception).ConfigureAwait(false);
+            var result = await HandleAsync(testCase.Exception);
 
             AssertEx.False(result.Handled, $"{testCase.Name} must not be claimed by the Benchmark handler.");
             AssertEx.Equal(StatusCodes.Status200OK, result.StatusCode, testCase.Name);
@@ -68,13 +68,13 @@ public sealed class BenchmarkExceptionHandlerTests
         await using var body = new MemoryStream();
         context.Response.Body = body;
 
-        var handled = await new BenchmarkExceptionHandler().TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false);
+        var handled = await new BenchmarkExceptionHandler().TryHandleAsync(context, exception, CancellationToken.None);
         body.Position = 0;
         using var reader = new StreamReader(body);
         return new HandlerResult(handled,
             context.Response.StatusCode,
             context.Response.ContentType ?? string.Empty,
-            await reader.ReadToEndAsync().ConfigureAwait(false));
+            await reader.ReadToEndAsync());
     }
 
     private static readonly BenchmarkHandlerCase[] ClaimedCases =
