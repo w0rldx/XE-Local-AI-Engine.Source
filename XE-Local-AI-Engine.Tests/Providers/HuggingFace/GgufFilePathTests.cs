@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Guards for Hugging-Face-supplied file names (untrusted input). Ensures traversal/rooted names are rejected and a
 ///     contained name resolves under the models directory (the defense-in-depth used by discovery + the store).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufFilePathTests
 {
     [Test]

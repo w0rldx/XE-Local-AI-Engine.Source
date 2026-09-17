@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     validate through <see cref="KnowledgeQueryLimits" />, so exercising it directly covers the enforced limit at both
 ///     sites (the endpoint's <c>HandleAsync</c> calls <see cref="KnowledgeQueryLimits.ExceedsMaxLength" /> verbatim).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeQueryLimitsTests
 {
     [Test]

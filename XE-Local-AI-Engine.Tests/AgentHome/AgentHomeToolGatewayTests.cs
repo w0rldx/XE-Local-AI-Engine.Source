@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     compact model-facing string and maps the two pre-provider policy rejections (unknown folder id, disallowed
 ///     runtime profile) onto a clear rejection, while letting cancellation propagate. The service is faked.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentHomeToolGatewayTests
 {
     private static readonly AgentHomeRunToolRequest ValidRequest = new()

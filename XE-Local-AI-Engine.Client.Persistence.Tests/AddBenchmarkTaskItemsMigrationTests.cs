@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     suite is really about what happens to the rows that already exist — a legacy run must come out of this
 ///     migration ranking exactly as it went in.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddBenchmarkTaskItemsMigrationTests
 {
     private const string PreTaskItemsMigrationId = "20260825225103_AddBenchmarkP2Discrimination";

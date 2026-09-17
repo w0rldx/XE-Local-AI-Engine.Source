@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     b10201 on an RTX 5090 — not paraphrases of the upstream README, which describes a different output in three
 ///     places that would each have failed silently as "unparseable" rather than loudly as a bug.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkPerplexityOutputParserTests
 {
     /// <summary>A plain perplexity run, tail-trimmed. The log prefix in front of the line is real and load-bearing.</summary>

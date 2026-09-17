@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     cover is the DECISIONS — which pairs exist, which verdict a swapped judging means, and when a fit must publish
 ///     no score at all — not the transactions behind them, which the persistence suite owns.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkPairwiseTests
 {
     private static readonly Guid ProjectId = new("aaaaaaaa-0000-0000-0000-000000000000");

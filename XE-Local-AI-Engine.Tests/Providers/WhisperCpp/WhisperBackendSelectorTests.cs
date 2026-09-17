@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     matters most is the one a reader gets wrong: NVIDIA on LINUX selects CPU, because whisper.cpp publishes no Linux
 ///     CUDA prebuilt and selecting CUDA would resolve bytes that do not exist.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperBackendSelectorTests
 {
     [Test]

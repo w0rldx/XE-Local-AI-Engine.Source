@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     production construction sites (the background-chat telemetry hop and the OpenAI-compatible embedding hop),
 ///     assert the leak the processor exists for, and then assert it is gone once the processor has run.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GenAiErrorDescriptionRedactionProcessorTests
 {
     private const string ActivitySourceName = "Microsoft.Extensions.AI";

@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         on a node whose configuration could not be read.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppsShippedConfigurationTests
 {
     private const string AppSettingsFileName = "appsettings.json";

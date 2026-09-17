@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     is lowercase. An ordinal compare rejected every such entry, which failed whole catalog endpoints that verify
 ///     each installed model.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InstalledGgufSnapshotStoreTests
 {
     [Test]

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     the normal <c>AddAsync</c> path stays <c>Manual</c> (forge-proof), seeded instructions encrypt at rest, the
 ///     slug projection is decrypt-free, and the filtered-unique index rejects a duplicate non-null slug.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentDefinitionSeededStoreTests : IDisposable
 {
     private const string Instructions = "You are a seeded starter-pack agent. Follow the repository conventions exactly.";

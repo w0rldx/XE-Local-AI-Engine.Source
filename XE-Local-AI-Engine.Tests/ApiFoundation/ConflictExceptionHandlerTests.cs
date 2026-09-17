@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <c>LocalModelEndpointTests</c>.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ConflictExceptionHandlerTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

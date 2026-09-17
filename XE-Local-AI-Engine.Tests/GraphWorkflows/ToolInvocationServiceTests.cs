@@ -31,6 +31,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         existing pin, so it is asserted below against the real store and the real catalog.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ToolInvocationServiceTests
 {
     /// <summary>The eight tools that pass BOTH gates at this tip. A category change anywhere moves this set.</summary>

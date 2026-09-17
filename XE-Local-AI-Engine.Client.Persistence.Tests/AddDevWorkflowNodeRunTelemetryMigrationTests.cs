@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     <c>dev_workflow_node_runs</c> on both an upgrade from the preceding migration and a fresh migrate-to-head, drops
 ///     them on rollback, adds no index, and leaves no model/snapshot drift.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
 {
     private const string PreTelemetryMigrationId = "20260903104044_AddIntegrationFoundation";

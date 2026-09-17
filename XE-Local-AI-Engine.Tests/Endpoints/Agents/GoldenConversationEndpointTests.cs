@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     round-trips the typed input turns + assertion through the encrypted store; list returns the <c>{ items }</c>
 ///     wrapper; delete is ownership-guarded (cross-agent → 404).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GoldenConversationEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

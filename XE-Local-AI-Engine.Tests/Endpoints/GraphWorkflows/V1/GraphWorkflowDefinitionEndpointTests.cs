@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The definition half of the graph-workflow surface: the five CRUD routes plus the validate probe.</summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowDefinitionEndpointTests
 {
     private const string Root = "/api/local/v1/graph-workflows";

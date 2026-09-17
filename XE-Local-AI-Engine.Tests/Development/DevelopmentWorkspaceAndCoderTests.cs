@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 using OS = TUnit.Core.Enums.OS;
 
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 {
     /// <summary>

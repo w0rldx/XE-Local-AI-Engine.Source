@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     rather than through the <see cref="PeriodicTimer" />, because the repo's fake clocks override only
 ///     <c>GetUtcNow</c>, so the timer would still run on real time and each assertion would cost five seconds.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DetachedInvocationReaperTests
 {
     private static readonly DateTimeOffset Start = DateTimeOffset.UnixEpoch;

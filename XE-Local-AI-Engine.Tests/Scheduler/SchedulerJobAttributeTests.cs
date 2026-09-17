@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="SchedulerDispatchJob" />. A full two-concurrent-fires integration test was evaluated but skipped
 ///     (see summary at end of file for reasoning).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SchedulerJobAttributeTests
 {
     [Test]

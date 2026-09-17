@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Unit coverage for <see cref="LlamaServerLaunchPolicy" /> — the central component that applies the shared context
 ///     allocation (<c>-c</c>), GPU KV-cache quantization + flash attention, and CPU thread policy.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerLaunchPolicyTests
 {
     [Test]

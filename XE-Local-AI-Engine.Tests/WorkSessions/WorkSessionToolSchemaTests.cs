@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The four state-tool schemas as the model receives them: parseable by the registry, strict about unknown
 ///     properties, matching the descriptors the offer merges, and inside llama.cpp's grammar repetition ceiling.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WorkSessionToolSchemaTests
 {
     [Test]

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     another: the shared per-IP layer cannot provide that on a loopback-only surface, and that gap is why ruling R5-5
 ///     added this layer at all.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationPrincipalRateLimiterTests
 {
     [Test]

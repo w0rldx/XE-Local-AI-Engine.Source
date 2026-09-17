@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkRunExecutorTests
 {
     [Test]

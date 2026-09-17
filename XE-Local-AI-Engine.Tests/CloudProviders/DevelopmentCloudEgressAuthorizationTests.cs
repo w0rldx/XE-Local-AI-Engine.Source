@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Regression proof for the final selected-cloud boundary and the pinned Microsoft.Extensions.AI 10.7.0 function loop.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentCloudEgressAuthorizationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 21, 18, 0, 0, TimeSpan.Zero);

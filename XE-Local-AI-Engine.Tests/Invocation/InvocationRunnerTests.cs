@@ -62,6 +62,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 using ChatFinishReason = Microsoft.Extensions.AI.ChatFinishReason;
 using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
+[Category(TestCategories.Unit)]
 public sealed class InvocationRunnerTests
 {
     private const string SkillName = "demo";

@@ -4,6 +4,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ToolArgumentValidatorTests
 {
     private const string ObjectSchema = """

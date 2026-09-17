@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     encryption but not for decryption (or the reverse) round-trips as garbage rather than failing loudly, so each is
 ///     asserted as ciphertext at rest AND as plaintext after a fresh read.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingEvaluationEncryptionTests : IDisposable
 {
     private const string MembershipJson = """{"schemaVersion":1,"holdoutSampleIds":["6f9619ff-8b86-d011-b42d-00c04fc964ff"]}""";

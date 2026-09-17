@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Live-found: nothing linked a run to its installed base, so adapters could never be smoke-tested or promoted.
 ///     The linker resolves the official <c>&lt;base&gt;-GGUF</c> repo (or the same repo id) and refuses to guess otherwise.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InstalledBaseModelLinkerTests
 {
     private const string BaseRepo = "Qwen/Qwen2.5-0.5B-Instruct";

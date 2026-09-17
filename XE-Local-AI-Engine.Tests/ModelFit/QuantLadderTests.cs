@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="MemoryFitEstimator.BytesPerWeight" /> so IQ files are sized at their true bits-per-weight instead of the
 ///     legacy 4.5bpw default.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class QuantLadderTests
 {
     [Test]

@@ -5,6 +5,7 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowRuleSetStoreTests
 {
     private const string ProjectScope = """{"projectIds":["9c1a5c9e-0000-4000-8000-000000000001"],"nodeTypes":["Agent"]}""";

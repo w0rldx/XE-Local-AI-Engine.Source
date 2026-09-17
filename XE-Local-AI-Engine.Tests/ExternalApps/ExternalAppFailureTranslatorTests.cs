@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     releases, and a translator matching on message text degrades to "Unknown" after an upgrade nobody connected
 ///     to it.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppFailureTranslatorTests
 {
     private const string Secret = "s3cr3t-admin-password";

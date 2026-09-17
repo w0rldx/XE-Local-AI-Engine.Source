@@ -43,6 +43,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         at any one boundary — it tolerates only the fragment guess the design knowingly accepts.
 ///     </para>
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class LiveSegmenterGoldenTests
 {
     private const string FixtureFileName = "jfk-golden-base.json";

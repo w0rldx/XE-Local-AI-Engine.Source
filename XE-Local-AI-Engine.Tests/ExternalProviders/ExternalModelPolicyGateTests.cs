@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     guard that keeps an <c>ext:</c> id routing to the local pipeline — so before this conversion every one of these
 ///     gates would have classified a hosted endpoint as node-local and handed it whatever a node-local model gets.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ExternalModelPolicyGateTests
 {
     private const string LocalExternalModel = "ext:local-box/qwen3";

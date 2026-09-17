@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     no input validation of its own) rejects unknown use cases, out-of-range limits, unsupported providers, and bad
 ///     benchmark model names, and accepts the valid recommend/benchmark shapes.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFitRequestValidatorTests
 {
     private readonly ModelFitRequestValidator _validator;

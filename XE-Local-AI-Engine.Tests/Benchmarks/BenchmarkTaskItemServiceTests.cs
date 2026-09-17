@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The task-item service owns the wire shape and the caps; the store owns identity. These pin the half that can
 ///     be got wrong without any database: what an operator is allowed to write, and how a prompt is encoded.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkTaskItemServiceTests
 {
     private static readonly Guid ProjectId = new("44444444-4444-4444-4444-444444444444");

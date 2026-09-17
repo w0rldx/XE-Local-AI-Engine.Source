@@ -90,7 +90,7 @@ Every test class carries **exactly one** class-level `[Category(...)]`, from thr
 |---|---|
 | `Unit` | Pure logic against in-memory collaborators: no host, no real database, no socket, no child process. A hand-written fake or an NSubstitute double is still `Unit`. |
 | `Integration` | Deterministic, but boots something real in-process: a `TestServerWebAppFactory` host, a real SQLite file (including a `MigratedDatabaseTemplate` copy), a `FakeOllama`/`FakeDocker` server on a loopback socket, or a real child process. |
-| `ExternalInfra` | Needs infrastructure the box may not have — today only the real-Docker-daemon suites behind `XE_REQUIRE_DOCKER_TESTS=1`. Never part of the default gate. |
+| `ExternalInfra` | Needs infrastructure the box may not have: a container daemon, a model runtime or live server, a GPU, a privileged sandbox binary. Opt-in through an environment variable, and **every** test in the class skips visibly when that gate is unset. Never part of the default gate. |
 
 The line between `Unit` and `Integration` is **mechanism, not speed**: what the test starts decides its category,
 not how long it takes. The gate runs `Unit` and `Integration`; the split exists so a failure's *class* is readable
@@ -104,9 +104,30 @@ brackets (`!=` excludes; combine properties inside one bracket, `[(Category=Unit
 --treenode-filter '/*/*/*/*[Category!=ExternalInfra]'
 ```
 
-*Migration status:* the attribute and the guard test — every class has exactly one category, and a `Unit` class may
-not reference the host factory, `DbContext` options, a fake server or `Process.Start` — arrive with slice **S2**.
-Until then, write the attribute on any test class you add or touch.
+Write the constant, never the string: `[Category(TestCategories.Unit)]`. Each test project declares its own
+`Categories/TestCategories.cs` and imports it globally from the project file, so the attribute needs no `using`.
+One trap the compiler will not tell you about: `System.ComponentModel` declares a `CategoryAttribute` too, and a
+file-scoped `using` of that namespace silently wins over TUnit's — the class then carries no category at all while
+the source still reads correctly. A file that imports that namespace therefore also aliases
+`using CategoryAttribute = TUnit.Core.CategoryAttribute;`.
+
+`Architecture/TestCategoryConventionTests.cs` is the guard. It fails on a class with `[Test]` methods that
+carries no category or more than one (by reflection in its own assembly, by source scan in the sibling
+projects), and on a `Unit` class that reaches an Integration mechanism — the host factory, a real SQLite
+connection, a fake server, a real socket or a child process — directly or through any helper. Only the primitives
+are written down; the helper list is derived at run time, so a new fixture is covered the day it lands, and there
+is no allowlist. The written-down list includes the product composition root (`Program.CreateAppAsync`,
+`builder.AddServices`, `AddNodeApplication`, `AddNodeModelRuntime`) — `AddNodeModelRuntime` is the only place in
+the whole DI path that calls `UseSqlite`, so a test that touches any of those four reaches a real SQLite database
+through product code that no scan over test sources could follow.
+
+What the guard deliberately does **not** check is that an `ExternalInfra` class is tagged as one. "Every test in
+this class is gated" is not decidable from a scan: the gate is usually a private helper several call levels below
+the test, and some classes are **mixed** — `WhisperRuntimeLiveSmokeTests` and `LlamaServerAdapterIntegrationTests`
+each pair gated live tests with tests that run unconditionally, so they are `Integration`, not `ExternalInfra`.
+Tagging a mixed class `ExternalInfra` would drop its ungated tests out of the default gate. That call stays with
+the reviewer — but the half that IS decidable is enforced: a `*RealDaemonTests` class must be `ExternalInfra`,
+and a `*LiveTests`/`*LiveSmokeTests` class must not be `Unit`.
 
 ### Naming
 

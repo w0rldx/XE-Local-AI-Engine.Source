@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     cold invalidation path has no llama.cpp process-budget dependency, and unavailable global-free data degrades to
 ///     the build + hardware axes.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InferenceInvalidationEvaluatorTests
 {
     private const long Gb = 1024L * 1024 * 1024;

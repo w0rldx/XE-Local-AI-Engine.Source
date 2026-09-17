@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 ///     Uses a fully-migrated temporary SQLite database + the real Quartz ADO.NET store so both store state
 ///     and Quartz job/trigger state are observable in the same process.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ScheduledJobManagementServiceTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-sched-mgmt-" + Guid.NewGuid().ToString("N"));

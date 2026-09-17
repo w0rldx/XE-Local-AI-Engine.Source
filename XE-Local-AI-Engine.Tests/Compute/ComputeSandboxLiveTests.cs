@@ -29,6 +29,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <see cref="XE_Local_AI_Engine.Tests.Sandbox.SandboxIsolationLiveTests" /> was written around.
 ///     </para>
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class ComputeSandboxLiveTests : IDisposable
 {
     /// <summary>Set to <c>1</c> to allow this suite to provision the pinned compute venv and spawn real processes.</summary>

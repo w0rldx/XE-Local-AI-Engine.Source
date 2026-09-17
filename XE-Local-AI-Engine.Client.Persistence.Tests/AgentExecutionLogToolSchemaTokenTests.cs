@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     these columns are always null on that kind, and adding permanently-null fields to its projection would
 ///     misinform every reader of that endpoint.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(2026, 9, 3, 10, 30, 0, TimeSpan.Zero);

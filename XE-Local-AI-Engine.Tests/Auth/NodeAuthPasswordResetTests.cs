@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     which the operator-run <c>--reset-admin-password</c> CLI calls to set a new admin password without the old one.
 ///     Exercised at the service layer (the CLI branch in Program.cs is a thin scope+resolve+exit wrapper over this).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeAuthPasswordResetTests
 {
     private const string Email = "admin@example.test";

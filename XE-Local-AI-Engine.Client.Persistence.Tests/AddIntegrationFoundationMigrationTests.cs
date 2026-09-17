@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     the brief's own list does not name (<c>stop_requested_at_utc</c>, <c>output_bytes</c>, <c>principal_id</c> on
 ///     three tables) and the conversation-kind backfill that closes the work-session chat-list leak.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddIntegrationFoundationMigrationTests
 {
     private const string PreviousMigrationId = "20260902081629_AddDevWorkflowRuleSets";

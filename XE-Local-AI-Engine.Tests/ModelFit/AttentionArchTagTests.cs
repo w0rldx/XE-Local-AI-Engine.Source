@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="AttentionArchTag" /> decides the tag from GGUF numbers only — never from an architecture string — so
 ///     these cases are stated as geometry, one per row of the tag table plus the two ways a head count can be unknown.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AttentionArchTagTests
 {
     [Test]

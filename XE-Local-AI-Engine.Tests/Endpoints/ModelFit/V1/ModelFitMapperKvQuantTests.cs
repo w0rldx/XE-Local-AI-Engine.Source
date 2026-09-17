@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     blob without the keys (explore row / pre-advisory snapshot) must yield all-null advisory fields, and the row's
 ///     primary fit fields must never be affected by the advisory's presence.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFitMapperKvQuantTests
 {
     private static ModelFitRecommendationRecord CreateRecord(string? diagnosticsJson)

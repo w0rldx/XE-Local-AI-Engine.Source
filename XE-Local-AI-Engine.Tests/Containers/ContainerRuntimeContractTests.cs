@@ -49,6 +49,7 @@ public enum ContainerRuntimeUnderTest
 ///         half, where starting a server to test a guard that fires before any HTTP call is pure overhead.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ContainerRuntimeContractTests
 {
     private const string Digest = "@sha256:0000000000000000000000000000000000000000000000000000000000000000";

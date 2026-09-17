@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class SchedulerOptionsValidatorTests
 {
     private readonly SchedulerOptionsValidator _validator = new();

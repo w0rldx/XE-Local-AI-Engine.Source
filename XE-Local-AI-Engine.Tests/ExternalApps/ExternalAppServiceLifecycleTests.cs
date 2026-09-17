@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Start, stop, restart, reset and uninstall: the state machine's refusals, the reuse-or-rebuild decision, and
 ///     what each pipeline leaves on disk.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppServiceLifecycleTests
 {
     [Test]

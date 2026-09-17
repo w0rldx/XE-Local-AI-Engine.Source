@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     lifecycle; the real supervisor would need a real child process to say anything here. The HTTP handler is a stub
 ///     for the same reason the rest of the suite uses one: it is the only way to pin a response shape byte for byte.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class WhisperServerTranscriberTests
 {
     private const string RealisticPayload = """

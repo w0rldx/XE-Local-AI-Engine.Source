@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     upgrade from the preceding migration and a fresh migrate-to-head; a row written before the migration reads back
 ///     null on the new columns; rollback drops all three; and the model has no snapshot drift.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
 {
     private const string PreTelemetryMigrationId = "20260903104044_AddIntegrationFoundation";

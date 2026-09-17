@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     reaches a NEW per-model client when the model switches mid-session (no node restart), caches one client per
 ///     (provider, model), and never disposes a resolved adapter at the boundary.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelRoutingLocalChatClientTests
 {
     private const string DefaultModel = "default-chat";

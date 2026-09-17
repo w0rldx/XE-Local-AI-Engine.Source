@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     exists so the settings page renders the empty state from one call. It also carries the live-request base URL an
 ///     external tool is configured with.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GetLocalModelProxyApiKeyEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

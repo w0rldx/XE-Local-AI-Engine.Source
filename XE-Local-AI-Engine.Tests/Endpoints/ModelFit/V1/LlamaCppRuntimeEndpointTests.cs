@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     binary download (it must not touch <see cref="ILlamaCppBinaryManager" />), and the update endpoint rejects a
 ///     malformed tag with a 400 before resolving any asset.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class LlamaCppRuntimeEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
+[Category(TestCategories.Integration)]
 public sealed class StableDiffusionSourceRuntimeFoundationTests
 {
     [Test]
@@ -751,6 +752,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         using var waitForPid = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         while (!File.Exists(pidPath))
         {
+            // real-timer: waits for a real child process to write its pid file; bounded by the 2s token above.
             await Task.Delay(10, waitForPid.Token);
         }
 

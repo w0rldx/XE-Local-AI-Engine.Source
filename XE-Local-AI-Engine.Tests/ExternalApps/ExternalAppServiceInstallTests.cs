@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The install pipeline end to end against the lying container fake: the happy path, every admission refusal,
 ///     and each way a daemon can make an install fail after the row exists.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppServiceInstallTests
 {
     private const string AppId = "test-app";

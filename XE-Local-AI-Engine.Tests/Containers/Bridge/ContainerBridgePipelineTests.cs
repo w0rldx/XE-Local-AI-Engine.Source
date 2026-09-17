@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         a wiring the product does not have.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ContainerBridgePipelineTests
 {
     private const string ModelName = "bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M";

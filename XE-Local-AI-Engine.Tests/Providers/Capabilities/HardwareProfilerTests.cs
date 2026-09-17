@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     environment probe seams are faked so detection is exercised with canned output and no
 ///     real GPU, process spawn or platform pin.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HardwareProfilerTests
 {
     private const long Mib = 1024L * 1024L;

@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
+[Category(TestCategories.Unit)]
 public sealed class ModelCoordinationTests
 {
     [Test]

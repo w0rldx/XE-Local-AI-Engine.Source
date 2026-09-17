@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and is unrecoverable afterwards — a database read must yield nothing that can be presented to the proxy endpoint.
 ///     This mirrors the MCP key's guarantees because the proxy shares its security posture and differs only in scheme.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelProxyApiKeyServiceTests
 {
     [Test]

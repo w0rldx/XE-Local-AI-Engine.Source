@@ -5,6 +5,7 @@ using NSwag;
 using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentOpenApiDocumentProcessorTests
 {
     private const string EndpointSchemaPrefix = "XE_Local_AI_EngineClientEndpointsDevelopmentV1";

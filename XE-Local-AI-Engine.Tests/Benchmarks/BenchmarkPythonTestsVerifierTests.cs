@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         — the jail adds the isolation, but the boundary is the process split, and a process is what tests it.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkPythonTestsVerifierTests
 {
     private const string Doubling = """

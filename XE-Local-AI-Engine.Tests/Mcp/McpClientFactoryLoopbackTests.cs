@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     allowlist is strict (exact-string, fail-closed) by design; these cases pin that no SSRF/parser-confusion vector
 ///     slips a non-loopback host through as one of the allowed strings.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class McpClientFactoryLoopbackTests
 {
     [Test]

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     It must see the PREVIOUSLY STORED headers: a blank secret header is legal only when a stored secret of the same
 ///     name will merge into it, and messages must never carry a header value.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CloudSettingsPolicyTests
 {
     [Test]

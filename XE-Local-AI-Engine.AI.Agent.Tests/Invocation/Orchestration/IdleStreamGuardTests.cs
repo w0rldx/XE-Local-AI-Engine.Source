@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     session wraps its <c>WatchStreamAsync</c> drain and disposal in. Driven directly against cancellation-ignoring
 ///     fakes (the concrete MAF <c>StreamingRun</c> cannot be faked), which is the seam that carries the new logic.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IdleStreamGuardTests
 {
     [Test]

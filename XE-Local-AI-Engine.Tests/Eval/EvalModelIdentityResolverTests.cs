@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     to the Ollama classification digest, and degrades to the explicit unverified sentinel — a same-name weight swap
 ///     always changes the verified token.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EvalModelIdentityResolverTests
 {
     private const string ModelName = "publisher/Model-GGUF:Q4_K_M";

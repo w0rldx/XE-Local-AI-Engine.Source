@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     ~2 GB SD1.5 file fails an ~18 GB Qwen-Image set on its FIRST launch, and the operator is told the runtime "did
 ///     not become ready in time", which reads as a broken model rather than an impatient budget.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageServerReadinessBudgetTests
 {
     [Test]

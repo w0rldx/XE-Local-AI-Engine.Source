@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     token (the server mints it in both <c>sub</c> and <see cref="ClaimTypes.NameIdentifier" />), while the node id
 ///     stays the persisted client node id. With no token (unpaired loopback) the owner falls back to the node id.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentHomeIdentityProviderTests
 {
     private static readonly Guid NodeId = Guid.Parse("11111111-1111-1111-1111-111111111111");

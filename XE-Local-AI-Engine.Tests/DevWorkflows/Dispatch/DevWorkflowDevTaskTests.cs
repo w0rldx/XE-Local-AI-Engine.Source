@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         singleton, and each seeds its own development project.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowDevTaskTests
 {
     [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]

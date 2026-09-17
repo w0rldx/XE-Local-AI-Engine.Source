@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     starts when no MCP server can be reached — so the refresh-wide failure classes are swallowed and logged while
 ///     anything unexpected is left to escape rather than being silently absorbed.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class McpServerStartupConnectorTests
 {
     [Test]

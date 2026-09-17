@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Parameter binding + single-value substitution: a substituted value is one value (never split), an undeclared
 ///     placeholder or a type mismatch is a fail-closed rejection, and a required-but-absent value throws.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CustomToolTemplateTests
 {
     private static readonly IReadOnlyList<CustomToolParameter> StringParam =

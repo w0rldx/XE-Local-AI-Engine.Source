@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The set the bridge's peer guard decides on: this computer's own addresses, kept current on a clock the test
 ///     owns rather than a real minute.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerBridgeAddressWatcherTests
 {
     [Test]

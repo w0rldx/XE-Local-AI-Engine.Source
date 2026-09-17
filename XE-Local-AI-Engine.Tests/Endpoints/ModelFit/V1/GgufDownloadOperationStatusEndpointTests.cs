@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     unknown guid. Tests seed operations directly through the shared registry (a production DI singleton) rather than
 ///     a real download/import, keeping the host hermetic.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GgufDownloadOperationStatusEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

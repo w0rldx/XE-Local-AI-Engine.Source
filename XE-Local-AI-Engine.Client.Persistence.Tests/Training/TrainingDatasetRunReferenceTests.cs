@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     that dataset would leave the lineage pointing at nothing, so the delete is refused for as long as any run
 ///     references it — including a finished one, because the lineage question outlives the run.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingDatasetRunReferenceTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

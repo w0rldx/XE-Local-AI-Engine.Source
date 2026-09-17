@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>(conversation_id, sequence)</c> index must keep sequences distinct under concurrent inserts, keep a delete
 ///     from stranding partial rows, and keep the writer's lock map bounded.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeChatConcurrencyTests : IDisposable
 {
     private const int ConcurrentInsertsPerConversation = 8;

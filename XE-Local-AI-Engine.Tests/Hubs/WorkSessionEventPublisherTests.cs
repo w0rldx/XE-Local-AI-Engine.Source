@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class WorkSessionEventPublisherTests
 {
     [Test]

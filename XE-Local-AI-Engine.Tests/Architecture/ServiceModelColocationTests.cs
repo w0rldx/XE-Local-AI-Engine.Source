@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <c>Services/</c> still holds pre-existing co-located declarations and is deliberately out of scope.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ServiceModelColocationTests
 {
     private static readonly string[] ScannedFolders =

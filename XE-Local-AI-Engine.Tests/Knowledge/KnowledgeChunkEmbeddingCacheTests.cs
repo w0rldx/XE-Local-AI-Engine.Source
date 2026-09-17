@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeChunkEmbeddingCacheTests
 {
     private const string VectorIdentity = "nomic::native:v1:2";

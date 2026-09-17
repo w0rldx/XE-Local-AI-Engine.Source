@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         SURVIVES a later start with it off — the seeder is additive-only and must never delete.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class MathematicianAgentSeederTests
 {
     [Test]

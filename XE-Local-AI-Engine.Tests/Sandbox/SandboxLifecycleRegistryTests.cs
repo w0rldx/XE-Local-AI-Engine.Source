@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     about: a trusted host workspace binding must match on re-attach, and terminating a jail bound to one must NOT
 ///     delete the user's directory.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxLifecycleRegistryTests : IDisposable
 {
     private readonly string _jailRoot = Path.Combine(Path.GetTempPath(), "xe-registry-" + Guid.NewGuid().ToString("N"));

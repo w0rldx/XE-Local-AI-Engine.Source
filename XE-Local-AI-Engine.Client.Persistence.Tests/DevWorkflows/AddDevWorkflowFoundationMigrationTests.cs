@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class AddDevWorkflowFoundationMigrationTests
 {
     private const string PreviousMigrationId = "20260826102207_AddBenchmarkTaskItems";

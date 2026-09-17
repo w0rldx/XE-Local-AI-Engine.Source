@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     is read, that a silent trainer is killed rather than waited on forever, that a cooperative stop lands as
 ///     Cancelled rather than Failed, and that the decrypted dataset is swept on every terminal path.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingRunExecutorTests : IDisposable
 {
     private readonly FixedNodeSqliteKeyHolder _keyHolder = new(RandomNumberGenerator.GetBytes(32));

@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     transfer. These tests drive both through the public <see cref="HuggingFaceImageModelStore.EnsureModelAsync" />
 ///     against a scripted handler, so they pin observable behaviour rather than the private helpers that implement it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelSetDownloadTests
 {
     private const string ModelName = "multi-part-model";

@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <item>the agent create/update contract carries <c>defaultTemporaryChat</c> round-trip.</item>
 ///     </list>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AdaptiveMemoryEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

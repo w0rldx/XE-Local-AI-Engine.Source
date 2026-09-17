@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     malformed, out-of-range, taken → dynamic <c>:0</c> bind), the happy-path re-bind of a remembered free port, and
 ///     the persist round-trip. Each test uses an isolated temp directory and never touches the real per-user data dir.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DesktopPortStoreTests
 {
     [Test]

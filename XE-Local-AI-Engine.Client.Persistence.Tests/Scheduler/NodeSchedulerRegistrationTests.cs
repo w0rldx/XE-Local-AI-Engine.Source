@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 ///     Verifies DI resolution and Quartz startup against a fully-migrated temporary SQLite database
 ///     (QRTZ_ tables present via the scheduler migration).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeSchedulerRegistrationTests : IDisposable
 {
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();

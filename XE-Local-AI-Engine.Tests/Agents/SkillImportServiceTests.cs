@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     acknowledgement, imported skills land disabled and marked imported, conflicts default to skipping, and the
 ///     GitHub source never leaves its host allowlist. No test here touches the network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SkillImportServiceTests
 {
     [Test]

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     selection rather than one apiece. The cancellation rules are the subtle half — a caller's own token aborts only
 ///     that caller's wait, never the shared computation every other waiter is awaiting.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ToolRelevanceScopeTests
 {
     [Test]

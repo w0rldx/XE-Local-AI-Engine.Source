@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Pins the authoritative transition table so the allowed-source sets cannot drift from the atomic SQL predicates
 ///     that enforce them (cancel / flush / terminalize in the persistence commands, and restart recovery).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class NodeChatMessageTransitionsTests
 {
     [Test]

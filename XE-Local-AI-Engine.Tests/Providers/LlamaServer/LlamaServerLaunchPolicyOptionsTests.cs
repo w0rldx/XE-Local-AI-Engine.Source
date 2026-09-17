@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>Validation + role-mapping coverage for <see cref="LlamaServerLaunchPolicyOptions" />.</summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerLaunchPolicyOptionsTests
 {
     [Test]

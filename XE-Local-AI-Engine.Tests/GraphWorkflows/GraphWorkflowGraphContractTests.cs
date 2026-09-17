@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     evaluator, so these tests are about the QUESTIONS being the right ones — the answers are proven where those
 ///     live.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GraphWorkflowGraphContractTests
 {
     /// <summary>

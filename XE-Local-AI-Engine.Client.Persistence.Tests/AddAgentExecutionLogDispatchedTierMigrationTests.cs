@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     migrate-to-head; a row written before the migration reads back null on both; rollback drops the whole wave's
 ///     columns from this table while leaving everything underneath it; and the model has no snapshot drift.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposable
 {
     private const string PreWaveMigrationId = "20260903104044_AddIntegrationFoundation";

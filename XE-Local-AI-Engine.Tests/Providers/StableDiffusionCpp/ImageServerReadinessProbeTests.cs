@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Verifies the sd-server readiness probe polls <c>GET /sdcpp/v1/capabilities</c> (sd-server has NO <c>/health</c>):
 ///     the first success means ready, and connection-refused while the daemon is still loading is retried.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageServerReadinessProbeTests
 {
     private static readonly Uri BaseAddress = new("http://127.0.0.1:18200/");

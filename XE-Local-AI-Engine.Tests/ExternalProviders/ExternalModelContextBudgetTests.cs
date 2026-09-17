@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         asserting the readiness result and then that fold is the whole chain.
 ///     </para>
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ExternalModelContextBudgetTests
 {
     private const string ExternalModel = "ext:local-box/qwen3";

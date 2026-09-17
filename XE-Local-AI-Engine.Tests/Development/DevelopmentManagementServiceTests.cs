@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentManagementServiceTests
 {
     /// <summary>

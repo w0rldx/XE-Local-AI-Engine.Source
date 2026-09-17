@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     one in the same table. The rollback test is the one that matters most: SQLite drops a column by rebuilding the
 ///     table, so a Down written against a stale target model silently deletes columns it never mentioned.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddBenchmarkReadinessMigrationTests
 {
     private const string PreviousMigration = "20260817140837_AddTrainingArtifactDiscardCleanupState";

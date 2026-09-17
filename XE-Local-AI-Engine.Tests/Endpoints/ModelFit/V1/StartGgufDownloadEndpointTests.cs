@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="HuggingFaceDownloadFailure.NotFound" /> is a 404 — both mapped through the shared
 ///     <c>GgufDownloadEndpointSupport</c> the two knowledge-base recommended-download endpoints also use.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class StartGgufDownloadEndpointTests
 {
     private const string DownloadRoute = "/api/local/v1/model-fit/download";

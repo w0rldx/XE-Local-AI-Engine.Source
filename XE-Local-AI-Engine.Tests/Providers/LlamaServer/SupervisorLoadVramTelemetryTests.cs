@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     under its decision gate and the GPU bytes it reserved — and carries neither when the spawn had no admission to
 ///     read them from. Nothing here probes the device: an unadmitted spawn reports nulls rather than a measurement.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorLoadVramTelemetryTests
 {
     private const long GlobalFreeBytes = 7_340_032_000L;

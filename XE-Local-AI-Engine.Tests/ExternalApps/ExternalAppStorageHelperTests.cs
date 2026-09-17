@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         stops the operation rather than letting an uninstall delete the row over data still on disk.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppStorageHelperTests
 {
     private const string VolumeName = "data";

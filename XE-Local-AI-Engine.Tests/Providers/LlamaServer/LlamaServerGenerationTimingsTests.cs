@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         rather than throwing — the reader sits on the hot streaming path of every turn in the product.</item>
 ///     </list>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerGenerationTimingsTests
 {
     private const string TimingsChunkJson = """

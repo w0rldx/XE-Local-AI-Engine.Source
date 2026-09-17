@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     poll → completed decodes the base64 image; a queued-cancel calls the HTTP cancel route; a generating-cancel (409)
 ///     tree-kills + restarts the daemon; and failed / 410-Gone surface a sanitized error.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class StableDiffusionCppRuntimeTests
 {
     private static readonly Uri BaseAddress = new("http://127.0.0.1:18200/");

@@ -29,6 +29,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     writes the body), while an unknown scheduled-job id makes the trigger throw ScheduledJobValidationException,
 ///     which now reaches the global handler. Only the message and the per-request traceId may differ.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DomainValidationExceptionHandlerTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

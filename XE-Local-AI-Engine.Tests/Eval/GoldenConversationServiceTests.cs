@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Golden-set create-validation unit tests. The service rejects over-long boundary fields before
 ///     persisting (mirroring the PlaybookAction free-text cap), so a client cannot push an unbounded encrypted payload.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GoldenConversationServiceTests
 {
     private static readonly Guid AgentId = Guid.NewGuid();

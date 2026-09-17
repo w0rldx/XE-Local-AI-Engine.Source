@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkRunBatchServiceTests
 {
     private static readonly Guid ProjectId = Guid.Parse("10000000-0000-0000-0000-000000000001");

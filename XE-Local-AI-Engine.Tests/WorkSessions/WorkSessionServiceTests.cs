@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The contract the REST layer sits on: which agent a session may run on, when its objective may change, what a
 ///     delete takes with it, and what a follow-up does to a paused run.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class WorkSessionServiceTests
 {
     [ClassDataSource<WorkSessionServiceHostFixture>(Shared = SharedType.PerClass)]

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     key's trigger allowlist still binds after the invocation — a narrow key must not be able to read or cancel its
 ///     own principal's executions under a trigger it is explicitly excluded from.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationExternalAccessTests
 {
     private const string BroadPrefix = "xeint_broad001";

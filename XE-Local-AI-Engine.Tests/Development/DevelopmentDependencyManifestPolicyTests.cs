@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         "delete the failing test" has no legitimate reading and "add a package" does.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentDependencyManifestPolicyTests
 {
     /// <summary>

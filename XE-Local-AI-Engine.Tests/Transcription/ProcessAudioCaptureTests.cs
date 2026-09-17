@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     managed and run anywhere, which is the entire reason the conversion was split out of the Windows source.
 ///     Inputs are synthesised in code; no fixture is committed.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ProcessAudioCaptureTests
 {
     private const int TargetSampleRate = 16000;

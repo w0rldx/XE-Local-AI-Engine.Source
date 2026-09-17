@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 using OS = TUnit.Core.Enums.OS;
 
+[Category(TestCategories.Unit)]
 public sealed class GgufImportFoundationTests
 {
     [Test]

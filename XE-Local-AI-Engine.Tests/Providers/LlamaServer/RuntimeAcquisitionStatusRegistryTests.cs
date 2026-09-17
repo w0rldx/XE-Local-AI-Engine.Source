@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     has several non-terminal phases, not one. Repeated byte updates inside one (phase, step) are throttled; any
 ///     phase change, any step change, and every terminal status pushes immediately.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RuntimeAcquisitionStatusRegistryTests
 {
     [Test]

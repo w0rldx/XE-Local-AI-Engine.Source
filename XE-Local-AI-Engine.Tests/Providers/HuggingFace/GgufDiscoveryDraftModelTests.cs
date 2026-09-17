@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     model's quant — so <c>Q8_0</c> meant either 0.4 GB or 11.8 GB depending on which row was clicked, and both mapped
 ///     to the same <c>{repoId}:{quant}</c> registry key. The file list below is the repo's real layout and sizes.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufDiscoveryDraftModelTests
 {
     private const string RepoId = "unsloth/gemma-4-12b-it-GGUF";

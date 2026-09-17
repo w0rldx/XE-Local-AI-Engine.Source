@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and it degrades to <see langword="null" /> — so the caller keeps its fusion order — whenever the model is not
 ///     installed, the server is down, the status is non-success, or the response is malformed.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerRerankerClientTests
 {
     private const string ModelName = "bge-reranker-v2-m3";

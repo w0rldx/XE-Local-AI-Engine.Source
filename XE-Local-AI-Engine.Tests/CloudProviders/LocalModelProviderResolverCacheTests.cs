@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     lookups collapse to one persisted read, and an explicit invalidation makes a freshly-written mapping visible
 ///     immediately rather than after the TTL.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelProviderResolverCacheTests
 {
     [Test]

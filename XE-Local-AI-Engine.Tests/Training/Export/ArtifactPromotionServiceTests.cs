@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     point: a registry entry with no derived-from is indistinguishable from an import, and the question "what was
 ///     this model trained on" becomes unanswerable the moment the run row is deleted.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ArtifactPromotionServiceTests : IDisposable
 {
     private const string BaseModelName = "base:Q4_K_M";

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="CredentialUnavailableException" /> triggers exactly one rebuild without persistence options
 ///     (never unencrypted-on-disk), and the fallback decision sticks for later calls.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EntraPersistenceFallbackCredentialTests
 {
     [Test]

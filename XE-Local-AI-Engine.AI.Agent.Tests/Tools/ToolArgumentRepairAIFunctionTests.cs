@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class ToolArgumentRepairAIFunctionTests
 {
     private const string Schema = """

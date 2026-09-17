@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     validator refuses the specific shapes that would produce a broken one-click install, and the bundled seed the
 ///     app actually ships passes that validator with the multi-repo Qwen-Image set intact.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelCatalogTests
 {
     [Test]

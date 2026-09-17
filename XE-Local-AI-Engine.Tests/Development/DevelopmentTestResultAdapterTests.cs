@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <c>No test projects were found.</c> is written to stderr alone with no summary block at all.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentTestResultAdapterTests
 {
     /// <summary>Measured stdout of a passing run: three tests, one of them skipped.</summary>

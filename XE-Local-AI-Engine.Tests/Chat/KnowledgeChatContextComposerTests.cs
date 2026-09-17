@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     untrusted DATA, caps the combined text to a character budget dropping the lowest-scored hits first, and never
 ///     leaks chunk body text into the sources projection.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeChatContextComposerTests
 {
     private static KnowledgeSearchHit Hit(string title, string content, double score, string? section = "Section", Guid? documentId = null, Guid? chunkId = null, bool lastKnownGood = false)

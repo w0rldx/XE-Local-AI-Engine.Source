@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     all share. If normalization were not a fixed point — or admitted a shape the guard cannot pin — the guard would
 ///     either reject legitimate traffic or admit a destination the operator never reviewed.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class OpenAICompatibleBaseAddressTests
 {
     [Test]

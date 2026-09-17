@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
+[Category(TestCategories.Integration)]
 public sealed class RetrievalEvalHarnessMetricTests : IDisposable
 {
     private const int K = 5;

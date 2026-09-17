@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Verifies the login coordinator's status lifecycle: start exposes the authorize URL and a
 ///     pending status, completion flips the status to succeeded, and a second start supersedes the first.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CodexLoginCoordinatorTests
 {
     [Test]

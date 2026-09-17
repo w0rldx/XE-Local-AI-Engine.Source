@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class RouteCoexistenceTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

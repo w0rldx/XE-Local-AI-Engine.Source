@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 using System.Xml.Linq;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class RuntimeLicensePackagingTests
 {
     [Test]

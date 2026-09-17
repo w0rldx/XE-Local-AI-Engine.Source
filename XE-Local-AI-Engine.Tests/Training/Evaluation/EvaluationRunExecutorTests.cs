@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Training.Runs;
 ///     generation would otherwise score the model against tools the dataset never demonstrated. Sample trajectories
 ///     come from the run-owned immutable corpus, so a later live review edit cannot change an evaluation already queued.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EvaluationRunExecutorTests : IDisposable
 {
     private static readonly Guid DatasetId = Guid.NewGuid();

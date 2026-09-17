@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     item, so what has to hold here is that every mechanism already built for items reaches it: the leaf set, the
 ///     item-set hash, the cascade, and the reorder that must not disturb any of them.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkNiahStoreTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

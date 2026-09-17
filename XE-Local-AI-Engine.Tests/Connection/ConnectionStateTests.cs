@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Connection;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ConnectionStateTests
 {
     [Test]

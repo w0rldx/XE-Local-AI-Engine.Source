@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     desktop-mode gate, browser-command builder, loopback URL resolver, the signal→StopApplication seam, and the
 ///     non-fatal browser-launch path. No real process, signal, or network is exercised.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DesktopLaunchTests
 {
     [Test]

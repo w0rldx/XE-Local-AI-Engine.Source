@@ -10,6 +10,7 @@ using Infra = GgufStoreTestInfrastructure;
 ///     it drafts for — a 0.4 GB "Q8_0 gemma-4" next to the 7.8 GB one. A rescan must give the drafter the marked quant
 ///     identity and the <see cref="GgufRole.Draft" /> role, without disturbing any base quant.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufRegistryDraftModelTests
 {
     [Test]

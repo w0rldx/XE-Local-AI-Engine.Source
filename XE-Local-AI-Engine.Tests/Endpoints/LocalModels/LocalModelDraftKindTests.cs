@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     0.4 GB twin of the 7.8 GB model it drafts for. It must classify as <see cref="ModelKind.Draft" /> (the React
 ///     picker offers <c>kind === "Chat"</c> only), while the real model beside it stays Chat.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelDraftKindTests
 {
     [Test]

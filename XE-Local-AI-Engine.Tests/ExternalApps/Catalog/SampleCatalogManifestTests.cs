@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The fixture is never shipped and never produced by the converter, so it also pins the C# side of the
 ///     canonical fingerprint: an edit that forgets to re-stamp <c>manifestSha256</c> fails here.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed partial class SampleCatalogManifestTests
 {
     private static readonly ExternalAppCatalogValidationResult Validation = ExternalAppCatalogValidator.Validate(SampleCatalogManifest.RawJson);

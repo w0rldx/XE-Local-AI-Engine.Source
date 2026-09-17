@@ -14,6 +14,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     type), so one type's readiness failure cannot disable the type that works — and a legacy backend-only entry
 ///     written before this keying is ignored and dropped from the file on the first read.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerLaunchFallbackStoreTests
 {
     private const string StateFileName = "llama-launch-fallback.json";

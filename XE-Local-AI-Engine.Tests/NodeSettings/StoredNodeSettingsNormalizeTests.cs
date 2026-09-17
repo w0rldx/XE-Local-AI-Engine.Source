@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     null so the accessor re-seeds it), trim/validate strings, gate the recommended-tag format, and — crucially — let
 ///     an old <c>node-settings.json</c> missing all the new fields deserialize to defaults without throwing.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class StoredNodeSettingsNormalizeTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-stored-settings-normalize-tests", Guid.NewGuid().ToString("N"));

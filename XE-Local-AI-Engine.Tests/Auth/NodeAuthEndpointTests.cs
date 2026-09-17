@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class NodeAuthEndpointTests
 {
     private const string Email = "admin@example.test";

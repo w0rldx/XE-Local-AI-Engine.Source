@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     verbatim (covered by <see cref="GoldenConversationServiceTests" />); these tests assert the harvest-specific
 ///     guards.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GoldenConversationServiceHarvestTests
 {
     private static readonly Guid AgentId = Guid.NewGuid();

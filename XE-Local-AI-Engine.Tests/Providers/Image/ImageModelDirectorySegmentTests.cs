@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         deleting either model removes the file the other still points at.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelDirectorySegmentTests
 {
     [Test]

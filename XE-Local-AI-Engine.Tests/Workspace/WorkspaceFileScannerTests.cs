@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         which need the privilege to plant a link in the first place.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WorkspaceFileScannerTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-scanner-" + Guid.NewGuid().ToString("N"));

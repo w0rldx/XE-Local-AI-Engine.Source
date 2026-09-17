@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class LocalChatHubAuthorizationIntegrationTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

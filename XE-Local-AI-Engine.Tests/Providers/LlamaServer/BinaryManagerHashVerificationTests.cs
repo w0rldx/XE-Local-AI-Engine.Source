@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Binary hash verification: a SHA256 mismatch is re-downloaded exactly once and then surfaced as a sanitized
 ///     failure; a cached binary is reused offline with no download. All HTTP is faked — no network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BinaryManagerHashVerificationTests
 {
     [Test]

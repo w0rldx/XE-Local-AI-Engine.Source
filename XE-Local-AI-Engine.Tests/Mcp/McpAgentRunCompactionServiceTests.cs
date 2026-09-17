@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 // No parallelism guard: fake store, fake clock. It emits on the process-global XE.Node meter through
 // McpAgentRunMetrics, which is covered by the bare [NotInParallel] the capture suites already carry.
+[Category(TestCategories.Unit)]
 public sealed class McpAgentRunCompactionServiceTests
 {
     [Test]

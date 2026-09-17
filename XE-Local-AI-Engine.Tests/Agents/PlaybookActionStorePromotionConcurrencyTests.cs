@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     validated snapshot (Version + Suggested state), and the enabled-action cap is re-checked inside the same
 ///     transaction as the write so two promotes cannot both slip past a stale below-cap count.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class PlaybookActionStorePromotionConcurrencyTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

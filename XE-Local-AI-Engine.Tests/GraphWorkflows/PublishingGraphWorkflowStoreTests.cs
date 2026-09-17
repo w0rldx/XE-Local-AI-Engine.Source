@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     below is the point of the design rather than decoration: a mutation added to the store interface fails this
 ///     file until it is announced.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class PublishingGraphWorkflowStoreTests
 {
     private const long Sequence = 12;

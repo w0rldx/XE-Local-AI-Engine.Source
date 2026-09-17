@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     serving every connection, declarations rather than probes, and a lifecycle split where the operations the node
 ///     genuinely cannot perform refuse LOUDLY while the ones a background service calls generically stay inert.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalOpenAiModelProviderTests
 {
     [Test]

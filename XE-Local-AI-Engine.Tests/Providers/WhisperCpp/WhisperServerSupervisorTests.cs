@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     idle reaper and the busy eject). Every wait here is a gate the test owns or a clock the test moves; nothing
 ///     sleeps, and nothing spawns a real process.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperServerSupervisorTests
 {
     [Test]

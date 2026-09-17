@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     exists because the alternative is an unbounded allocation, a path escape, or a string that renders differently
 ///     from what it stores.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SkillImportArchiveGuardTests
 {
     [Test]

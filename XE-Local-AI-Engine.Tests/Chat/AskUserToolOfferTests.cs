@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     call it. Both halves live in one type so they cannot drift, and these tests hold the pure list/spec rewrites; the
 ///     seam that decides WHEN to withdraw is pinned in <c>NodeChatStreamServiceTests</c> and <c>WorkSessionStepLoopTests</c>.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AskUserToolOfferTests
 {
     [Test]

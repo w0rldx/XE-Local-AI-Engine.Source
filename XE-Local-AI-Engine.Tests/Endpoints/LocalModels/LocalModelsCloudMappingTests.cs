@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     distinct group alongside the node-local Ollama models, and the cloud entries advertise the Codex provider's
 ///     declared capability matrix rather than an Ollama classification.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelsCloudMappingTests
 {
     [Test]

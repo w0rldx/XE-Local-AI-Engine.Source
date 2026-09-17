@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     mints carries the integrator's principal as the authoritative claim with the credential prefix as attribution
 ///     only (ruling R4-6).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationApiKeyAuthenticationHandlerTests
 {
     [ClassDataSource<IntegrationApiKeyHostFixture>(Shared = SharedType.PerClass)]

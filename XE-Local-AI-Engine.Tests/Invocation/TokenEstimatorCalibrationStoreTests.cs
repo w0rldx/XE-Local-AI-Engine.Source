@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="TokenEstimatorCalibrationStore.EstimateSafetyFactor" /> mitigates the char heuristic's optimism for a
 ///     model nothing is known about; this channel is what makes the correction specific once rounds have run.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TokenEstimatorCalibrationStoreTests
 {
     private const string Model = "qwen3.8-27b:Q4_K_M";

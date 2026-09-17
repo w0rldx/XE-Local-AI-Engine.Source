@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     their events with it. <c>ConversationFootprintPurgeCoverageTests</c> is the drift guard for the table list; this
 ///     is the behavioural half.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationConversationPurgeTests
 {
     [Test]

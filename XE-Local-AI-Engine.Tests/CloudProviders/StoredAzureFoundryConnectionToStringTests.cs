@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Covers the redacting <c>PrintMembers</c> on both records: a secret header value and the API
 ///     key never appear in <c>ToString</c>, while a non-secret header value still round-trips.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class StoredAzureFoundryConnectionToStringTests
 {
     [Test]

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     rollup) on an upgrade and on a fresh migrate-to-head, drops both on rollback without disturbing the columns that
 ///     preceded them, and leaves no model/snapshot drift.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
 {
     private const string ReadinessColumn = "model_readiness_ms";

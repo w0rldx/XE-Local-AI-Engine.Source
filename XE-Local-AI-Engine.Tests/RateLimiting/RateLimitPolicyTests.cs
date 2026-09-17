@@ -57,6 +57,7 @@ public sealed class RateLimitedHostFixture : IAsyncInitializer, IAsyncDisposable
 ///     </para>
 /// </summary>
 [NotInParallel("RateLimitEnforcement")]
+[Category(TestCategories.Integration)]
 public sealed class RateLimitPolicyTests
 {
     // The production AuthPolicy permit limit (ConfigureServices): 10 requests per fixed 1-minute window per peer.

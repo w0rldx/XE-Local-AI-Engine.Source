@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     context window from the server's <c>/props</c> endpoint (<c>default_generation_settings.n_ctx</c>), degrading to
 ///     <see langword="null" /> on any unavailability rather than throwing.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerHealthProbePropsTests
 {
     private static readonly Uri BaseAddress = new("http://127.0.0.1:18100/v1");

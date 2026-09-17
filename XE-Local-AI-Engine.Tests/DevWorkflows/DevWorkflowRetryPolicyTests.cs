@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The fix loop's write against a store that is losing races, driven directly: the harness commits, and a lost
 ///     race is the one thing it cannot stage.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevWorkflowRetryPolicyTests
 {
     private const string FixLoop = """

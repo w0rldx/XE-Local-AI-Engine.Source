@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // The trace id logged for an unhandled exception must be the same W3C id the client receives in
 // ProblemDetails.traceId, so an operator can join a client-reported trace id straight to the server log line. The
 // Kestrel connection id (HttpContext.TraceIdentifier) is a distinct value and is kept only under RequestId.
+[Category(TestCategories.Unit)]
 public sealed class DefaultExceptionHandlerTests
 {
     [Test]

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (NVIDIA→CUDA on Windows / →Vulkan on Linux, AMD/Intel→Vulkan, none→CPU) plus pinned-vs-upgrade asset
 ///     resolution. No network and no real GPU probe — the vendor probe is faked.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BinaryManagerVariantSelectionTests
 {
     [Test]

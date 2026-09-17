@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     session + pending state without token material, logout clears the session, and all routes reject callers
 ///     without an operator token.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CodexEndpointTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

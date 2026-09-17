@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class InvocationAgentFactoryTests
 {
     // The stable half of ReasoningBudgetSkipLog's message: the factory logs other lines per call, so assertions on

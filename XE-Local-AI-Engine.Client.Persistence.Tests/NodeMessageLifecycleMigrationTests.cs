@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class NodeMessageLifecycleMigrationTests : IDisposable
 {
     private const string InitialMigrationId = "20260419152305_InitialNodeChatSchema";

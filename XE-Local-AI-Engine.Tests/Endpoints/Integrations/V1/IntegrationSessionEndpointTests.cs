@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     their own node is not acting as an integrator — so an unknown id is a plain 404 rather than the external
 ///     family's masked one, and every row is reachable.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationSessionEndpointTests
 {
     private const string SessionsRoute = "/api/local/v1/integrations/sessions";

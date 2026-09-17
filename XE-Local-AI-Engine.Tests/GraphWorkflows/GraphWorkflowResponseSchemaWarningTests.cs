@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     resolver, which has no real form outside a fully composed node. The PARSER's own warning set is unchanged and
 ///     stays pinned in <see cref="GraphWorkflowGraphTests" />.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class GraphWorkflowResponseSchemaWarningTests
 {
     private const string LocalModel = "qwen3:8b";

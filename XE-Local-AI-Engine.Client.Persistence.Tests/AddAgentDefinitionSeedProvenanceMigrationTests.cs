@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     The columns themselves are asserted at head by <c>AddAgentDefinitionsMigrationTests</c>; this suite owns the
 ///     index semantics, which nothing else pins.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddAgentDefinitionSeedProvenanceMigrationTests
 {
     private const string ThisMigrationId = "20260602195614_AddAgentDefinitionSeedProvenance";

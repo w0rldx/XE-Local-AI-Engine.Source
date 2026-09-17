@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     <c>changes.patch</c> presence (never <c>changed-files.json</c>), folder-relative logging, and host-path redaction.
 ///     The git baseline and the host folder are seeded with the SAME pre-image so a generated patch applies cleanly.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodePatchApplyServiceTests : IDisposable
 {
     private static readonly string[] PatchDiffArgs =

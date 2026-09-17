@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     records the two launch knobs that change the number most (<c>flash_attn</c>, the V-cache type). Without the
 ///     binding a benchmark is an unattributable number that cannot be compared to another run.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddBenchmarkProfileRevisionBindingMigrationTests
 {
     [Test]

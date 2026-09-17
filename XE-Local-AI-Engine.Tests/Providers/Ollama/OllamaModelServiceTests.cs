@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>models/{modelName}/unload</c> endpoint) against the fake Ollama. The eviction must target the REQUESTED model,
 ///     not the shared client's <c>SelectedModel</c>.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class OllamaModelServiceTests
 {
     [Test]

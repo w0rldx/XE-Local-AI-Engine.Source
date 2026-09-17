@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     seeded rubric + camelCase input turns, and stages each fresh candidate through
 ///     <see cref="IGoldenConversationService.CreateHarvestedAsync" />. Counts split across created / duplicate / skipped.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GoldenHarvestServiceTests
 {
     private const string RubricSeedPrefix = "The response should be consistent with this operator-approved answer:";

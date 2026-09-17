@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         other caller of the gateway got.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RunPythonToolHandlerTests
 {
     private const string ValidArguments = """{"code":"print(2 + 2)"}""";

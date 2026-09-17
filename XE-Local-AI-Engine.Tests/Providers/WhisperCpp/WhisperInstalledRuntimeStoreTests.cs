@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     a corrupt primary degrades to a tombstone carrying the operator's selection rather than to "nothing installed",
 ///     which would let resolution hand back a prebuilt that contradicts the UI.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperInstalledRuntimeStoreTests
 {
     [Test]

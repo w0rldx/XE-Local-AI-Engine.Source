@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     These tests cover the v1-core reader tiers (plaintext with legacy-encoding detection, PDF, and DOCX) and the
 ///     no-throw contract for unsupported and corrupt input. Fixtures are built in-process so no binary blobs ship.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DocumentTextExtractorTests
 {
     private static DocumentTextExtractor CreateExtractor()

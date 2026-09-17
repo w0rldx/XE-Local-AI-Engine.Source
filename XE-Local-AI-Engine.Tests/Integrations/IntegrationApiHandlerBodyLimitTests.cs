@@ -31,6 +31,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         raise verbatim.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationApiHandlerBodyLimitTests
 {
     private const int Cap = 512;

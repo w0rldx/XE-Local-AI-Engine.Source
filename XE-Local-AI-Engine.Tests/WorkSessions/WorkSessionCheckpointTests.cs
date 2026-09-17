@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the owned conversation's raw history — and every one of its no-op outcomes is non-fatal, because a node with no
 ///     installed local chat model still has to be able to checkpoint and be resumed.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class WorkSessionCheckpointTests
 {
     [Test]

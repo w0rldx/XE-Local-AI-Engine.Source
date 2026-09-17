@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         without reading an exception out of the outcome.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DockerDaemonProbeTests
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 9, day: 5, hour: 12, minute: 0, second: 0, TimeSpan.Zero);

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the only thing standing between an authored manifest and a container the engine creates, so every rule needs a
 ///     negative case — a rule that is never exercised is a rule the next slice silently relies on.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppCatalogValidatorTests
 {
     private const string ApplicationsKey = "applications";

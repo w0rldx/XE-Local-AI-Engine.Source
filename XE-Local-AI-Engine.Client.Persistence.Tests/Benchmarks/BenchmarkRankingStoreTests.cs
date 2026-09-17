@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     Ranking inside one project: an operator override always ranks, a judge score ranks only while its judging is in
 ///     the current cohort, and the rank itself is a property of the project rather than of the page it is read on.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkRankingStoreTests : IDisposable
 {
     private const string HashA = "0000000000000000000000000000000000000000000000000000000000000001";

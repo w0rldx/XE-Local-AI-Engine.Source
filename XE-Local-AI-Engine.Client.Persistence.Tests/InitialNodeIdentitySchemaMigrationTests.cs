@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     (<c>__EFMigrationsHistory_Identity</c>) from the chat context, and nothing else in this suite had ever exercised
 ///     that context, so a break in it would have surfaced only at first launch.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class InitialNodeIdentitySchemaMigrationTests
 {
     [Test]

@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (the pre-existing header-free selective path backing the quant picker) is covered by
 ///     <c>GgufDiscoveryTests.GgufDiscovery_ListRepoFiles_SkipsHeaderReads_AndExcludesProjectors</c>.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufDiscoveryPerfTests
 {
     private const string RepoId = "bartowski/Many-Quant-GGUF";

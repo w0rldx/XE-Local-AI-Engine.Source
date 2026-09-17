@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     that gates the cloud withhold notice, the inlined attachment text, the per-turn image budget, and the
 ///     best-effort knowledge grounding.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ChatTurnContextBuilderTests
 {
     [Test]

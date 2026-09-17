@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     rather than reaching the coordinator, and a null selection is a VALID request that clears the override rather
 ///     than a missing field.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionModelEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

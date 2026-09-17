@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     proves exclusions, symlink-escape rejection, the per-folder byte budget, the git baseline, and the read-only
 ///     mount copy fallback.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     content. The columns are pinned as an exact set at this point in the chain, so a later migration that quietly
 ///     re-shapes the base tables fails here rather than in whichever suite happens to read them.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class InitialNodeChatSchemaMigrationTests
 {
     private const string ThisMigrationId = "20260419152305_InitialNodeChatSchema";

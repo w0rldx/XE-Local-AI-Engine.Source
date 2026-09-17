@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     ADR 0008 R6-1 withdrew the caller-managed read-only-tools rule once the session began persisting and replaying
 ///     its tool history.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationTriggerServiceTests
 {
     [Test]

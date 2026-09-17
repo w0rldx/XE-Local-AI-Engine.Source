@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class FileDeadLetterStoreTests : IDisposable
 {
     private readonly string _queuePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

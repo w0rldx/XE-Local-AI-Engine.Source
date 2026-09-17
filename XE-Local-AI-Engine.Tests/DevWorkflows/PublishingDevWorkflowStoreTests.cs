@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     below is the point of the design rather than decoration: a mutation added to the store interface fails this
 ///     file until it is announced.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class PublishingDevWorkflowStoreTests
 {
     private const long Sequence = 12;
@@ -264,6 +265,7 @@ public sealed class PublishingDevWorkflowStoreTests
             _ = await harness.Store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked)).ConfigureAwait(false);
             if (telemetry.Calls < 2)
             {
+                // real-timer: the pool slot returns from a background finally, after the gate opens rather than with it.
                 await Task.Delay(25).ConfigureAwait(false);
             }
         }

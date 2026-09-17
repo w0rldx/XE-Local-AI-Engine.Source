@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // terminal message row. These tests pin the pump's field mapping onto that request and that the result reflects the
 // persisted winning status; the atomic write itself (agent id, winning status, idempotency) is covered by the
 // persistence/recovery integration tests.
+[Category(TestCategories.Unit)]
 public sealed class NodeChatInvocationPumpRunEnvelopeTests
 {
     [Test]

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         the mapping directly would prove the mapping and nothing about the wire it is reached over.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class FakeDockerDaemonRouteTests
 {
     private const string Image = "busybox@sha256:0000000000000000000000000000000000000000000000000000000000000001";

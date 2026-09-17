@@ -29,6 +29,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///         it times out — which is the failure a live reload previously reproduced.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AskUserColdLoadResumeTests
 {
     [Test]

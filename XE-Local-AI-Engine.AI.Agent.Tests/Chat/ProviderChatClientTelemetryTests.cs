@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     callers resolve their own node-local client precisely so conversation content does not leave the node, and a
 ///     span carrying prompts would cross the same boundary from the other side.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ProviderChatClientTelemetryTests
 {
     private const string ModelId = "wrapper-test-model-71f0";

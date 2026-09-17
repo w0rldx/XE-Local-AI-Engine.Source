@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         nothing about the shape the SDK actually raises.
 ///     </para>
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
 {
     // The verbatim body a llama-server returns when a pooled embedding input exceeds the physical batch size. This is

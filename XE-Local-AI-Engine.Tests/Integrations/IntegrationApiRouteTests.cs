@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     applied at the route — a key scoped to one trigger cannot read OR cancel its own principal's executions under
 ///     another.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationApiRouteTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

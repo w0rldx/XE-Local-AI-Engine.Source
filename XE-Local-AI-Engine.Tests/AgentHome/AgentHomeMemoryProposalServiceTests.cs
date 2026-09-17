@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Memory-proposal export coverage: schema validation, secret scanning, and collector behaviour.
 ///     No Docker, no real sandbox — the service reads host-side JSONL files written by the agent (or test fixtures).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 {
     private readonly List<string> _tempDirs = [];

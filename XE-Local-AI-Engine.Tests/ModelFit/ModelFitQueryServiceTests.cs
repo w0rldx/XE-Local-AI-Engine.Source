@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the local model-fit advisor replaced the containerized runner; the constructor's two-store signature is the
 ///     structural proof of the no-runner invariant.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFitQueryServiceTests
 {
     private const string ApprovedImageId = "llmfit-recommender-0-9-30";

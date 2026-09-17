@@ -21,6 +21,7 @@ using OS = TUnit.Core.Enums.OS;
 /// </remarks>
 [RunOn(OS.Linux)]
 [UnsupportedOSPlatform("windows")]
+[Category(TestCategories.Unit)]
 public sealed class WhisperAdoptionLinkPolicyTests
 {
     [Test]

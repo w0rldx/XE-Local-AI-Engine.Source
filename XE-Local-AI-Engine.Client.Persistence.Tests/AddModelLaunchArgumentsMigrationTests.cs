@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     Verifies the <c>AddModelLaunchArguments</c> migration applies cleanly to the latest schema and creates the
 ///     <c>model_launch_arguments</c> table with its mapped columns and the <c>NOCASE</c> name key.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddModelLaunchArgumentsMigrationTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

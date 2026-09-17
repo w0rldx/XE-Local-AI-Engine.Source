@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and classified a genuine OOM as Other, silently disabling the down-tier. Failure output sits at the END of a
 ///     failed startup at either verbosity, which is what the window now keeps.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorStartupCaptureWindowTests
 {
     // Verbatim from a real CUDA allocation failure.

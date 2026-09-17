@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     fake — no real processes and no real file I/O (the path filter is pure string normalization). Mirrors
 ///     <c>StaleLlamaServerReaperTests</c>.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class StaleImageServerReaperTests
 {
     private static readonly string BinariesRoot = Path.Combine(Path.GetTempPath(), "xe-sd-reaper-test", "stable-diffusion.cpp");

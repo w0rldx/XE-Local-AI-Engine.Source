@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ComputeOptionsValidatorTests
 {
     private readonly ComputeOptionsValidator _validator = new();

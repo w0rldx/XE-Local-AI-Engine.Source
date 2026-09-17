@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         and is not claimed.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class FakeDockerNetworkAndExecRouteTests
 {
     private const string Image = "busybox@sha256:0000000000000000000000000000000000000000000000000000000000000001";

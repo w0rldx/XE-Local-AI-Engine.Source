@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class RuntimePackageConfigHashTests
 {
     // Frozen golden: the digest of the no-playbook / empty-playbook config (version 7, prompt "You are the bound

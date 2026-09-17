@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ModelRouteNameTests
 {
     [Test]

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     pause/tool slice add none. That is why the column lists below name the columns this slice never reads — they
 ///     are the thing standing between a later slice and a second migration.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddGraphWorkflowsMigrationTests
 {
     private const string PreviousMigrationId = "20260904121650_AddAiTrendsWave";

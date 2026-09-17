@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     rule. The only equality the runtime guarantees is agreement with <c>EdgeState</c>; agreement with
 ///     <c>Admission</c> is false by construction, because admission is a question about a TARGET's inbound edges.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevWorkflowRouteTests
 {
     /// <summary>The four statuses a route may be taken from. The other five are refused — see the unreachability test.</summary>

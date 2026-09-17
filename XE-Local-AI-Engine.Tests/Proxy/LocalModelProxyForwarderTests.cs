@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     llama.cpp-only and refuses any unknown/cloud model name with a 404 (so an external tool can never reach cloud
 ///     credentials), and that a busy runtime is a retryable 503 rather than a hang.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelProxyForwarderTests
 {
     private const string InstalledModel = "test-model";

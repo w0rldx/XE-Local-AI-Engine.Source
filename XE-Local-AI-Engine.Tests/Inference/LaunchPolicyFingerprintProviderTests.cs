@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
 {
     // One cache per provider: several tests assert an absolute full-hash count, so a provider must start cold.

@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         breaking every Coder tool.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class SandboxProviderRegistrationTests
 {
     [Test]

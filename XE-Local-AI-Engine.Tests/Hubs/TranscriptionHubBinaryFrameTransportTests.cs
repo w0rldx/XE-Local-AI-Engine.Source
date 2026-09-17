@@ -34,6 +34,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         side fails <c>safeParse</c>, and a failed parse renders an empty transcript with no error anywhere.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionHubBinaryFrameTransportTests
 {
     private const string ApiPrefix = "/api/local/v1";

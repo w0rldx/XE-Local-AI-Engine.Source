@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentRestartRecoveryTests
 {
     [Test]

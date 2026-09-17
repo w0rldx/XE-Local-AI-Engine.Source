@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Schema compiler: the emitted schema carries no GBNF-breaking length/range keyword, a Fixed tool compiles to a
 ///     closed empty object, and a Parameterized tool exposes its declared properties + required set.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CustomToolSchemaCompilerTests
 {
     [Test]

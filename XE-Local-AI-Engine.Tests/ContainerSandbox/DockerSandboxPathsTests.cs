@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         container root, and every command runs somewhere with no repository in it.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DockerSandboxPathsTests
 {
     [Test]

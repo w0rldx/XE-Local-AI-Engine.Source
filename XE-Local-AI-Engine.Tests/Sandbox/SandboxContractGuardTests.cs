@@ -4,6 +4,7 @@ using System.Reflection;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class SandboxContractGuardTests
 {
     private const string ContractNamespace = "XE_Local_AI_Engine.Client.Services.Sandbox";

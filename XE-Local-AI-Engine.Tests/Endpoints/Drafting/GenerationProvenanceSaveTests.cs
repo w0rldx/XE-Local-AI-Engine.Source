@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         </item>
 ///     </list>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GenerationProvenanceSaveTests
 {
     private const string AgentsRoute = "/api/local/v1/agents";

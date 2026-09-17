@@ -13,6 +13,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     install downloads roughly 7.5 GB of CUDA wheels, so every transition here — including the adopt rollback that
 ///     protects a working runtime from a failed reprovision — has to be exercisable without that.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingRuntimeServiceTests
 {
     [Test]

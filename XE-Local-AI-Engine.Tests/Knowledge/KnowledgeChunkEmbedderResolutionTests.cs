@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="ILocalModelProvider.CreateEmbeddingGenerator" /> is asserted, and the graceful content-free failure is
 ///     preserved when the generator itself fails.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeChunkEmbedderResolutionTests
 {
     private const int Dimensions = 768;

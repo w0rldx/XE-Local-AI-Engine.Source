@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     <see cref="AgentHomeManifestService" /> (temp host root) and the <see cref="FakeSandboxRuntimeProvider" />
 ///     end-to-end, with a fake resolver/identity injected through a real scope factory. No Docker, no Ollama.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentHomeServiceTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);

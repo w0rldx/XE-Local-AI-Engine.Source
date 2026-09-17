@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>feature-development-v1</c> shape puts a human gate before its decomposition and a join before its
 ///     verification, so this is the difference between those two nodes being handed the plan and being handed nothing.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowUpstreamArtifactTests
 {
     private const string SeededAgentId = "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b";

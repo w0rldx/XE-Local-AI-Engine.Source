@@ -20,6 +20,7 @@ using Harness = IntegrationCoordinatorHarness;
 ///         id. Chat reads the conversation first and persists second, so its read never contains the current turn.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationContinuationTests
 {
     private const string SeedText = Harness.SeedText;

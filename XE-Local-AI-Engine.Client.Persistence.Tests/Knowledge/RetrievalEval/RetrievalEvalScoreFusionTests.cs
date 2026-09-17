@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///         </item>
 ///     </list>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class RetrievalEvalScoreFusionTests : IDisposable
 {
     private const int K = 5;

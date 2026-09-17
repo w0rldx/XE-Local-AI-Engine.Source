@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and falls back to the agent role's choice when it is not configured, which is what makes the seam a runtime
 ///     no-op on a node that has never set the new key.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxProviderSelectionTests
 {
     [Test]

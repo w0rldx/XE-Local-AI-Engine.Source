@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class IntegrationStreamEventTypesTests
 {
     [Test]

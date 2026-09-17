@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     action, the new <see cref="PlaybookActionSource.Extracted" /> provenance, the per-agent
 ///     <c>DefaultTemporaryChat</c> flag, and the metadata-only <c>AgentExecutionLog</c>.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
 {
     private const string Instructions = "You are a careful engineering agent. Follow the repository conventions exactly.";

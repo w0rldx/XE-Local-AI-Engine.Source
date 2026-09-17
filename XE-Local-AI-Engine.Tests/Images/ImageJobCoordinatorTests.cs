@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Behavioural tests for the image-job coordinator: queued persistence, serialize-to-one-running, both cancel modes,
 ///     the persist-before-succeed ordering, and the hub's late-subscriber replay.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageJobCoordinatorTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     uv is a managed binary acquired by digest, so a served archive that does not match the pin must be discarded
 ///     rather than unpacked. These run entirely against a stubbed handler — nothing reaches GitHub.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class UvBinaryAcquirerTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-uv-" + Guid.NewGuid().ToString("N"));

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class EmbeddingPlaybookRetrievalRankerTests
 {
     private const string EmbeddingModel = "test-embed";

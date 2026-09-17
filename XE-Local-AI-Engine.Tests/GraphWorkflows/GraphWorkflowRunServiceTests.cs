@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The run command surface over the real store and a real database. Only the dispatcher signal is faked, and only
 ///     so a test can see it — there is no dispatcher in this slice, so a started run legitimately sits <c>Pending</c>.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowRunServiceTests
 {
     [ClassDataSource<GraphWorkflowHostFixture>(Shared = SharedType.PerClass)]

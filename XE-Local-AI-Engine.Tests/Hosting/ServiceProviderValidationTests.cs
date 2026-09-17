@@ -35,6 +35,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 /// </remarks>
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class ServiceProviderValidationTests
 {
     [Test]

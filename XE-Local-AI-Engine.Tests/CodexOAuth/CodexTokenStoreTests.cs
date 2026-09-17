@@ -15,6 +15,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     Verifies the ported <see cref="CodexTokenStore" /> persists the OAuth session encrypted at rest, applies
 ///     user-only file permissions, clears on logout, and fails closed when the stored payload is tampered.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CodexTokenStoreTests : IDisposable
 {
     private const string TokensFileName = "codex-oauth-tokens.enc";

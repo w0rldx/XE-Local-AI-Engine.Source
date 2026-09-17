@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     exercised with multiple handles in-process (the exclusive open is enforced by the OS across handles, same as it is
 ///     across processes), so no second process is needed.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SingleInstanceLeaseTests
 {
     [Test]

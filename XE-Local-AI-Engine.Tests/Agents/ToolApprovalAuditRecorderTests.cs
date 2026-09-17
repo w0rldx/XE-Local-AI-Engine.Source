@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     counter capture reads a process-global meter.
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class ToolApprovalAuditRecorderTests
 {
     [Test]

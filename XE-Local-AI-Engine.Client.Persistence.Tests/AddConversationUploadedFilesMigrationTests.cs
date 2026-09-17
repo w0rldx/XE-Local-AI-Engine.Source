@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     the load-bearing part: deleting a conversation must take its uploaded-file rows with it, or the purge leaves
 ///     orphaned rows pointing at blobs nothing will ever clean up.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddConversationUploadedFilesMigrationTests
 {
     [Test]

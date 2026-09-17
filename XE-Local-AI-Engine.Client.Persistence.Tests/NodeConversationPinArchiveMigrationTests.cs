@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
 {
     private const string PrePinArchiveMigrationId = "20260526115619_AddNodeChatOrigin";

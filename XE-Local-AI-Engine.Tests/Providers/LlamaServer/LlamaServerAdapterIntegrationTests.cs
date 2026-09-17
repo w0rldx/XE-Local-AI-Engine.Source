@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>http://127.0.0.1:18100/v1</c> / <c>:18101/v1</c>) to execute it. The chat process must be launched with
 ///     <c>--jinja</c> and the embedding process with a non-<c>none</c> pooling type.
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class LlamaServerAdapterIntegrationTests
 {
     [Test]

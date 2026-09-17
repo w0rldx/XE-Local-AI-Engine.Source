@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The single writer of every node-run document, pinned byte for byte. These are the bytes edge conditions route
 ///     on, so a shape that drifts here is a run that takes the wrong branch rather than a test that reads oddly.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GraphWorkflowDocumentTests
 {
     /// <summary>Comfortably above anything these documents produce, so only the cap test is about the cap.</summary>

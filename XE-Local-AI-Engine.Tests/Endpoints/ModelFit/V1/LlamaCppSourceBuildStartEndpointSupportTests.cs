@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The two endpoints returned byte-for-byte these strings before the duplicated switches were folded together, and
 ///     the build-kind label is the only wording that may differ between them.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaCppSourceBuildStartEndpointSupportTests
 {
     [Test]

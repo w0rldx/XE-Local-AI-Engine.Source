@@ -23,6 +23,7 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     runner puts these two namespaces in different ones — so the sentinel directory carries the process id too.
 /// </remarks>
 [NotInParallel(TranscriptionUploadStreamingTests.FrameworkTempSentinelKey)]
+[Category(TestCategories.Integration)]
 public sealed class ConversationUploadEndpointTests
 {
     /// <summary>

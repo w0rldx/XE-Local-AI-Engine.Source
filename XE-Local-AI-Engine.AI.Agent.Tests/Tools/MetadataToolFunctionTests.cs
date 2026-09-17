@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class MetadataToolFunctionTests
 {
     private const string Schema = """{"type":"object","properties":{"goal":{"type":"string"}}}""";

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     rather than against a mock: every criterion here is a property of the produced directory, so a test that only
 ///     checked the service's return value would prove nothing about it.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentTemplateServiceTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-template-" + Guid.NewGuid().ToString("N"));

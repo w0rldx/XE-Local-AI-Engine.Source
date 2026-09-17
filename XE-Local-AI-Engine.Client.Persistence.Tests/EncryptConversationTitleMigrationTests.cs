@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     <c>NodeChatTitleEncryptionBackfillService</c> re-derives them from each conversation's first user message at the
 ///     next startup. The conversation itself must survive; only its title is cleared.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class EncryptConversationTitleMigrationTests
 {
     private const string PreEncryptionMigrationId = "20260608093959_AddMessageAgentDefinitionId";

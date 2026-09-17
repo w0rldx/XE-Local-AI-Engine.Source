@@ -27,6 +27,7 @@ using Extensions = Microsoft.Extensions.Hosting.Extensions;
 /// accidental upward reference (a leaf provider reaching back into the host,
 /// application, or persistence layer) fails the build instead of shipping.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LayerDependencyTests
 {
     // Namespace roots used as forbidden dependency targets. NetArchTest matches

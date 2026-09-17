@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     schema uses, the enums stored as text, and the two mappings the store's correctness rests on — the unique
 ///     <c>(instance_id, sequence)</c> index and <c>version</c> as a concurrency token.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppEntityConfigurationTests
 {
     [Test]

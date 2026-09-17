@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Covers the outbound custom-header pipeline policy: every resolved header is set on the request, and a reserved
 ///     name is defensively skipped case-insensitively even if it slipped past save-time validation.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CustomHeaderPipelinePolicyTests
 {
     [Test]

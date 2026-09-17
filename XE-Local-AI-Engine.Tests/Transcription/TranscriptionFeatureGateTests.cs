@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     document is identical on every node, and a disabled node answers 404 from request-path middleware placed ahead
 ///     of local API security.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionFeatureGateTests
 {
     private const string ApiPrefix = "/api/local/v1";

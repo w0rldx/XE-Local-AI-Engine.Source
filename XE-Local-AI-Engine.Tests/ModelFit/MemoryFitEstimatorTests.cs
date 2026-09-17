@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the budget, lowers the KV term under KV-cache quant, and degrades to a RAM/CPU budget when VRAM is unknown. No
 ///     I/O — every input is supplied directly.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class MemoryFitEstimatorTests
 {
     private const long Gb = 1024L * 1024 * 1024;

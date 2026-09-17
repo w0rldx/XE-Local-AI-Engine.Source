@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     to impersonate each other: the node operator (JWT, drives the key-management endpoints) and an external MCP
 ///     client (bearer API key, drives the MCP endpoint). Each is rejected on the other's surface.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class McpServerInboundAuthTests
 {
     private static readonly string[] AgenticAdminToolNames =

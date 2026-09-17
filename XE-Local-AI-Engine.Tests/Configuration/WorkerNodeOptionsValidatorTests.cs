@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class WorkerNodeOptionsValidatorTests
 {
     private readonly WorkerNodeOptionsValidator _validator = new();

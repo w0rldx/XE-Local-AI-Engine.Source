@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class SampleValidationPipelineTests
 {
     private const string ToolSchema = """{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}""";

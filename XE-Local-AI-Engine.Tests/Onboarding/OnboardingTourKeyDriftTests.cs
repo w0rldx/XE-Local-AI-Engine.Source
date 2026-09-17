@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Guards the three tutorial registry keys against the default browser fixture. A drift would make an optional
 ///     invitation appear over unrelated browser tests and would stop the fixture from representing a returning user.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class OnboardingTourKeyDriftTests
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(5);

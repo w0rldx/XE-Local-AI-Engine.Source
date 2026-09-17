@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     decrypts content on read (proving EF decryption); the thumbs-up scan reads the plaintext feedback columns via raw
 ///     ADO. FK enforcement is on (EnsureCreated) → seed agent → conversation → messages → feedback.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GoldenHarvestSourceStoreTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

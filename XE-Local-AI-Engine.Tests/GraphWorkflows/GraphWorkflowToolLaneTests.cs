@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         one run's.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowToolLaneTests
 {
     /// <summary>

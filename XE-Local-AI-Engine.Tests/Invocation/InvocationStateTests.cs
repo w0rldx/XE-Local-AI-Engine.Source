@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the class but not to the clone travels as null on whichever path snapshots first, which is how the persisted
 ///     value silently becomes null for a turn that did dispatch.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InvocationStateTests
 {
     [Test]

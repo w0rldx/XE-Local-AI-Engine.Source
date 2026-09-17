@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         fixed number of pairwise comparisons that covers it.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DockerSandboxMountBrokerTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 7, day: 30, hour: 12, minute: 0, second: 0, TimeSpan.Zero);

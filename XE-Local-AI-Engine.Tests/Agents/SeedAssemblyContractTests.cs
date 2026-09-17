@@ -30,6 +30,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     no turn inherits the previous one's history.
 ///     A failure here means the three shapes have diverged; fix the diverged site or move this pin deliberately.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SeedAssemblyContractTests
 {
     private const string Instructions = "You are the worker. Follow the playbook exactly.";

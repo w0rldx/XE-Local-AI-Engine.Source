@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         scripted prompt must not be shared with another class's runs.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CanvasWorkflowImportRunTests
 {
     /// <summary>The scripted fragment: the first agent's instructions, which is what its seed turn carries.</summary>

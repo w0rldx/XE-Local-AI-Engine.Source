@@ -20,6 +20,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///         unless a test says so.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentMountBrokerTests : IDisposable
 {
     private static readonly DevelopmentCommandProfile GenericProfile =

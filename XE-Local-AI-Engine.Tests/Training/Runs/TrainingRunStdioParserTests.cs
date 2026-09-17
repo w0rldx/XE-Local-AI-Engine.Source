@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     merged into one. These pin that the parser reads protocol out of that noise and never mistakes noise for
 ///     protocol — a banner misread as an event would reset the inactivity watchdog on a wedged run.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingRunStdioParserTests
 {
     [Test]

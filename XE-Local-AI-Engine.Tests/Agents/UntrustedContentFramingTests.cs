@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     marker-REPLAY gap — one attachment's model-visible closing marker cannot be embedded inside a later attachment to
 ///     forge its fence close.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class UntrustedContentFramingTests
 {
     private const string Seed = "server-secret-derived-seed-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

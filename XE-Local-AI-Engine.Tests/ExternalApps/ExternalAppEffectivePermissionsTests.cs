@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     union hides the two widenings at the bottom of this file: a capability added to a service whose sibling
 ///     already had it, and a second service becoming writable.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppEffectivePermissionsTests
 {
     [Test]

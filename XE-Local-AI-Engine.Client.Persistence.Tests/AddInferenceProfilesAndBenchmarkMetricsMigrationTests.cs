@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     part: one profile per (machine, model, role, backend), so a second explore on the same box replays or replaces
 ///     the existing profile instead of silently accumulating rivals that spawn would then pick between arbitrarily.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests
 {
     private const string ThisMigrationId = "20260626234754_AddInferenceProfilesAndBenchmarkMetrics";

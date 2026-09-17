@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The command surface: what a caller can ask of a run, what it is refused, and what a repeat of the same request
 ///     does.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowRunServiceTests
 {
     private const string GateOnly = """

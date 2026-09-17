@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     The startup app-update check runs exactly one check (delegating to <see cref="IAppUpdateService" />) and never
 ///     crashes startup when the service throws — it degrades to a logged warning.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AppUpdateCheckServiceTests
 {
     [Test]

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     instance root that only surfaced at the first install would look like a storage failure on the instance rather
 ///     than the configuration error it is.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppsOptionsValidatorTests
 {
     [Test]

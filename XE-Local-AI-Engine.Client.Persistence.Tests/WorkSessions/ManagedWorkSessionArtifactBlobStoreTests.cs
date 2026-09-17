@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
+[Category(TestCategories.Unit)]
 public sealed class ManagedWorkSessionArtifactBlobStoreTests : IDisposable
 {
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();

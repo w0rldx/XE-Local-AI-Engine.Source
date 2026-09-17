@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     reasoning verbatim, and its own knowledge-base reads can spend 16k tokens on a single document — on 2026-08-24 a
 ///     27B model at a 65,536-token window went over at step 5. The bound folds the older turns before the send.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ConversationStepContextBoundTests
 {
     [Test]

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The MCP options validator rejects a non-positive per-call tool timeout (alongside the existing connect
 ///     timeout and loopback-host checks), so a misconfiguration fails fast at startup.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class McpOptionsValidatorTests
 {
     [Test]

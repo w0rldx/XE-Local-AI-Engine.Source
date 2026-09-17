@@ -5,6 +5,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     suites that use a probe; this is the path that returns no probe at all, so nothing else is left holding the
 ///     directory and the key holder it had already created.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class MigrationSchemaProbeTests
 {
     [Test]

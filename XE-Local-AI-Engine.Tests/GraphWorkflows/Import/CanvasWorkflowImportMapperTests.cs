@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         out as a document, and whatever could not be carried across says so in <c>Reasons</c> instead.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CanvasWorkflowImportMapperTests
 {
     /// <summary>

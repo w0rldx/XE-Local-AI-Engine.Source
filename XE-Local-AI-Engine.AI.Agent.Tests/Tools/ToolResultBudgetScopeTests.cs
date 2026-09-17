@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     are built, so a run that needs a smaller ceiling — a work-session step, whose knowledge-base reads return up to
 ///     50,000 characters each — can only get one ambiently. Tighten-only, so no run can raise the node's ceiling.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ToolResultBudgetScopeTests
 {
     private const int NodeCeiling = 65_536;

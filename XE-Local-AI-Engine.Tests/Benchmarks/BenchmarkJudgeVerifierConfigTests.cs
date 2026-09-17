@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Defines what verifier configuration a policy may carry. Execution behavior is covered by
 ///     <see cref="BenchmarkJudgeVerifiersTests" />; both go through the same parser, which is the point.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkJudgeVerifierConfigTests
 {
     [Test]

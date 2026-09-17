@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     leaving it in place while believing it gone — so this pins BOTH ends: present at the migration before it, absent
 ///     at the head of the chain.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DropApprovedUtilityImagesMigrationTests
 {
     private const string PriorMigrationId = "20260714161306_AddRunEnvelopeDurabilityColumns";

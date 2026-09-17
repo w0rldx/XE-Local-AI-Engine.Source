@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowServiceRegistrationTests
 {
     [Test]

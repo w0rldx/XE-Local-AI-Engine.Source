@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     under test here — the service behind it is stubbed — so the assertions are about status codes, the paging
 ///     envelope, and who is allowed to call at all.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionSessionEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

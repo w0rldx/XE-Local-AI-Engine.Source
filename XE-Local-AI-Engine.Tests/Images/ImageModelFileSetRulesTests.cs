@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The file-set rules mirror what the launch-argument builder can emit: exactly one file per role, and a diffusion
 ///     part is mandatory (without it there is nothing to pass to <c>--diffusion-model</c>).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelFileSetRulesTests
 {
     [Test]

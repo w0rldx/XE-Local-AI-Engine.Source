@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ModelNameValidatorTests
 {
     private readonly ModelNameValidator _validator = new(Options.Create(new SecurityOptions()));

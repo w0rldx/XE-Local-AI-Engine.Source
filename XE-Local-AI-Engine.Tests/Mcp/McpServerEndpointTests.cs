@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class McpServerEndpointTests
 {
     private const string ServersRoute = "/api/local/v1/mcp/servers";

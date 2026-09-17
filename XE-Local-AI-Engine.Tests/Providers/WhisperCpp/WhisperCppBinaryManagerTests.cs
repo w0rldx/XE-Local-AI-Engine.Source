@@ -19,6 +19,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     these drive a hand-written <see cref="HttpMessageHandler" /> serving a real in-memory archive — no network, no
 ///     real binary, and the OS/arch test constructor keeps asset selection deterministic on any host.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperCppBinaryManagerTests
 {
     [Test]

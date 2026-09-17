@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Development;
 
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentAttemptExecutionSupervisorTests
 {
     [Test]

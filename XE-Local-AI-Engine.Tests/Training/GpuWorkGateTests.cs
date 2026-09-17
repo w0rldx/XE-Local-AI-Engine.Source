@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The node's GPU admission gate. Exclusive work owns the whole node; shared work coexists with shared work and
 ///     with nothing else.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GpuWorkGateTests
 {
     [Test]

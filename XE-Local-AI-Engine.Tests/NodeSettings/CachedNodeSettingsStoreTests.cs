@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     read after a save reflects what the canonical inner store persisted. The entry has no TTL, so the ordering
 ///     tests below are not about a transient blip: a publication that lands out of order is permanent.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CachedNodeSettingsStoreTests
 {
     private static MemoryCache NewCache()

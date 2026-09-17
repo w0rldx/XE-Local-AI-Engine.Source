@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     spot-checking that a few flags appear somewhere. A change to any of it should mean editing this expectation on
 ///     purpose.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxIsolatedChainTests
 {
     [Test]

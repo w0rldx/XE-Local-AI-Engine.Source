@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     sets it — otherwise a workflow participant is the one caller that still free-runs its reasoning until the context
 ///     window is exhausted.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ParticipantReasoningOptionsTests
 {
     // The stable half of ReasoningBudgetSkipLog's message, so the assertions select the skip notice by content.

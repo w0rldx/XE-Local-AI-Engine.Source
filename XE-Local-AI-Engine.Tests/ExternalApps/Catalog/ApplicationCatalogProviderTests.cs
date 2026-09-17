@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="ExternalAppCatalogCacheStore" /> over a temp data directory, not a stub, so the file round-trip and
 ///     its source-URL binding are covered here rather than in a separate suite.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ApplicationCatalogProviderTests : IDisposable
 {
     private const string RemoteUrl = "https://catalog.test/applications.json";

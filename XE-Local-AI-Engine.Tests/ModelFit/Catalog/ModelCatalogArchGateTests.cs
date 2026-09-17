@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     node's runtime satisfies is supported; one whose architecture support landed in a newer build is excluded.
 ///     Malformed tags fail OPEN (never silently hide every entry).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelCatalogArchGateTests
 {
     [Test]

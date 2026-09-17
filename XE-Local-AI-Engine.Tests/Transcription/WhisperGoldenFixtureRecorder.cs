@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         spoke the wire protocol itself would also stop proving that the shipped adapter works.
 ///     </para>
 /// </remarks>
+[Category(TestCategories.ExternalInfra)]
 public sealed class WhisperGoldenFixtureRecorder
 {
     private const string ServerVariable = "XE_WHISPER_GOLDEN_SERVER_URL";

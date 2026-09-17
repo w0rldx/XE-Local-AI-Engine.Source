@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     every status an attempt can stop on rather than for a list of call sites, and that the tool names survive the
 ///     scope they were collected in.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowNodeRunTelemetryTests
 {
     [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]

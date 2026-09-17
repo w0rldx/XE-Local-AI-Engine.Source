@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     size-aware / limited-retry readiness-timeout classification, and the graceful/force operator eject with bounded
 ///     in-flight lease drain.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorLifecycleTests
 {
     private static LlamaServerSupervisorOptions OptionsWithDrain(TimeSpan drainTimeout)

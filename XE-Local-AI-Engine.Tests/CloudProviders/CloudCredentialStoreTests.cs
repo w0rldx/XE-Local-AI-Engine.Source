@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 using OS = TUnit.Core.Enums.OS;
 
+[Category(TestCategories.Unit)]
 public sealed class CloudCredentialStoreTests : IDisposable
 {
     private readonly string _contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

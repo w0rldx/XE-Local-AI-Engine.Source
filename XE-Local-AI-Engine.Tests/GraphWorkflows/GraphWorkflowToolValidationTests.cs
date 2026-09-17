@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         while its tool was invocable, started after the envelope tightened away from it.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowToolValidationTests
 {
     [ClassDataSource<GraphWorkflowHostFixture>(Shared = SharedType.PerClass)]

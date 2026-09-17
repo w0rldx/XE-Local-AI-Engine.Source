@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         answered 410.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationStreamEventEnvelopeBoundTests
 {
     private static readonly JsonSerializerOptions RingOptions = new(JsonSerializerDefaults.Web);

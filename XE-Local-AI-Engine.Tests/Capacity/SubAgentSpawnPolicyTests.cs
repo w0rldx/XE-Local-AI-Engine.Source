@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class SubAgentSpawnPolicyTests
 {
     [Test]

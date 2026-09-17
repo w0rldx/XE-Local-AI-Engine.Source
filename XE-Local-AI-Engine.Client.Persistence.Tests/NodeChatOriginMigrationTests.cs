@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class NodeChatOriginMigrationTests : IDisposable
 {
     private const string PreOriginMigrationId = "20260523133000_AddNodeMessageLifecycleColumns";

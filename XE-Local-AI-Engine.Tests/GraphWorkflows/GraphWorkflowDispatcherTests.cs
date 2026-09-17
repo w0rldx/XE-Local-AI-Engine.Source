@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         out — every kind this runtime declares has one.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowDispatcherTests
 {
     [ClassDataSource<GraphWorkflowHostFixture>(Shared = SharedType.PerClass)]

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (2026-07-10): Qwen/Qwen2.5-Coder-14B-Instruct-GGUF ships Q4_K_M as two splits (8.0GB + 0.99GB); treating them
 ///     as independent files let the advisor pick the 0.99GB second split alone and estimate a 14B model at ~1.8GB.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufDiscoveryShardTests
 {
     private const string RepoId = "Qwen/Qwen2.5-Coder-14B-Instruct-GGUF";

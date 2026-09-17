@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     stable-diffusion.cpp @ <c>master-742-1a13107</c>, including its live <c>--help</c> mapping from
 ///     <c>--clip-on-cpu</c> to <c>te=cpu</c>.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageServerArgumentBuilderTests
 {
     private static readonly StableDiffusionRuntimeOptions Options = new();

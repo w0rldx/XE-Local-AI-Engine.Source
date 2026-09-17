@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     had no use for), and it assembles a launch receipt after readiness. Nothing here may cost a run its measurement,
 ///     so the receipt is non-throwing and an unreadable fact is recorded as absent.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorBenchmarkReceiptTests
 {
     private const string FullOffloadLine = "0.00.408.714 I load_tensors: offloaded 25/25 layers to GPU";

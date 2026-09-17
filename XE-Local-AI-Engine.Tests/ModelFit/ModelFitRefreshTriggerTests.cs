@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>model-recommendation-check</c> job. The facade depends only on the scheduler service — it has no utility-runner
 ///     dependency and cannot execute llmfit.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFitRefreshTriggerTests
 {
     [Test]

@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     without starting anything — the transport TYPE a record resolves to is the decision, and the fail-closed refusal
 ///     happens before a sandbox is created — so they hold identically on a host that can isolate and one that cannot.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxedMcpStdioTransportTests
 {
     /// <summary>Stands in for the node data directory — the engine's database, keys and jails all live under it.</summary>

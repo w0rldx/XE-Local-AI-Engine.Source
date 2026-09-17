@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
+[Category(TestCategories.Integration)]
 public sealed class CapabilityReporterTests
 {
     [Test]

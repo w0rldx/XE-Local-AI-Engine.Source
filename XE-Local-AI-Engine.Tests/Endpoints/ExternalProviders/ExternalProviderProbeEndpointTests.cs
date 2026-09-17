@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>How each probe outcome reaches the wire, and what the probe route refuses to carry.</summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalProviderProbeEndpointTests
 {
     private const string ProbeRoute = "/api/local/v1/external-providers/probe";

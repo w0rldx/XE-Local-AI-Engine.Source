@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the OLDER sibling pinned) that also carries a compaction synopsis — because that is where a naive
 ///     "drop everything below the boundary before resolving" cap would silently change the selected path.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeChatTurnReadCapTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

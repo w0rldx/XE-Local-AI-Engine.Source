@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         Every test builds a host of its own, so an absolute count here is never a sibling's row.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CanvasWorkflowImportTests
 {
     /// <summary>A fresh install has nothing to import and must say nothing about it.</summary>

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///         and leave the show-all query (which does not constrain it) sorting every non-purged row.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddConversationListIndexMigrationTests
 {
     private const string IndexName = "ix_conversations_list";

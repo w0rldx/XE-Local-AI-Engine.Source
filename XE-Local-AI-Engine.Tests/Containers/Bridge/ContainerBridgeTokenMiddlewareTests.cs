@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     engine-owned network, so this is the layer that stops one of them using another's bridge — which is why an
 ///     unverified request must never reach whatever is mapped behind it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerBridgeTokenMiddlewareTests
 {
     private const string ValidToken = "0123456789abcdef0123456789abcdef.c2VjcmV0LW1hdGVyaWFs";

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     with the original cause preserved, while every other exception — and the success path — passes through
 ///     untouched, so the translation cannot mask a genuine caller error.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class OllamaExceptionTranslatingEmbeddingGeneratorTests
 {
     [Test]

@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     The offer/known-name/known-tool surfaces merge the live MCP snapshot, MCP tools join the
 ///     capable-only set, and <c>GetKnownTools</c> tags each entry with its source.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalToolOfferProviderTests
 {
     [Test]

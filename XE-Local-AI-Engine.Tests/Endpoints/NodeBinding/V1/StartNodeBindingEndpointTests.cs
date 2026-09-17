@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>POST binding/start</c>: operator-gated, 200 with the device-code session mapped to its wire shape, and 400
 ///     (FastEndpoints error envelope) when the Central Platform refuses — never a 500.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class StartNodeBindingEndpointTests
 {
     private const string Route = "/api/local/v1/binding/start";

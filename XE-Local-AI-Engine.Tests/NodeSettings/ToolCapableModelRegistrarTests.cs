@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     no tool calling and no explanation. The capability was already detected by <c>GgufCapabilityDetector</c> and
 ///     already persisted as <see cref="LocalModelDescriptor.IsToolCapable" />; nothing consumed it.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ToolCapableModelRegistrarTests
 {
     private const string ToolCapableGguf = "unsloth/Qwen3.6-27B-MTP-GGUF:Q4_K_M";

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     turning the credential from a recoverable secret into a one-way digest — so the schema at the head of the chain
 ///     deliberately does NOT match what this migration created, and both ends are pinned here.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddMcpServerApiKeyMigrationTests
 {
     private const string ThisMigrationId = "20260803153806_AddMcpServerApiKey";

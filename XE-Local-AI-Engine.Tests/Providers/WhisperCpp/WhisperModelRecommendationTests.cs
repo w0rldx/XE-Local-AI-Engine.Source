@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         a tier-only table while recommending a different model than this one does.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperModelRecommendationTests
 {
     private const long Gigabyte = 1024L * 1024L * 1024L;

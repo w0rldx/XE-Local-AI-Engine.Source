@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     the non-terminal status compare-and-swap, the one crash-atomic terminal transition, the append feed and the two
 ///     ordered reads.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationExecutionStoreTests
 {
     private static readonly IReadOnlySet<IntegrationExecutionStatus> Running = new HashSet<IntegrationExecutionStatus>

@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         The lane's own contract — slots, stop, forget, restart — is <see cref="GraphWorkflowToolLaneTests" />.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowToolExecutorTests
 {
     [ClassDataSource<GraphWorkflowToolHostFixture>(Shared = SharedType.PerClass)]

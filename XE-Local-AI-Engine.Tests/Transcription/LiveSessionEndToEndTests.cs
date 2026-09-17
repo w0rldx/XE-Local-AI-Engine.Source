@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 /// </summary>
 [NotInParallel(LiveSessionKey)]
+[Category(TestCategories.Integration)]
 public sealed class LiveSessionEndToEndTests
 {
     /// <summary>

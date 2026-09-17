@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     thread from. A conversation without the column falls back to the newest leaf, so losing it silently changes
 ///     which messages a reopened thread shows.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddNodeConversationSelectedPathMigrationTests
 {
     [Test]

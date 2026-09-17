@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     things that can silently go wrong — sweeping while the scheduler is disabled, computing the cutoff in the wrong
 ///     unit (run rows stamp <c>CreatedAtUtc</c> in unix <b>milliseconds</b>), and a failed sweep killing the loop.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SchedulerHistoryRetentionServiceTests
 {
     private const int RetentionDays = 30;

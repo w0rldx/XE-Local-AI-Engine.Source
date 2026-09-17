@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
+[Category(TestCategories.Unit)]
 public sealed class GgufDownloadTransactionTests
 {
     private static readonly byte[] WeightBytes = "weight-content"u8.ToArray();

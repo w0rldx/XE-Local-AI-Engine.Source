@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     gate), and a model the reaper evicted mid-tool-call is transparently re-spawned on the next ensure-running
 ///     (restart, not failure).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorRaceTests
 {
     [Test]

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the provider-neutral <see cref="OllamaModelCapabilityClient" /> and the app-service <see cref="OllamaModelService" />.
 ///     A graceful unload is exercised end-to-end against the fake runtime.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class RunningModelSnapshotMappingTests
 {
     [Test]

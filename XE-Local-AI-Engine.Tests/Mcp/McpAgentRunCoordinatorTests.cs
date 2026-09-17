@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // No parallelism guard: every seam is an NSubstitute fake over a local harness. The McpAgentRunMetrics this builds
 // emits on the process-global XE.Node meter, but the capture suites that listen on it (McpAgentRunMetricsTests and
 // the Telemetry/Invocation ones) hold a bare [NotInParallel] of their own, so an emitter needs none.
+[Category(TestCategories.Unit)]
 public sealed class McpAgentRunCoordinatorTests
 {
     private const string LegacyDelegateRequestFingerprint = "22D00EDA7B70A9C1F32B01A3CFAAE6BEFB3DC9137D8C097F70C9469AC27886C8";

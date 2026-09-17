@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     run that HANGS rather than one that fails — the failure mode a durable runtime can least afford, since nothing
 ///     ever comes along to notice.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GraphWorkflowGraphTests
 {
     /// <summary>The charset refusal in full, so a row that fails some OTHER way cannot pass by containing "key".</summary>

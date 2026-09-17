@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     contract declares no such member. Asserting any of them over an empty application set would verify nothing,
 ///     so they all live in <see cref="SampleCatalogManifestTests" /> now, over a document that declares a manifest.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ShippedCatalogSeedTests
 {
     private static readonly ExternalAppCatalogDocument Seed = ExternalAppCatalogBundledLoader.Load(NullLogger.Instance);

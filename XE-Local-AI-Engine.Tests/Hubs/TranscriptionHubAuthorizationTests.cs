@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     anonymous case green while opening the hub to any signed-in principal, so 401 alone is never reported as
 ///     Operator evidence.
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionHubAuthorizationTests
 {
     /// <summary>

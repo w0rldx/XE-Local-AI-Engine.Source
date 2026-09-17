@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     independent restatement of the documented framing (int32-LE name length, UTF-8 name, int64-LE file length, content hash),
 ///     over the bundle files in ordinal name order.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RuntimeBundleIdentityCalculatorTests
 {
     private const string ExecutableFileName = "llama-server";

@@ -15,6 +15,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     design where the delete lived in the transcription's own cleanup, because that cleanup only exists after the
 ///     copy has already succeeded.
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionUploadSlotTests
 {
     private const long Cap = 16 * 1024;

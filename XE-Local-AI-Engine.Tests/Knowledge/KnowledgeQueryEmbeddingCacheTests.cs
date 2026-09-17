@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     vector), that entries expire after the TTL, that the size bound evicts the coldest entry, and that a zero TTL
 ///     disables caching entirely.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeQueryEmbeddingCacheTests
 {
     private static readonly float[] VectorA = [0.1f, 0.2f, 0.3f];

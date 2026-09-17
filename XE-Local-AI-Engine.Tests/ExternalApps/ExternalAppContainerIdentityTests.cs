@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     readers are injected so the rules for a daemon and a platform this machine is not can be asserted rather than
 ///     reasoned about.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppContainerIdentityTests
 {
     private const int HostUserId = 1234;

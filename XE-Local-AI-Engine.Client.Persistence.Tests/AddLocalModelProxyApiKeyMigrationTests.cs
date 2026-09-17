@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     <c>AddLocalModelProxyApiKey</c> creates the inbound model-proxy credential table. Same show-once shape as the
 ///     MCP key: a display <c>prefix</c> plus a one-way <c>key_hash</c>, and no column that could hold the plaintext.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddLocalModelProxyApiKeyMigrationTests
 {
     [Test]

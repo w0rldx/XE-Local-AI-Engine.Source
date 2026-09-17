@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     <c>ux_training_base_artifacts_repo_revision</c> unique index actually lives — the retry behaviour it forces
 ///     cannot be observed against an in-memory substitute.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingBaseArtifactStoreTests : IDisposable
 {
     private const string RepoId = "unsloth/Llama-3.2-1B-Instruct";

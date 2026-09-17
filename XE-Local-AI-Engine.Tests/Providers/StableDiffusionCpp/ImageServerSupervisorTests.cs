@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     respawned instead of handed out forever), plus how far the admission gate reaches: it covers the cap decision
 ///     and the port set only, never an evicted victim's tree-kill.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageServerSupervisorTests
 {
     [Test]

@@ -33,6 +33,7 @@ internal sealed class IntegrationSseWriterOptions : IOptions<IntegrationOptions>
 ///         mapper, because a second producer of a terminal is a second answer to "did this run finish".
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationExecutionCoordinatorStreamingTests
 {
     /// <summary>The end-to-end shape: one ring, one persisted subset, the terminal last.</summary>

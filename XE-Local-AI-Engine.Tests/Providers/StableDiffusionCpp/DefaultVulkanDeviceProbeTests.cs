@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     ICD manifest) so no real filesystem or process environment is touched. Proves the WSL/ICD logic, the fail-safe on
 ///     IO errors, and that the verdict is computed once and cached.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DefaultVulkanDeviceProbeTests
 {
     [Test]

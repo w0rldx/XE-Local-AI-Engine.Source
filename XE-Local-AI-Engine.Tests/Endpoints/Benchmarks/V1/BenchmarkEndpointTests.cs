@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkEndpointTests
 {
     private const string Api = "/api/local/v1/benchmarks";

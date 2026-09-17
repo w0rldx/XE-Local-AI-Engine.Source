@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     smallest when nothing fits, then the quality sweet-spot when no probe). The GPU-variant selector and VRAM probe
 ///     are mocked — no real hardware.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufVariantRecommenderTests
 {
     private const long Gib = 1024L * 1024 * 1024;

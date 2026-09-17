@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     granted. The RESTRICT foreign key is the point: a granted folder cannot be deleted out from under a project that
 ///     is still bound to it, so the workspace root can never silently become unauthorized.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BindDevelopmentProjectsToSelectedFoldersMigrationTests
 {
     [Test]

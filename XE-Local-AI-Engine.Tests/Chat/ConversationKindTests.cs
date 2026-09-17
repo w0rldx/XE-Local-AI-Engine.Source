@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The <c>conversations.kind</c> discriminator, end to end through the real raw-SQL chat paths: the list is
 ///     chat-only, a by-id read is not, and a caller may both choose a kind and supply the conversation id.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ConversationKindTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

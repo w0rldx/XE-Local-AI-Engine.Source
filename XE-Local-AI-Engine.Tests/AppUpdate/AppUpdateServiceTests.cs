@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>Covers anonymous public-update orchestration without any GitHub credential dependency.</summary>
+[Category(TestCategories.Integration)]
 public sealed class AppUpdateServiceTests
 {
     [Test]

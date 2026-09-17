@@ -33,6 +33,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         otherwise be visible.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ContainerBridgeHostFilteringTests
 {
     /// <summary>The value the node ships. Loopback-only, which is exactly right for every listener but the bridge.</summary>

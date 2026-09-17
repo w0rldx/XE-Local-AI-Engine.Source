@@ -19,6 +19,7 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     faked: the size cap, the missing-file refusal, the typed 415 for a container this node cannot decode, and the
 ///     guarantee that a traversal-laden client file name never reaches a path.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionUploadEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

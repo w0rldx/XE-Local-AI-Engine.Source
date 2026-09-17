@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     as ciphertext at rest AND as plaintext after a fresh read — and the AAD is proven by substitution, across rows,
 ///     across columns and across attempts.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkJudgeEncryptionTests : IDisposable
 {
     private const string PolicyJson = """{"schemaVersion":1,"rubric":{"criteria":[{"id":"correctness","weight":40}]}}""";

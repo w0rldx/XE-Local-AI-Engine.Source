@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class OrchestrationRunSessionTests
 {
     [Test]
@@ -56,6 +57,7 @@ public sealed class OrchestrationRunSessionTests
         idleClock.CancelAfter(TimeSpan.FromMilliseconds(50)); // The watch observes the temporary empty dictionary.
         releaseFailure.SetResult();
         await Assert.ThrowsAsync<InvalidOperationException>(() => completion);
+        // real-timer: must outlast the real CancelAfter(50ms) above, a CancellationTokenSource with no TimeProvider seam.
         await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
 
         AssertEx.True(pending.ContainsKey("approval-1"));

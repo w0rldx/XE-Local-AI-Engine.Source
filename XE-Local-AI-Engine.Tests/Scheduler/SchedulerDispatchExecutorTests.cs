@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Guards (null def / disabled / soft-deleted / unknown template) are verified without touching the handler;
 ///     the happy path confirms the handler is invoked exactly once with the correct context.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SchedulerDispatchExecutorTests
 {
     private static readonly Guid JobId = Guid.Parse("11111111-1111-1111-1111-111111111111");

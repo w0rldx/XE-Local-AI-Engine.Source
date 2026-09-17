@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     a profile verbatim is exactly the failure this trades away, so the invalidation — not just the new columns — is
 ///     what this suite pins.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddLaunchPolicyFingerprintAndBenchmarkResourcesMigrationTests
 {
     private const string PreFingerprintMigrationId = "20260722192133_BindDevelopmentProjectsToSelectedFolders";

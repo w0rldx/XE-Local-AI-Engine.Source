@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     a local cold-load), and every non-cancellation failure degrades to "no warm" / "window unknown" rather than
 ///     failing the turn — a cancellation still propagates, because the turn is terminating.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalRuntimeWarmerTests
 {
     [Test]

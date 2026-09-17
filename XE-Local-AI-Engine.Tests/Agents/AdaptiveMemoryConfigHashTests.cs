@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     re-fetch. The cross-repo golden in <c>RuntimePackageConfigHashTests</c> remains the canonical proof that
 ///     <c>RuntimePackageConfigHash.Compute</c> is byte-identical (its signature is untouched by this feature).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AdaptiveMemoryConfigHashTests
 {
     private const string SystemPrompt = "You are the bound persona.";

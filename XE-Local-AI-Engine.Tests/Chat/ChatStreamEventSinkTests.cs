@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     completing the queue, because the pump reads a write fault as a persistence fault and would terminalize the
 ///     assistant row Failed.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ChatStreamEventSinkTests
 {
     private static readonly NodeChatMessageCorrelation Correlation = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());

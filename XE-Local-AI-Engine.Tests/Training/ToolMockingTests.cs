@@ -4,6 +4,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ToolMockingTests
 {
     private const string Schema = """{"type":"object","properties":{"path":{"type":"string"},"depth":{"type":"integer"}}}""";

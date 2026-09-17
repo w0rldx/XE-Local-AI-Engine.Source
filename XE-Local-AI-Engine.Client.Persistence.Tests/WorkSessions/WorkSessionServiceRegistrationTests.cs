@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
+[Category(TestCategories.Integration)]
 public sealed class WorkSessionServiceRegistrationTests
 {
     [Test]

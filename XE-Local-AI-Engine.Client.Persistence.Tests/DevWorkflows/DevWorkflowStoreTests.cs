@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowStoreTests
 {
     /// <summary>T-1: the run's counter is the one watermark, and it never repeats or skips across child tables.</summary>

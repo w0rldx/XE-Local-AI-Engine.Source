@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     decryption (or the reverse) round-trips as garbage rather than failing loudly, so every new encrypted column is
 ///     asserted here as ciphertext at rest AND plaintext after a fresh read.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingEncryptionTests : IDisposable
 {
     private const string DefinitionJson = """{"toolNames":["read_file"],"sizeTarget":32,"holdoutFraction":0.1}""";

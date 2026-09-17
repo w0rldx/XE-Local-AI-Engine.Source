@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     stamp on the run, nothing for the caps to count, no way for the ranking read to know how many probes a cell
 ///     owed. Expanded here, a case is an ordinary task item and every one of those mechanisms reaches it for free.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkNiahTaskItemTests
 {
     private static readonly Guid ProjectId = new("55555555-5555-5555-5555-555555555555");

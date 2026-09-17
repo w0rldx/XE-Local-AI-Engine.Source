@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     quadratic in output length. <see cref="PartialFlushPolicy" /> replaces the interval with a growth trigger, which
 ///     bounds the rewrite-to-append ratio independently of message length.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class PartialFlushPolicyTests
 {
     [Test]

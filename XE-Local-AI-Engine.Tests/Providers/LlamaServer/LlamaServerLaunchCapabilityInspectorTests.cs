@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     discover it as a failed spawn. The answers come from the same probed manifest the launch path already gates on,
 ///     and neither the manifest nor the resolved binary (which carries a filesystem path) crosses the boundary.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerLaunchCapabilityInspectorTests
 {
     // The shape of the pinned b10201 --help lines the manifest parses its allowed values out of. The "allowed values"

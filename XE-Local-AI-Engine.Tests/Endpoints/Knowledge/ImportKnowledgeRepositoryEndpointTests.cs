@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Now only <see cref="KnowledgeRepositoryImportRejectedException" /> (and the folder/argument rejections) are 400;
 ///     <see cref="KnowledgeRepositoryReadException" /> falls through to the global handler as a 500.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ImportKnowledgeRepositoryEndpointTests
 {
     private const string ImportRoute = "/api/local/v1/knowledge-base/repositories/import";

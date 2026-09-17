@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     non-desktop, so a POST to preview/start is rejected by routing (404/405 — no endpoint mapped) rather than
 ///     reaching the handler.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GgufImportEndpointDesktopGateTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

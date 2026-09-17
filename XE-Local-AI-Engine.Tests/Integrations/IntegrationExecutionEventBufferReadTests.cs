@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     BARRIER no reader may cross — a sequence published late would otherwise land below the reader's cursor and be
 ///     lost to every live consumer, with no gap to report it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationExecutionEventBufferReadTests
 {
     /// <summary>Test 1.</summary>

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     pinned here — which header is present, which body field is set — are exactly the ones an options-level
 ///     assertion would report as correct while the assembled pipeline did something else.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalOpenAiChatClientWireTests
 {
     [Test]

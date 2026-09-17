@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class LlamaTokenEstimatorCalibrationServiceTests
 {
     [Test]

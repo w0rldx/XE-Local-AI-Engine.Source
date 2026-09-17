@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         added — or added as the wrong lifetime — would pass all of them and fail only on a running node.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppsModuleRegistrationTests
 {
     [Test]

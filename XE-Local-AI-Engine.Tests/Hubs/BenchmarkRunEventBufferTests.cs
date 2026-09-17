@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkRunEventBufferTests
 {
     private static readonly JsonSerializerOptions ProbeJsonOptions = new(JsonSerializerDefaults.Web);

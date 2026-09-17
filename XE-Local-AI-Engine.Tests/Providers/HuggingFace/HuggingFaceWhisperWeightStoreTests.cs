@@ -24,6 +24,7 @@ using Infra = GgufStoreTestInfrastructure;
 ///     The real store over the real <see cref="HfDownloadClient" /> is used throughout, because those two together
 ///     are what failed; only the transport is faked.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class HuggingFaceWhisperWeightStoreTests
 {
     private static readonly byte[] SharedBytes = Encoding.UTF8.GetBytes(new string(c: 'v', count: 2048));

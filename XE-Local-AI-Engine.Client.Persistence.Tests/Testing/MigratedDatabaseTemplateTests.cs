@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 ///     committed row is left behind in a write-ahead-log sidecar the copy does not carry, and a rebuilt migrations
 ///     assembly cannot be served a stale template.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class MigratedDatabaseTemplateTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

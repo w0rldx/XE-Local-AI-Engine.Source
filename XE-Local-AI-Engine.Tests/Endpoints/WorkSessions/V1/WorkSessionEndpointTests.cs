@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class WorkSessionEndpointTests
 {
     private static readonly Guid SessionId = Guid.Parse("11111111-1111-1111-1111-111111111111");

@@ -20,6 +20,7 @@ using OS = TUnit.Core.Enums.OS;
 ///         <c>Skip.Unless(...)</c> in the body on top of the attribute.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class PlatformSkipTests
 {
     [Test]

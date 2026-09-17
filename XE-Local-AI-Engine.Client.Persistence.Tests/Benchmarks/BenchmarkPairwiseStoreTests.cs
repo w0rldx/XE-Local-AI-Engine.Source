@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     a fit is ONE row with ONE active pointer — so a crash cannot leave a ranking blended from two fits — and that
 ///     the ranking decides staleness from the fit row and the revision row alone, never by re-reading verdicts.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkPairwiseStoreTests : IDisposable
 {
     private const string PolicyHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

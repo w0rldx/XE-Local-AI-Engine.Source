@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     seam is faked so the reaper's three safety gates can be asserted without signalling a real process group —
 ///     signalling is irreversible, and the interesting cases are precisely the ones where it must NOT happen.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxOrphanReaperTests : IDisposable
 {
     private readonly List<string> _tempPaths = [];

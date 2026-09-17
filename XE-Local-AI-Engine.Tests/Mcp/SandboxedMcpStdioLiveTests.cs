@@ -33,6 +33,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         green on a box which contains nothing reports a guarantee nothing exercised.
 ///     </para>
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class SandboxedMcpStdioLiveTests
 {
     private const string EnabledVariable = "XE_COMPUTE_LIVE";

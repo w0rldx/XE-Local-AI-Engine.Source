@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         requirements record, would pass while the shipped constants said something else.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxIsolationSummaryTests
 {
     [Test]

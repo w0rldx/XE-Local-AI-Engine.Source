@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Proves the generated-image blob store encrypts image bytes at rest (the on-disk blob is not the plaintext PNG) and
 ///     round-trips them back through the decrypt path, and that the metadata row is persisted alongside.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GeneratedImageStoreTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

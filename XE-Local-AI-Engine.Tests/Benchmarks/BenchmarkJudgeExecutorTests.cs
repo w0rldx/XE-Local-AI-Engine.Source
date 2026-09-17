@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkJudgeExecutorTests
 {
     private static readonly Guid AttemptId = new("33333333-3333-3333-3333-333333333333");

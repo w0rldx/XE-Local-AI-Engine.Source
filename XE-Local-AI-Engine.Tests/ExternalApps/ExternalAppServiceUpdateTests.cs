@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The update preview and the update pipeline: what the dialog is told, what admission refuses before anything
 ///     is stopped, and where the row's single recovery boundary sits.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppServiceUpdateTests
 {
     [Test]

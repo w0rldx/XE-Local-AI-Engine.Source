@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
+[Category(TestCategories.Unit)]
 public sealed class AgentDefinitionResolverTests
 {
     private const string SystemPrompt = "You are the bound persona.";

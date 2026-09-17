@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         merely moved sockets must stay silent.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DockerDaemonPreflightServiceTests
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 7, day: 29, hour: 9, minute: 30, second: 0, TimeSpan.Zero);

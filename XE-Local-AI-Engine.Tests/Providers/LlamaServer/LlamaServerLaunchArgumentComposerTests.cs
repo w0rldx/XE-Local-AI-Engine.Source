@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     whether a placement-probe spawn may add its own <c>-lv</c>, and the launch-plan summary appended to the spawn
 ///     log line. <c>BuildLaunchSpec</c> itself is pinned by the launch-spec/projection suites.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerLaunchArgumentComposerTests
 {
     [Test]

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     missing-resource case asserts the Error log and not merely an empty catalog: the two are otherwise
 ///     indistinguishable.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppCatalogBundledLoaderTests
 {
     [Test]

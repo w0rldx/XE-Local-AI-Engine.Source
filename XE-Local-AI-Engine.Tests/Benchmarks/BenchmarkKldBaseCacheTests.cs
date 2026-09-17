@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     second writer, a killed writer, a full disk, and an eviction pass that must not delete a file a queued
 ///     measurement is about to read.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkKldBaseCacheTests : IDisposable
 {
     private static readonly string Fingerprint = "v1:" + new string('a', 64);

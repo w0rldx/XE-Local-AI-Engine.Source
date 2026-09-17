@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     stripped base, and the total/never-throw contract (unknown or blank → the safe <see cref="GgufQuantTier.Balanced" />
 ///     middle).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufQuantQualityTests
 {
     [Test]

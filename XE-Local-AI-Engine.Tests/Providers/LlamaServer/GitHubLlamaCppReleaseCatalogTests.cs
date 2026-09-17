@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Live GitHub Releases catalog: asset/digest parsing, ETag-conditional reuse, graceful offline + rate-limit
 ///     handling, asset-name templating per OS/variant, and tag-format rejection. All HTTP is faked — no network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GitHubLlamaCppReleaseCatalogTests
 {
     // Symbolic, NOT a literal. AssetName() below derives the expected asset name from LlamaCppReleasePins, so a

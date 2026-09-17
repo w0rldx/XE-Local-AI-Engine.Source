@@ -164,6 +164,7 @@ public sealed class IntegrationSessionHostFixture : IAsyncInitializer, IAsyncDis
 ///     executions with it.
 /// </summary>
 [NotInParallel("IntegrationSessionHost")]
+[Category(TestCategories.Integration)]
 public sealed class IntegrationSessionEndToEndTests
 {
     [ClassDataSource<IntegrationSessionHostFixture>(Shared = SharedType.PerClass)]
@@ -478,6 +479,7 @@ public sealed class IntegrationSessionEndToEndTests
                 return;
             }
 
+            // real-timer: polls the real status route for a terminal state; the deadline token bounds it.
             await Task.Delay(TimeSpan.FromMilliseconds(25), deadline.Token);
         }
     }

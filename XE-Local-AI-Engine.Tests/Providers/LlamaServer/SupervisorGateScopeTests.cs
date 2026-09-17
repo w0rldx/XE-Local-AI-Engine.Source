@@ -29,6 +29,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         serving-time lines stop paying a lock and a string copy into a buffer nothing reads again.
 ///     </para>
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorGateScopeTests
 {
     [Test]

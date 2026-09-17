@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     result (never silently dropped or blocked), and the accept / reject counters plus the live queue-depth gauge are
 ///     published on the <c>XE.Node</c> meter.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeIngestionDispatcherTests
 {
     [Test]

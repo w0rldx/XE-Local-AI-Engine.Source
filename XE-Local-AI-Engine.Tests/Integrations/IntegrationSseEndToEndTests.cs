@@ -115,6 +115,7 @@ public sealed class IntegrationCoordinatorHostFixture : IAsyncInitializer, IAsyn
 ///     only place the whole chain's frame ORDER is asserted; every other suite tests one link of it.
 /// </summary>
 [NotInParallel("IntegrationCoordinatorHost")]
+[Category(TestCategories.Integration)]
 public sealed class IntegrationSseEndToEndTests
 {
     private const string EventStream = "text/event-stream";

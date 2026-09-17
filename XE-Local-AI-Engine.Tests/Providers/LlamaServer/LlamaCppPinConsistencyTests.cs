@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     SHA, and ten per-platform asset rows; editing the tag but leaving one asset row behind produces a 404 at download
 ///     time on exactly one platform — the one nobody tested on. Pure constant inspection: no network, no file system.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaCppPinConsistencyTests
 {
     // Every (os, arch, variant) row the pin table is expected to carry. Enumerated explicitly rather than reflected, so

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     restart reconciler write plain failures and know nothing about it, which is what these tests stand in for — a
 ///     failure class is put on a row through the store, exactly as the lane this build does not ship would put it there.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowRetryTests
 {
     [ClassDataSource<GraphWorkflowHostFixture>(Shared = SharedType.PerClass)]

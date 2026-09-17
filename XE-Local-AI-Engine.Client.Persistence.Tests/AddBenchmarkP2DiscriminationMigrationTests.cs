@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     work-item CHECK. It is one migration precisely so no window exists in which a work item of a kind the old
 ///     CHECK forbids is written; splitting it would fail an operator's freeze rather than a test.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddBenchmarkP2DiscriminationMigrationTests
 {
     private const string PreP2MigrationId = "20260825173509_AddBenchmarkRunRepeatMode";

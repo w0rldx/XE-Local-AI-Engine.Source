@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     replaced each carried their own, and a rate reported as infinity — or as zero — for a duration nobody measured
 ///     is worse than an empty column, because it ranks.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TokenThroughputTests
 {
     [Test]

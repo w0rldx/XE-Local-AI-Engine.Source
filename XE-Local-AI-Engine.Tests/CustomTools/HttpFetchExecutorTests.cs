@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     SSRF guard denies loopback by design), so these assert <see cref="HttpFetchExecutor.BuildRequest" /> directly:
 ///     {param} placeholders in a header value are substituted, and a fixed header is passed through unchanged.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HttpFetchExecutorTests
 {
     [Test]

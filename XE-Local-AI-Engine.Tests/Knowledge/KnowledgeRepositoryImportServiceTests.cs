@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

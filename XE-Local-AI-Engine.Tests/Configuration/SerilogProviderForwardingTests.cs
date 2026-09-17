@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 //
 // This asserts the observable consequence (a second provider receives events) rather than the flag itself, so it keeps
 // holding if the registration is restructured.
+[Category(TestCategories.Integration)]
 public sealed class SerilogProviderForwardingTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

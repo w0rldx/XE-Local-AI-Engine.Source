@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         "restore" the startup rejection and break every rootless install.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerSandboxOptionsValidatorTests
 {
     [Test]

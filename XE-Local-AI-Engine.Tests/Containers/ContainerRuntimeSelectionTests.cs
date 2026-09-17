@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         change meaning silently if a value were ever inserted between them.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerRuntimeSelectionTests
 {
     [Test]

@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     - A GGUF with OverrideKind=Embedding overrides a Chat detected kind and is excluded.
 ///     - A GGUF with OverrideKind=Chat overrides an Embedding detected kind and is eligible.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalDefaultChatModelResolverTests
 {
     [Test]

@@ -27,6 +27,7 @@ using EndpointDefinition = FastEndpoints.EndpointDefinition;
 ///         the named assertion on it is the actual regression guard.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class EndpointAuthorizationPolicyTests
 {
     /// <summary>

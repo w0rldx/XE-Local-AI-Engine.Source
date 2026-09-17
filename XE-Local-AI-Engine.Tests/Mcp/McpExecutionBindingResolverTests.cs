@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class McpExecutionBindingResolverTests
 {
     private const string LegacyDelegateBindingFingerprint = "F38689143E073344FB2CBC8B0F6044AEB1975335A03046B5F079029249531DF7";

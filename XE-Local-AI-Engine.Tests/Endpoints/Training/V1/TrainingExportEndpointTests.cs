@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The export surface's HTTP contract: operator-only, a refusal that costs nothing, and the two conflicts an
 ///     operator can actually hit — a busy GPU and an artifact the registry already owns.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingExportEndpointTests
 {
     private const string Api = "/api/local/v1/training";

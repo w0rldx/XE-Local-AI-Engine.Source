@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     stored &gt; appsettings seed &gt; hardcoded default for every field: a stored value wins, an absent stored value
 ///     falls back to the appsettings seed, and an absent seed falls back to the hardcoded default.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class NodeRuntimeSettingsTests
 {
     [Test]

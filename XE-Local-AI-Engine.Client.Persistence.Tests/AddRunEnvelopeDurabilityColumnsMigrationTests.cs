@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     the assistant message id, on both an upgrade from the preceding migration and a fresh migrate-to-head; drops them
 ///     on rollback; and leaves no model/snapshot drift.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
 {
     private const string PreDurabilityMigrationId = "20260714144229_AddAgentRunEnvelopeColumns";

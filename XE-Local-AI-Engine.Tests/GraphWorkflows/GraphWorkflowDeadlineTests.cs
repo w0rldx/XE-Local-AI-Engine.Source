@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Node deadlines, derived from the ROW rather than armed in memory — which is what a restart and a re-attempt both
 ///     rely on. Pure functions over a snapshot and a clock, so none of this needs a host.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GraphWorkflowDeadlineTests
 {
     private static readonly DateTimeOffset StartedAt = DateTimeOffset.FromUnixTimeMilliseconds(1_700_000_000_000);

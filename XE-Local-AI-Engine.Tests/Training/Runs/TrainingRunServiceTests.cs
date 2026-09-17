@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Run creation against the real stores and the real canonical export writer. The freeze is the point: what a run
 ///     trained on has to stay answerable after the dataset moves on, which is a claim only a real store can support.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingRunServiceTests : IDisposable
 {
     private readonly FixedNodeSqliteKeyHolder _keyHolder = new(RandomNumberGenerator.GetBytes(32));

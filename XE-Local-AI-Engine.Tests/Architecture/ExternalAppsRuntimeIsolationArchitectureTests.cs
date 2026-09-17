@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         a <c>//</c> inside a URL can never erase the reference that follows it on the line.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppsRuntimeIsolationArchitectureTests
 {
     /// <summary>

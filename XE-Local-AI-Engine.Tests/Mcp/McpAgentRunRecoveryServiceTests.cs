@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     is deliberately <b>fail-fast</b>: dispatch may not begin against an unrepaired ledger, so a recovery failure has
 ///     to escape <c>StartAsync</c> and take the host down rather than being logged and swallowed.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class McpAgentRunRecoveryServiceTests
 {
     private static readonly McpAgentRunLedgerCounters Counters = new(AccountingVersion: 1,

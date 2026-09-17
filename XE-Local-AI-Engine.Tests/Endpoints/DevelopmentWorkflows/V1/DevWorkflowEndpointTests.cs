@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The work-item and definition halves of the surface. Runs, feeds and the decision live in their own file.</summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowEndpointTests
 {
     private const string Root = "/api/local/v1/development-workflows";

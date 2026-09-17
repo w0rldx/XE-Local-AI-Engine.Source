@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The editor's probe: the same parser a save runs, asked without saving. Its answer is a REPORT, so it is a 200
 ///     whether the graph is clean or broken — the client needs one shape either way.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowValidateEndpointTests
 {
     private const string Validate = "/api/local/v1/graph-workflows/definitions/validate";

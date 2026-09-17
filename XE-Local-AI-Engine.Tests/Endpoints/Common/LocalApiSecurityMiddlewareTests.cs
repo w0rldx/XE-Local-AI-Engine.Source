@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     so the transport peer address can be set — something the in-memory TestServer cannot express (it presents a null
 ///     peer).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalApiSecurityMiddlewareTests
 {
     [Test]

@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         answers the same run id are one story about the unique index, not about a mapper.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowRunEndpointTests
 {
     private const string Root = "/api/local/v1/graph-workflows";

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     endpoint's generated name; the global <c>Endpoints.NameGenerator</c> (Program.cs) must keep that resolution
 ///     working — if it regressed, the POST would throw (500) instead of returning 201 + a resolvable Location.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CreateAgentDefinitionEndpointTests
 {
     [Test]

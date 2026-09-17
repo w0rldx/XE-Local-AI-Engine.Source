@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 //  - Aspire-specific service discovery (and the global HTTP resilience/discovery defaults, which live in the same
 //    conditional block) stays gated on ASPIRE_ENABLED.
 // The four tests below cover ASPIRE_ENABLED {off,on} x OTLP endpoint {unset,set}.
+[Category(TestCategories.Unit)]
 public sealed class ServiceDefaultsTelemetryTests
 {
     // AddOpenTelemetry() registers its hosted service from this assembly; a descriptor from it means instrumentation

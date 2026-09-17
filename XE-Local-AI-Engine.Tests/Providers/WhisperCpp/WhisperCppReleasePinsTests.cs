@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     zip on any other Windows box, and the Ubuntu tarball on Linux — including for a Linux CUDA request, because
 ///     whisper.cpp ships no Linux CUDA prebuilt at all. Pure table lookups, so every case is exercised on any host.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperCppReleasePinsTests
 {
     [Test]

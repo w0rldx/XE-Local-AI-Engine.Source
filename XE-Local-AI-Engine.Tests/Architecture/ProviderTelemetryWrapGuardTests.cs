@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>provider.CreateChatClient(...)</c> freely), and only occurrences with a leading dot count, so an interface
 ///     declaration or implementing signature is not a call site.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ProviderTelemetryWrapGuardTests
 {
     private const string CreateCall = ".CreateChatClient(";

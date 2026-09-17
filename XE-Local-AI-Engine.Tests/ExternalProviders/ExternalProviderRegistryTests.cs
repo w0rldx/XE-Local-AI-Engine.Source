@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     out no keys with its descriptors, and answers the synchronous send-path question honestly — including the one
 ///     answer that is not "no": "I do not know yet."
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalProviderRegistryTests
 {
     [Test]

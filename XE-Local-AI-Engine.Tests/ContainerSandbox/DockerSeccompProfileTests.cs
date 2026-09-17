@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Pins the embedded seccomp profile to the upstream bytes its provenance header names
 ///     (moby/profiles tag <c>seccomp/v0.2.3</c>). An accidental edit to the JSON would otherwise ship silently.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DockerSeccompProfileTests
 {
     private const string UpstreamSha256 = "536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74";

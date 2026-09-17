@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class RuntimeEnvironmentFactsProviderTests : IDisposable
 {
     // One cache per provider, disposed with the test: production shares a single container-owned instance.

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The five lifecycle verbs, the update preview and the cancel. Everything here turns on two rules: a 202 body is
 ///     the ADMITTED row and never the outcome, and every command but cancel carries the version the operator last read.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppLifecycleEndpointTests
 {
     [Test]

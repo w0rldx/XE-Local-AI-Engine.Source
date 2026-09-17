@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         environment fact on a laptop and a broken gate on a machine that promised Docker.
 ///     </para>
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class DockerSandboxRealDaemonTests
 {
     /// <summary>

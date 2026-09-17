@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         fixtures share node keys, so a shared host would let one test's script answer another's node run.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowFixLoopTests
 {
     /// <summary>A project id on the work item, because a graph with tool nodes in it is only startable with one.</summary>

@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     deployments into the chat picker, and the error-translating chat client that turns an Azure
 ///     <see cref="RequestFailedException" /> into a typed, secret-free <see cref="AzureFoundryProviderException" />.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AzureFoundryProviderSurfaceTests
 {
     [Test]

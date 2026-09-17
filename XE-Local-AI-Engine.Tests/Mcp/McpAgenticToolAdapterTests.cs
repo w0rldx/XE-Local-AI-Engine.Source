@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class McpAgenticToolAdapterTests
 {
     private static readonly McpInboundExecutionContext Agentic = new(McpServerApiKeyScope.Agentic, "xemcp_abc123");

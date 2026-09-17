@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     execution-log row and the <c>[code]</c> prefix on a Development attempt's terminal reason — ship as SQL in the
 ///     runbook, because no composer loads either vocabulary and a mapper nothing calls is a mapper nothing tests.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentUnitFailureClassTests
 {
     /// <summary>

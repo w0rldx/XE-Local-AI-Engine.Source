@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 // SqliteFileProbe.ReleasePooledHandles is SqliteConnection.ClearAllPools, which is process-global: one test's
 // teardown kills a sibling's in-flight connection. Latent while the class was small, reproducible once it was not.
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentReworkEdgeTests : IDisposable
 {
     private const string Reason = "The validate node rejected this implementation: 3 of 15 tests failed.";

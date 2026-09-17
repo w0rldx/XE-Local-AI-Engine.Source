@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 ///     exhaust it.
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
 {
     /// <summary>

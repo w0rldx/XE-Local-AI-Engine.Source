@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the authentication handler depends on. The load-bearing property is that the key is shown exactly once and is
 ///     unrecoverable afterwards — a database read must yield nothing that can be presented to the MCP endpoint.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class McpServerApiKeyServiceTests
 {
     [Test]

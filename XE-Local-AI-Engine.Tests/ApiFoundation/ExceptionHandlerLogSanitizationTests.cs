@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class ExceptionHandlerLogSanitizationTests
 {
     private const string UnsafeMethod = "PO\rST\0\u0085";

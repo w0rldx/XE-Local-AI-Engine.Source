@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     lowerCamelCase literal — the group a message is addressed to, and that neither payload carries anything but
 ///     identifiers and counters.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppEventPublisherTests
 {
     /// <summary>

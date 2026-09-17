@@ -12,6 +12,7 @@ using Infra = GgufStoreTestInfrastructure;
 ///     The <c>trained</c> origin parses everywhere a persisted origin is read, and an origin this build does not know —
 ///     one a NEWER build wrote — costs only the row that carries it, never the whole manifest.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufRegistryTrainedOriginTests
 {
     private const string BaseFileName = "Base-Model-Q4_K_M.gguf";

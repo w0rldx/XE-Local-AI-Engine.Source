@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     services are not registered then and FastEndpoints activates every endpoint at startup. The capability endpoint
 ///     must stay out of the marker so it can keep reporting the disabled state.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentEndpointRegistrationTests
 {
     [Test]

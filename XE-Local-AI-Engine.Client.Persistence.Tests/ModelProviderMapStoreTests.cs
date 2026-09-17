@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Models;
 
+[Category(TestCategories.Integration)]
 public sealed class ModelProviderMapStoreTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

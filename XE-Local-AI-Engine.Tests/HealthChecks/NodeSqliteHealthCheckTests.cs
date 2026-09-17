@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     readable, writable, and carries the node schema. An existing but read-only, or schema-incompatible, database must
 ///     flip /health/ready with a distinguishing reason even when the rest of the node is fine.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeSqliteHealthCheckTests
 {
     [Test]

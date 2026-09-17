@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     every other read view (the diagnostics view, the run-envelope ledger, and the usage summary each filter their own
 ///     kind). Executed against real SQLite so the column mapping and the read-view filters are proven.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(2026, 7, 18, 10, 30, 0, TimeSpan.Zero);

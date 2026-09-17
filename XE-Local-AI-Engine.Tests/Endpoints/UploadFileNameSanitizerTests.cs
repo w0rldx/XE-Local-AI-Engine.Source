@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The upload file-name sanitizer reduces a client-supplied name to a safe leaf so a traversal/control/reserved
 ///     value can never become display metadata or (defense in depth) influence a storage path.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class UploadFileNameSanitizerTests
 {
     [Test]

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     writes nothing, an unacknowledged import writes nothing, an imported skill lands disabled with Imported
 ///     provenance, a resource list carries no content, and a report token is single-use.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class SkillImportEndpointTests
 {
     private const string ListRoute = "/api/local/v1/skills";

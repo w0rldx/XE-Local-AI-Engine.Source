@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     ONLY from process env vars; and the launch-spec still emits/omits GPU placement args by variant so a selector that
 ///     returns <c>Cuda</c> composes into a GPU spawn.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class OverrideSelectorAndOptionsTests
 {
     private static readonly LlamaServerProcessSupervisor.ProcessKey ChatKey = new("llama3", ModelRole.Chat);

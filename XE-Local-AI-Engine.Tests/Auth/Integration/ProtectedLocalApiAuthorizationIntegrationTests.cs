@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Auth.Integration;
 using System.Net;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class ProtectedLocalApiAuthorizationIntegrationTests
 {
     // Both tests are read-only GETs against the same default host, so one bootstrap serves the class.

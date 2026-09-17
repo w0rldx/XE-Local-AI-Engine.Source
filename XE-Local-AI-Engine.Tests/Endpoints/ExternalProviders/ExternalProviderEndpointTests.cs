@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The connection CRUD surface: what it returns, what it must never return, and how the two write outcomes reach
 ///     the wire.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalProviderEndpointTests
 {
     private const string ApiKey = "sk-unsloth-super-secret";

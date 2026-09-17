@@ -22,6 +22,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     oracle. Linux is the primary runtime; the OS-divergent shell command and the symlink case are guarded so the
 ///     suite stays green on any host.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 {
     private readonly List<string> _tempPaths = [];

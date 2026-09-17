@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     migrate-to-head, drops them on rollback, and leaves no model/snapshot drift. The two discriminator columns are
 ///     NOT NULL with a default of 0 so pre-existing (adaptive-memory) rows backfill to record kind 0.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
 {
     private const string PreRunEnvelopeMigrationId = "20260713204544_AddChatMaintenanceState";

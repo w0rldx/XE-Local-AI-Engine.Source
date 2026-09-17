@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     provider), while <see cref="DevelopmentSandboxOptionsValidator" /> accepts an unset value and rejects a
 ///     MISSPELLED one — which would otherwise only surface as a DI failure under a user action, long after the edit.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxProviderOptionsValidatorTests
 {
     [Test]

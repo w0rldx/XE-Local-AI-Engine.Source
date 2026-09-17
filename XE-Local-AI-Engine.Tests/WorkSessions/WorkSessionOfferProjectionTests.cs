@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     only; without the merge here the seeded work-session agents would intersect to an empty tool set and the whole
 ///     feature would be inert — the trap <c>spawn_subagent</c> and the coder tools each hit before.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WorkSessionOfferProjectionTests
 {
     [Test]

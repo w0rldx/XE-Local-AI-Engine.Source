@@ -17,6 +17,7 @@ using Infra = GgufStoreTestInfrastructure;
 ///     GGUF store: disk guard, quant resolution, resume, disk-full survival, hash verification, cancel,
 ///     progress reporting, and gated/token behaviour. All HTTP is faked — no network, no real DriveInfo.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufStoreTests
 {
     private static readonly byte[] ModelBytes = Encoding.UTF8.GetBytes(new string(c: 'g', count: 4096));

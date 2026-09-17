@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>Serialized for the same single-credential reason as the generate suite.</para>
 /// </summary>
 [NotInParallel("LocalModelProxyApiKeyRevoke")]
+[Category(TestCategories.Integration)]
 public sealed class RevokeLocalModelProxyApiKeyEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

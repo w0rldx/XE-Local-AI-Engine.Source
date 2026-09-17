@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // invalid one into it; the key itself is provided via in-memory configuration below rather than by mutating the process
 // environment, so this class only reads the resource and never poisons a sibling.
 [NotInParallel("XE_NODE_SQLITE_KEY")]
+[Category(TestCategories.Integration)]
 public sealed class PlaybookRetrievalRankerRegistrationTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

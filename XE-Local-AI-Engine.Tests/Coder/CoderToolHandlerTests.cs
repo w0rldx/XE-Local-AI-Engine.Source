@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     touching the reader (reject-before-side-effect), surfaces validation errors, and reports
 ///     <see cref="IClientLocalToolHandler.RequiresApproval" /> == false.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CoderToolHandlerTests
 {
     [Test]

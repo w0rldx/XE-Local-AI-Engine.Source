@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     matches its kind, and — the load-bearing one — stays alive when an executor's own failure handling throws, since
 ///     a dead consumer silently starves every later durable run.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkQueueHostedServiceTests
 {
     [Test]

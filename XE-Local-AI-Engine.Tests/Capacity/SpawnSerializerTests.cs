@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     overlap (they serialize on the one process); a run that cannot acquire its turn within the timeout returns the
 ///     "busy" fallback rather than hanging; and distinct models do not block each other.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SpawnSerializerTests
 {
     private const string Model = "bartowski/Model-GGUF:Q4_K_M";

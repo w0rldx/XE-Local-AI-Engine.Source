@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     absolute, drive-qualified, extended/device, and control-char paths are rejected; legitimate relative paths
 ///     resolve under the root.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WorkspacePathGuardTests
 {
     [Test]

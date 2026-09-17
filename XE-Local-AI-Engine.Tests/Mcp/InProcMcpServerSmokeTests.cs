@@ -3,11 +3,14 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 using System.ComponentModel;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Tests.Testing;
+// System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
+using CategoryAttribute = TUnit.Core.CategoryAttribute;
 
 /// <summary>
 ///     Verifies the in-process MCP server harness itself: a real client connected over the in-memory stream pair can
 ///     list and call the tools the fake server exposes. This is the seam every connection-manager test relies on.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InProcMcpServerSmokeTests
 {
     [Test]

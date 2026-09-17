@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     model, so the full endpoint → service → persist path runs with no Ollama. The model-dependent scoring path is
 ///     covered by the Wave-2 service unit tests.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class RunPlaybookActionEvalEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

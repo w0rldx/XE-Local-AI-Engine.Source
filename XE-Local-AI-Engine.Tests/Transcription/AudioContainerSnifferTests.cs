@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Pins what the engine decides an upload is from its leading bytes. The extension is deliberately not an input to
 ///     anything here: a client that renames an Ogg file to <c>.wav</c> must still be told it sent Ogg.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AudioContainerSnifferTests
 {
     // One header per container, then the three ways nothing should match, then the case that pins the ordering.

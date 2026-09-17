@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
 {
     private const string PreImageMigrationId = "20260626234754_AddInferenceProfilesAndBenchmarkMetrics";

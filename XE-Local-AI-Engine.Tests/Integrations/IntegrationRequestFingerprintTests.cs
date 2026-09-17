@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     body, and any drift here silently turns every retry into a 409 or, worse, makes two different requests look
 ///     like the same one.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationRequestFingerprintTests
 {
     private static readonly Guid Principal = Guid.Parse("11111111-2222-3333-4444-555555555555");

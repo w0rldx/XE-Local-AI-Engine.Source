@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Covers the per-model extra-launch-arg parser: quote-aware tokenizing, detecting the reserved process-contract
 ///     flags on the write path, and defensively stripping them (with their space-separated value) on the read path.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaLaunchArgumentParserTests
 {
     [Test]

@@ -25,4 +25,8 @@
     <Compile Remove="NegativeFence/**/*.cs"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="XE_Local_AI_Engine.Client.Persistence.Tests.Categories"/>
+  </ItemGroup>
+
 </Project>

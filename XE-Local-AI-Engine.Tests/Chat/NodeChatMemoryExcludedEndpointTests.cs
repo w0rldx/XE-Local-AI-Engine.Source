@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     adaptive-memory feature. The PATCH toggle rides the existing conversation-mutation surface (Operator-gated like
 ///     rename/pin/archive) and round-trips through the read path.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeChatMemoryExcludedEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

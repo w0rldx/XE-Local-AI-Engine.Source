@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     does not have. The column rename is pinned at both ends by <c>AddMcpServerApiKeyMigrationTests</c>; this suite
 ///     owns the deletion.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class HashMcpServerApiKeyMigrationTests
 {
     private const string PreHashMigrationId = "20260803153806_AddMcpServerApiKey";

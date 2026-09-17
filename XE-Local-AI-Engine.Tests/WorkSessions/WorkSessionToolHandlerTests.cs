@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     invocation runner seeds, so every case here stages that scope — or deliberately does not, which is the
 ///     fail-closed path that makes the profile-opt-in offer safe.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class WorkSessionToolHandlerTests
 {
     [ClassDataSource<WorkSessionHostFixture>(Shared = SharedType.PerClass)]

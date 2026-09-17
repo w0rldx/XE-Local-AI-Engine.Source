@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         the live round owns that evidence.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowEndToEndTests
 {
     private const string AnalyzeInstructions = "Judge whether this needs review.";

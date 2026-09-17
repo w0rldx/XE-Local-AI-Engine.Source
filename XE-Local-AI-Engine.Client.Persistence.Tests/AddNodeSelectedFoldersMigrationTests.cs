@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     above persistence addresses a grant by alias, so two rows sharing one would make the resolved folder ambiguous),
 ///     and the host path is a BLOB because it is encrypted at rest rather than stored as a readable path.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddNodeSelectedFoldersMigrationTests
 {
     private const string ThisMigrationId = "20260529173005_AddNodeSelectedFolders";

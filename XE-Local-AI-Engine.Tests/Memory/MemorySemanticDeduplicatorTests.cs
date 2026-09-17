@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     candidate is re-embedded each run. A deterministic map-based fake embedder makes cosine fully controllable
 ///     (mirrors the KB/ranker test embedder pattern) — no Ollama/llama-server.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class MemorySemanticDeduplicatorTests
 {
     private const string ResolvedModel = "test-embed";

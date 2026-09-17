@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Covers the orchestration guards around base-checkpoint acquisition: the disk preflight, the delete guard while a
 ///     transfer is live, and the cancel path.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BaseArtifactServiceTests : IDisposable
 {
     private const string RepoId = "unsloth/Llama-3.2-1B-Instruct";

@@ -37,6 +37,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         two are worth failing independently.
 ///     </para>
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class ContainerBridgeRealDaemonTests
 {
     private const string RequireDockerVariable = "XE_REQUIRE_DOCKER_TESTS";
@@ -415,6 +416,7 @@ public sealed class ContainerBridgeRealDaemonTests
                         $"Timed out after {timeout.TotalSeconds:0}s waiting for {what}."));
                 }
 
+                // real-timer: polls the real Docker daemon, which offers no readiness signal; the deadline token bounds it.
                 await Task.Delay(TimeSpan.FromMilliseconds(200), deadline.Token).ConfigureAwait(false);
             }
         }

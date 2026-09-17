@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class HeuristicTokenEstimatorTests
 {
     // chars/4 + 4-token per-message framing overhead.

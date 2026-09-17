@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     half against the same writer; between them the two emitters are held to one status, one Content-Type and one
 ///     body shape, which is the contract <c>ProducesProblem(413)</c> declares on all six capped routes.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RequestBodyTooLargeProblemTests
 {
     [Test]

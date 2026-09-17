@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     exception: the caller has to record a decision, and a throw would leave the artifact stuck Pending with no
 ///     reason for an operator to act on.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainedModelSmokeGateTests
 {
     private static readonly TrainingArtifactRecordView MergedArtifact = new("/staged/merged-Q4_K_M.gguf", BaseModelFilePath: null);

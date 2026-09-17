@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (conversation_id, sequence) rows from the pre-lock race is deterministically renumbered before the unique index
 ///     is created, and the index then enforces uniqueness. Also asserts the migration is a no-op on a clean database.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeChatSequenceMigrationTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

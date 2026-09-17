@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Scoped rule-set policy: which scoped rule sets a node run resolves to, what the row records about it, and what reaches the
 ///     agent's objective.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowRuleSetPolicyTests
 {
     private static readonly Guid ProjectId = Guid.Parse("7f2c1a44-1111-4000-8000-000000000001");

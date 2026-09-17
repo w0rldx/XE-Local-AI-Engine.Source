@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class EndpointExceptionMappingSourceGuardTests
 {
     private static readonly IReadOnlyDictionary<string, int> TrainingCatchAllowlist = new Dictionary<string, int>(StringComparer.Ordinal)

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
     DesktopLaunch.AdminEmailEnvironmentVariable,
     DesktopLaunch.AdminPasswordEnvironmentVariable
 ])]
+[Category(TestCategories.Integration)]
 public sealed class EngineCommandDispatchTests
 {
     [Test]

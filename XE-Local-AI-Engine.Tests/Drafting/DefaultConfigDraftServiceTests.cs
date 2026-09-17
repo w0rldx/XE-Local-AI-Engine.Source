@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     non-queueing admission gate, an aggregate prompt budget, and post-parse normalization that trusts nothing the
 ///     model asserted. No live model, Ollama daemon or llama-server is involved — the chat client is a fake.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DefaultConfigDraftServiceTests
 {
     private const string LlamaModel = "qwen3-8b:Q4_K_M";

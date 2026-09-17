@@ -15,6 +15,7 @@ using Infra = GgufStoreTestInfrastructure;
 ///     <c>Range</c> falls back to the single stream, an interrupted run resumes only the incomplete ranges, and the
 ///     connection count is clamped at the point of use. All HTTP is faked — no network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HfParallelDownloadTests
 {
     // The commit the fake origin reports for the caller's mutable "main" ref.

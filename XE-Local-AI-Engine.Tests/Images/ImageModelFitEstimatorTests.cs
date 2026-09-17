@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     that run fine), the whole set is charged in CPU mode, and an unmeasured budget reports <c>Unknown</c> rather
 ///     than degrading to a comfortable-sounding "Fits".
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelFitEstimatorTests
 {
     private const long Gb = 1024L * 1024 * 1024;

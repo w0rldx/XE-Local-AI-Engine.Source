@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         corpus to a third-party provider inside the next step's state block.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class WorkSessionCloudEgressTests
 {
     [ClassDataSource<WorkSessionServiceHostFixture>(Shared = SharedType.PerClass)]

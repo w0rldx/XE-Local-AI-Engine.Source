@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     object owns the uploaded file, so the interesting question is never "does the happy path clean up" but "does the
 ///     failure that nobody thought about clean up".
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionServiceTests
 {
     [Test]

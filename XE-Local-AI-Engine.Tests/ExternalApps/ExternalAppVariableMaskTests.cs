@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     mask-out, the keep-on-write and the SPA — and a mask the write side does not recognise silently stores the
 ///     placeholder as the application's password.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppVariableMaskTests
 {
     [Test]

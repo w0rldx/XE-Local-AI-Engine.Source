@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>PUT custom-tools/{customToolId}</c>: operator-gated, 404 for an unknown id, 400 when the replacement fails
 ///     validation, and 200 on success — with the version bumped only when the model-visible config actually changed.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class UpdateCustomToolEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

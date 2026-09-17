@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     settings file cannot be read, log and swallow — a node that refuses to start because a backfill failed is a far
 ///     worse outcome than a list that corrects itself on the next start.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ToolCapableModelBackfillServiceTests
 {
     [Test]

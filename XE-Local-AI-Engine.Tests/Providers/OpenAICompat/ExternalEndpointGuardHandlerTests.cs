@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Its locality declaration — which unlocks workspace tools, the knowledge base and <c>run_python</c> — is granted
 ///     against that one address, so anything that could move the destination has to be refused rather than trusted.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalEndpointGuardHandlerTests
 {
     private static readonly Uri PinnedBase = new("https://api.example.com:8443/v1/");

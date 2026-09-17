@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     rows (which fires the FTS insert trigger), run the purge, then assert every table AND the FTS index are empty. This
 ///     deliberately uses the FK-off runtime connection so an EF-tracked cascade cannot produce a false pass.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
 {
     private const string SearchableToken = "zebrahorse";

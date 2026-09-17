@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     encrypted rows on a retention purge. This walks the live EF model rather than a migrated schema so the failure
 ///     fires the moment a new conversation/message-keyed entity configuration is added, before a migration even exists.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ConversationFootprintPurgeCoverageTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkBradleyTerryTests
 {
     private static readonly Guid RunA = new("11111111-1111-1111-1111-111111111111");

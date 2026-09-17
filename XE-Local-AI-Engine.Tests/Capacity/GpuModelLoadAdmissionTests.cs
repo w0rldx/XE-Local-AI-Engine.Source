@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     release), a cancelled waiter abandons the wait cleanly without stealing the gate, a bounded max-wait surfaces a
 ///     typed timeout rather than hanging, and it records the wait-duration + timeout metrics on the shared XE.Node meter.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GpuModelLoadAdmissionTests
 {
     [Test]

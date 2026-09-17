@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Direct unit tests for the judge's DETERMINISTIC assertion scoring path (no model call). The required/forbidden
 ///     phrase rules are scored in plain code with Ordinal comparison.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DefaultPlaybookEvalJudgeTests
 {
     [Test]

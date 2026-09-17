@@ -33,6 +33,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // The production-sampler tests attach a global recorded ActivityListener for the duration of their host; NotInParallel
 // serializes every test in this class so that listener can never leak into the bare-factory "-00" assertions.
 [NotInParallel(nameof(BackendTraceCorrelationTests))]
+[Category(TestCategories.Integration)]
 public sealed class BackendTraceCorrelationTests
 {
     private const string InboundTraceId = "0af7651916cd43dd8448eb211c80319c";

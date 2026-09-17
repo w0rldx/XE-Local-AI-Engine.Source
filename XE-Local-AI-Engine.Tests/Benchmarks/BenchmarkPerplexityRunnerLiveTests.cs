@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     killed base phase publishes nothing. Both skip on a host with no llama.cpp runtime or no model to score, which
 ///     is every CI machine — the assertions here are for the box the measurement is actually taken on.
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class BenchmarkPerplexityRunnerLiveTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

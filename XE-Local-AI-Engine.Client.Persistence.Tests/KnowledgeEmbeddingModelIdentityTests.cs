@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     against a provider whose installed set makes the resolver pick a GGUF name that differs from the configured name,
 ///     so a same-dimension model swap is detectable (the reviewer's latent silent-corruption gap).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 {
     private const string ConfiguredName = "nomic-embed-text";

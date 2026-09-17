@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class GraphWorkflowRunHubTests
 {
     /// <summary>The replay window the hub is configured with below. Read from the OPTION, unlike the Dev hub's private const.</summary>

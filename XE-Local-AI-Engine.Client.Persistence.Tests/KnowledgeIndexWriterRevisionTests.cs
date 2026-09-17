@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     Revision compare-and-swap coverage for the final knowledge-index write. Repository updates keep a stable document
 ///     id, so an old embedding job must not commit merely because the source row still exists.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
 {
     private const string CurrentContentHash = "current-repository-revision";

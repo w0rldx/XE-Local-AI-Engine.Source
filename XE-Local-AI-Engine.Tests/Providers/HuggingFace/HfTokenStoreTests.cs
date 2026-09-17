@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     The optional HF token round-trips through the <see cref="IDataProtector" /> store, clears back to anonymous,
 ///     is never written in plaintext, and a decryption failure self-heals to anonymous without surfacing the token.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HfTokenStoreTests : IDisposable
 {
     private const string Token = "hf_secret_access_token_value";

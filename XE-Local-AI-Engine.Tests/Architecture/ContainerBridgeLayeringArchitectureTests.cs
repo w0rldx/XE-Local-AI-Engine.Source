@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         a comment start and erased every reference that followed it on that line.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerBridgeLayeringArchitectureTests
 {
     /// <summary>

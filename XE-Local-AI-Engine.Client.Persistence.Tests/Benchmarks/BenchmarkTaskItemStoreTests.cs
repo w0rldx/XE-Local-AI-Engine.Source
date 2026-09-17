@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     The task-item write surface: atomic creation with the project, the legacy-only item-0 backfill, the revision
 ///     and input-hash bump every mutation makes, and the item-set hash whose movement resets the rank cohort.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkTaskItemStoreTests : IDisposable
 {
     private const string PolicyHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

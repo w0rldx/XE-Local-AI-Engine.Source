@@ -32,6 +32,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         moving the dependency into a <c>Client.Application</c> service the endpoint takes instead.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EndpointDependencyTests
 {
     private const string ClientNamespace = "XE_Local_AI_Engine.Client";

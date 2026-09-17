@@ -31,6 +31,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     there is no direct execution entry point in this graph. The new parameter schema carries no approved-image /
 ///     provider-name fields.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelRecommendationCheckSchedulerPathTests
 {
     private const long Gb = 1024L * 1024 * 1024;

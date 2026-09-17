@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     assert both halves of the narrowing: the typed correlation failure is still a 404, and a plain
 ///     <c>InvalidOperationException</c> is now the 500 that says something is broken.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CancelNodeChatMessageEndpointTests
 {
     private const string CancelRoute = "/api/local/v1/chat/cancel";

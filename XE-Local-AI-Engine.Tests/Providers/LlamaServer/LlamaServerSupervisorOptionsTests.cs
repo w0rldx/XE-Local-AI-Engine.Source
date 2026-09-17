@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The size-aware readiness-timeout computation and the options validation added to
 ///     <see cref="LlamaServerSupervisorOptions" />.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerSupervisorOptionsTests
 {
     private const long BytesPerGiB = 1024L * 1024 * 1024;

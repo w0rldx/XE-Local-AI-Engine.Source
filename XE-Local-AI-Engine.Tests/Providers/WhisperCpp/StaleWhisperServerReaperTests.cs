@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The startup reaper must kill a previous run's orphan and nothing else. All matching runs through an in-memory
 ///     scanner fake: no real process, and no real file I/O, because the path filter is pure string normalization.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class StaleWhisperServerReaperTests
 {
     private static readonly string BinariesRoot = Path.Combine(Path.GetTempPath(), "xe-whisper-reaper-test", "whisper.cpp");

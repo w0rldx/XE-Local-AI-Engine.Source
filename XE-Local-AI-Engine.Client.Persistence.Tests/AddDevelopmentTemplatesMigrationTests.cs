@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     <c>AddDevelopmentTemplates</c> creates the template registry plus the per-folder materialization record. The
 ///     unique alias index is what lets an operator refer to a template by a short name without ambiguity.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddDevelopmentTemplatesMigrationTests
 {
     [Test]

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     What the boot pass does with the three kinds of disagreement it can find: a row an interrupted operation left
 ///     transient, a settled row whose containers went their own way, and containers no row claims.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppStartupReconcilerTests
 {
     /// <summary>

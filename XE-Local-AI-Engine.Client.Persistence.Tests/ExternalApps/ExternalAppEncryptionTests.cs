@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     therefore must print nothing. <c>variables_json</c> holds the user's own credentials; <c>bridge_token</c> holds
 ///     the credential the engine issued the application for its own inference surface, and both are sealed the same way.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppEncryptionTests
 {
     [Test]

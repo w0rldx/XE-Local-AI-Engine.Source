@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 // The lease handles are disposed explicitly on the paths under test; CA2000 cannot track the out-var + conditional flow.
 #pragma warning disable CA2000
+[Category(TestCategories.Unit)]
 public sealed class DocumentExtractionAdmissionGateTests
 {
     [Test]

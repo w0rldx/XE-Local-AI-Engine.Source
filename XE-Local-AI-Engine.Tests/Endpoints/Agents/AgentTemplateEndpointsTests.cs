@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Operator-gated starter-pack template endpoints: list (GET) and import (POST). Both require a node bearer token;
 ///     list returns the curated catalog with provenance flags, and import returns the per-slug outcome buckets.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentTemplateEndpointsTests
 {
     private const string ListRoute = "/api/local/v1/agents/templates";

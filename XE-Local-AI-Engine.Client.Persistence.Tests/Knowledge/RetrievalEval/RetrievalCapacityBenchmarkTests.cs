@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     Only the two tests that call <see cref="RunAsync" /> carry <c>[NotInParallel]</c>; see the comment there. The
 ///     other three assert constants and guard clauses in memory and run in parallel.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class RetrievalCapacityBenchmarkTests : IDisposable
 {
     private const string ProfileVariable = "XE_RAG_CAPACITY_PROFILE";

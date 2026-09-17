@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Covers the base-checkpoint enumeration and multi-file download against a stubbed Hub and download surface.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BaseCheckpointStoreTests : IDisposable
 {
     private const string BaseRepo = "unsloth/Llama-3.2-1B-Instruct";

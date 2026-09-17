@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ConversationCompactionOptionsTests
 {
     [Test]

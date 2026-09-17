@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     harvested case enabled (404 for an unknown / cross-agent / non-harvested / already-enabled case). Both are
 ///     route-only POSTs, so the client posts <c>{}</c> (FastEndpoints 415s a truly empty body).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class HarvestGoldenConversationsEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

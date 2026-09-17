@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     is unrecoverable afterwards, and every rejection — malformed, unknown prefix, wrong digest, revoked — is the
 ///     same <see langword="null" />, because a caller must never learn which of the four it hit (ruling R2-6).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationApiKeyServiceTests
 {
     [Test]

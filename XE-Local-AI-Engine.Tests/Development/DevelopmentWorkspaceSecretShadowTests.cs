@@ -20,6 +20,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///         real file. Every assertion below therefore has a companion assertion that the worktree is unchanged.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
 {
     private static readonly DevelopmentCommandProfile GenericProfile =

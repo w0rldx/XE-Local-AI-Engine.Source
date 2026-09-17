@@ -13,6 +13,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     and surfaces cancellation; a missing tool degrades to <see langword="null" />. The POSIX-shell cases are gated to
 ///     Linux (the box + CI); the missing-tool case is cross-platform.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ProcessProbeTests
 {
     private static ProcessProbe CreateProbe()

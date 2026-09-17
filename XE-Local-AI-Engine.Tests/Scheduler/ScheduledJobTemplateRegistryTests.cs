@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Unit tests for <see cref="ScheduledJobTemplateRegistry" />.
 ///     Covers: ListTemplates, GetTemplate hit/miss, TryGetHandler true/false, and duplicate-TemplateId ctor throw.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ScheduledJobTemplateRegistryTests
 {
     [Test]

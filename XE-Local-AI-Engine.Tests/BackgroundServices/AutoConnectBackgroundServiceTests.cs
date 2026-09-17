@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 [NotInParallel(nameof(AutoConnectBackgroundServiceTests))]
+[Category(TestCategories.Unit)]
 public sealed class AutoConnectBackgroundServiceTests : IDisposable
 {
     public void Dispose()

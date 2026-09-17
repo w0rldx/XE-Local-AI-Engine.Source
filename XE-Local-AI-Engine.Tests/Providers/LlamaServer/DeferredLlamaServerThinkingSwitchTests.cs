@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     OpenAI chat pipeline over a request-capturing transport and assert the serialized body: the switch is present ONLY
 ///     when the disable-thinking marker is set, and every other request is byte-identical (no <c>chat_template_kwargs</c>).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerThinkingSwitchTests
 {
     [Test]

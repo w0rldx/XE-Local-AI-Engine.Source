@@ -8,6 +8,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class ResolveToolApprovalEndpointTests
 {
     private const string Route = "/api/local/v1/chat/approvals/resolve";

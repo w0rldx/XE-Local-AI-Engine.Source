@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     attempt that must land inside the primary-success transaction, deletion order, recovery and the reference-key
 ///     compare-and-swap.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
 {
     private const string HashA = "0000000000000000000000000000000000000000000000000000000000000001";

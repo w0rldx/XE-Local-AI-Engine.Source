@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <see cref="ContainerRuntimeContractTests" />.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerRuntimeWireMappingTests
 {
     /// <summary>The first header byte of a standard-output chunk in Docker's exec stream framing.</summary>

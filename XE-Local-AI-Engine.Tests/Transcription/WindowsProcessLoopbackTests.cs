@@ -28,6 +28,7 @@ using OS = TUnit.Core.Enums.OS;
 /// </remarks>
 [RunOn(OS.Windows)]
 [SupportedOSPlatform("windows10.0.19041.0")]
+[Category(TestCategories.Unit)]
 public sealed class WindowsProcessLoopbackTests
 {
     [Test]

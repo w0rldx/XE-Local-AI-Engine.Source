@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Guards the operator wire contract for every role supported by the inference benchmark harness.</summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFitMapperRoleTests
 {
     [Test]

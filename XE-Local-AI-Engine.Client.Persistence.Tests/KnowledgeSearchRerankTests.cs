@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     (FTS) order — which the reranker then reorders. Reranking scores the BASE chunk content and is bounded to the
 ///     candidate pool.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeSearchRerankTests : IDisposable
 {
     private const string RerankerModel = "bge-reranker-v2-m3";

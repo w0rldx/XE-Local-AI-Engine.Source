@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The routes stay DISCOVERED either way: what changes is behaviour, never the published surface
 ///     (<c>OpenApiDocumentTests.LocalOpenApiDocument_DescribesExternalAppSurface_WhenTheFeatureIsDisabled</c>).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppFeatureAvailabilityTests
 {
     /// <summary>

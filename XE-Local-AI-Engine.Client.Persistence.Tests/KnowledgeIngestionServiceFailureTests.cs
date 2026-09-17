@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     the real embedder maps to a content-free <see cref="KnowledgeIngestionException" />. The seeded document text is a
 ///     distinctive token that must NOT leak into the persisted failure reason.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
 {
     private const string SecretDocumentText = "classifiedpayload42";

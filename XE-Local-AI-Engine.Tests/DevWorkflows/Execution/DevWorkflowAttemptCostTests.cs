@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     earlier attempts are captured onto their own retry events before the reset empties the row. These are the tests
 ///     that a total is <c>final row + every retry snapshot</c> and that neither source can lose an attempt.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowAttemptCostTests
 {
     private const string BoundAgentId = "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b";

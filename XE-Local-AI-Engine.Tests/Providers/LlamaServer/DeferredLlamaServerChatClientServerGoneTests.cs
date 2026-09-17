@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     during a force-eject and was NOT matched originally, so the run misclassified as a generic provider
 ///     failure. Connect-time shapes (refused/reset sockets, ConnectionError) were already covered.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerChatClientServerGoneTests
 {
     [Test]

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Readiness must not be polluted by the OPTIONAL Central Platform pairing: an unpaired (local-only) node is
 ///     Healthy, and only a node that IS paired but whose pairing is failing degrades.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WorkerHealthCheckTests
 {
     [Test]

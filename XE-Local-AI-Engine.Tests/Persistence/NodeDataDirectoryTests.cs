@@ -17,6 +17,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     first-launch migration carries a broken-RC tester's existing artifacts across. The settings store rounds-trips
 ///     through that root and applies owner-only perms on non-Windows to match the key-file posture.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class NodeDataDirectoryTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-node-data-dir-tests", Guid.NewGuid().ToString("N"));

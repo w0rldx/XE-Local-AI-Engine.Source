@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the caller before its row is durable, and exactly one of <c>Publish</c> or <c>Abandon</c> follows every
 ///     successful <c>Reserve</c> — a hole readers step over is legal, a reservation nobody resolves is a stall.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EmitOutputToolHandlerTests
 {
     [Test]

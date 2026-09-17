@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class EngineCliProcessTests : IDisposable
 {
     /// <summary>The engine's deterministic "--port is taken" exit code; it never falls back to another port.</summary>

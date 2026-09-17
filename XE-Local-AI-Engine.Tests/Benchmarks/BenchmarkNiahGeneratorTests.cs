@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     corpus): a case that generated differently on a second machine would carry a different input hash for the same
 ///     configuration, and every answer ever given to it would read as an answer to a question that no longer exists.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkNiahGeneratorTests
 {
     private static readonly Guid ParentId = new("aaaaaaaa-1111-2222-3333-444444444444");

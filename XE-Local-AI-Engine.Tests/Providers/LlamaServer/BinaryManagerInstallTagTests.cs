@@ -18,6 +18,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     writes NO state; the 3-tier <see cref="LlamaCppBinaryManager.EnsureBinaryAsync" /> still bootstraps from the pins
 ///     offline. All HTTP is faked — no network. The smoke test spawns a real executable, so these are Linux-only.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BinaryManagerInstallTagTests
 {
     private const string Tag = "b9799";

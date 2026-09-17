@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     must never propagate into the background ingestion pipeline, and the warning it leaves behind must name the
 ///     exception type only, never document content.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeIndexingNotifierTests
 {
     [Test]

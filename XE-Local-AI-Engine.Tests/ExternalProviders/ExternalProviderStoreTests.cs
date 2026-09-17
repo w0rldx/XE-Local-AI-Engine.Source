@@ -18,6 +18,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     that renaming a connection does not de-authenticate it, and that a stale editor cannot silently overwrite a
 ///     concurrent edit.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalProviderStoreTests : IDisposable
 {
     // Matches the store's own options, so a hand-written payload is spelled exactly as the store would spell it.

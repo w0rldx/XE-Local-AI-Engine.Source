@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class GgufAcquisitionOperationRegistryTests
 {
     [Test]

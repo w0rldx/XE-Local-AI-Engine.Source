@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     was reported to the operator — and to the eject/update gates that read this list — as "nothing is running".
 ///     These tests pin both halves: a probe/transport failure still degrades, anything else stays a 500.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ListRunningModelsEndpointTests
 {
     private const string RunningRoute = "/api/local/v1/model-fit/running";

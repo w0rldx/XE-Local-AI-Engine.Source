@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     before the JSON is written — so a parser that read the first line, or tried to parse the whole buffer, would
 ///     fail against the real runtime. Verified live on a dev host 2026-08-15.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingRuntimeProbeParserTests
 {
     [Test]

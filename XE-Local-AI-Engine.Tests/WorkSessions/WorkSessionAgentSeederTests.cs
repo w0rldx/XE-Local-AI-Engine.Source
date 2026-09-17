@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>AllowedToolNames</c>: the agent-send path intersects the offer with that list, and the state tools appear only
 ///     in the profile-opt-in offer, so an agent that does not name them gets none of them.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class WorkSessionAgentSeederTests
 {
     [ClassDataSource<SeededWorkSessionAgentsFixture>(Shared = SharedType.PerClass)]

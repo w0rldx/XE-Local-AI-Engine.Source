@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     GGUF), while a model explicitly mapped to <c>ollama</c> still routes to Ollama. This is the routing half of the
 ///     "Ollama is now optional" decision — the flipped default only governs truly-unmapped names.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelProviderResolverDefaultTests
 {
     [Test]

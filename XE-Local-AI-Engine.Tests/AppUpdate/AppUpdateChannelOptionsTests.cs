@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Locks the public GitHub update-source policy independently from Velopack's OS package channel.</summary>
+[Category(TestCategories.Unit)]
 public sealed class AppUpdateChannelOptionsTests
 {
     private const string ValidRepositoryUrl = "https://github.com/example/public-repo";

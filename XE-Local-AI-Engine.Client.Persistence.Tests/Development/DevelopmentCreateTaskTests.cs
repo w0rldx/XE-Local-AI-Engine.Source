@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     Adding a task to a project that already has one — the capability workflow decomposition needs, and the thing the
 ///     project-id unique index made impossible until it was widened.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentCreateTaskTests : IDisposable
 {
     private readonly DevelopmentTestFixture _fixture = new();

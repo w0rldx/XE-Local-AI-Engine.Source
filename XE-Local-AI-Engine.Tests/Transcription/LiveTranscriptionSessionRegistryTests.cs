@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         this file, because the frame queue makes a push's effect arrive after the push returns.
 ///     </para>
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class LiveTranscriptionSessionRegistryTests
 {
     private const string ModelId = "ggml-base";

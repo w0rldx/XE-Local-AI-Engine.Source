@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the assertion that protects every existing caller — that a request which does not mention it produces exactly
 ///     the chain it produced before this mode existed.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class SandboxFilesystemIsolationContractTests
 {
     [Test]

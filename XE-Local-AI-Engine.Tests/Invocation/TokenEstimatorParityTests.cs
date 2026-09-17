@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     test locks the two copies together so a change to one that is not mirrored in the other fails here — including the
 ///     script-aware weighting (ASCII / Latin accents / CJK / emoji).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TokenEstimatorParityTests
 {
     [Test]

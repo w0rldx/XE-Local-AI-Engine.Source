@@ -15,6 +15,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+// System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
+using CategoryAttribute = TUnit.Core.CategoryAttribute;
 
 /// <summary>
 ///     Drives the real connection manager against an in-process MCP server (genuine SDK protocol over an in-memory
@@ -24,6 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     contends on the shared pumping machinery.
 /// </summary>
 [NotInParallel(nameof(McpServerConnectionManagerTests))]
+[Category(TestCategories.Unit)]
 public sealed class McpServerConnectionManagerTests
 {
     [Test]

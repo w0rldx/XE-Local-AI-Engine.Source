@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     works, that the list pages and orders the way the session list depends on, that deleting a session takes its
 ///     transcript with it, and that the unique <c>(session_id, seq)</c> index rejects a repeated sequence.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionSessionStoreTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());

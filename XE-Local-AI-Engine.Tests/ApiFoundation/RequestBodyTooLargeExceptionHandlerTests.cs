@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     inside model binding, so the endpoint's own Content-Length exit never runs and its throw is what reaches the
 ///     pipeline. Unmapped, that throw was a 500 on every route that declares a 413.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RequestBodyTooLargeExceptionHandlerTests
 {
     [Test]

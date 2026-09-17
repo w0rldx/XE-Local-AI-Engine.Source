@@ -31,6 +31,7 @@ using OS = TUnit.Core.Enums.OS;
 /// </remarks>
 [RunOn(OS.Linux)]
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class WhisperRuntimeLiveSmokeTests
 {
     private const string LiveEnvironmentVariable = "XE_WHISPER_LIVE";

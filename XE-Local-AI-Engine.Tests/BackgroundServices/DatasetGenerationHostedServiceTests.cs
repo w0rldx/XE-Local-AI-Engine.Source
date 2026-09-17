@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     an exception escaping <c>ExecuteAsync</c> stops the whole host under the default
 ///     <c>BackgroundServiceExceptionBehavior.StopHost</c>.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DatasetGenerationHostedServiceTests
 {
     [Test]

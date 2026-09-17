@@ -36,6 +36,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 /// </summary>
 #pragma warning disable OPENAI001 // Experimental OpenAI Responses surface — the entire Codex transport is built on it.
+[Category(TestCategories.Unit)]
 public sealed class CodexToolCallingWireTests
 {
     private const string ToolName = "get_weather";

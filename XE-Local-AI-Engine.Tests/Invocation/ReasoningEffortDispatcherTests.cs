@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     both language phrase sets, and the swap gates. The dispatcher never fails a turn — under any refusal it falls
 ///     back to the resolved model at a lower effort — so every case here asserts a decision, never an exception.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ReasoningEffortDispatcherTests
 {
     private const string ResolvedModel = "qwen3.8-27b";

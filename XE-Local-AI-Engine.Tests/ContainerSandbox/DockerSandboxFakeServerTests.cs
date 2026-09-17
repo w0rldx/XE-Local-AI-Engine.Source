@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <see cref="DockerSandboxRealDaemonTests" />.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DockerSandboxFakeServerTests
 {
     /// <summary>The image the fake daemon is told it holds. Digest-pinned because the provider refuses anything else.</summary>

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         sibling's clock, and advancing it half an hour would expire their node runs too.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowDeadlineTests
 {
     /// <summary>A project id on the work item, because a graph with tool nodes in it is only startable with one.</summary>

@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     EF/sqlite <see cref="ImageJobStore" /> so the non-terminal query and the prompt-ciphertext-preserving update are
 ///     covered end-to-end.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ImageJobStartupReconcilerTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

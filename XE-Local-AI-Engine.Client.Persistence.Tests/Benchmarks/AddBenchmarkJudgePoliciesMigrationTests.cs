@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     judging, and judge work keyed by attempt instead of by run. Its Up deliberately deletes every pre-existing
 ///     benchmark row by explicit operator decision, which is asserted here rather than trusted.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddBenchmarkJudgePoliciesMigrationTests
 {
     private const string PreviousMigration = "20260816174029_AddBenchmarkRunLaunchReceipts";

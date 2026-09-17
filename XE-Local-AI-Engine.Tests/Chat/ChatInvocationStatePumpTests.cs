@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     them and detect a gap from the offsets alone), a terminal never lands ahead of its own tail, and the SSE
 ///     cadence stays fast while the far more expensive persistence cadence lags well behind it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ChatInvocationStatePumpTests
 {
     [Test]

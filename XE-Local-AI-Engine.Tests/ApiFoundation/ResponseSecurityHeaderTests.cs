@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 using System.Net;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class ResponseSecurityHeaderTests
 {
     private const string AntiFramingHeaderName = "X-Frame-Options";

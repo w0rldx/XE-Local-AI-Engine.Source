@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     ranked recommendations, both cascading off the snapshot. It also created <c>approved_utility_images</c>, which a
 ///     later migration drops — see <see cref="DropApprovedUtilityImagesMigrationTests" />.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddModelFitTablesMigrationTests
 {
     [Test]

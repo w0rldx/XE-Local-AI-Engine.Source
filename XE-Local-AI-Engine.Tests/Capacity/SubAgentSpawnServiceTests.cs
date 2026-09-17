@@ -30,6 +30,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     outer cancellation token flows into the inner run. The capacity verdict is mocked so each dispatch branch is
 ///     exercised in isolation; no Ollama/Docker/network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SubAgentSpawnServiceTests
 {
     private const string Model = "bartowski/Model-GGUF:Q4_K_M";

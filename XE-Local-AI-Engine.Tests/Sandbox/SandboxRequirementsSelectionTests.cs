@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         guarantee is untested; it is unfalsifiable at runtime by construction, which is stronger.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxRequirementsSelectionTests
 {
     /// <summary>

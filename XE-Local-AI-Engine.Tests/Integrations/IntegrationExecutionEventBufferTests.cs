@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     otherwise fall below the cursor and be lost to every live consumer forever. And an entry with a pending
 ///     reservation is pinned: evicting it would strand a reader and let the publish that follows land on nothing.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationExecutionEventBufferTests
 {
     [Test]

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     recommendation walks the list and keeps the last fitting row, so a re-ordering would silently change every
 ///     recommendation this node makes without failing anything else.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperModelCatalogTests
 {
     [Test]

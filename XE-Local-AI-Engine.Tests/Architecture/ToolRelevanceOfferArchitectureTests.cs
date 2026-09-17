@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     second construction site anywhere in product code would silently make those arrays filterable, hiding tools from
 ///     a turn that has no escape hatch to get them back. This was previously pinned by grep alone.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ToolRelevanceOfferArchitectureTests
 {
     private const string ConstructionSite = "new ListToolsFunction(";

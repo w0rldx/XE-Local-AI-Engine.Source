@@ -33,4 +33,8 @@
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\RecordingLogger.cs" Link="Testing\RecordingLogger.cs"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="XE_Local_AI_Engine.AI.Agent.Tests.Categories"/>
+  </ItemGroup>
+
 </Project>

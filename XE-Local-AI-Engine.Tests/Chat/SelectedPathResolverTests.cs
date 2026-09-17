@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class SelectedPathResolverTests
 {
     [Test]

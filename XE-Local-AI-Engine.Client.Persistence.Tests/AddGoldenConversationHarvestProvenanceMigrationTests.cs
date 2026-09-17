@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     default <c>source = 0</c> (Manual) with null provenance ids; rollback drops the three columns. Mirrors
 ///     <see cref="NodeChatOriginMigrationTests" /> (historical-row insert + up/down assertions over raw columns).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisposable
 {
     private const string PreHarvestProvenanceMigrationId = "20260531133736_AddPlaybookActionEnabledAtUtc";

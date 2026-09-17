@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         exercised — worse than no test at all.
 ///     </para>
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class SandboxIsolationLiveTests
 {
     private const string EnabledVariable = "XE_COMPUTE_LIVE";

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     <c>InvalidJudgeTransition</c> and stall the single-consumer queue behind an item it could never claim. Both are
 ///     now four-arm switches, and this covers every cell of that table.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
 {
     private const string PolicyHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Reasoning is TWO distinct capabilities: GRADED (a switchable <c>think:&lt;level&gt;</c> control) and NATIVE (the
 ///     model reasons on a template-baked channel with no switch — the OpenAI harmony family).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufCapabilityDetectorTests
 {
     // A trimmed but representative Qwen2.5 template fragment — it iterates `tools` and emits the tool_call message.

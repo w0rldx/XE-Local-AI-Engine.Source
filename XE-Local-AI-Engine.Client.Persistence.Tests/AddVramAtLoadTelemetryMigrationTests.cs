@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     <c>dev_workflow_node_runs</c> on an upgrade and on a fresh migrate-to-head, drops both on rollback without
 ///     disturbing the columns that preceded them, and leaves no model/snapshot drift.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
 {
     private const string FreeColumn = "vram_free_at_load_bytes";

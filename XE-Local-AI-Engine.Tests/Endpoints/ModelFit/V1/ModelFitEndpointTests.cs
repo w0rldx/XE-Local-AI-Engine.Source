@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     shapes; and the security invariant that the hf-token endpoints NEVER echo the token value. These run against the
 ///     real DI host with an empty DB (the scheduler is not started in the test host).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ModelFitEndpointTests
 {
     /// <summary>

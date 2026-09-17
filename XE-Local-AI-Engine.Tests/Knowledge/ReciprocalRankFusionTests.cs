@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     appears in of <c>1 / (k + rank)</c> with <c>k = 60</c> (1-based rank). The result is the union of every chunk id,
 ///     ordered by descending fused score with a deterministic tiebreak on the chunk id.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ReciprocalRankFusionTests
 {
     private readonly ReciprocalRankFusion _fusion = new();

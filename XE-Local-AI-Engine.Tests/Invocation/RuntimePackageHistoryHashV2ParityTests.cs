@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Golden-vector parity tests for canonical hash. Hashes must match C0re server exactly.
 ///     Fixture source: tests/Fixtures/envelope-hash-v2/
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RuntimePackageHistoryHashV2ParityTests
 {
     private const string Aad = "YWFk";

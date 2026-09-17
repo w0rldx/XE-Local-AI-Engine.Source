@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The estimator's job is not precision — activation memory is inherently model- and kernel-dependent — but
 ///     direction: it must never under-estimate its way into admitting a run that OOMs an hour in.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingFootprintEstimatorTests
 {
     private const long OneGigabyte = 1024L * 1024 * 1024;

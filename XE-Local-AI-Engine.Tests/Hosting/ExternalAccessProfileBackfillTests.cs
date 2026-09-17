@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     operator to answer; and an unreadable settings file leaves the profile UNDECIDED rather than silently re-enabling
 ///     outbound checks that were turned off.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAccessProfileBackfillTests
 {
     [Test]

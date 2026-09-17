@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class ExceptionHandlerRegistrationOrderTests
 {
     [Test]

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>OllamaModelInfoParser</c> tests when S5 collapsed the duplicate parser onto this reader, plus the null case
 ///     the reader answers differently: it returns <see langword="false" /> where the parser threw.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class OllamaModelInfoReaderTests
 {
     [Test]

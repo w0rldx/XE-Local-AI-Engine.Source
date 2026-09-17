@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     before trusting the daemon, so a resolver that silently preferred the wrong socket would make the attestation prompt describe an
 ///     endpoint nobody chose.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DockerDaemonEndpointResolverTests
 {
     /// <summary>The value that must never survive a rendering, whichever component an operator hid it in.</summary>

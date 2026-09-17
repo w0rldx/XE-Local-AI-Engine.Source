@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     replaying. The judge section left the snapshot with the 1–5 judge; the migration that removed it
 ///     deletes every row that carried one, so no stored payload has to keep reading.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
 {
     private const string LiteralV1Snapshot =

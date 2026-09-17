@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     resolved weight identity in addition to its name, so a model updated under the SAME name (an Ollama / llama.cpp
 ///     weight swap) moves the fingerprint and can no longer authorize a promotion recorded against the old weights.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class PlaybookEvalFingerprintTests
 {
     private static readonly Guid ActionId = Guid.NewGuid();

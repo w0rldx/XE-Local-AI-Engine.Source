@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     models are left untouched (no clobbering an operator override), and a failure to list the installed models
 ///     (Ollama absent/unreachable) is a no-op rather than a startup crash.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class OllamaProviderMapBackfillTests
 {
     [Test]

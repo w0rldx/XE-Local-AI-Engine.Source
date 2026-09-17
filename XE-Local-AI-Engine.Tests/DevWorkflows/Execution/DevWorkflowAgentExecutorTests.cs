@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The agent lane: what a node run does with the work session it owns, and what it does when the node has no slot
 ///     to give it.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowAgentExecutorTests
 {
     /// <summary>One agent node, so an assertion is about the lane rather than about routing.</summary>

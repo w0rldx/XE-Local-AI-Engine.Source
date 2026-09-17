@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     hubs, and a sanitized event published through <see cref="ISchedulerEventPublisher" /> reaches an authorized
 ///     connected client (proving the hub bridge end-to-end).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class SchedulerHubTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

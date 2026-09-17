@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Covers the single-slot live credential cache: a miss before anything is stored, a hit only for the exact key
 ///     it was stored under, and last-write-wins on overwrite (matches the single-connection cloud-credential model).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EntraLiveCredentialCacheTests
 {
     [Test]

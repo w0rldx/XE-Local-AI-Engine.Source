@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     classifier is exercised against an actual <see cref="SqliteException" />, not a synthetic one.
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class NodeSqliteContentionTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

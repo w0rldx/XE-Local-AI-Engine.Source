@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     fit per scope. Each is a rule a careful publisher would also keep — and each is here because "the publisher was
 ///     careful" is not an invariant, it is a hope.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkP2SchemaConstraintTests
 {
     private static readonly Guid ProjectId = new("aaaaaaaa-0000-0000-0000-000000000001");

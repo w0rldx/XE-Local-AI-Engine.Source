@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         reader below the floor, above the head or on an untracked execution deterministically.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationSseRoutesTests
 {
     private const string EventStream = "text/event-stream";
@@ -595,6 +596,7 @@ public sealed class IntegrationOneStreamHostFixture : IAsyncInitializer, IAsyncD
 
 /// <summary>Test 35a — the open-stream gate, as a status rather than as a queued connection.</summary>
 [NotInParallel("IntegrationOneStreamHost")]
+[Category(TestCategories.Integration)]
 public sealed class IntegrationSseStreamCapTests
 {
     [ClassDataSource<IntegrationOneStreamHostFixture>(Shared = SharedType.PerClass)]
@@ -701,6 +703,7 @@ public sealed class IntegrationSseStreamCapTests
                 throw new AssertionException("The single stream slot never came free.");
             }
 
+            // real-timer: the single stream slot is freed by the server, observable only by asking for it again.
             await Task.Delay(TimeSpan.FromMilliseconds(25));
         }
     }

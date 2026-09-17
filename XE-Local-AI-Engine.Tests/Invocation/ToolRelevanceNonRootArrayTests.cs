@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     participant turn and a child turn above the threshold each send their own COMPLETE tool array, even under an
 ///     active scope.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ToolRelevanceNonRootArrayTests
 {
     [Test]

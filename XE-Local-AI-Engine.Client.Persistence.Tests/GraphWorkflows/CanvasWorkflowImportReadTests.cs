@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
 ///         assertion is an absolute count, so each test migrates a database of its own.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CanvasWorkflowImportReadTests
 {
     /// <summary>The migration immediately before <c>DropCanvasWorkflows</c> — the last point <c>canvas_workflows</c> exists.</summary>

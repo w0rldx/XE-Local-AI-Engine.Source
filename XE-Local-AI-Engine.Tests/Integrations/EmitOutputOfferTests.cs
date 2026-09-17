@@ -13,6 +13,7 @@ using Harness = IntegrationCoordinatorHarness;
 ///         call can land. Every non-integration caller fails the last two, and these are the tests that keep it so.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EmitOutputOfferTests
 {
     private const string ToolName = EmitOutputToolDefinition.ToolName;

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ProviderMapCoordinationArchitectureTests
 {
     // Non-vacuity floor for the source scan below, set under today's measured 2045 .cs files across the two

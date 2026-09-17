@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     pooled role) still produces byte-identical argv, and the projection's identity is stable for equal inputs and
 ///     moves for any differing field.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerLaunchProjectionTests
 {
     private const string ExecutablePath = "/fake/bin/llama-server";

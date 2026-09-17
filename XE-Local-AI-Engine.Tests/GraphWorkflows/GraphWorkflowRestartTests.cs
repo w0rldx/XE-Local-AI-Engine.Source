@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         staging as well. The key serializes this class alone; other classes hold their own host and their own file.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowRestartTests
 {
     private const string RecoveryKey = nameof(GraphWorkflowRestartTests);

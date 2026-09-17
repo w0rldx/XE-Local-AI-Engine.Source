@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     rebuilt container; every layer above the store must drop it, and these are the assertions that say so rather
 ///     than trusting that each mapper was written by hand with that in mind.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppBridgeTokenExposureTests
 {
     private const string AppId = "test-app";

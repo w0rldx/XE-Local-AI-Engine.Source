@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="LlamaDeviceInventory.Unknown" /> rather than a false "no GPU". The process launch itself is not
 ///     exercised here — the parser is the unit; the no-spawn + degrade guards are proven via a substituted binary manager.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaDeviceInventoryProbeTests
 {
     private const long BytesPerMib = 1024L * 1024L;

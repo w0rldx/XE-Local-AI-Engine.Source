@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="LlamaGrammarToolSchemaCompatibility" /> and
 ///     <see cref="DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility" />.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaGrammarToolSchemaCompatibilityTests
 {
     // Every keyword that drives GBNF repetition unrolling, one per test case. Measured on a real llama-server

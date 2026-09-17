@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ConversationCompactionServiceTests
 {
     private static readonly Guid ConversationId = Guid.NewGuid();

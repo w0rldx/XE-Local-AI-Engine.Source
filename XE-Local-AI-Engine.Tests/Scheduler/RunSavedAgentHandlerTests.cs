@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     reservation is disposed on both success and failure, approval-required tools are stripped from the unattended
 ///     offer, an <see cref="OperationCanceledException" /> propagates, and the recorded run summary is content-safe.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RunSavedAgentHandlerTests
 {
     private const string AgentIdString = "11111111-1111-1111-1111-111111111111";

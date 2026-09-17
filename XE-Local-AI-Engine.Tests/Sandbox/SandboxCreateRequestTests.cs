@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     impossible to construct — a provider-side check would leave every other provider free to accept it, and a zero
 ///     would read as "unlimited" exactly where the field means the opposite.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxCreateRequestTests
 {
     [Test]

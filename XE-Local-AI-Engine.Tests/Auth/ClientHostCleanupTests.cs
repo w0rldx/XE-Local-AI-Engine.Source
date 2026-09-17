@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Auth;
 
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ClientHostCleanupTests
 {
     [Test]

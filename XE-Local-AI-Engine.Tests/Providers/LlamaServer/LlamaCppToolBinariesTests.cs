@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     located on disk rather than recorded, so the regression to guard is a resolver that reports a helper present when
 ///     the file is not there (the fidelity/export paths would then spawn a missing binary) or absent when it is.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaCppToolBinariesTests
 {
     [Test]

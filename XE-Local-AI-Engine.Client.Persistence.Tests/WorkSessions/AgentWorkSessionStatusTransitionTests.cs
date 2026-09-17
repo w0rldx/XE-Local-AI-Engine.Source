@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class AgentWorkSessionStatusTransitionTests
 {
     private static readonly (AgentWorkSessionStatus From, AgentWorkSessionStatus To)[] LegalTransitions =

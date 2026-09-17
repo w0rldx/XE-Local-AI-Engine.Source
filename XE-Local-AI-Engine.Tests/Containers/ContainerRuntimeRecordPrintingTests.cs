@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         not a review note: a reviewer cannot see the log statement a later slice adds, and this can.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerRuntimeRecordPrintingTests
 {
     private const string KnownSecret = "s3cr3t-odysseus-admin-password";

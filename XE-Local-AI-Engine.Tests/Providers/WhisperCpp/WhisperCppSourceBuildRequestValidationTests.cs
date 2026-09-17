@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     privileges, so the server pins the official source itself and every other shape has to be spelled out by an
 ///     operator who acknowledged that.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperCppSourceBuildRequestValidationTests
 {
     [Test]

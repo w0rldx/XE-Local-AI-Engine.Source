@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     operator must read", so the distinction is load-bearing rather than cosmetic; these tests fail loudly if the
 ///     projections ever stop routing through <c>OptionalBlob</c>.
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class TrainingStoreNullBlobTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

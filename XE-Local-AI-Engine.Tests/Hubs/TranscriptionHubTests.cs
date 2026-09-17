@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     forwarded, and what a connection's departure means. Everything behind it — the registry, the service — is
 ///     substituted, because what is under test is the hub's refusals and its watermark arithmetic.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TranscriptionHubTests
 {
     /// <summary>The replay window the hub is configured with below, read from the OPTION as the product does.</summary>

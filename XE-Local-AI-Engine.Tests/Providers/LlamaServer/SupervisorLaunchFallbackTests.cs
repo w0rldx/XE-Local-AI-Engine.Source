@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     readiness, the supervisor retries ONCE with the safe config and records the fallback per backend — but only when
 ///     the safe config then succeeds (so a genuinely broken model never poisons the backend's optimized-config state).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorLaunchFallbackTests
 {
     [Test]

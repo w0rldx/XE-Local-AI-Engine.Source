@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     successful <c>AuthenticationResult</c> here would mean fabricating MSAL's own <c>IAccount</c>/<c>AccountId</c>
 ///     shapes for no additional coverage.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class EntraAuthCodeSignInCoordinatorTests
 {
     [Test]

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     correlation envelope, and that argument summaries never leak raw host paths or secrets.
 ///     Tests run against <see cref="AgentHomeRunLogger" /> directly — no sandbox, no Docker, no Ollama.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentHomeRunLoggerTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 30, hour: 9, minute: 0, second: 0, TimeSpan.Zero);

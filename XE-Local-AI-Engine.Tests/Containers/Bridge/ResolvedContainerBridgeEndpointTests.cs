@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         is the other half of that answer, and it holds even if the refusal is ever bypassed.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ResolvedContainerBridgeEndpointTests
 {
     private const int BridgePort = 18790;

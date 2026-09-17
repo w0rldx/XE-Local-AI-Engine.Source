@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The process-local cancel handles. It exists because the invocation runner only cancels the run it is CURRENTLY
 ///     driving, so an execution still waiting on the node's single lease would ignore that call entirely.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationCancellationRegistryTests
 {
     [Test]

@@ -31,6 +31,7 @@ using OS = TUnit.Core.Enums.OS;
 ///         environment fact on a laptop and a broken gate on a machine that promised Docker.
 ///     </para>
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class ContainerRuntimeRealDaemonTests
 {
     /// <summary>Set to <c>1</c> where a daemon is promised (CI); an absent one is then a FAILURE, not a skip.</summary>

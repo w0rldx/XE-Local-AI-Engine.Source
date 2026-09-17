@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         lowered ceiling, since that check is the service's job by design.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DraftEndpointTests
 {
     private const string AgentDraftRoute = "/api/local/v1/agents/draft";

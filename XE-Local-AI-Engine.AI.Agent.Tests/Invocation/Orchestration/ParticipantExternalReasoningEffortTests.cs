@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The external-provider effort marker on the orchestration path, which bakes its reasoning into the participant
 ///     agent at construction and so has to mirror the single-agent factory exactly.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ParticipantExternalReasoningEffortTests
 {
     private const string ExternalModel = "ext:local-box/qwen3";

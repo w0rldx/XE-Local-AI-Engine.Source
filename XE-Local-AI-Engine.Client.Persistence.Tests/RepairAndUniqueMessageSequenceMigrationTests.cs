@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     leaves well-formed data untouched and separates only genuine collisions. Both halves are asserted here: the
 ///     repair over colliding rows, and the constraint that stops the collision recurring.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class RepairAndUniqueMessageSequenceMigrationTests
 {
     private const string PreRepairMigrationId = "20260711002326_AddBenchmarkProfileRevisionBinding";

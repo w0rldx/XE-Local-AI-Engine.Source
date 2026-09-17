@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel("DevelopmentFeatureConfiguration")]
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentEndpointTests
 {
     private static readonly Guid ProjectId = Guid.Parse("11111111-1111-1111-1111-111111111111");

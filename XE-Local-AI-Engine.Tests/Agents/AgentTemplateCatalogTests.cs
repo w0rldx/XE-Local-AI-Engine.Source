@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Verifies the starter-pack catalog loads the embedded <c>agent-templates.seed.json</c> resource through the real
 ///     wired DI graph (not just from disk) and that every template carries the required non-empty fields.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentTemplateCatalogTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

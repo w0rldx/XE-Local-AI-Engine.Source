@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     confinement and because start, update and reset all re-enter the same pass: "a pre-existing file is a
 ///     violation" would fail every rebuild after the first.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppStorageLayoutTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-external-apps-layout-" + Guid.NewGuid().ToString("N"));

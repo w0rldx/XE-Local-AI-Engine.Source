@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 ///     backfill re-runs detection against the project's own repository — and, crucially, declines to guess when it
 ///     cannot see the repository at all.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentProfileBackfillTests : IDisposable
 {
     private readonly DevelopmentTestFixture _fixture = new();

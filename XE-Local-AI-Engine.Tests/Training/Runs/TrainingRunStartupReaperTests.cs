@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     pid-plus-path match, would happily kill an unrelated Python. Every recorded field is a gate, and each one is
 ///     pinned individually here because the guarantee is per-field.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingRunStartupReaperTests
 {
     private static readonly TrainingLaunchReceiptV1 Receipt = new()

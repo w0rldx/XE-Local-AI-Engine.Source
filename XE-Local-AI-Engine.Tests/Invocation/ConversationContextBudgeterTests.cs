@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
+[Category(TestCategories.Unit)]
 public sealed class ConversationContextBudgeterTests
 {
     /// <summary>

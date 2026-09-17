@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     assertion here also asks what it left alone. A GGUF's map row, an Ollama backfill row and a hand-curated
 ///     allow-list entry for a local model must all come through it untouched.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ExternalProviderReconcilerTests
 {
     [Test]

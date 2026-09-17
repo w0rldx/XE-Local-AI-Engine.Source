@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // The metric-asserting tests capture the node meter globally via a MeterListener; running the whole class serially keeps
 // a sibling test's watchdog-timeout/abandonment emission from bleeding into another test's capture window.
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class StreamIdleWatchdogTests
 {
     [Test]

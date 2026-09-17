@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///         been quiesced and drained — a <c>Down</c> that fails there fails at the worst possible moment.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddBenchmarkLaunchIdentitySchemeMigrationTests
 {
     private const string PreviousMigrationId = "20260903104044_AddIntegrationFoundation";

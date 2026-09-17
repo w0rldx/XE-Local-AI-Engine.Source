@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>ValidateOnStart</c>, so every branch here is the difference between a misconfiguration that stops the host at
 ///     boot and one that surfaces much later as an agent that will not construct.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentOptionsValidatorTests
 {
     [Test]

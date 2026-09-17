@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     this feature puts on disk — the trainer needs a real file to open — so it is owner-only and swept on every
 ///     terminal path, failures included.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingRunWorkspaceTests : IDisposable
 {
     private readonly FixedNodeSqliteKeyHolder _keyHolder = new(RandomNumberGenerator.GetBytes(32));

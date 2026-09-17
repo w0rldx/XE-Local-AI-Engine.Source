@@ -30,6 +30,7 @@ using OS = TUnit.Core.Enums.OS;
 ///         (<c>DesktopLifecycle</c> intercepts it and runs the full supervisor teardown).
 ///     </para>
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class WindowsJobObjectTreeKillTests
 {
     /// <summary>

@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         runs — and reconciling the whole node is precisely what these tests assert, so it cannot be narrowed.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowRestartTests
 {
     private const string SingleAgent = """

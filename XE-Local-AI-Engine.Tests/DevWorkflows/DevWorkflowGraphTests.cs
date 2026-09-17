@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     produces a run that HANGS rather than one that fails — which is the failure mode a durable runtime can least
 ///     afford, since nothing ever comes along to notice.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevWorkflowGraphTests
 {
     /// <summary>

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The composer assembles the synthetic plain-chat context block from a conversation's uploaded-file text. It labels
 ///     each file, concatenates them in order, and caps the combined text to a character budget with a truncation notice.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ConversationAttachmentContextComposerTests
 {
     // A stable, high-entropy fence seed (in production the server-secret-derived per-conversation seed).

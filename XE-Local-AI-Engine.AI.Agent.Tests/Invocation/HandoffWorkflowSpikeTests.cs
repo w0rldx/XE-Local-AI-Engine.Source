@@ -49,6 +49,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 /// </remarks>
 [NotInParallel(nameof(HandoffWorkflowSpikeTests))]
+[Category(TestCategories.Unit)]
 public sealed class HandoffWorkflowSpikeTests
 {
     private const string TriageInstructions =

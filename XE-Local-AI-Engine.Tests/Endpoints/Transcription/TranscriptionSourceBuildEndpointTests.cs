@@ -14,6 +14,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     The five managed source-build routes. What earns the attention here is that every refusal comes back as a
 ///     typed 409 with a reason code the SPA can branch on, rather than as an error the operator cannot act on.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionSourceBuildEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

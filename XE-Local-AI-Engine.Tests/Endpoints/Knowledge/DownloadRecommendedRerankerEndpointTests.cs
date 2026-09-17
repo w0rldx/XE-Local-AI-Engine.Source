@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the recommended repo + pinned quant; an already-installed recommended reranker is a friendly no-op (no second
 ///     download); an in-flight download is rejoined rather than duplicated; and the surface is operator-gated.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DownloadRecommendedRerankerEndpointTests
 {
     private const string DownloadRoute = "/api/local/v1/knowledge-base/reranker/download-recommended";

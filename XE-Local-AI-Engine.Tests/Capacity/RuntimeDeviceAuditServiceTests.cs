@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     indeterminate probe never raises a false alarm; and a CPU-only host is never flagged. The effective-profile
 ///     projection degrades a fallback box to CPU-mode so the advisor + capacity gate size against RAM, not phantom VRAM.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RuntimeDeviceAuditServiceTests
 {
     private const long Gb = 1024L * 1024 * 1024;

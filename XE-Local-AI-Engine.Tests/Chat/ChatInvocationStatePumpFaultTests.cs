@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     run. The Failed terminalize rides the same NodeChatMessageTransitions atomic guard, so it can never overwrite a
 ///     terminal that already committed.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ChatInvocationStatePumpFaultTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

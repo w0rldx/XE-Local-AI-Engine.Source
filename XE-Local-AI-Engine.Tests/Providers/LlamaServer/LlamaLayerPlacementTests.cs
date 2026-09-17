@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     information at all, so the supervisor has to raise verbosity to see them, and the line format (a leading
 ///     timestamp and level marker) is what the grammar has to tolerate.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class LlamaLayerPlacementTests
 {
     private const string FullOffloadLine = "0.00.408.714 I load_tensors: offloaded 25/25 layers to GPU";

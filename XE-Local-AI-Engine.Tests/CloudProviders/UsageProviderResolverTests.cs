@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     mapping over all five outcomes, and the <see cref="UsageProviderResolver" /> orchestration — cloud-first precedence,
 ///     local fallback, and the never-throw / null-model / failed-lookup degradations to <c>unknown</c>.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class UsageProviderResolverTests
 {
     [Test]

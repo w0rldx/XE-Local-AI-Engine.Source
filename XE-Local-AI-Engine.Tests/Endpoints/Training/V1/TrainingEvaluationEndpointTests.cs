@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     database. Every route is Operator-gated, and the lineage refusals (no installed base, nothing promoted, an
 ///     unknown pairing) surface as 4xx rather than as faults.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingEvaluationEndpointTests
 {
     private const string Evaluations = "/api/local/v1/training/evaluations";

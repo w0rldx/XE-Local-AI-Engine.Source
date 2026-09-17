@@ -34,7 +34,10 @@ using DevWorkflowNodeRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.
 using DevWorkflowNodeType = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeType;
 using DevWorkflowRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRunStatus;
 using DevWorkflowWorkItemStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowWorkItemStatus;
+// System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
+using CategoryAttribute = TUnit.Core.CategoryAttribute;
 
+[Category(TestCategories.Unit)]
 public sealed class NodeAdminMcpToolsTests
 {
     private static readonly string[] ExpectedToolNames =

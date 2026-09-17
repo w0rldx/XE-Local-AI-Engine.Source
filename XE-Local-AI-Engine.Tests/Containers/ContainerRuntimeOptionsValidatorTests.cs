@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         before the application has written its state. That is why they fail at start rather than at first use.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerRuntimeOptionsValidatorTests
 {
     [Test]

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     here is operator-gated and everything here is a projection, so the assertions are about what crosses the wire —
 ///     never an asset body, never a secret, and never a verdict this layer re-derived.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppCatalogEndpointTests
 {
     [Test]

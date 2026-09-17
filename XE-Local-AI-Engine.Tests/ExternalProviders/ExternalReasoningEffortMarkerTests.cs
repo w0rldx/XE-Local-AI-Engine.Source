@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     constraint that made the llama.cpp reasoning budget travel as a marker. So the key literal exists twice, and
 ///     this suite is what keeps a rename in one of them from silently disabling effort selection in the other.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ExternalReasoningEffortMarkerTests
 {
     private const string ExternalModel = "ext:local-box/qwen3";

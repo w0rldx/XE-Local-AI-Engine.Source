@@ -23,6 +23,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///         chain — prepare, then run a profile command — now works from a bare <c>(projectId, nodeRunId)</c> pair.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
 {
     private static readonly DevelopmentCommandProfile GenericProfile =

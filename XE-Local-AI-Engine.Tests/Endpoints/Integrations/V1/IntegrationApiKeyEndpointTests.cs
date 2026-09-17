@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     exactly once — never on a list — and that a revoke keeps the row, because execution and audit history reference
 ///     the credential's prefix.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationApiKeyEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

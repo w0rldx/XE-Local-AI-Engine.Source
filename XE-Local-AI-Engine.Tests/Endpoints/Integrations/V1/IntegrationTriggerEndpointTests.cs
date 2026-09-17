@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The five Operator-gated trigger endpoints: authorization on every one, the create's 201 with a resolvable
 ///     <c>Location</c>, and the validation and conflict answers a UI has to render.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationTriggerEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

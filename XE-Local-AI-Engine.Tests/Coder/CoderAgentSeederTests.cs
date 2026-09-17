@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     "Coder (read-only)" row carrying the three v1 tool names (all approvals false, Seeded provenance), and a second
 ///     boot is a no-op (idempotent by slug).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CoderAgentSeederTests
 {
     [Test]

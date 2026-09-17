@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     pin the conversion, the discriminator token the SPA matches the read-only case on (which is what keeps the hub
 ///     and the REST 409 telling the user the same thing), and the narrowness that keeps every OTHER fault opaque.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalChatHubDomainRejectionTests
 {
     private const string ExpectedPrefix = $"{nameof(NodeConflictProblemType.ReadOnlyConversation)}: ";

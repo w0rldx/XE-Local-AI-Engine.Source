@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 /// </summary>
 [NotInParallel("LocalModelProxyApiKeyGenerate")]
+[Category(TestCategories.Integration)]
 public sealed class GenerateLocalModelProxyApiKeyEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

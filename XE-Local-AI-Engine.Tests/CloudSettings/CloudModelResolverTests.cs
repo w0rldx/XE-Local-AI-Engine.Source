@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     best-effort — a failing credential store must degrade to "not cloud" / "no connection" so local routing still
 ///     runs — but a genuine cancellation must still propagate.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CloudModelResolverTests
 {
     [Test]

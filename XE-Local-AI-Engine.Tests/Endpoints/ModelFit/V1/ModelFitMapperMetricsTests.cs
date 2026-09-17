@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Mapper tests for the benchmark-metrics projection. The raw <c>/metrics</c> scrape, diagnostics blob, and internal
 ///     timing samples stay server-side and must NOT appear on the DTO.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFitMapperMetricsTests
 {
     private static readonly JsonSerializerOptions WebSerializerOptions = new(JsonSerializerDefaults.Web);

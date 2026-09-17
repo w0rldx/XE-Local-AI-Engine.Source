@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     memo is consulted, so a populated memo can never satisfy an approval nobody can see), the fail-closed
 ///     256-entry memo cap, and the per-segment duplicate-request dedup.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ToolApprovalCoordinatorTests
 {
 #pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI; the same scoped suppression the provider call sites use.

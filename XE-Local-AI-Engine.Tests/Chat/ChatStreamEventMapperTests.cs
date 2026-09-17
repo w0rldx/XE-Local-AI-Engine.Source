@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class ChatStreamEventMapperTests
 {
     private const long Timestamp = 1_700_000_000_000L;

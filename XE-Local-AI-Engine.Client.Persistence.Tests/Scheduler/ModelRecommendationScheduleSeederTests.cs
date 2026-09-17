@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 ///     database + the real Quartz ADO.NET store and the real <see cref="ModelRecommendationCheckHandler" /> template so
 ///     the seeder's create/list path runs against the production registration.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ModelRecommendationScheduleSeederTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-sched-seed-" + Guid.NewGuid().ToString("N"));

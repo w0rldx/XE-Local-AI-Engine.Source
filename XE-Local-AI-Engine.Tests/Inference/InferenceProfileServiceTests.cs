@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     only freezes a benchmark-justified Explored profile, never throwing. The supervisor fake actually invokes the
 ///     passed profiling body so the explore/benchmark logic runs end to end. No DB, no process.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InferenceProfileServiceTests
 {
     private const string Model = "bartowski/Model-GGUF:Q4_K_M";

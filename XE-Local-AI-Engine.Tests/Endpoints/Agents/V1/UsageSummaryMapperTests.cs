@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     per provider (biggest consumer first), and each level attaches a server-computed USD cost estimate — reasoning
 ///     billed as output, rates per 1M tokens, local runtimes free, rounded to 4 decimals.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class UsageSummaryMapperTests
 {
     private static TokenUsageAggregateRecord Bucket(string model, string provider, long day, int runs, long prompt, long completion, long reasoning, long total)

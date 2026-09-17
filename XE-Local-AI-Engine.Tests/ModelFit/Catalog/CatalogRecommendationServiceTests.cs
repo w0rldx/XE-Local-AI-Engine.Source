@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="CatalogRecommendationService" />: use-case + arch-tag filtering, the Recommended/CanRun split, the
 ///     tier → fit-class → quant → recency → id ranking order, and the MoE expert-offload path.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CatalogRecommendationServiceTests
 {
     private const long Gb = 1024L * 1024 * 1024;

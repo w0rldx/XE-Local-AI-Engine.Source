@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     because it is the implementation every non-Windows node actually resolves and it is small enough to be the
 ///     thing under test.
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionCaptureEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

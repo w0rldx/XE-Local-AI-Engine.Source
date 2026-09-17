@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///         regression there reads as an occasional wrong failure category rather than as a failure.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InvocationLifecycleTrackerTests
 {
     [Test]

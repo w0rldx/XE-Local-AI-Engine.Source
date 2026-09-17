@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         hosted service, so a run parks on its pause only because this test advanced it.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowDecisionEndpointTests
 {
     private const string Root = "/api/local/v1/graph-workflows";

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class AddSchedulerTablesMigrationTests : IDisposable
 {
     private const string PreSchedulerMigrationId = "20260601085538_AddGoldenConversationHarvestProvenance";

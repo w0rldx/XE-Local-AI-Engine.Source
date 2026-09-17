@@ -5,6 +5,7 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class NodeAeadCipherTests
 {
     [Test]

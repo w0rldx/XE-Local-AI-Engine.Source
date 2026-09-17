@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>DELETE custom-tools/{customToolId}</c>: operator-gated, 204 on the first delete and 404 on the second — the
 ///     delete is not idempotent-by-204, so a UI that retries learns the row is already gone.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DeleteCustomToolEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

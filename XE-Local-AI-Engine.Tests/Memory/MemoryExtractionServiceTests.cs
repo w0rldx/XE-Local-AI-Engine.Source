@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     invariant (node-local resolution, never a cloud client) is covered by
 ///     <see cref="DefaultMemoryExtractionAgentTests" />.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class MemoryExtractionServiceTests
 {
     [Test]

@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     refresh service, a non-success refresh throws so the dispatcher records a Failed run, an OCE propagates
 ///     untouched, and a happy run reaches the refresh service exactly once. The descriptor wiring is also asserted.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelRecommendationCheckHandlerTests
 {
     private const string ValidParameters =

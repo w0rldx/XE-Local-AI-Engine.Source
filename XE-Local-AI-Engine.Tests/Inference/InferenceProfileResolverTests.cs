@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     re-explores. The scoped store is reached through a real <see cref="IServiceScopeFactory" /> over a substituted
 ///     store; the machine key + invalidation seams are mocked. No DB, no process.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InferenceProfileResolverTests
 {
     private const string MachineKey = "machine-abc";

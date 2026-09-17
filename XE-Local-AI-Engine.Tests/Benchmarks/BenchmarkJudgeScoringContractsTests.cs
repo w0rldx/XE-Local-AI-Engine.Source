@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkJudgeScoringContractsTests
 {
     private const string HappyPath =

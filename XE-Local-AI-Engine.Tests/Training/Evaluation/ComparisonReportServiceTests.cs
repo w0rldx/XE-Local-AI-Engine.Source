@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     A comparison report caches a pure computation. These tests pin that the cache is honest: what a report stores
 ///     is exactly what recomputing from the two bound evaluations' persisted results and frozen memberships produces.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ComparisonReportServiceTests
 {
     private static readonly Guid DatasetId = Guid.NewGuid();

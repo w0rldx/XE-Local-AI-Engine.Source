@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     directly (no startup delay) and asserts it sets <c>updateAvailable</c> only when a NEWER recommended tag is
 ///     resolvable, and degrades to an <c>isOffline</c> snapshot — never throwing — when the catalog has no live data.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaCppUpdateCheckServiceTests
 {
     [Test]

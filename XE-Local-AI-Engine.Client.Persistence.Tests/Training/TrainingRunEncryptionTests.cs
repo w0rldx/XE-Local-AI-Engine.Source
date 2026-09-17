@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     decryption (or the reverse) round-trips as garbage rather than failing loudly, so all six encrypted columns are
 ///     asserted here as ciphertext at rest AND plaintext after a fresh read.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingRunEncryptionTests : IDisposable
 {
     private const string FreezeJson = """{"schemaVersion":1,"sampleIds":["a"],"holdout":["b"],"blobSha256":"ab"}""";

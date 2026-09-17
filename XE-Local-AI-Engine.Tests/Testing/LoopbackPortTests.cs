@@ -7,6 +7,7 @@ using System.Globalization;
 ///     product reports as in use is abandoned for a fresh one, and exhausting the attempts is a failure
 ///     rather than a silent fallback.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class LoopbackPortTests
 {
     [Test]

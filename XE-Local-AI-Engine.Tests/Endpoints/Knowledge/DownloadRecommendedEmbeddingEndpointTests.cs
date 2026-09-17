@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     already-installed NON-recommended embedding model is also a no-op, because that is the model
 ///     <c>EmbeddingModelResolver</c> would pick anyway.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DownloadRecommendedEmbeddingEndpointTests
 {
     private const string DownloadRoute = "/api/local/v1/knowledge-base/embedding/download-recommended";

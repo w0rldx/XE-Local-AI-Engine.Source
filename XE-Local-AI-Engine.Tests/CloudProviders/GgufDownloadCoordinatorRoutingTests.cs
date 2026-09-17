@@ -24,6 +24,7 @@ using GgufAcquisitionOperationKind = XE_Local_AI_Engine.Client.Services.Models.G
 ///     a successful download — the single production writer that makes a downloaded GGUF reach the llama.cpp runtime
 ///     regardless of the unmapped-routing default. A failed download writes NO mapping row.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufDownloadCoordinatorRoutingTests
 {
     private const string Repo = "bartowski/Qwen2.5-0.5B-Instruct-GGUF";

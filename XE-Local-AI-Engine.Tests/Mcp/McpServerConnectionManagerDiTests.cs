@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (as the host does in Development) and resolving the manager must not throw — it would if the singleton injected
 ///     the scoped store directly.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class McpServerConnectionManagerDiTests
 {
     [Test]

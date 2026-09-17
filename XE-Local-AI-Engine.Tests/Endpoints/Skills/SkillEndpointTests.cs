@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     201 with a resolvable Location header; get returns the full skill including the markdown body; list returns the
 ///     <c>{ items }</c> wrapper and omits the body; update round-trips and validation rejects bad input with 400.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class SkillEndpointTests
 {
     private const string ListRoute = "/api/local/v1/skills";

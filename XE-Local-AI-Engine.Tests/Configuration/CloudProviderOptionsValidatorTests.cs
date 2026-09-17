@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     AzureFoundry, so each one is asserted both ways: it rejects a half-configured Azure deployment, and it stays
 ///     silent when the node is local-only — otherwise a default (provider-none) install would fail to start.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CloudProviderOptionsValidatorTests
 {
     private readonly CloudProviderOptionsValidator _validator = new();

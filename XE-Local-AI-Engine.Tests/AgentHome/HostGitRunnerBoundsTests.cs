@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     of that output is the engine's memory in a hostile patch's hands. The trusted apply port has always read bounded;
 ///     this is the same discipline on the shared runner.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HostGitRunnerBoundsTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-host-git-bounds-" + Guid.NewGuid().ToString("N"));

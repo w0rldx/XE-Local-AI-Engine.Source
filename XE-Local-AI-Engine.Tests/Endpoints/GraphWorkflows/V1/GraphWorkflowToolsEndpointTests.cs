@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     endpoint's own contribution: the operator gate, the disabled-node 404, and that the wire shape carries the
 ///     service's set through unfiltered and unwidened.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowToolsEndpointTests
 {
     private const string Tools = "/api/local/v1/graph-workflows/tools";

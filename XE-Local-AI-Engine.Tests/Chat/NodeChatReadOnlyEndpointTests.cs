@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     by conflictType = "ReadOnlyConversation" (the string the SPA's isNodeChatReadOnlyConflict matches). This is the
 ///     security-relevant boundary that stops a node-local operator from mutating a platform-owned conversation.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeChatReadOnlyEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     desktop launch, no-ops when a model is already present (idempotent), never runs off the desktop flag (off-flag
 ///     invariant), and degrades to onboarding rather than crashing when the download fails (offline-tolerant).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class FirstRunModelProvisioningServiceTests
 {
     private const string DefaultGguf = "bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M";

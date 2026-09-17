@@ -31,6 +31,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     never the bottleneck.
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class WorkerHubConnectionSignalRIntegrationTests
 {
     [Test]

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and so does its label, so both must sit inside one untrusted-content boundary that the author of that content
 ///     cannot close from within.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationSeedComposerTests
 {
     [Test]

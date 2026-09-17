@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     every scorable item in it produced a rankable score, and the two identity stamps a run carries decide whether
 ///     it still answers a question — and a suite — the project recognises.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkCellRankingStoreTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

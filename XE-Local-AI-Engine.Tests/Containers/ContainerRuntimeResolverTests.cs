@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         daemon and race the Development Mode sandbox suite, which pins the same file.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerRuntimeResolverTests
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 9, day: 11, hour: 9, minute: 0, second: 0, TimeSpan.Zero);

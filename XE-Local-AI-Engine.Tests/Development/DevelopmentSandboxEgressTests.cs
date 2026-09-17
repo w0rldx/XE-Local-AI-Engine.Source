@@ -23,6 +23,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///         fallback is the honest limitation of this design, not an accident to be left undocumented.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentSandboxEgressTests : IDisposable
 {
     private static readonly DevelopmentCommandProfile GenericProfile =

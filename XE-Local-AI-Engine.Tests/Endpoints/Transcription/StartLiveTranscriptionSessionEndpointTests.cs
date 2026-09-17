@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="ITranscriptionService.StartLiveAsync" /> reaches the wire. The service is stubbed — what is under
 ///     test is the transport, the status codes and the body a client branches on.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class StartLiveTranscriptionSessionEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

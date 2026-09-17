@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     whole point of a display-only axis: a number that is not comparable is worse than no number, and a null
 ///     perplexity beside a real one reads as "this quant lost nothing".
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkFidelityExecutorTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

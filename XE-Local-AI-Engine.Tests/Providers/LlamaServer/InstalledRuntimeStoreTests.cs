@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The installed-runtime state file round-trips and tolerates an absent or corrupt file (first-run / drift) by
 ///     returning null rather than throwing.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InstalledRuntimeStoreTests
 {
     [Test]

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class McpAgentRunMetricsTests
 {
     private static readonly string[] ForbiddenTags =

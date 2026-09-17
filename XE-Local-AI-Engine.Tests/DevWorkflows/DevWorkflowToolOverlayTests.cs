@@ -24,6 +24,7 @@ using DevelopmentArtifactKind = XE_Local_AI_Engine.Client.Persistence.Entities.D
 ///         would be a test of the arrangement rather than of the mechanism.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowToolOverlayTests : IDisposable
 {
     private const string ApprovedSubject = "SUBJECT-HASH";

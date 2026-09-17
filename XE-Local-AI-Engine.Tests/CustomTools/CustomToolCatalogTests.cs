@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     second one. Offer semantics (enabled AND acknowledged AND a valid name, a compilable schema, the unconditional
 ///     approval wrap) are unchanged by the batching and are pinned here alongside the read count.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CustomToolCatalogTests
 {
     [Test]

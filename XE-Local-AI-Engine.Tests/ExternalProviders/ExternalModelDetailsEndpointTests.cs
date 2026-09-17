@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     seen, which is the same failure the Codex and Azure branches were added to prevent. The one detail an external
 ///     model genuinely has is the window its operator declared, and the chat context meter reads it.
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class ExternalModelDetailsEndpointTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

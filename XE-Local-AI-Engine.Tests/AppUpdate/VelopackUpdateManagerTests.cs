@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Proves the real Velopack adapter uses an anonymous public GitHub source and supports portable installs.</summary>
+[Category(TestCategories.Unit)]
 public sealed class VelopackUpdateManagerTests
 {
     [Test]

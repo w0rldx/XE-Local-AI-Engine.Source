@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     against real SQLite so the arithmetic day-bucket and nullable SUM translations are proven. The per-provider rollup
 ///     is folded from these buckets by the endpoint mapper, so it is covered by the mapper test rather than here.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
 {
     private const long MillisecondsPerDay = 86_400_000L;

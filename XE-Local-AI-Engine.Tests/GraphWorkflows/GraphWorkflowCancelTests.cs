@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         from the dispatcher rather than from the lane it lives in.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowCancelTests
 {
     [ClassDataSource<GraphWorkflowHostFixture>(Shared = SharedType.PerClass)]

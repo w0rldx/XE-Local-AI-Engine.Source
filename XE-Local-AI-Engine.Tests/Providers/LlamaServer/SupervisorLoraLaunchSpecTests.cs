@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     A LoRA-adapter model launches as the BASE model with the adapter applied on top: <c>-m &lt;base&gt;</c> plus
 ///     <c>--lora &lt;adapter&gt;</c>. Flag name verified against the pinned llama.cpp release <c>b10201</c>.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorLoraLaunchSpecTests
 {
     private static readonly LlamaServerProcessSupervisor.ProcessKey ChatKey = new("base:Q4_K_M+tuned", ModelRole.Chat);

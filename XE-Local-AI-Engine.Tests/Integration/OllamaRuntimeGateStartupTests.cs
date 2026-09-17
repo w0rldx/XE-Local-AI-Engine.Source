@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>ServiceProviderValidationTests.CompositionRoot_WithTheOllamaRuntimeGateOff_BuildsWithScopeAndBuildValidationEnabled</c>.
 ///     Each test owns its host because the gate is a host-build-time configuration value a shared factory cannot vary.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class OllamaRuntimeGateStartupTests
 {
     [Test]

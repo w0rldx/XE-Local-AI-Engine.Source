@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     its output on whether the system prompt contains the candidate behaviour, so a test can stage a regression by
 ///     scripting the judge to fail the candidate output but pass the baseline output.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class PlaybookEvalServiceTests
 {
     private const string CandidateBehavior = "Always cite a source.";

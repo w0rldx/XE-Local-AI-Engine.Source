@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The admission-versus-execution split: what a caller gets back, what happens to the work when the caller goes
 ///     away, and what a second caller is told while the first is still running.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppOperationRunnerTests
 {
     [Test]

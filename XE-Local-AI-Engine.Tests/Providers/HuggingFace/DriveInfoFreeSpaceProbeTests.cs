@@ -9,6 +9,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     training base artifacts, the KLD benchmark cache and the External Apps admission gate. What it measures is
 ///     the filesystem holding the closest existing ancestor of the path, never the path's root.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DriveInfoFreeSpaceProbeTests
 {
     [Test]

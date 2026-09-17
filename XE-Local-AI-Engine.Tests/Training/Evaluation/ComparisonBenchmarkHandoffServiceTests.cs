@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     reason rather than failing inside the freeze; and the freeze's bare <see cref="KeyNotFoundException" /> for an
 ///     uninstalled model is translated into a named, operator-actionable refusal instead of escaping as a 500.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ComparisonBenchmarkHandoffServiceTests
 {
     private const string BaseModelName = "qwen3.8-27b-Q4_K_M";

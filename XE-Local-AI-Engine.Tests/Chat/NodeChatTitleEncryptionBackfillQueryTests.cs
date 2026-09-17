@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     instead of silently failing the backfill at boot. The service swallows exceptions by design, so the query
 ///     text is exercised directly.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

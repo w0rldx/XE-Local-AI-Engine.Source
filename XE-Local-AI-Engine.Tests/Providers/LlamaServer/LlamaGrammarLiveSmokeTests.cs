@@ -34,6 +34,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         entirely — which would make this smoke silently inert in a third way.
 ///     </para>
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class LlamaGrammarLiveSmokeTests
 {
     /// <summary>Absolute path to a <c>llama-server</c> executable. Its presence is half the opt-in gate.</summary>
@@ -288,6 +289,7 @@ public sealed class LlamaGrammarLiveSmokeTests
                 // Probe timed out; the model is still loading.
             }
 
+            // real-timer: waits on a real spawned llama-server loading a model; /health is the only readiness signal.
             await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
         }
 

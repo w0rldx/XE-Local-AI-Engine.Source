@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // The rolling file log must carry the W3C TraceId/SpanId so a file log line can be correlated with the trace
 // id surfaced to the client in ProblemDetails. Serilog attaches those from the ambient Activity; this asserts the file
 // output template actually renders them.
+[Category(TestCategories.Unit)]
 public sealed class RollingFileTraceCorrelationTests : IDisposable
 {
     private readonly string _logDirectory = Path.Combine(Path.GetTempPath(), "xe-rolling-trace-" + Guid.NewGuid().ToString("N"));

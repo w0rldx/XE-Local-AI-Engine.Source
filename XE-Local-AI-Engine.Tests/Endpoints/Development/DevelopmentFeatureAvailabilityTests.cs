@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel("DevelopmentFeatureConfiguration")]
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentFeatureAvailabilityTests
 {
     [Test]

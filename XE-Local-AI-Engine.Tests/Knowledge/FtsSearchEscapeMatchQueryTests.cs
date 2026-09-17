@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and bare keywords (<c>OR AND NEAR</c>) as ordinary text — they can never inject query syntax or trip a parse
 ///     error — while OR fusion restores multi-word BM25 recall for the RRF pipeline.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class FtsSearchEscapeMatchQueryTests
 {
     [Test]

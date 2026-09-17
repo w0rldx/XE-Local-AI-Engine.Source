@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class WorkspaceEndpointTests
 {
     private const string Route = "/api/local/v1/workspaces";

@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>POST /v1/chat/completions</c> and 404s the listing is a perfectly usable connection, so reporting it as
 ///     unreachable would make the probe refuse working setups. Only a transport failure is unreachable.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ExternalProviderProbeServiceTests
 {
     private const string StoredKey = "sk-unsloth-super-secret";

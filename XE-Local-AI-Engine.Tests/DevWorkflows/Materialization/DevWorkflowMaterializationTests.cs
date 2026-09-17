@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         history — belong to the handful of tests that keep a host of their own and say so at the construction site.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowMaterializationTests
 {
     [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]

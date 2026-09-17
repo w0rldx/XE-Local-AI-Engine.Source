@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
+[Category(TestCategories.Unit)]
 public sealed class SourceBuildRecoveryTests
 {
     [Test]

@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class OrchestrationAgentFactoryTests
 {
     private const string TriageInstructions =
@@ -239,7 +240,7 @@ public sealed class OrchestrationAgentFactoryTests
             {
                 sawApproval = true;
 
-                // Real-timer integration: this sleep is deliberately retained. The idle clock is a linked
+                // real-timer: this sleep is deliberately retained. The idle clock is a linked
                 // CancellationTokenSource.CancelAfter (no TimeProvider seam), and the timeout is configured only in whole
                 // seconds (OrchestrationAgentOptions.IdleTimeoutSeconds, minimum 1s), so the wait must exceed 1s in real
                 // wall-clock time to prove the suspended-while-pending clock keeps the run alive. Shrinking it would need

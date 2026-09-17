@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The lease algebra behind <c>409 runtime-busy</c>. The real gate is exercised here, never a substitute: it is the
 ///     thing under test, and a mocked gate would prove only that the test calls the mock.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperRuntimeActivityGateTests
 {
     [Test]

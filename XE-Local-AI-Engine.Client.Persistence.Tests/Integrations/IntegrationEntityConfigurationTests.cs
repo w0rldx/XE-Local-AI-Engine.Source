@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     The Fluent mappings, through a real context and a real SQLite file: what is unique, what is encrypted, and what
 ///     the AAD binds an encrypted column to.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationEntityConfigurationTests
 {
     [Test]

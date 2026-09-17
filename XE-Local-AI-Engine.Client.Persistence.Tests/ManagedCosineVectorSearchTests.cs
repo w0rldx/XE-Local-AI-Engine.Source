@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     rows, top-k boundaries, ties, zero vectors, and cancellation. Foreign-key enforcement is OFF at runtime, so orphan
 ///     vector rows are a valid minimal fixture here.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ManagedCosineVectorSearchTests : IDisposable
 {
     private const string EmbeddingModel = "nomic-embed-text";

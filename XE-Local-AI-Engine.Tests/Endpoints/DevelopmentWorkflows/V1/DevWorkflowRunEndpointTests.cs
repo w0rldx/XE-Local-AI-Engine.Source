@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Runs, their feeds, the node drill-down and the one decision route.</summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowRunEndpointTests
 {
     private const string Root = "/api/local/v1/development-workflows";

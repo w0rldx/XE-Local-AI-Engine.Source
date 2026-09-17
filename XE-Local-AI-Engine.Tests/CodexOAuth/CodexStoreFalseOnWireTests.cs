@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the JSON contains <c>"store": false</c> AND omits <c>previous_response_id</c> / <c>conversation</c> (no
 ///     service-side state retention).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CodexStoreFalseOnWireTests
 {
     [Test]

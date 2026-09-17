@@ -15,6 +15,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     failure and never falls through to acquisition or a silent CPU run; an unset override acquires as before. The
 ///     validation spawns a real executable stub, so these are POSIX-only.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class OverrideBinaryManagerTests
 {
     [Test]

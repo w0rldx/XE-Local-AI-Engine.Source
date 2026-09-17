@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
+[Category(TestCategories.Integration)]
 public sealed class ConversationUploadedFileStoreTests : IDisposable
 {
     private const string OriginalFileName = "secret-quarterly-report.pdf";

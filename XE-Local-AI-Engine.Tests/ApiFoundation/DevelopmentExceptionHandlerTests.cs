@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     chain: a missing entity is still the surface's bodyless 404, and the two Development conflicts still write the
 ///     exact <c>AddError(message) + Send.ErrorsAsync(statusCode: 409)</c> body their endpoints used to write by hand.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentExceptionHandlerTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

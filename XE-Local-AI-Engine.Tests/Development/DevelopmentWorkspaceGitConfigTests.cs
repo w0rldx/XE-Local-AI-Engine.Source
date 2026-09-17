@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         file and repository-local config lived outside the jail entirely.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-gitconfig-" + Guid.NewGuid().ToString("N"));

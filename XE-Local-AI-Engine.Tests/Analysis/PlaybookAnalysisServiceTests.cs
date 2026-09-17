@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Analysis.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class PlaybookAnalysisServiceTests
 {
     [Test]

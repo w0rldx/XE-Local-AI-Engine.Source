@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     Opt-in hardware compatibility lane for the upgraded MAF/MEAI stack. Unlike the permanent deterministic
 ///     release gate, this test requires an operator-supplied llama-server executable and fixed local GGUF.
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class AgentFrameworkHardwareCompatibilityTests
 {
     private const string ModelName = "framework-compatibility/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M";

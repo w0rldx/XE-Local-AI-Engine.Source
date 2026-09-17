@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     from model text. A scripted <see cref="IChatClient" /> stands in for the model so the test is fully
 ///     deterministic.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class FrameworkApprovalGateTests
 {
     private const string ToolName = "destructive_cleanup";

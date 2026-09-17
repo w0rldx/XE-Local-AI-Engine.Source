@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     message as a neutral notice instead of the red "Response failed" alert — both by matching the constants
 ///     verbatim.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ProviderCallBudgetTests
 {
     [Test]

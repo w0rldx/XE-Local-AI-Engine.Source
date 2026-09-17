@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     token counts to whichever backend happens to be configured today and skew every per-provider comparison drawn
 ///     from this table.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddAgentExecutionLogProviderMigrationTests
 {
     private const string PreProviderMigrationId = "20260718023348_DropApprovedUtilityImages";

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     typo in the real seed content that unit tests against synthetic JSON would never see. Every entry must also
 ///     declare at least one of the six allowlisted use-cases and a live-verifiable "owner/repo" GGUF id shape.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelCatalogBundledLoaderTests
 {
     [Test]

@@ -15,6 +15,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     <see cref="GpuVariantSelector" /> cached-signal rule, and the additive <see cref="InstalledRuntimeState" /> field.
 ///     POSIX-only (the validation spawns a real stub executable + uses Unix file modes).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CudaManagedRuntimeTests
 {
     private const string GpuStub =

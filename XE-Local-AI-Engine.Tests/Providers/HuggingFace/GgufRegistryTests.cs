@@ -9,6 +9,7 @@ using Infra = GgufStoreTestInfrastructure;
 ///     GGUF registry: list/resolve a present model by name, and self-heal a corrupt/missing manifest by
 ///     rescanning the models directory. No network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufRegistryTests
 {
     private static readonly JsonSerializerOptions RawManifestOptions = new()

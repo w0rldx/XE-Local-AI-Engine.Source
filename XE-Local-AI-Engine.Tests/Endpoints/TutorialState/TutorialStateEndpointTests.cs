@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <item>PUT is Operator-gated — an unauthenticated request is rejected.</item>
 ///     </list>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TutorialStateEndpointTests
 {
     private const string Route = "/api/local/v1/tutorial-state";

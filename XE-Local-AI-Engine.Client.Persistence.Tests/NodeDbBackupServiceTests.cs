@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
+[Category(TestCategories.Integration)]
 public sealed class NodeDbBackupServiceTests : IDisposable
 {
     private const string BackupFilePrefix = "node-chat-";

@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The admission gate. The manifest's memory figures are read here and nowhere else, so these are the tests
 ///     that say what those figures mean.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppResourceGateTests
 {
     private const long Gibibyte = 1024L * 1024 * 1024;

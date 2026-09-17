@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     status (so a cancelled turn is not counted as a service fault), while a genuine failure and a cancellation on a
 ///     non-gen_ai source are left untouched.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GenAiCancellationStatusProcessorTests
 {
     [Test]

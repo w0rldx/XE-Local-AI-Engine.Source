@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>POST binding/cancel</c>: operator-gated, and unconditionally 200 with <c>cancelled=true</c> — cancelling when
 ///     nothing is in flight is a no-op, not an error, so the UI can always offer the button.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CancelNodeBindingEndpointTests
 {
     private const string Route = "/api/local/v1/binding/cancel";

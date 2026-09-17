@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class AgentHomeExecutionLeaseManagerTests
 {
     private static readonly AgentHomeExecutionLeaseKey KeyA = new("owner", "node-a");

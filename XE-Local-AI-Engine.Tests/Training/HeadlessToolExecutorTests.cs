@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     Pins the execution invariant: real execution requires <see cref="ToolCategory.ReadLocal" /> AND a composed
 ///     effective approval of false, and the executor's own <see cref="IToolApprovalPolicy" /> call is what decides it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HeadlessToolExecutorTests
 {
     private const string ToolName = "read_file";

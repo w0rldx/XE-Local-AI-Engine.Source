@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     64-bit value above 2^53 survives exactly; these tests pin the exact round-trip and the malformed-value rejection
 ///     that back the chat + image seed boundaries (Blocker 3).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SeedValueTests
 {
     [Test]

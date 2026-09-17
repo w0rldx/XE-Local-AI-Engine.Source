@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     interesting one — a poll cancelled by a concurrent <c>binding/cancel</c> still answers 200 with
 ///     <c>status=cancelled</c> rather than surfacing the OperationCanceledException as a 500.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class PollNodeBindingEndpointTests
 {
     private const string Route = "/api/local/v1/binding/poll";

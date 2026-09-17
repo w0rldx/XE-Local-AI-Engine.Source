@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     ONE process-wide GPU-load admission gate, so a GPU-backed image spawn does not begin while a GPU-backed LLM spawn
 ///     holds the gate — the two never race two <c>--fit</c> / free-VRAM reads.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GpuLoadAdmissionCrossSupervisorTests
 {
     [Test]

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     offer can ADD an approval wrapper to a resolved executable but can never strip a handler- or MCP-enforced one, and
 ///     an offer with no policy metadata fails closed to requiring approval.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InvocationToolResolverTests
 {
     [Test]

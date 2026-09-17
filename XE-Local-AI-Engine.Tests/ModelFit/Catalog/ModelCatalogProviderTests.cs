@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     creates a fresh instance per test and disposes it afterward, so the per-test <see cref="HttpClient" />s created
 ///     by <see cref="BuildProvider" /> are tracked in <see cref="_disposables" /> and released in <see cref="Dispose" />.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelCatalogProviderTests : IDisposable
 {
     private const string ValidRemoteJson =

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     supervisor's poll cadence, not a resilience handler, controls readiness-detection timing. These tests drive the
 ///     probe over a counting message handler (the seam the DI change swaps for a dedicated, resilience-free client).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerHealthProbeTests
 {
     private static readonly Uri BaseAddress = new("http://127.0.0.1:18100/v1");

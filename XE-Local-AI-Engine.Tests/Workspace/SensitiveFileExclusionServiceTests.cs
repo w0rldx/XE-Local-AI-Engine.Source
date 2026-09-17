@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Sensitive-file exclusion coverage: secrets, the host <c>.git</c> baseline, credential bundles, and
 ///     generated/heavy output directories are excluded; ordinary source files are not.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SensitiveFileExclusionServiceTests
 {
     private readonly SensitiveFileExclusionService _service = new();

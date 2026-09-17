@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>EnableSensitiveData</c> false rather than reading the operator's interactive-pipeline opt-in.
 ///     Both tests drive a real embedding call through the production factory, not a re-applied wrapper.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class EmbeddingTelemetryHopTests
 {
     private const string ActivitySourceName = "Microsoft.Extensions.AI";

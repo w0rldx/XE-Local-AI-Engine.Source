@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeFollowUpToolNamespaceTests
 {
     [Test]

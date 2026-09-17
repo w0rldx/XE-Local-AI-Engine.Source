@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="HuggingFaceDownloadException" />, and the empty directory is removed — while a resumable partial
 ///     download is deliberately preserved.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelStoreFailedDownloadTests
 {
     private const string ModelName = "bogus-model";

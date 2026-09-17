@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     receipts and environment captures rather than hand-written identity records, because the completeness rule is
 ///     about what the real capture path does and does not guarantee.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkJudgeExecutionIdentityTests
 {
     private const string PolicyHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

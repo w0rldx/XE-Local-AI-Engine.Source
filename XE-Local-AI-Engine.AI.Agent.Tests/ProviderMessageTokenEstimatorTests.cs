@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     HeuristicTokenEstimator; see TokenEstimatorParityTests for the cross-assembly lock). CJK weights ≈1 token per
 ///     character while Latin accents keep the lighter non-ASCII weight so German/French prose is not over-counted.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ProviderMessageTokenEstimatorTests
 {
     private const int OverheadTokens = 4;

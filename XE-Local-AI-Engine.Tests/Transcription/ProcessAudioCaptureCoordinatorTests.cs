@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         throwing — because that is what <c>BeginEnd</c> does.
 ///     </para>
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ProcessAudioCaptureCoordinatorTests
 {
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(5);

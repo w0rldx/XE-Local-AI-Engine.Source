@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     ClientLocal handler), so these tests fail if the coder→offer merge regresses and the feature goes inert.
 ///     A resolution-seam test alone passes even when the offer seam is broken, so this is the load-bearing gate.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CoderOfferSeamTests
 {
     private const string CapableModel = "qwen3:8b";

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="AgentTelemetryOptions" /> rather than defer to the ambient
 ///     <c>OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT</c> environment variable (which Aspire injects as true).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentTelemetrySensitiveDataTests
 {
     private const string GenAiCaptureEnvVar = "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT";

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         live-observed in the viewer, which showed "Seed -1" for every randomly-seeded image.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ImageJobSeedWriteBackTests : IDisposable
 {
     private const long RandomSeedSentinel = -1;

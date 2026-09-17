@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The three runtime routes. The one that earns the most attention is the eject: a refusal has to come back as a
 ///     409 carrying the activity snapshot, because that is what lets the operator see whether to wait or to retry.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionRuntimeEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

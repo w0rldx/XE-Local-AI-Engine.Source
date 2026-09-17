@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class AdaptiveRetrievalPolicyTests
 {
     [Test]

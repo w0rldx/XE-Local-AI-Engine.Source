@@ -30,6 +30,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         Once the host has the mechanism, anything else FAILS rather than skips.
 ///     </para>
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class BenchmarkPythonTestsLiveTests : IDisposable
 {
     private const string EnabledVariable = "XE_COMPUTE_LIVE";

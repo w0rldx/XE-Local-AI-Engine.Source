@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     a bearer token (all are Operator-gated, none desktop-gated), reachability with an operator token, and the
 ///     404/validation shapes. Runs against the real DI host with an empty database.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingRuntimeEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1/training";

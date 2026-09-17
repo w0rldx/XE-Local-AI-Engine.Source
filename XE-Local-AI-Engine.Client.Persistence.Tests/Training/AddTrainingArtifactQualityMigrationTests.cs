@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class AddTrainingArtifactQualityMigrationTests : IDisposable
 {
     private const string QualityMigrationId = "20260817124108_AddTrainingArtifactQuality";

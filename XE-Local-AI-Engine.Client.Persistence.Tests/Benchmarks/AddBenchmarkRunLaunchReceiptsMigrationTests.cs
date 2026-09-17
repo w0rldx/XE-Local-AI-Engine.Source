@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     launched. Every column is nullable on purpose: runs frozen before launch evidence existed keep reading, and
 ///     the receipt/environment blocks stay NULL until a spawn records them.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddBenchmarkRunLaunchReceiptsMigrationTests
 {
     [Test]

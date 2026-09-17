@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     persistence suite; this pins the half a reader actually consumes — a row that carries the estimate returns both
 ///     numbers over HTTP, and a row that does not returns nulls rather than zeros.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ListRunEnvelopesEndpointTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     benchmark that belongs to a different (or unsuccessful) run. Exercises the real SQLite schema built by
 ///     <c>EnsureCreated</c>, which includes the additive <c>profile_id</c> column.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ModelFitBenchmarkStoreTests : IDisposable
 {
     private const string Provider = "llamacpp";

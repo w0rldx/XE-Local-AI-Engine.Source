@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The supervisor's step loop against a scripted stream service — its real dependency, since a fake chat client
 ///     would exercise the framework's tool pipeline rather than anything this loop decides.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class WorkSessionStepLoopTests
 {
     /// <summary>An approval-required tool that is NOT <c>ask_user</c>: FU3-3 outlives ask_user's removal from workflow sessions.</summary>
@@ -728,6 +729,7 @@ public sealed class WorkSessionStepLoopTests
             }
             catch (WorkSessionInvalidTransitionException) when (DateTimeOffset.UtcNow < deadline)
             {
+                // real-timer: retries a real admission race against the running step loop until the deadline.
                 await Task.Delay(25).ConfigureAwait(false);
             }
         }

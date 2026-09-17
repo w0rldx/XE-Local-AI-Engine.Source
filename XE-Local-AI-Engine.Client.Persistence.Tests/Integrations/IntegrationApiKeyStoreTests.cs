@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     Every method on the credential store. The two mutators deliberately use <c>ExecuteUpdate</c>, so the assertions
 ///     below also pin that neither of them re-seals the digest column.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationApiKeyStoreTests
 {
     private static readonly DateTimeOffset FixedNow = new(2026, 9, 3, 12, 0, 0, TimeSpan.Zero);

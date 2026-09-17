@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         checked each guarantee. The conformant case pinned first is what makes the rest meaningful.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DockerSandboxHardeningTests
 {
     [Test]

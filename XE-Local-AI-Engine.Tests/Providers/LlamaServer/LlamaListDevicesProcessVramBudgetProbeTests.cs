@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     without ever touching the binary manager (no process spawned). Process-level GPU behavior is not exercised here —
 ///     the parser is the unit; the no-spawn guard is proven via a substituted binary manager that records no call.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaListDevicesProcessVramBudgetProbeTests
 {
     private const long BytesPerMib = 1024L * 1024L;

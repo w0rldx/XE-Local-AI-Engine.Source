@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and cancellation across two calls, which <c>Returns</c>/<c>Received</c> cannot express without becoming harder
 ///     to read than the fake.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class WhisperModelDownloadCoordinatorTests
 {
     [Test]

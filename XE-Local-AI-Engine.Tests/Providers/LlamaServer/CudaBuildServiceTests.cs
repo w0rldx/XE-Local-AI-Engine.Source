@@ -16,6 +16,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     (mutates the process PATH/env to inject the stubs).
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class CudaBuildServiceTests
 {
     [Test]

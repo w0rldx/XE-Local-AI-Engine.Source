@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     agent_definitions.memory_extraction_enabled). Asserts the schema after applying up from the prior migration and
 ///     after rolling back.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
 {
     private const string PreAdaptiveMemoryMigrationId = "20260617222625_AddModelProviderMap";

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and a keep-warm-enabled state with no model, and it must fall back to the EFFECTIVE runtime value (from
 ///     <see cref="INodeRuntimeSettings" />) for the process-slot and interval rules when the request omitted the knob.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class NodeSettingsPolicyTests
 {
     [Test]

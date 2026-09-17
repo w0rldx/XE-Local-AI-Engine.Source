@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         wrote, not only on where it landed.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowDispatcherTests
 {
     /// <summary>A human gate on its own: one node, one question, one answer, and the run is done.</summary>

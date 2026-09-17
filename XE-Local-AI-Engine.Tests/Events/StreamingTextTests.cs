@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     invariants here are what let a per-chunk snapshot clone copy the accumulator by reference without materializing the
 ///     whole string.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class StreamingTextTests
 {
     [Test]

@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         it decides the same way on a laptop with bwrap and Docker as on an offline CI runner with neither.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxSubstrateSelectionArchitectureTests
 {
     /// <summary>

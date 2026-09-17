@@ -19,6 +19,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///         checks). The first attempt had in fact produced the correct fix.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentAttemptFailureReportingTests
 {
     [Test]

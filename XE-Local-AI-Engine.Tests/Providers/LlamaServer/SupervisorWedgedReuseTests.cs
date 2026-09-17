@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     handed to every request forever (each reuse otherwise refreshes LastUsedUtc, so the idle reaper never sees it).
 ///     The probe is rate-limited, so a reuse inside the interval is handed out with no HTTP probe.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorWedgedReuseTests
 {
     private static LlamaServerSupervisorOptions OptionsWith(TimeSpan interval, int maxFailures)

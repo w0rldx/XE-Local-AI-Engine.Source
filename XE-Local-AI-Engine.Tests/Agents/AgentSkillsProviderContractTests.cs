@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     A failure here is not a bug in this repo — it is notice that a package bump changed a security-relevant default
 ///     and that the call sites in <c>InvocationAgentFactory</c> and <c>SubAgentSpawnService</c> must be re-reasoned.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentSkillsProviderContractTests
 {
     // Both provider call sites construct with default options, so these three defaults ARE our runtime behaviour:

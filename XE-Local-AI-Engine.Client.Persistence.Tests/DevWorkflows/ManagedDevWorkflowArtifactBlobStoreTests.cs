@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 ///     wrong is the four constants it passes: the folder, the leaf, the AAD column and the cap. A round trip on disk is
 ///     what catches all four.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ManagedDevWorkflowArtifactBlobStoreTests : IDisposable
 {
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();

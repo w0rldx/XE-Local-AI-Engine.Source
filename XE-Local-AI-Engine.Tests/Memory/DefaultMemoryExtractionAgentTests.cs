@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     cloud-capable <see cref="IChatClient" />. The agent has no <c>IChatClient</c> dependency at all (structural
 ///     guarantee); these tests prove it routes through the node-local resolver and disables cleanly without a model.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DefaultMemoryExtractionAgentTests
 {
     [Test]

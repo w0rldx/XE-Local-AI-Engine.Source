@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="ModelCatalogValidator" /> accept/reject cases: the schema-version gate, the per-field checks, and the
 ///     tolerant-parse-failure path every bundled and remote-refreshed catalog must pass through.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelCatalogValidatorTests
 {
     private const string ValidEntryJson =

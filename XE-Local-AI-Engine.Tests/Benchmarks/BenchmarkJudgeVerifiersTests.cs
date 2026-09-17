@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Verifier execution is table-driven per kind, with the adversarial inputs a verifier meets in the wild:
 ///     a catastrophic pattern, an oversized answer, unicode, and a boxed fraction that must equal its decimal.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkJudgeVerifiersTests
 {
     [Test]

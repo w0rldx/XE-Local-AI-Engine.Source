@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Instructions.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class AgentInstructionProviderTests
 {
     private static AgentInstructionProvider CreateProvider()

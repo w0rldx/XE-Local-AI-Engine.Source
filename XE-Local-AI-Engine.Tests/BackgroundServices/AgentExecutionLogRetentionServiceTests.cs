@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Tests for <see cref="AgentExecutionLogRetentionService" />: a periodic sweep, on its own DI scope, deletes
 ///     execution-log rows older than the configured retention window and no-ops cleanly when disabled.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

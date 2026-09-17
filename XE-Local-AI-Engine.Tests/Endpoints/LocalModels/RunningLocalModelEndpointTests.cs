@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and <c>POST models/{modelName}/unload</c> (decode-before-validate, idempotent graceful unload, unsafe-name guard,
 ///     and the eviction of a model from BOTH local runtimes, since the node cannot know which one holds it).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class RunningLocalModelEndpointTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

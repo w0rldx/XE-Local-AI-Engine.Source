@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     resolver already loads it once; the orchestration branch reuses that resolution's <c>Kind</c> and only reloads for
 ///     a bound orchestrator (rare), so the common non-orchestrator path issues a single store read.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ChatTurnResolverTests
 {
     [Test]

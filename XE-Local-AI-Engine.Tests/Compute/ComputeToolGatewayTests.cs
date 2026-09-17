@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     in <see cref="ComputeSandboxLiveTests" />; this suite pins the request shape and the result vocabulary, which is
 ///     what a model actually reads.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ComputeToolGatewayTests
 {
     /// <summary>

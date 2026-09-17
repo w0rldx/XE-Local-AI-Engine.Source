@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     Real-git byte-equality under <c>.gitattributes</c> perturbation, the <c>--binary</c> not-silently-dropped
 ///     behavior, and binary-patch apply rejection are proven by the env-gated real-git smoke — not here.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AgentHomePatchServiceTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);

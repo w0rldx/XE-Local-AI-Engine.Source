@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using OS = TUnit.Core.Enums.OS;
 
+[Category(TestCategories.Integration)]
 public sealed class LlamaCppSourceBuildTransportTests
 {
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);

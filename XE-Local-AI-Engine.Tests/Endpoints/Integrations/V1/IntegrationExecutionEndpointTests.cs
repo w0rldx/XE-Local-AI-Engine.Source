@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     can reach older rows, and the three codes a cancel can answer. The cancel is deliberately NOT key-scoped — an
 ///     operator must reach every integrator's rows.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationExecutionEndpointTests
 {
     private const string ExecutionsRoute = "/api/local/v1/integrations/executions";

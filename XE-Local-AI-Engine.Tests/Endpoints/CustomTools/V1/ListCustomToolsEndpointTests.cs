@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>GET custom-tools</c>: operator-gated, and wraps the views in a named <c>items</c> envelope so the generated
 ///     client has a stable list schema.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ListCustomToolsEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

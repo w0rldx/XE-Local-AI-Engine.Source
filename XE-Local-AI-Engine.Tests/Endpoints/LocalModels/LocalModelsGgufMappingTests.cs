@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>Chat</c> WITHOUT an <c>/api/show</c> probe (so they satisfy the React <c>kind === "Chat"</c> picker filter),
 ///     and surfaces them even when Ollama is unavailable.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelsGgufMappingTests
 {
     private static LocalModelDescriptor Gguf(string modelName,

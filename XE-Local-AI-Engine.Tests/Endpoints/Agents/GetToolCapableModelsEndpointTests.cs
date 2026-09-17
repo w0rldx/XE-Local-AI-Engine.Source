@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class GetToolCapableModelsEndpointTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

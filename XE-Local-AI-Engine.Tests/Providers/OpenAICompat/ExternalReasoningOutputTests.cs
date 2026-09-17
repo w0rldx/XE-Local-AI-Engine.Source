@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     converted it too would show the user their model's thinking twice — a regression no assertion on presence alone
 ///     would catch.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ExternalReasoningOutputTests
 {
     [Test]

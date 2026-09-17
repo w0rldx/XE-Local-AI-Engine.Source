@@ -7,6 +7,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeScheduledModelReindexWorkerTests
 {
     [Test]

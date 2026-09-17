@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         compare the JSON against a third copy and pass while dev was broken.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SignalRProxyPathDriftTests
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(5);

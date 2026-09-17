@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     secret header value is returned MASKED. The read path must never hand a stored secret back, not even to the
 ///     operator on the loopback surface.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GetCustomToolEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

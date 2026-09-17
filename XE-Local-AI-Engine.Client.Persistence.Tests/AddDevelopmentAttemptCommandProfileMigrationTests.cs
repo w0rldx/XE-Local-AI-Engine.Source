@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     this column", which readers resolve against the project's profile) — the migration's own comment says so, and
 ///     this test pins the shape so a later "fix" to an encrypted BLOB fails loudly.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddDevelopmentAttemptCommandProfileMigrationTests
 {
     [Test]

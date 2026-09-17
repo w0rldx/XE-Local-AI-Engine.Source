@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>--version</c>/<c>--help</c> probe is cached for an unchanged file identity, a changed binary invalidates it,
 ///     failures remain retryable, mandatory launch flags fail closed, and unsupported optional tuning is omitted.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerCapabilityManifestTests
 {
     private const string FullHelp = """

@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     caller's token ends forwarding without touching the run, so an integrator that closes its stream to poll does
 ///     not thereby cancel a generation.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationSseWriterTests
 {
     /// <summary>Test 23 — the frame bytes, in the order SseFormatter emits them.</summary>

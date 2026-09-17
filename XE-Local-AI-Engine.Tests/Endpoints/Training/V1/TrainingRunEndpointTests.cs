@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     route is Operator-gated, and the license confirmation is enforced at the boundary so an operator gets a 4xx
 ///     rather than a fault — the store enforces it a second time so no other caller can bypass it.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrainingRunEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1/training/runs";

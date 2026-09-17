@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     wrapper sets <see cref="ChatOptions.RawRepresentationFactory" /> to produce a
 ///     <see cref="CreateResponseOptions" /> with <see cref="CreateResponseOptions.StoredOutputEnabled" /> false.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CodexStoreDisabledChatClientTests
 {
     [Test]

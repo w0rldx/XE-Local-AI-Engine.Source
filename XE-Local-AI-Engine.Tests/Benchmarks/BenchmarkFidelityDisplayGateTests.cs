@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     can still see is a number they will still compare, and one measured over a different corpus, chunk count or
 ///     base model means something different from the one beside it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkFidelityDisplayGateTests
 {
     private static readonly string BaseFingerprint = "v1:" + new string('a', 64);

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The scorer matrix. Every verdict here is reproducible from the persisted sample and the persisted response,
 ///     which is what lets a comparison report be recomputed from storage rather than trusted.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EvaluationScorerTests
 {
     private const string WeatherSchema =

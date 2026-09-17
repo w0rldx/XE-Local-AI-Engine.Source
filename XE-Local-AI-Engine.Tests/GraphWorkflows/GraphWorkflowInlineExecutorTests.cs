@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The documents the five inline kinds produce, read back off the rows the real tick wrote. Byte-level where the
 ///     shape is the contract, because every downstream condition is a dot path into these.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowInlineExecutorTests
 {
     [ClassDataSource<GraphWorkflowHostFixture>(Shared = SharedType.PerClass)]

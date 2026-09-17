@@ -5,6 +5,8 @@ using System.Diagnostics;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
+// System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
+using CategoryAttribute = TUnit.Core.CategoryAttribute;
 
 /// <summary>
 ///     Proves on real bytes, at a new location, the property adoption depends on: a built <c>whisper-server</c> whose
@@ -19,6 +21,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     this checks the bytes after the move, which is the thing that actually breaks when the rpath is wrong.
 /// </remarks>
 [RunOn(OS.Linux)]
+[Category(TestCategories.ExternalInfra)]
 public sealed class WhisperManagedRuntimeRelocationTests
 {
     [Test]

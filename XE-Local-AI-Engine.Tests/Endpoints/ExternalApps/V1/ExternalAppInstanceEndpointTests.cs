@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     what the operator is shown and what the node keeps to itself — the installed snapshot rather than the catalog's
 ///     current manifest, and never a secret in either direction.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppInstanceEndpointTests
 {
     [Test]

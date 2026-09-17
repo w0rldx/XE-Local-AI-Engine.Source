@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     that were actually sent — which is the only way a test can tell "the watermark moved" from "the audio was
 ///     really dropped from the buffer".
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class LiveTranscriptionSegmenterTests
 {
     private const string ModelId = "ggml-base";

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (404 / 405, since the SPA fallback only handles GET) and a GET falls through to the SPA fallback (HTML, NOT a JSON
 ///     endpoint response). Either way the request never reaches an app-update endpoint.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AppUpdateEndpointDesktopGateTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

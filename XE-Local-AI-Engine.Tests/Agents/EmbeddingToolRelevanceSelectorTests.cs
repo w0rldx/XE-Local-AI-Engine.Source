@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     than throwing, because this one runs inside the send, in front of the first token. Second, nothing it logs
 ///     carries a tool name, a description or the user's query.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EmbeddingToolRelevanceSelectorTests
 {
     private const string EmbeddingModel = "test-embed";

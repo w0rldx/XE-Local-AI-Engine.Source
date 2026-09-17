@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     pending tool call it is parked on. The boundary is asserted from both sides, so a "raise the park budget" edit
 ///     cannot pass by landing exactly on the tool-call age.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WorkSessionOptionsValidatorTests
 {
     [Test]

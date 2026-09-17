@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     tool name) and can never waive a default-on tool; unknown category names / false entries are no-ops; and a
 ///     null/empty settings object yields a policy equivalent to the floor.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class NodeToolApprovalPolicyTests
 {
     [Test]

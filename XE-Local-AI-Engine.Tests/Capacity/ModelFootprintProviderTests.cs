@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Verifies that capacity projects the exact shared process allocation instead of recomputing fit math.</summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFootprintProviderTests
 {
     private const long Gb = 1024L * 1024 * 1024;

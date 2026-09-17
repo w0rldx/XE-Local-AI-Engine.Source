@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The confidence bit lets a consumer (the catalog's staleness check) distinguish a real resolution from a bare
 ///     fallback, so a transient outage never gets compared against as if it were an actual vector identity.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EmbeddingModelResolverTests
 {
     private const string ConfiguredName = "nomic-embed-text";

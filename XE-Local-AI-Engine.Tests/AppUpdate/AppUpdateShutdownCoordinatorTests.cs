@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 
+[Category(TestCategories.Unit)]
 public sealed class AppUpdateShutdownCoordinatorTests
 {
     [Test]

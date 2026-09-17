@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     else — they are exactly the tools that push a real agent past the threshold, and hiding one never bypasses the
 ///     approval it carries from registry build.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ToolRelevanceCoreSetTests
 {
     [Test]

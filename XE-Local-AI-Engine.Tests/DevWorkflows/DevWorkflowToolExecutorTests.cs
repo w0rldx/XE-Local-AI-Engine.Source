@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         node run.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowToolExecutorTests
 {
     /// <summary>A project id on the work item, because a graph with tool nodes in it is only startable with one.</summary>

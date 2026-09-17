@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         singletons whose history these fixtures read, and they share node keys with the other materialization suites.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowMaterializedIsolationTests
 {
     /// <summary>

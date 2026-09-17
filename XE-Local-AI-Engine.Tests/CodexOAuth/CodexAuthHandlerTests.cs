@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     refresh and exactly one retry, and — because a sent <see cref="HttpRequestMessage" /> cannot be resent — the
 ///     retry goes on a fresh CLONE of the request carrying the original (buffered) content and the refreshed bearer.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CodexAuthHandlerTests
 {
     [Test]

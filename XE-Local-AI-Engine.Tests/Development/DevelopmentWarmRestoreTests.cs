@@ -22,6 +22,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///         does not outlive <c>PrepareAsync</c>.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentWarmRestoreTests : IDisposable
 {
     private static readonly DevelopmentCommandProfile DotnetProfile =

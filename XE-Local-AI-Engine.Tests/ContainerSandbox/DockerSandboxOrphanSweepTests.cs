@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         survive it: another installation's container, and this process's own.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DockerSandboxOrphanSweepTests
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 8, day: 25, hour: 9, minute: 0, second: 0, TimeSpan.Zero);

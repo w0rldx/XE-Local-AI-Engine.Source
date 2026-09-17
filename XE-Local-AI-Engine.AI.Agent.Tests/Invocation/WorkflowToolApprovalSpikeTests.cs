@@ -28,6 +28,8 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp;
+// System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
+using CategoryAttribute = TUnit.Core.CategoryAttribute;
 
 /// <summary>
 ///     Approval-gate probe. Proves a THREADLESS framework-native human-in-the-loop approve→resume on a
@@ -37,6 +39,7 @@ using OllamaSharp;
 ///     tool. Execution is ground-truth via a sentinel file, not inferred from model text. Opt-in via env
 ///     <c>P0_RUN_LIVE=1</c> so default CI stays offline.
 /// </summary>
+[Category(TestCategories.ExternalInfra)]
 public sealed class WorkflowToolApprovalSpikeTests
 {
     private const string MarkerFile = "/tmp/p0_tool_ran.txt";

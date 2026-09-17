@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         drive both channels through the real SDK serialization over a capturing transport.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CodexReasoningOnWireTests
 {
     private const string CodexReasoningEffortKey = "codex_reasoning_effort";

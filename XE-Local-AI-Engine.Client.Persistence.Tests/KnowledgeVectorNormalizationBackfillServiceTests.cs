@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     batches, is a no-op on an empty database, and that the hosted service flips the in-memory latch and sets the
 ///     durable marker so a second run skips the work but still latches.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposable
 {
     private const string EmbeddingModel = "nomic-embed-text";

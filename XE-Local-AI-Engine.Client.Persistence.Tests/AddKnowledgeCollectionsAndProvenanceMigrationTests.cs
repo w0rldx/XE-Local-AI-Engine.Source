@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     placeholder rather than to the current parser/chunker version, which would claim they had been produced by code
 ///     that never touched them and defeat the re-index check that reads these columns.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
 {
     private const string PreCollectionsMigrationId = "20260811161453_AddModelLaunchArguments";

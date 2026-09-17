@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     schema. Every test migrates a real SQLite database, so the FTS5 external-content table, triggers, BM25 weighting,
 ///     vector joins, and final hydration query are exercised together with the production SQL.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeCollectionSearchTests : IDisposable
 {
     private const string CollectionA = "PROJECT-A";

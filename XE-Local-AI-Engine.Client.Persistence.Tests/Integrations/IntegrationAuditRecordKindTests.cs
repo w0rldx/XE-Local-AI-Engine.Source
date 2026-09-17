@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     → model_name, key prefix → provider, target agent id → config_hash — and stays invisible to every other read
 ///     view. Executed against real SQLite so the column mapping and the read-view filters are proven.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationAuditRecordKindTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(2026, 9, 3, 12, 0, 0, TimeSpan.Zero);

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="Build_NeverEmitsConvertOrTmpDir" />: the convert flag would make the daemon write EVERY request's
 ///     audio to disk, including live PCM, which is the contract this whole feature is built around.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperServerArgumentBuilderTests
 {
     private const string ModelPath = "/models/whisper/base/ggml-base.bin";

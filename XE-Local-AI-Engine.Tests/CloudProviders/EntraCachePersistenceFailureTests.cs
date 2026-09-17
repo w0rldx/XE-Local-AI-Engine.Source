@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="MsalCachePersistenceException" />, not the bare <see cref="CredentialUnavailableException" /> the
 ///     old single-type catches only handled).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EntraCachePersistenceFailureTests
 {
     [Test]

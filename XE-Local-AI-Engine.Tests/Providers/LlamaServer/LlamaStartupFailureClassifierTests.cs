@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class LlamaStartupFailureClassifierTests
 {
     // Verbatim llama.cpp text. The KV-cache allocation failure is thrown from llama-kv-cache.cpp when the backend

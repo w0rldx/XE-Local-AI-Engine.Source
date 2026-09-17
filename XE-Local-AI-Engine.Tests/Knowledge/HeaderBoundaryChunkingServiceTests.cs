@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     in a single implicit section. These tests pin that structural contract plus its determinism. All fixtures are built
 ///     in-process from <see cref="IngestionDocument" /> elements so no binary blobs ship.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HeaderBoundaryChunkingServiceTests
 {
     [Test]

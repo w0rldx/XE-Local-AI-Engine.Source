@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     their TTL, and concurrent callers missing on the same key share one computation instead of each paying a
 ///     round-trip to the single-slot embedding server.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ByteBudgetedCacheTests
 {
     [Test]

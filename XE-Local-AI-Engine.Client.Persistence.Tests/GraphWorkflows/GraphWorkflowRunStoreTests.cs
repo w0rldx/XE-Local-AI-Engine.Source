@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     The run half of the store: what a start commits, what the request-id index guarantees, and what restart recovery
 ///     does in one transaction. The definition half is <c>GraphWorkflowStoreTests</c>.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowRunStoreTests
 {
     /// <summary>

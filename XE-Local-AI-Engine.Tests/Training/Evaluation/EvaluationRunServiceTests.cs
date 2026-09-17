@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Evaluation creation always borrows the training run's immutable membership. A later live review edit must not
 ///     prevent a base or tuned evaluation from replaying the exact corpus that run trained against.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EvaluationRunServiceTests
 {
     private static readonly Guid DatasetId = Guid.NewGuid();

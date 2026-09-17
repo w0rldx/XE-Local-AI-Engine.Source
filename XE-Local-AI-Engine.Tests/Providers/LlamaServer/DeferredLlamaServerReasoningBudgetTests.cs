@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     tests assemble the REAL MEAI OpenAI chat pipeline over a request-capturing transport and assert the serialized
 ///     body: the budget is present with the marker's value, and absent — byte-identical — without it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerReasoningBudgetTests
 {
     [Test]

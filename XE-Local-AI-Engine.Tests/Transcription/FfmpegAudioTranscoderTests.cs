@@ -16,6 +16,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     process tests drive a CONTROLLED child through the internal executable seam instead — a script this test wrote —
 ///     so the cancellation contract can be asserted on a machine with no ffmpeg installed.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class FfmpegAudioTranscoderTests
 {
     [Test]

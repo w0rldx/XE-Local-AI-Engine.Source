@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeEmbeddingVectorPolicyTests
 {
     private const string NomicV15 = "nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";

@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
+[Category(TestCategories.Unit)]
 public sealed class OrchestrationResolverTests
 {
     private const string ToolCapableModel = "qwen3:8b";

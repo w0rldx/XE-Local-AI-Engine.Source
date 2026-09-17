@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="AzureFoundryChatClientFactory.Create" /> uses, via the <see cref="AzureFoundryChatClientFactory.CreateOpenAiV1ClientForTesting" />
 ///     test seam — over a request-capturing fake transport, and assert on the CAPTURED outbound request.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AzureFoundryV1PipelineExecutionTests
 {
     // header.payload.signature — three segments, matching the JWT shape a gateway's validate-jwt policy expects.

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     let each lifecycle outcome be asserted at the executor↔store boundary — including the redaction contract (no
 ///     exception message or stack trace is ever handed to the store) and fire-instance idempotency.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SchedulerDispatchExecutorHistoryTests
 {
     private static readonly Guid JobId = Guid.Parse("22222222-2222-2222-2222-222222222222");

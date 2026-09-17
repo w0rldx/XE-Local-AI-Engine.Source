@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkProjectServiceTests
 {
     private static readonly Guid ProjectId = new("11111111-1111-1111-1111-111111111111");

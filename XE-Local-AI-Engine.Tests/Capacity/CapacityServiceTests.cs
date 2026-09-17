@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (not total) and falls back to total when free is unmeasurable; the decision reads a fresh (forceRefresh) profile.
 ///     Every probe is mocked — no Ollama/network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CapacityServiceTests
 {
     private const long Gb = 1024L * 1024 * 1024;

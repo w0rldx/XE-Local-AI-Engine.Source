@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         the node-wide invocation slot, and on a shared host that is every sibling's slot too.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowAgentExecutorTests
 {
     [ClassDataSource<GraphWorkflowAgentHostFixture>(Shared = SharedType.PerClass)]

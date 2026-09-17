@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     pinned: a GPU build that placed nothing is <c>cpu-fallback</c>, not "cpu", and a CPU build on macOS is
 ///     <c>metal-unverified</c> rather than a claim either way.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkLaunchBackendTests
 {
     [Test]

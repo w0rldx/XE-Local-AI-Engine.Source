@@ -329,7 +329,8 @@ Backend tests are **TUnit** (`[Test]`) on Microsoft.Testing.Platform, with a pro
 Reach for a substitute only after the real thing and the repo's fake seam (`FakeOllama`,
 `RecordingHubMessageSender`, MSW) have been ruled out, and never for the gate, cipher or migration the test exists
 to verify — [17-writing-tests.md §1a](17-writing-tests.md#1a-test-principles). Every test class carries exactly
-one `[Category]` — [17-writing-tests.md §1b](17-writing-tests.md#1b-test-categories).
+one `[Category(TestCategories.…)]`, enforced by `TestCategoryConventionTests` —
+[17-writing-tests.md §1b](17-writing-tests.md#1b-test-categories).
 Scope a run with `--treenode-filter` (not `--filter`). See
 [13-testing-and-validation.md](13-testing-and-validation.md).
 

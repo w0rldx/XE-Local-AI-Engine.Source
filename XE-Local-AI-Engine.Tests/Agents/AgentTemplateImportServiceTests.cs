@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     personas, already-seeded slugs are skipped (no duplicate), unknown slugs are reported without a write, and a
 ///     duplicate slug in one request is deduped.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentTemplateImportServiceTests
 {
     [Test]

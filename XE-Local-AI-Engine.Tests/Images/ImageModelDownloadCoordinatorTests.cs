@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     observable terminal phase — and that a failure is reported as <c>Failed</c> with an operator-safe reason rather
 ///     than staying <c>Running</c> indefinitely.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelDownloadCoordinatorTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);

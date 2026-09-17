@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.AppUpdate.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Locks the credential-free public updater contract and endpoint authorization.</summary>
+[Category(TestCategories.Unit)]
 public sealed class AppUpdateContractTests
 {
     private static readonly Type[] ResponseContracts = [typeof(AppUpdateStatusResponse), typeof(ApplyAppUpdateResponse)];

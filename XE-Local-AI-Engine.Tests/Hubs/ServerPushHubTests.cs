@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     local state — which documents exist, which models are being fetched), and the hub-backed publisher that replaces
 ///     the no-op default actually reaches a connected client under the agreed event name and payload.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ServerPushHubTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

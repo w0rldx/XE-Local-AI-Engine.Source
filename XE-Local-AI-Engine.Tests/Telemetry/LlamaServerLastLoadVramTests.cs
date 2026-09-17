@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The meter bridge's second job: remembering the VRAM figures of the LAST SUCCESSFUL load per (model, role), which
 ///     is what lets a node run settling minutes later say what the box looked like when its model was loaded.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerLastLoadVramTests
 {
     [Test]

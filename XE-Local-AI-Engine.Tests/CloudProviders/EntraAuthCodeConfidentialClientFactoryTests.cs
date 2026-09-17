@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Secret-Service-less Linux box (e.g. this CI/dev sandbox) this genuinely exercises the persistence-unavailable
 ///     branch; on a box with a working keyring it exercises the happy path — both must be silent.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EntraAuthCodeConfidentialClientFactoryTests : IDisposable
 {
     private readonly string _dataDirectoryPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     key/value table (name PK + value, both NOT NULL, unencrypted) on both an upgrade from the immediately preceding
 ///     migration and a fresh migrate-to-head, drops it on rollback, and leaves no model/snapshot drift.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
 {
     private const string PreChatMaintenanceStateMigrationId = "20260713170221_RepairAndUniqueMessageSequence";

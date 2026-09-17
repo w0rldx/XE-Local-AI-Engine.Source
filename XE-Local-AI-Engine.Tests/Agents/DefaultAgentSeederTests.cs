@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     "Default Assistant" row (instructions = the embedded chat prompt, full provenance), and a second boot is a
 ///     no-op (idempotent by slug).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DefaultAgentSeederTests
 {
     [Test]

@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Mode-classification coverage for <see cref="SpeculativeDecodingSettings" />.</summary>
+[Category(TestCategories.Unit)]
 public sealed class SpeculativeDecodingSettingsTests
 {
     [Test]

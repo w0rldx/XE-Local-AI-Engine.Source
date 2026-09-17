@@ -14,6 +14,7 @@ using Infra = GgufStoreTestInfrastructure;
 ///     destination with lineage attached. These are the end-to-end invariants that decide whether a promoted model is
 ///     traceable and, for an adapter, launchable at all.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufTrainedCommitTests
 {
     private const string MergedFileName = "tuned-merged-q4_k_m-0123456789abcdef01234567.gguf";

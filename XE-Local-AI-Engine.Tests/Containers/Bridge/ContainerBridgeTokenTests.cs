@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The token's shape. The id half is what makes verification a keyed row read instead of a comparison against
 ///     every installed application's secret, so the split has to be exact and unambiguous in both directions.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerBridgeTokenTests
 {
     [Test]

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     so a runtime that cannot take the flag cannot honour that booking and the launch is REFUSED — never degraded,
 ///     and never with a safe fallback, which would drop the flag and launch the very over-subscription being prevented.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerCapabilityGateTests
 {
     private const string HelpWithCpuMoe = """

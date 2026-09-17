@@ -30,6 +30,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         the test needs rather than for as long as a sleep happens to last.
 ///     </para>
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class TrainingExclusivityTests
 {
     private static readonly TimeSpan BoundedWait = TimeSpan.FromSeconds(5);

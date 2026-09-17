@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     cover the two identities that claim rests on — the corpus id and the base-logit digest — and the file naming
 ///     that has to survive a filesystem that forbids the character a content fingerprint starts with.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkFidelityContractTests
 {
     private const string Qwen3Fingerprint = "v1:" + "ab12cd34" + "00000000000000000000000000000000000000000000000000000000";

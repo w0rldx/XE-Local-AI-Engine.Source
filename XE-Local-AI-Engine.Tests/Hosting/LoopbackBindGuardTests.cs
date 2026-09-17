@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     bind; here the pure classifier is exercised directly so the "rejects a routable bind" decision is asserted without
 ///     spinning a real externally-bound listener.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LoopbackBindGuardTests
 {
     [Test]

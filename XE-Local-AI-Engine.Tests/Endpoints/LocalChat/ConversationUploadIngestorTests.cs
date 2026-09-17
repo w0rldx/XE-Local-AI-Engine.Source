@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     client-supplied Content-Type), a non-image keeps the extract-then-persist path and the client type (with the
 ///     octet-stream fallback), and a full admission gate rejects before any bytes are buffered.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ConversationUploadIngestorTests
 {
     [Test]

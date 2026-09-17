@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     unchanged-sentinel output and the verbose server evidence required to turn automatic full offload into a concrete
 ///     replay vector.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaFitParamsOutputParserTests
 {
     [Test]

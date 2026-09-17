@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     re-tested as v4, decimal/octal/hex host literals are rejected, the scheme/userinfo rules hold, and the pinned
 ///     connect callback denies a hostname that resolves to a loopback address (the DNS-rebind pin).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CustomToolSsrfGuardTests
 {
     [Test]

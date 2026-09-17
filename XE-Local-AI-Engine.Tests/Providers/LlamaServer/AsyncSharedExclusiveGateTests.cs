@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     exclusive holder excludes them in both directions, a pending exclusive acquire is not starved by later shared
 ///     acquires, and an abandoned (cancelled) exclusive acquire leaves the gate usable.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AsyncSharedExclusiveGateTests
 {
     [Test]

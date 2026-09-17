@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The image-model store reuses the shared <see cref="GgufFilePath" /> containment guard for every downloaded weight
 ///     part (a repo is untrusted input). This freezes that the guard rejects traversal for image-style part names.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelPathGuardTests
 {
     [Test]

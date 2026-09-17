@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     loopback timeout, and the never-logs-token-material guarantee. The token endpoint is mocked; the loopback
 ///     listener is real and driven by an in-test HTTP client posing as the OAuth redirect.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CodexAuthServiceTests : IDisposable
 {
     private readonly List<IDisposable> _disposables = [];

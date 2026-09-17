@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///         which is why neither is plaintext and why neither may be presentable as the prompt.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
 {
     private const string PromptJson = """{"prompt":"Sort this list."}""";

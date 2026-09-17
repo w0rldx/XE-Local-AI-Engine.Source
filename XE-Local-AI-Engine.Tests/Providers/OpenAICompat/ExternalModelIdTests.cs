@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     path, written into the provider map (case-insensitive) and into the tool-capable allow-list (ordinal), so its
 ///     grammar and its ONE canonical spelling are what keep those stores agreeing. These tests pin both.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalModelIdTests
 {
     [Test]

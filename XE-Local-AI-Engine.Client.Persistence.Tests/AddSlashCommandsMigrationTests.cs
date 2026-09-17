@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     <c>AddSlashCommands</c> creates the slash-command table. <c>name</c> is NOCASE and uniquely indexed, so
 ///     <c>/Deploy</c> and <c>/deploy</c> cannot both exist and the picker cannot show an ambiguous pair.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddSlashCommandsMigrationTests
 {
     [Test]

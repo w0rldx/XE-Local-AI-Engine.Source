@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     program that builds its own jail, so "a fake earlier on the search order is rejected" is the property under
 ///     test, not "the real one is found".
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrustedBinaryResolverTests
 {
     [Test]

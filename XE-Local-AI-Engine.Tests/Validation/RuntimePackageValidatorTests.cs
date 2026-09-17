@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
+[Category(TestCategories.Unit)]
 public sealed class RuntimePackageValidatorTests
 {
     private readonly RuntimePackageValidator _validator;

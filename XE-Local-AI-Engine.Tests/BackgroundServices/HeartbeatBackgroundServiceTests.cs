@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 // resets the delay under whoever is still looping, so the shared key serializes them — the same idiom
 // AutoConnectBackgroundServiceTests uses for the identical static-override pattern.
 [NotInParallel(nameof(HeartbeatBackgroundServiceTests))]
+[Category(TestCategories.Unit)]
 public sealed class HeartbeatBackgroundServiceTests : IDisposable
 {
     // Every wait below is on a signal the loop itself raises, and the budget is deliberately far larger than the work.

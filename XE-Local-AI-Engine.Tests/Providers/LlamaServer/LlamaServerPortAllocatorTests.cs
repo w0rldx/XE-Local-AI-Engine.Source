@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     still bound by a foreign process, and fails NON-RETRYABLY when the range is exhausted. The reserved count is what
 ///     the loaded-model cap is measured against, so a release must make the slot countable again immediately.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class LlamaServerPortAllocatorTests
 {
     private const string NonRetryableMarker = "LlamaServer.NonRetryable";

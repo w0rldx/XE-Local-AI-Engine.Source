@@ -25,6 +25,7 @@ using ToolCategory = XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory;
 ///         writing to the channel would make each assertion a race against a background reader.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationExecutionCoordinatorTests
 {
     private const string SeedText = IntegrationCoordinatorHarness.SeedText;

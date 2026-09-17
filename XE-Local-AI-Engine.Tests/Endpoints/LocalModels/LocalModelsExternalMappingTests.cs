@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     connection facts (<c>displayLabel</c>, <c>externalConnectionId</c>, <c>externalConnectionName</c>,
 ///     <c>declaredLocality</c>) that a bare <c>provider: "external"</c> tag cannot express.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelsExternalMappingTests
 {
     [Test]

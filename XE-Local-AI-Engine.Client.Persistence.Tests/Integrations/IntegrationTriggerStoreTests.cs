@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>Every method on the trigger store, against a real SQLite file.</summary>
+[Category(TestCategories.Integration)]
 public sealed class IntegrationTriggerStoreTests
 {
     private static readonly DateTimeOffset FixedNow = new(2026, 9, 3, 12, 0, 0, TimeSpan.Zero);

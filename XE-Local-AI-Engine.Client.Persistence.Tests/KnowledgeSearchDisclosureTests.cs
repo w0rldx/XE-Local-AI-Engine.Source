@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     so a consumer never treats potentially-stale content as freshly indexed. The embedding arm is intentionally
 ///     degraded (no provider) and reranking is off, so the fused order is the lexical (FTS) order.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeSearchDisclosureTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

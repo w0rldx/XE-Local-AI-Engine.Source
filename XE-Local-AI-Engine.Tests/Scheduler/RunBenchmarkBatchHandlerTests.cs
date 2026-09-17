@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     a matrix where every cell failed surfaces as a sanitized <see cref="ScheduledJobExecutionException" /> on the job
 ///     run, and the per-fire time budget reports the untried cells instead of holding the fire.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RunBenchmarkBatchHandlerTests
 {
     private const string ProjectIdString = "22222222-2222-2222-2222-222222222222";

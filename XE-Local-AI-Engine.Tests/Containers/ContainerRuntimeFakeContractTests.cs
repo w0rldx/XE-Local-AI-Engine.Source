@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         through.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerRuntimeFakeContractTests
 {
     private const string Digest = "@sha256:0000000000000000000000000000000000000000000000000000000000000000";

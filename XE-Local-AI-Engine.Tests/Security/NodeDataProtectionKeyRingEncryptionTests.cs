@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     round-trip, fail-closed-on-wrong-KEK, an end-to-end Protect/Unprotect over an on-disk ring that is genuinely
 ///     encrypted at rest, and backward-compatibility with a legacy plaintext key-ring.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class NodeDataProtectionKeyRingEncryptionTests
 {
     private static readonly byte[] SampleKek = Enumerable.Range(start: 7, count: 32).Select(static value => (byte)value).ToArray();

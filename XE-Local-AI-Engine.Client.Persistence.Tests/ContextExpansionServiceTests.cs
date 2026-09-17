@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     for each anchor individually — including same-document anchors with overlapping windows, an anchor at the lower
 ///     boundary, an anchor whose window runs past the last chunk, and anchors spanning multiple documents.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ContextExpansionServiceTests : IDisposable
 {
     private const int Window = 1;

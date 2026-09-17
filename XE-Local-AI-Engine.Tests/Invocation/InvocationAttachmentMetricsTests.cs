@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     disposes the attachment.
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class InvocationAttachmentMetricsTests
 {
     private const string DetachedGauge = "chat_stream_detached_invocations";

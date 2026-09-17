@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class McpServerStoreTests : IDisposable
 {
     private const string Description = "Local filesystem MCP server for the repo.";

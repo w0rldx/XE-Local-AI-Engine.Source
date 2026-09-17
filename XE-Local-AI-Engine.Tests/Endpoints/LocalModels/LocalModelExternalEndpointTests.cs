@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     connection metadata, the details route answers from the declarations, selection is validated against the
 ///     registry, and the delete route refuses with a 409 instead of a 500.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class LocalModelExternalEndpointTests
 {
     private const string ModelId = "ext:unsloth-box/qwen3-27b";

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.WorkSessions;
 ///     surface refuses all five lifecycle verbs on one and the run drives it through
 ///     <see cref="IWorkflowOwnedWorkSessionLifecycle" /> instead.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowOwnedWorkSessionTests
 {
     /// <summary>

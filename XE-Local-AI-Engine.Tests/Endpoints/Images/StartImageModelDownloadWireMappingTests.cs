@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class StartImageModelDownloadWireMappingTests
 {
     [Test]

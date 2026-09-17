@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     converts safely, and that busy_timeout lets a second writer wait rather than fail instantly.
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class NodeSqlitePragmasTests : IDisposable
 {
     /// <summary>Past the waiter's 1 s command timeout, well under the 5 s busy_timeout under test.</summary>

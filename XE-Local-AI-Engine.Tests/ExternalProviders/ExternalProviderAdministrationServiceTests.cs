@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the model unroutable, possibly not tool-capable, and — after a key edit — still being sent to with the previous
 ///     key from a cached chat client.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalProviderAdministrationServiceTests
 {
     [Test]

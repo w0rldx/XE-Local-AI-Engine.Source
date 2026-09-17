@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         installation from ever catching up again — logged at information level and carried on from.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevWorkflowDefinitionSeederTests
 {
     /// <summary>

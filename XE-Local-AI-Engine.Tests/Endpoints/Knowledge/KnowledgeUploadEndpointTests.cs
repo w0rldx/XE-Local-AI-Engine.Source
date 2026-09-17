@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     reporting success while the document stays stranded; a dedupe hit that is already Indexed is left alone; and a
 ///     fresh upload the bounded queue cannot admit returns the retryable 503 + Retry-After busy response.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeUploadEndpointTests
 {
     private const string UploadRoute = "/api/local/v1/knowledge-base/documents";

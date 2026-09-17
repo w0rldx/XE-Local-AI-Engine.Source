@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     spawn-through-readiness window through the shared gate (the second does not even launch until the first is
 ///     resident), while CPU-only loads bypass the gate entirely and launch concurrently.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorAdmissionTests
 {
     [Test]

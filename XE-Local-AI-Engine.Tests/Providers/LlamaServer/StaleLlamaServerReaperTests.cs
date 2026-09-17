@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     untouched, and never throw out of <c>StartAsync</c>. All matching logic is exercised through an in-memory scanner
 ///     fake — no real processes and no real file I/O (the path filter is pure string normalization).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class StaleLlamaServerReaperTests
 {
     private static readonly string BinariesRoot = Path.Combine(Path.GetTempPath(), "xe-reaper-test", "llama.cpp");

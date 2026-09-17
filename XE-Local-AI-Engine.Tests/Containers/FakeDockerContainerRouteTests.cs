@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     application path and the Development Mode sandbox path send different subsets of the same wire shape and read
 ///     different fields back.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class FakeDockerContainerRouteTests
 {
     private const string Image = "busybox@sha256:0000000000000000000000000000000000000000000000000000000000000001";

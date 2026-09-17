@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     fan-out cap admits exactly its budget of concurrent leases and rejects the next until one is released; the
 ///     cloud-spawn cap counts for the whole turn and never decrements; and a missing ambient context defaults safe.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SpawnContextTests
 {
     [Test]

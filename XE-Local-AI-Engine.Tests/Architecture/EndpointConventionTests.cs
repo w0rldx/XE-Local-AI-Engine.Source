@@ -38,6 +38,7 @@ using Assembly = System.Reflection.Assembly;
 ///         route-building shape is a reason to widen the rule on purpose, not a false positive to silence.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EndpointConventionTests
 {
     /// <summary>

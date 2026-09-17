@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     same way. Also covers the hybrid external-endpoint attach path (attach to a configured endpoint instead of
 ///     spawning a local process) and the per-process health aggregation surface.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorCrashAndSurfaceTests
 {
     [Test]

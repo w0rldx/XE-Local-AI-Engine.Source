@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     flag round-trips through the raw-SQL read path. These tests cover persistence and reads; post-run extraction
 ///     write suppression is outside this suite.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ConversationMemoryExcludedTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

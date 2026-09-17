@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>ListEventsAsync</c> the events endpoint pages — so what these cases pin is the ORDER of the join and the
 ///     read, the watermark the replay honours, and that nothing reaches a group before the instance is known to exist.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppHubTests
 {
     private const int ReplayCap = 200;

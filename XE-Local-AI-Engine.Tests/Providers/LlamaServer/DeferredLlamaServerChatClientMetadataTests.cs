@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     (<c>ProviderChatClientTelemetry.WithProviderTelemetry</c> over the summarizer, memory-extraction,
 ///     playbook-analysis and config-draft clients) set no <c>ChatOptions.ModelId</c> to fill the gap.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerChatClientMetadataTests
 {
     private const string ModelName = "deferred-metadata-model-3f21";

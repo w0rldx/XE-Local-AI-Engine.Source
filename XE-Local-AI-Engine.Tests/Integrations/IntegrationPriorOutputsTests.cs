@@ -18,6 +18,7 @@ using Harness = IntegrationCoordinatorHarness;
 ///         and never as instructions.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationPriorOutputsTests
 {
     private const string Seed = "prior-outputs-tests-seed";

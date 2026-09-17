@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Real loopback sockets, because the thing under test is whether the port is actually held. A fake socket would
 ///     assert that the code calls something, which is the half that was never in doubt.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppPortAllocatorTests
 {
     [Test]

@@ -27,6 +27,7 @@ using Harness = IntegrationCoordinatorHarness;
 ///         lives, in <c>IntegrationExecutionStoreTests</c>.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationTerminalDetailShapeTests
 {
     private static readonly string[] FailureKeys = ["category", "summary"];

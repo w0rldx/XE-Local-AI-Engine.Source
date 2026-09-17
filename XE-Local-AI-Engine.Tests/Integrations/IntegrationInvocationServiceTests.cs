@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     caller could probe with, admission commits BEFORE anything else is written so a rejected request leaves nothing
 ///     durable behind, and the sequence that reaches the row is the one the buffer minted.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationInvocationServiceTests
 {
     [Test]

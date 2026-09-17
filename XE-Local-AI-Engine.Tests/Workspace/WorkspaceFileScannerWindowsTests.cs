@@ -34,6 +34,7 @@ using OS = TUnit.Core.Enums.OS;
 ///         arranged it.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class WorkspaceFileScannerWindowsTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-scanner-win-" + Guid.NewGuid().ToString("N"));

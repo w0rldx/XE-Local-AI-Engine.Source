@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     tool-catalog response (which exposes the same answer so the chat card only offers "Approve for this session"
 ///     where the node honors it). The two must never drift, so the rule is pinned here once.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SessionApprovalEligibilityTests
 {
 #pragma warning disable MAAI001 // Agent Skills is [Experimental] in Microsoft.Agents.AI.

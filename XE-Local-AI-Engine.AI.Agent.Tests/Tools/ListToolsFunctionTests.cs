@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     array, which is why the function is bound to a decision object rather than looking one up by key — there is no
 ///     ambient "current array" slot to race, and a signature assertion below is what keeps one from coming back.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ListToolsFunctionTests
 {
     [Test]

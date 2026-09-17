@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     prepends <c>search_document: </c> for ingestion and <c>search_query: </c> for retrieval. These tests pin each
 ///     prefix, confirm the two intents never bleed into one another, and confirm a single call applies the prefix once.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeEmbeddingPrefixerTests
 {
     private readonly KnowledgeEmbeddingPrefixer _prefixer = new();

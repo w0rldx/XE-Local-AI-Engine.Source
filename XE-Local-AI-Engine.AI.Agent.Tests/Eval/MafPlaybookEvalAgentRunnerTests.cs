@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="IChatClient" /> stands in for the node-local model so the runner's behaviour — final-text
 ///     return, tools-off, instruction flow-through, threadless — is fully reproducible.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class MafPlaybookEvalAgentRunnerTests
 {
     private const string BaselineInstructions = "You are a concise assistant. Answer directly.";

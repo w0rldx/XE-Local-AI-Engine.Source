@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using static TrainingRuntimeTestInfrastructure;
 using OS = TUnit.Core.Enums.OS;
 
+[Category(TestCategories.Unit)]
 public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-training-probe-" + Guid.NewGuid().ToString("N"));

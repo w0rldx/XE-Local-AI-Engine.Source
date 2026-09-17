@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     purge racing a terminalize can never strand an orphaned envelope carrying the conversation's plaintext ids —
 ///     whichever operation the per-conversation lock hierarchy lets win.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 {
     private const int RaceIterations = 64;

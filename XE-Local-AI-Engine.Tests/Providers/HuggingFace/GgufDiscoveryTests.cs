@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     popularity fields. No network — a stubbed <see cref="HttpMessageHandler" /> returns canned Hub JSON
 ///     plus canned GGUF header bytes.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufDiscoveryTests
 {
     private const string RepoId = "bartowski/Llama-3.2-3B-Instruct-GGUF";

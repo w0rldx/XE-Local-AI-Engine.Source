@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.ExternalInfra)]
 public sealed class EmbeddingSmokeTests
 {
     private const string ChatModel = "qwen3.5:0.8b";

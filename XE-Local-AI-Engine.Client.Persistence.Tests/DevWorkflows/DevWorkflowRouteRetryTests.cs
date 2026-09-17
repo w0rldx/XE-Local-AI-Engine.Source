@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///         approval about an implementation that no longer existed. These tests hold the write to all-or-nothing.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowRouteRetryTests
 {
     private static readonly Guid VerifyId = Guid.Parse("11111111-1111-1111-1111-111111111111");

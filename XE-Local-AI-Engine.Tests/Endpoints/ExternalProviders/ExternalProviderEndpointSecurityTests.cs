@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the node into an SSRF instrument for anything that can reach its loopback port. So each assertion pairs the 401
 ///     with "and the store was never read / the probe was never attempted".
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class ExternalProviderEndpointSecurityTests
 {
     [Test]

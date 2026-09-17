@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.WorkSessions;
 
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class AddAgentWorkSessionsMigrationTests
 {
     private const string PreviousMigrationId = "20260822041045_AddMcpAgenticRunAuthority";

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     defaults are SD1.5's (20 steps, CFG 7.0, <c>euler_a</c>), and running a distilled FLUX-schnell or a Qwen-Image at
 ///     those numbers produces a burnt image rather than an error — a failure mode that looks like a broken model.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageFamilyDefaultsTests
 {
     [Test]

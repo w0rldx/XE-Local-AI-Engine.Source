@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>Authorization: Bearer &lt;token&gt;</c>, the requested scope is propagated to the credential, and it
 ///     composes with <see cref="CustomHeaderPipelinePolicy" /> without either policy clobbering the other's header.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class EntraBearerTokenPipelinePolicyTests
 {
     [Test]

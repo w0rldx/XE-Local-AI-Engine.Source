@@ -26,6 +26,7 @@ using System.Reflection;
 ///         compiles and fails its test — which is what the validation gate has to be able to tell apart.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 internal static class DevelopmentSyntheticSolutionRepository
 {
     /// <summary>

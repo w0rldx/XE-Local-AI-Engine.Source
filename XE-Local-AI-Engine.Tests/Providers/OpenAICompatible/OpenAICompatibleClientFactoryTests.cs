@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     options, because the SDK's own placeholder-credential policy runs inside that pipeline and is exactly what a
 ///     naive "no credential" implementation would silently lose to.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class OpenAICompatibleClientFactoryTests
 {
     private static readonly Uri BaseAddress = new("http://127.0.0.1:1/v1/");

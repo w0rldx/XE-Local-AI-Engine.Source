@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     <c>offered ∩ AllowedToolNames</c> for a capable model, and empty for an incapable one. If the merge regresses,
 ///     the intersection collapses to ∅ and this gate fails — proving the feature is wired, not merely resolvable.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CoderAgentSendIntersectionTests
 {
     private const string CapableModel = "qwen3:8b";

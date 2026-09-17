@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 ///     caught in live verification 2026-06-03). A cron / no-override fire forwards a null override map. It also decides
 ///     the run's trigger kind: the manual-fire marker means Manual, its absence means Schedule.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SchedulerDispatchJobRunnerTests
 {
     private static readonly Guid JobId = Guid.Parse("22222222-2222-2222-2222-222222222222");

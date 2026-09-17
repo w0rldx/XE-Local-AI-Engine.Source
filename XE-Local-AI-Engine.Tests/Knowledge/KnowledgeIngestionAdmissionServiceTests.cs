@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the resolved status is reported even when nothing is enqueued; and a full bounded queue surfaces as QueueFull so
 ///     the endpoint answers with a retryable busy response.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeIngestionAdmissionServiceTests
 {
     [Test]

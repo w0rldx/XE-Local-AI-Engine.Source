@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     delegate to the GGUF model store (<see cref="IGgufModelStore" />) then the llama-server supervisor
 ///     (<see cref="ILlamaServerProcessSupervisor" />) in order.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFitRefreshServiceTests
 {
     private const long Gb = 1024L * 1024 * 1024;

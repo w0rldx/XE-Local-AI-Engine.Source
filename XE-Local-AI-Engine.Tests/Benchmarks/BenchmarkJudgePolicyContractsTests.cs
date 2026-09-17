@@ -5,6 +5,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkJudgePolicyContractsTests
 {
     [Test]

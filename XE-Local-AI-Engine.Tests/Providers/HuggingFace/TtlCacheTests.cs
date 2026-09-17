@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The bounded TTL cache honours TTL expiry and single-flight per key, and once over capacity evicts expired then
 ///     least-recently-used entries while preserving recently-read keys and never caching a failed factory result.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TtlCacheTests
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);

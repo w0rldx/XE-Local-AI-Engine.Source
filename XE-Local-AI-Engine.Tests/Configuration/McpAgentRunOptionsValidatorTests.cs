@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     them in EITHER direction; those cases are asserted both above and below the pinned value so a "raise the limit"
 ///     edit cannot pass by widening only one side.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class McpAgentRunOptionsValidatorTests
 {
     private readonly McpAgentRunOptionsValidator _validator = new();

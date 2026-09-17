@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     create → get round-trip returns the persisted Queued view through a stubbed coordinator, and the body-less cancel
 ///     POST is accepted (not 415) — an unknown job reports 404.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ImageJobEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

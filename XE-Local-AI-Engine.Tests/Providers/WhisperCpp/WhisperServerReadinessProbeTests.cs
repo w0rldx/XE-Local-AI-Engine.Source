@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     it while a model is loading, including for the whole of an in-place model switch, so a 503 has to keep the loop
 ///     polling rather than read as a failure the way any other non-success would.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class WhisperServerReadinessProbeTests
 {
     private static readonly Uri BaseAddress = new("http://127.0.0.1:18300/");

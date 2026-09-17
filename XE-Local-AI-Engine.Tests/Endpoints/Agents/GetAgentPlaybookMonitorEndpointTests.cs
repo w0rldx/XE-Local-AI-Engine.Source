@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     an empty <c>items</c> array for an agent with no Enabled actions, plus a <c>retrieval</c> block carrying the
 ///     relevance-gating thresholds.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GetAgentPlaybookMonitorEndpointTests
 {
     /// <summary>

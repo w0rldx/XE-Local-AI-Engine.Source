@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     database file in plaintext, that a ciphertext moved to another row fails its tag check, and that its <c>Down</c>
 ///     takes exactly those two tables away again.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
 {
     private const string PreviousMigrationId = "20260911235825_AddExternalAppBridgeToken";

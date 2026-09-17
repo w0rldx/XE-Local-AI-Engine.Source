@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
+[Category(TestCategories.Integration)]
 public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
 {
     private const string PreviousMigrationId = "20260726192021_AddLaunchPolicyFingerprintAndBenchmarkResources";

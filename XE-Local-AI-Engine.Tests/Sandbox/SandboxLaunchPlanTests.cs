@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     running something. Real behavior of the resulting chain (OOM kill, egress denial) is covered by the live-gated
 ///     tests in <see cref="ProcessSandboxRuntimeProviderTests" />.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxLaunchPlanTests
 {
     [Test]

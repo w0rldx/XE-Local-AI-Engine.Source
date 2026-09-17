@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     is rejected on the others' surface — in particular the proxy key must not reach admin, and the operator token
 ///     must not drive the raw-model proxy.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class LocalModelProxyInboundAuthTests
 {
     private const string ModelsRoute = "/api/local/v1/proxy/v1/models";

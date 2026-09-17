@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The honesty rules for the generation timeline: which stdout observations may be attributed to this job, which
 ///     would move the bar backwards, and — the point of the whole feature — exactly when a countdown may be shown.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GenerationProgressTrackerTests
 {
     [Test]

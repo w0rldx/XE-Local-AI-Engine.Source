@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The session lifecycle around the gate: what an accept writes for a NEW caller-managed session versus a
 ///     continuation, what an operator's page and delete do, and what the integrator's own read may see.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationSessionServiceTests
 {
     [Test]

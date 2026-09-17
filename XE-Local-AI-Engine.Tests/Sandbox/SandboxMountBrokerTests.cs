@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         that never asked for it. These assert the identity, not merely that a mount list came back.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxMountBrokerTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-mount-broker-" + Guid.NewGuid().ToString("N"));

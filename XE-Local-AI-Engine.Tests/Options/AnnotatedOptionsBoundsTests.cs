@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     refactor. Both compile, both pass every other suite, and both only show up as an operator configuration that starts when
 ///     it should have refused.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class AnnotatedOptionsBoundsTests
 {
     [Test]

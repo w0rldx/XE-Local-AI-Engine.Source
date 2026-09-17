@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         decision is these two functions.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ContainerBridgeListenerProbeTests
 {
     [Test]

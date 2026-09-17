@@ -18,6 +18,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     sanitized terminal status — and stays completely silent when nothing was actually acquired. All HTTP is faked —
 ///     no network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RuntimeAcquisitionProgressTests
 {
     private const string UpgradeTag = "b9799";

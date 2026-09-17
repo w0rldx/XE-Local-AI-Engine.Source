@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     dataset's creation and its generation used to swap the teacher, the tool snapshot and the instructions while the
 ///     dataset still claimed the older <c>DefinitionVersion</c>.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DatasetGenerationExecutorTests
 {
     [Test]

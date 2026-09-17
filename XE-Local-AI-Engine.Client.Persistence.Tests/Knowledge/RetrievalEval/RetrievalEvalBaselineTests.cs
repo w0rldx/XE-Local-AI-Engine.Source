@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///         model-backed semantic eval is a separate, opt-in run and is intentionally out of scope here.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class RetrievalEvalBaselineTests : IDisposable
 {
     private const int K = 5;

@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     the separate stable path identity: identical bytes at different paths remain distinct, while changed bytes at one
 ///     path update that document and reset it for reindex.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

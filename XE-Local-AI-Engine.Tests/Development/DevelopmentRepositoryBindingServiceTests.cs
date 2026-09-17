@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
 {
     /// <summary>

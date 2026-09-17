@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The development-workflow switch: what it refuses at startup, and what a node answers with it off.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowOptionsTests
 {
     private const string ProbeRoute = "/api/local/v1/development-workflows/work-items";

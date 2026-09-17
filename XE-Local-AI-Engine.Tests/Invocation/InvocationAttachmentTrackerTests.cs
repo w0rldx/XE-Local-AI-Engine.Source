@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     which NEVER attached is invisible to both, so a scheduled or platform run is neither reaped nor stripped of its
 ///     park budget.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InvocationAttachmentTrackerTests
 {
     [Test]

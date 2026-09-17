@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     digest the artifacts are stamped with, the reuse rule that rejects a drifted stored profile, and the detector
 ///     that proposes one at registration.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentCommandProfileTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-command-profile-" + Guid.NewGuid().ToString("N"));

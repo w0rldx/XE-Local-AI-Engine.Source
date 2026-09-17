@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         which is exactly the degraded state this exists to prevent.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentArtifactSanitizerRootsTests
 {
     /// <summary>

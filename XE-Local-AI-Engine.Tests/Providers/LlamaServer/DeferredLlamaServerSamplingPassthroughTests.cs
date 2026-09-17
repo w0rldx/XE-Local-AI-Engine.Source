@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     transport (<see cref="LlamaGrammarToolOffer.CaptureWireBodyAsync" />) and grade the serialized bytes, not a
 ///     reimplementation of the adapter.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerSamplingPassthroughTests
 {
     [Test]

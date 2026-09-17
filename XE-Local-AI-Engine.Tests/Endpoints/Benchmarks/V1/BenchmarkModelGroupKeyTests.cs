@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     what an operator comparing quants needs: two quants of one model have different content by definition, so every
 ///     quant became its own group and "which quant of this model is best" could never be asked.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkModelGroupKeyTests
 {
     [Test]

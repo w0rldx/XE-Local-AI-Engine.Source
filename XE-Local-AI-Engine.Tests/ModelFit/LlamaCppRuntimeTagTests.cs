@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>b&lt;number&gt;</c> tag is strictly OLDER than the recommended one — a string inequality (the prior bug) wrongly
 ///     advertised a downgrade as an update when the installed tag was newer than the recommended one.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaCppRuntimeTagTests
 {
     [Test]

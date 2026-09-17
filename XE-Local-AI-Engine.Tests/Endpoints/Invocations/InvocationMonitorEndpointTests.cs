@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class InvocationMonitorEndpointTests
 {
     private static readonly DateTimeOffset FrozenNow = DateTimeOffset.Parse("2026-05-25T10:00:00Z");

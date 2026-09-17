@@ -50,6 +50,7 @@ These suites landed with the 2026-06-24…27 subsystems and are confirmed presen
 - **`EndpointDependencyTests`**: what an endpoint may take as a constructor dependency. It holds for every endpoint in the host and has no exemption list. Generic arguments, array element types and `Nullable<T>` are walked recursively, so a forbidden type wrapped in an allowed generic still counts.
 - **`ThirdPartySdkBoundaryTests`**: the fence keeping `OllamaSharp`, `Docker.DotNet`, `Azure.*` and `Microsoft.Identity.Client` out of the host, application, persistence, agent and contracts layers, with one shrink-only allowlist per SDK. Each list has a second test that fails on an entry whose file no longer references that SDK, so an exemption cannot outlive what it excused.
 - **`EndpointAuthorizationPolicyTests`**: deny-by-default authorization, read from each route's effective metadata rather than from FastEndpoints' own bookkeeping. Every FastEndpoints endpoint resolves to the `NodeOperator` policy or appears in the pre-authentication allowlist (four entries as measured 2026-09-16, with its own stale-entry check); every SignalR hub route requires `NodeOperator` under the configuration that maps it, with the Development-gated hub's absence proved separately under `EnableDevelopmentMode = false`; and the hand-mapped minimal APIs plus the inbound MCP route carry their named policies. The guard's teeth are `ConfiguratorCanaryProbeEndpoint`, a permanent endpoint that calls neither `Policies()` nor `AllowAnonymous()`: the global configurator in `Program.cs` is its only protection, so deleting that one line reds this test by name while every endpoint carrying its own redundant `Policies()` call stays green. See [Security & Privacy](12-security-and-privacy.md) §3.2.
+- **`TestCategoryConventionTests`**: the test-classification guard. Every class with `[Test]` methods carries exactly one `[Category(TestCategories.Unit|Integration|ExternalInfra)]` — checked by reflection in this assembly, which is the only thing that sees which `CategoryAttribute` the class actually bound to, and by source scan in the two sibling test projects, which are not referenced from here. A `Unit` class may reach no Integration mechanism: only the primitives (host factory, `SqliteConnection`/`UseSqlite`/`EnsureCreated`, the fake servers, a real socket, a child process) are written down, and every helper that reaches one — directly or through another helper — is derived at run time, so the marker list maintains itself and needs no allowlist.
 - **`Support/SourceCommentStripper`**: the shared string-aware comment stripper the source-scanning guards call, replacing the regex each had grown. A regex that erases everything after `//` also erases it inside a string literal, so a banned reference written after a URL on the same line passed a guard that never saw it. `ContainerBridgeLayeringArchitectureTests` and `ExternalAppsRuntimeIsolationArchitectureTests` both route through it now, and both carry string-shaped controls that the old regex loses.
 
 `LayerDependencyTests` grew in the same slice: the test and support projects now have their exact `ProjectReference` sets pinned alongside the production ones (seven entries as of 2026-09-16, keyed by repository-relative csproj path because the negative-fence probe nests inside its parent project's directory), cross-checked against the solution's `/Tests` folder membership so a newly added test or fixture project cannot ship unpinned.
@@ -137,6 +138,22 @@ Never run a build concurrently with `dotnet test --no-build`: the build can rewr
 the test host reads them, producing a phantom red or phantom green. `with-build-lock.sh` prevents
 collisions between cooperating processes; `assembly-guard.sh` detects an unwrapped build. Exit `69`
 means the lock timed out and nothing ran. Exit `75` means **CONTAMINATED, result void, rerun required**.
+
+```bash
+# Backend inner loop — scope by category (see 17-writing-tests.md §1b for what each one means)
+dotnet test <project> -c Release --no-build -- --treenode-filter '/*/*/*/*[Category=Unit]'
+dotnet test <project> -c Release --no-build -- --treenode-filter '/*/*/*/*[Category!=ExternalInfra]'
+dotnet test <project> -c Release --no-build -- --treenode-filter '/*/*/AgentHomeServiceTests/*[Category=Unit]'
+```
+
+Four path segments — assembly, namespace, class, test — then one property group in brackets. A class filter goes in
+the third segment and combines with the category as shown; several properties go inside **one** bracket joined by
+`&` or `|` (`[(Category=Unit)&(Category=Integration)]`), because only one property group per segment is allowed.
+`!=` excludes, and it also matches a test that carries no such property at all — harmless now that every class
+carries exactly one category, and the guard keeps it that way. Discovery counts come from `--list-tests` against the
+built test host executable in `bin/<configuration>/net10.0/`; `dotnet test … -- --list-tests` reports "Zero tests
+ran" instead. The category counts sum exactly to the unfiltered count in every project — a class with no
+category, or with two, breaks that sum, and `TestCategoryConventionTests` fails the gate when one does.
 
 ```bash
 # React client

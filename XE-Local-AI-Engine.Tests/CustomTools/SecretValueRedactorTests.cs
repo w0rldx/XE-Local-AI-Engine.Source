@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Value-based redaction: a known secret value is masked wherever it appears, and URL userinfo is stripped.</summary>
+[Category(TestCategories.Unit)]
 public sealed class SecretValueRedactorTests
 {
     [Test]

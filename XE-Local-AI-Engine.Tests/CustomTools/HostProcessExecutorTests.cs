@@ -12,6 +12,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     Host command executor + executable guard: an interpreter/symlink executable is rejected at execution time, a
 ///     timeout returns a non-throwing incomplete result (tree-killed), and a secret env value is scrubbed from output.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HostProcessExecutorTests : IDisposable
 {
     private readonly string _scratch = Path.Combine(Path.GetTempPath(), "xe-customtool-" + Guid.NewGuid().ToString("N"));

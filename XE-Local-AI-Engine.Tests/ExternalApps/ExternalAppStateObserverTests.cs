@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     refresh only, and every instance read is served from the database — so without this, a container someone
 ///     stopped from a terminal leaves the interface reporting the application as running indefinitely.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppStateObserverTests
 {
     [Test]

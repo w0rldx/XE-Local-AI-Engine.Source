@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>model-recommendation-check</c> schedule whose parameters carry the new advisor schema (no approved-image /
 ///     provider fields), and re-runs never duplicate it when a definition already exists.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelRecommendationScheduleSeederTests
 {
     [Test]

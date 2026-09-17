@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     must degrade to an empty list, never a 500 — the browse panel going red the moment Hugging Face hiccups is
 ///     exactly the failure the GGUF lane already learned to avoid.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ImageModelDiscoveryEndpointTests
 {
     /// <summary>

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     byte-identical (silent) startup output, so a normal pinned-acquisition deploy is not changed by this service
 ///     existing.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerRuntimeOverrideStartupNoticeTests
 {
     [Test]

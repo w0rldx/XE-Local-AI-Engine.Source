@@ -21,6 +21,7 @@ using DevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.
 ///         It is deliberately the only DevWorkflows test that does this; everything else runs against the scripted lane.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowToolSandboxTests : IDisposable
 {
     /// <summary>

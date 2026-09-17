@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     an independent credential-store read that could classify a request local while the factory routes it to Azure
 ///     from its cached snapshot. A snapshot read failure FAILS CLOSED to cloud so the private-data gate withholds.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelCapabilityResolverTests
 {
     private const string AzureDeployment = "azure-gpt-deploy";

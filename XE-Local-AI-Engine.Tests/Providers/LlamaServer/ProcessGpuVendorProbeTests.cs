@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     degrading to "undetected" — never blocking past the per-tool timeout. Exercised on any host via the injectable
 ///     driver-signal + process-factory seams (no real GPU / no real shelling).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ProcessGpuVendorProbeTests
 {
     [Test]

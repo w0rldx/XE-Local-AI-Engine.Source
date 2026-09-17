@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed class WorkSessionNotFoundExceptionHandlerTests
 {
     [Test]

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class GoldenConversationStoreTests : IDisposable
 {
     private const string Instructions = "You are a careful engineering agent. Follow the repository conventions exactly.";

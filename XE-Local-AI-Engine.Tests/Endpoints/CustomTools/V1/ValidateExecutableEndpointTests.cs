@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         before routing produces its 405. Either status proves the same thing here — the POST is not registered.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ValidateExecutableEndpointTests
 {
     private const string ProbeRoute = "/api/local/v1/custom-tools/executable-probe";

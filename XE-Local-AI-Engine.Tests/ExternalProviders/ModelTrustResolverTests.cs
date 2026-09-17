@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     have classified a declared-CLOUD external model as node-local — and handed it the workspace, the knowledge
 ///     base, custom tools and <c>run_python</c>.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class ModelTrustResolverTests
 {
     [Test]

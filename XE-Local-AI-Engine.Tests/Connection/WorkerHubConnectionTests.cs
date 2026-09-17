@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
+[Category(TestCategories.Unit)]
 public sealed class WorkerHubConnectionTests
 {
     [Test]

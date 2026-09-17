@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     validation→400 response on bad input; redaction (no raw parameters in job response;
 ///     no raw details/error_details in run response).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class SchedulerEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

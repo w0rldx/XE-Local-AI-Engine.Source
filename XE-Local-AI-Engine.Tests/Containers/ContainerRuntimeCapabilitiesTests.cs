@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     evaluates it. They live in one type so that they cannot disagree; these tests are what keep that true once the
 ///     catalog validator states the same nine names on its own side.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerRuntimeCapabilitiesTests
 {
     [Test]

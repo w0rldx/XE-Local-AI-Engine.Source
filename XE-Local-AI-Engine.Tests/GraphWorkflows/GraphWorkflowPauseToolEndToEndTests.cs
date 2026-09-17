@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         its chance to land.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowPauseToolEndToEndTests
 {
     private const string Root = "/api/local/v1/graph-workflows";

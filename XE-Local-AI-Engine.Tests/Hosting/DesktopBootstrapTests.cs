@@ -21,6 +21,7 @@ using OS = TUnit.Core.Enums.OS;
 // save-then-clear-then-restore the var so a serialized-but-leaky sibling can never poison the next test's "neither
 // set" premise.
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class DesktopBootstrapTests : IDisposable
 {
     private readonly string? _originalOperatorSecretEnv = Environment.GetEnvironmentVariable(NodeOperatorSecretProvider.EnvVarName);

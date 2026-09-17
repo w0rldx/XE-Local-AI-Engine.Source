@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     actually resolves calls against; binding a substitute in the hop's own clone would be invisible in a unit test
 ///     that only inspected the clone, and would silently do nothing in production.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ToolRelevanceChatClientTests
 {
     private const string Query = "please read the project file and summarise it";

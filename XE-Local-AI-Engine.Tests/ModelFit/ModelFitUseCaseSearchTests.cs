@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     curated terms (case-insensitively); an unknown use-case falls back to its verbatim text; null/blank falls back to
 ///     <c>instruct</c>. The list is never empty.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ModelFitUseCaseSearchTests
 {
     [Test]

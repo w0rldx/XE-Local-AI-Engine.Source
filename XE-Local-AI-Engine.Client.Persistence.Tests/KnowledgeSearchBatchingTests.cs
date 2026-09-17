@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     candidate whose row is gone, and running the FTS and embed arms concurrently still feeds the SAME two ranked lists
 ///     into Reciprocal Rank Fusion (the final order equals the RRF baseline of the two arms).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeSearchBatchingTests : IDisposable
 {
     private const string ResolvedModel = "nomic-embed-text";

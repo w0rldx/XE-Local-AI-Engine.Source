@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     flattening them. Each handler must also decline what it does not name, or an unrelated fault would answer 4xx
 ///     instead of the 500 that says something is broken.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class PromotedEndpointSupportHandlerTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

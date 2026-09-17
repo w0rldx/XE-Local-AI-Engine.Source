@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     <c>ValidateConfig</c> (API key required only for the ApiKey auth mode, ≥1 model, Azure host
 ///     allowlist, HTTPS).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AzureFoundryConfigStoreTests : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

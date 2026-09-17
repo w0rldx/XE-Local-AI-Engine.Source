@@ -18,6 +18,8 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
+// System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
+using CategoryAttribute = TUnit.Core.CategoryAttribute;
 
 /// <summary>
 ///     The acceptance loop on the REAL <see cref="ProcessSandboxRuntimeProvider" />: copy a selected folder into the
@@ -27,6 +29,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     the <see cref="XE_Local_AI_Engine.Tests.AgentHome.AgentHomeServiceTests" /> harness shape but swaps in the
 ///     process provider. It self-skips if <c>git</c> is not on PATH (the loop needs real git in the jail).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 6, day: 17, hour: 12, minute: 0, second: 0, TimeSpan.Zero);

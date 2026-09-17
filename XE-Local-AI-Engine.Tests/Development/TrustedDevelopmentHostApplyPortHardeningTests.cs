@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         recomputes the same diff and compares hashes.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-apply-port-hardening-" + Guid.NewGuid().ToString("N"));

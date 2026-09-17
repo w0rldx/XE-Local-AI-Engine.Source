@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     an operator override for the model name wins, then the built-in default table, then zero (unknown / unpriced).
 ///     Model names match case-insensitively; the constructor defensively drops blank keys and negative / non-finite rates.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class UsageRateResolverTests
 {
     private static IUsageRateResolver WithOverrides(params (string Model, double Input, double Output)[] entries)

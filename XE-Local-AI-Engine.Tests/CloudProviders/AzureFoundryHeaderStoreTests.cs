@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     (including secret values and operator suffixes), a v2 blob with no Headers field defaulting to empty (legacy
 ///     load), and the defense-in-depth <c>ValidateConfig</c> rejections.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class AzureFoundryHeaderStoreTests : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

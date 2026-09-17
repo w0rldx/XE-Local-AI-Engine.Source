@@ -6,6 +6,7 @@ using ModelContextProtocol.Server;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Unit)]
 public sealed partial class McpToolsReferenceDriftTests
 {
     [Test]

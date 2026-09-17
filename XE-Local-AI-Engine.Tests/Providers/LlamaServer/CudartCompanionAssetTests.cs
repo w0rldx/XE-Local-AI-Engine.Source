@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The pure cudart-companion derivation (<see cref="LlamaCppReleasePins.DeriveCudartAssetName" />) and the
 ///     Windows-CUDA pin carrying its companion runtime archive metadata. No network and no file system.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CudartCompanionAssetTests
 {
     [Test]

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     test in the module in a way that reads as an unrelated failure.
 /// </remarks>
 [NotInParallel(nameof(WhisperServerRuntimeOverrideOptions))]
+[Category(TestCategories.Unit)]
 public sealed class WhisperServerRuntimeOverrideOptionsTests
 {
     [Test]

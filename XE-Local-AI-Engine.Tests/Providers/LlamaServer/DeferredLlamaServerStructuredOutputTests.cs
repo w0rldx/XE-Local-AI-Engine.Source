@@ -37,6 +37,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>type: "json_object"</c> it reads an optional <c>schema</c> and otherwise constrains to free-form JSON. Any
 ///     other non-empty type but <c>"text"</c> is rejected outright.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerStructuredOutputTests
 {
     // The schema an author actually writes: tight value bounds, all of them well inside

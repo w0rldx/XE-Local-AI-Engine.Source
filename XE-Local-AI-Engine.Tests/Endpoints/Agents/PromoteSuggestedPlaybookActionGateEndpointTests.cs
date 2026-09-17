@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and the action stays Suggested (still inert). When the agent is already at the cap, a promote whose eval passed is
 ///     blocked with 409 (<c>{ status: "CapReached", reason }</c>).
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
 {
     /// <summary>

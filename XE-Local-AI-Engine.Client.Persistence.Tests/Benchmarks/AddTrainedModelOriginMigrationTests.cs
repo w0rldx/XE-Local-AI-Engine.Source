@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     <c>BenchmarkRunConfiguration</c> and the database CHECK constraint. Missing either one turns the first benchmark
 ///     run of a locally trained model into a throw at save time.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddTrainedModelOriginMigrationTests : IDisposable
 {
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

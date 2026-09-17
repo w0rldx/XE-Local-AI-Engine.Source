@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>context_length</c>, returning all-null metadata (never throwing) for a missing / empty / non-GGUF file. The
 ///     HTTP client is wired over a throwing handler to prove the local-file path never touches the network.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufHeaderReaderLocalFileTests
 {
     [Test]

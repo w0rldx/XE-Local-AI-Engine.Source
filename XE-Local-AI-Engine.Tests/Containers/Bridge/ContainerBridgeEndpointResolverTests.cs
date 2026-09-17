@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     driven off a fabricated interface list: <c>System.Net.NetworkInformation</c> describes only the machine the
 ///     test happens to run on, and the rules that matter are the ones for the machines it is not.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerBridgeEndpointResolverTests
 {
     [Test]

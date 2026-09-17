@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     That stamp is what lets a later build tell "this hash is comparable to mine" from "this hash was computed by a
 ///     scheme I no longer run" without re-projecting anything from the executing box's conditions.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkPhaseLaunchResolverTests
 {
     [Test]

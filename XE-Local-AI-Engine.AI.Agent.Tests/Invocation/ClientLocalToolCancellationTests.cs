@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     backs <c>run_in_agent_home</c>) and a scripted model, then cancels the run token mid-tool and asserts the
 ///     handler observed the cancellation. Deterministic — a scripted <see cref="IChatClient" />, no Ollama.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ClientLocalToolCancellationTests
 {
     private const string ToolName = "run_blocking_client_local";

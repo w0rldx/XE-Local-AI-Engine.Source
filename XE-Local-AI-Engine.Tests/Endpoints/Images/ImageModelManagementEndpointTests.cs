@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Both require the operator token, and both are idempotent — cancelling a download that just finished, or deleting
 ///     a model that is not installed, is a success, because the operator clicking a stale row is a race, not a mistake.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ImageModelManagementEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

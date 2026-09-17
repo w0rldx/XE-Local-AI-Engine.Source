@@ -17,6 +17,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     decisions the service makes around those commands — when it refuses to start, what it asks cmake for, and what
 ///     it does with what <c>readelf</c> reports.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class WhisperCppSourceBuildServiceTests
 {
     [Test]

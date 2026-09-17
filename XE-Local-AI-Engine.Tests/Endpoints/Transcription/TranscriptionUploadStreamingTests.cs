@@ -88,6 +88,7 @@ public static class FrameworkTempSentinel
 ///     </para>
 /// </remarks>
 [NotInParallel(FrameworkTempSentinelKey)]
+[Category(TestCategories.Integration)]
 public sealed class TranscriptionUploadStreamingTests
 {
     /// <summary>

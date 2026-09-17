@@ -52,6 +52,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     multi-content assistant messages, parallel tool calls in a single round, an approved tool alongside a rejected one,
 ///     and reasoning-only messages.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BudgetedApprovalReplayTests
 {
     private const string QueryToolName = "structured_query";

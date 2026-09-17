@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     abandoned within the bounded drain window rather than blocking shutdown, and a document that completes after the
 ///     semaphore is disposed does not fault on <see cref="ObjectDisposedException" />.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class KnowledgeIngestionWorkerTests
 {
     private static readonly TimeSpan PollTimeout = TimeSpan.FromSeconds(5);

@@ -38,6 +38,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         end state the ratchet exists to reach.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ThirdPartySdkBoundaryTests
 {
     /// <summary>

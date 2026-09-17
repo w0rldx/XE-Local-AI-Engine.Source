@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="DeferredLlamaServerEmbeddingGeneratorFailureTests" />, which drives the sibling client that way for
 ///     the same reason.
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class DeferredLlamaServerResponseSchemaEntryPointTests
 {
     private const string AuthoredSchema =

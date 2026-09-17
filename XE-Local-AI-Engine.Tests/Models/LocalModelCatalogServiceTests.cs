@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     keeps a node with no Ollama, no cloud session and an unreadable GGUF registry able to answer a picker query.
 ///     Each test kills exactly one source and asserts the others survive it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LocalModelCatalogServiceTests
 {
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);

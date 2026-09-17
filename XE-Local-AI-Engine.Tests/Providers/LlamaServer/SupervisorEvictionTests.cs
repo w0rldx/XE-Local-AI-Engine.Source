@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     in-window but unleased POOLED (embedding/reranker) process, by contrast, yields its slot — otherwise the default
 ///     cap (3 = the number of roles) plus background indexing hard-fails every chat model switch for a full TTL window.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorEvictionTests
 {
     /// <summary>Enough wall clock for several passes of the reaper's ~1 s cadence, which runs on the real clock.</summary>

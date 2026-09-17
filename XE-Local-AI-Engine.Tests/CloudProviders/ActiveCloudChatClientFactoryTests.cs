@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
     Justification = "The out client aliases a test-owned StubChatClient already disposed via 'using'.")]
+[Category(TestCategories.Unit)]
 public sealed class ActiveCloudChatClientFactoryTests
 {
     private static readonly TimeSpan PastTtl = TimeSpan.FromSeconds(5);

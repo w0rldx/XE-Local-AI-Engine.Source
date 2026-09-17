@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         port, and that the scenario knobs a test sets are the ones the endpoints will read.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class FakeDockerServerTests
 {
     [Test]

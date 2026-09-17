@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using GgufAcquisitionOperationKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
+[Category(TestCategories.Unit)]
 public sealed class GgufImportTransactionCoordinatorTests
 {
     [Test]

@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     <c>AddTutorialState</c> adds the per-user onboarding tour state. It lives on the IDENTITY context, not the chat
 ///     context, which is the easy thing to get wrong when adding the next column near it.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddTutorialStateMigrationTests
 {
     [Test]

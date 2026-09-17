@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     file bodies, variable defaults, the raw fetched document) into the node log. Mirrors
 ///     <c>ContainerRuntimeRecordPrintingTests</c> on the container side.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ExternalAppCatalogRecordPrintingTests
 {
     [Test]

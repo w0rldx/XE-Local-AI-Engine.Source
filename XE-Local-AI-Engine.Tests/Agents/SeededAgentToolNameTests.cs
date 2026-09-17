@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         than in each seeder's own suite, because the defect is a class of defect and not a property of one persona.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class SeededAgentToolNameTests
 {
     /// <summary>

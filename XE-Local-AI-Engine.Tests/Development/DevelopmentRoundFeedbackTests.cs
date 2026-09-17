@@ -16,6 +16,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///         travel down the same channel: whatever asked for the rework, its reason reaches the round that must act.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DevelopmentRoundFeedbackTests
 {
     [Test]

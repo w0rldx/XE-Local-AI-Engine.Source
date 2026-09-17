@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class InvocationEfficiencyTelemetryTests
 {
     [Test]

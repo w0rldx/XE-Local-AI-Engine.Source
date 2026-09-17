@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     feature's method name, and a saturated bound drops the transport copy with a warning instead of blocking the
 ///     publisher.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class HubEventRelayTests
 {
     [Test]

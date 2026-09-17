@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         fail-closed on paper only. The <c>SettingsMutator</c> seam exists for exactly these.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DockerSandboxRuntimeProviderTests
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 7, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);

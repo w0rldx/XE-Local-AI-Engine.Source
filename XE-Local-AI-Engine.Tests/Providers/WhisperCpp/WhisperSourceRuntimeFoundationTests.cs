@@ -20,6 +20,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     Adoption is driven directly rather than through the build service, because these are properties of the
 ///     transaction itself and proving them here keeps them provable without compiling anything native.
 /// </remarks>
+[Category(TestCategories.Integration)]
 public sealed class WhisperSourceRuntimeFoundationTests
 {
     [Test]

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         it authorises, so two accepts can never land two seeds in one conversation.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationSessionGateTests
 {
     [Test]

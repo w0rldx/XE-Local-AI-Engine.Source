@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The compare read path. The store is a substitute, so every test here states the cell table it is reading
 ///     — which is the only input the paired delta has.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkCompareEndpointTests
 {
     private const string Api = "/api/local/v1/benchmarks";

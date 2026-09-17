@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     that has decided to stop a run finishes stamping and closing it whatever the caller's connection does, and a
 ///     lost marker CAS answers what the row actually reads rather than a blanket 202.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationExecutionQueryServiceTests
 {
     [Test]

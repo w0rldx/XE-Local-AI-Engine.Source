@@ -22,6 +22,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     absolute/<c>..</c> path arg can never read a host file outside the jail. The no-sandbox, disabled, binary,
 ///     traversal, and concurrency cases are pinned here too.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CoderWorkspaceReaderTests : IDisposable
 {
     private const string Owner = "owner-coder";

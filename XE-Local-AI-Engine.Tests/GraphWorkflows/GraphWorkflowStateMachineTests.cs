@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The run and node-run state machines. The store does not judge transitions, so these functions are the only guard
 ///     — and being pure is what lets the whole table be enumerated with no database in sight.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GraphWorkflowStateMachineTests
 {
     /// <summary>The parser's node- and edge-key ceiling, restated: it is private to <c>GraphWorkflowGraph</c>.</summary>

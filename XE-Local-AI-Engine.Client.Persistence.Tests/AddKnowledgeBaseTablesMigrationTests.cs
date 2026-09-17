@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     the chunk vectors. Every child cascades off <c>knowledge_documents</c>, which is what makes deleting a document
 ///     actually delete its embeddings instead of stranding them.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddKnowledgeBaseTablesMigrationTests
 {
     [Test]

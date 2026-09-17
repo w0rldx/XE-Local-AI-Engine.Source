@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     failure classes are swallowed (the ones a stale/unavailable job store actually produces) and that anything
 ///     outside that list still escapes.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SchedulerJobDetailReconciliationServiceTests
 {
     [Test]

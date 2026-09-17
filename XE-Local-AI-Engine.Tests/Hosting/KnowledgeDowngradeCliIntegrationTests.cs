@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     correct.
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class KnowledgeDowngradeCliIntegrationTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-downgrade-cli-" + Guid.NewGuid().ToString("N"));

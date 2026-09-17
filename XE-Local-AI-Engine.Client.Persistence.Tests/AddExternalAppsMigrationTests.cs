@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     plaintext columns must have, the two indexes, and that its <c>Down</c> takes exactly those two tables away
 ///     again. Also the fence for ruling R1-23 — the catalog cache is a file, so no third table exists.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddExternalAppsMigrationTests
 {
     private const string PreviousMigrationId = "20260907085114_DropCanvasWorkflows";

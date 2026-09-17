@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         Every test takes a host of its OWN: the scripted chain is a container singleton whose history they read.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowIntegrationApplyTests
 {
     /// <summary>

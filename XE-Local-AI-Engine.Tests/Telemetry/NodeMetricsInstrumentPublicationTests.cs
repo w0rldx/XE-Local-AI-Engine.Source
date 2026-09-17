@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // a real MeterListener (the same surface OpenTelemetry attaches) catches that. Serial so a sibling test's node-meter
 // emission cannot bleed into a capture window.
 [NotInParallel]
+[Category(TestCategories.Unit)]
 public sealed class NodeMetricsInstrumentPublicationTests
 {
     [Test]

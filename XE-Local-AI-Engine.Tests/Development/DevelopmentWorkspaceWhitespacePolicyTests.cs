@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         <c>core.whitespace=cr-at-eol</c>.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-whitespace-" + Guid.NewGuid().ToString("N"));

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     the table from this migration's target model, so a Down generated against a stale model deletes columns it
 ///     never mentions.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddBenchmarkProjectReasoningBudgetMigrationTests
 {
     private const string PreviousMigration = "20260824151335_AddAgentWorkSessions";

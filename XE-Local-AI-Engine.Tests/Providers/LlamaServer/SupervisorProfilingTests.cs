@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     exclusive, pins the process against idle eviction for the benchmark, appends <c>--metrics</c> to a replay spawn
 ///     when asked, and always releases the single-flight gate + evicts the transient process — even when the body throws.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorProfilingTests
 {
     [Test]

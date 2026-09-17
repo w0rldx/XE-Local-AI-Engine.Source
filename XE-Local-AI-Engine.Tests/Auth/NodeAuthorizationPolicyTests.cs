@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     role requirement. A silent loosening — an extra scheme added to a policy, or the admin role dropped — compiles
 ///     and passes every other suite, so it is asserted here directly.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class NodeAuthorizationPolicyTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

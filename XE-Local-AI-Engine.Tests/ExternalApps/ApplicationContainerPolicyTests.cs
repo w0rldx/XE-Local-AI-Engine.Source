@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     and then lying about exactly one field. "We passed the flag" is not verification; what the daemon says it
 ///     created is.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ApplicationContainerPolicyTests
 {
     private const string InstallId = "install-1";
@@ -609,6 +610,7 @@ public sealed class ApplicationContainerPolicyTests
 ///     <c>requires[]</c>, once by the runtime that evaluates it. This slice is the first that can see both, and a
 ///     drift between them would mean a valid manifest answered "incompatible" by a runtime that offers the thing.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerCapabilityNameParityTests
 {
     [Test]

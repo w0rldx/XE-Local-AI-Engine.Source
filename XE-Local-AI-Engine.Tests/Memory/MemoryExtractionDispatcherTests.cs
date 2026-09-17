@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>AgentExecutionLog</c> row (no message content) on its OWN scope/DbContext, running the extraction service, and
 ///     never surfacing a failure. Work is asynchronous, so assertions poll for the background work to land.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class MemoryExtractionDispatcherTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

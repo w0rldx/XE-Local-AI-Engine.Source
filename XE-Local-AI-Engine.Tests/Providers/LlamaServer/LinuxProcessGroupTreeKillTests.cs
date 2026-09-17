@@ -17,6 +17,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     The Windows Job Object branch is implemented to the <c>dotnet-pinvoke</c> standard but cannot run here — it is
 ///     flagged for operator verification on real Windows 11. This test guards the half that runs on Linux.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class LinuxProcessGroupTreeKillTests
 {
     // Linux-only runtime verification; the Windows path is operator-verified.

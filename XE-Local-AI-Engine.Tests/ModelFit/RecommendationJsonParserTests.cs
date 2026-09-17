@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     defaults to 8192 and previously masked every model's real context). The parser falls back to
 ///     <c>effective_context_length</c> only when <c>context_length</c> is absent.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class RecommendationJsonParserTests
 {
     [Test]

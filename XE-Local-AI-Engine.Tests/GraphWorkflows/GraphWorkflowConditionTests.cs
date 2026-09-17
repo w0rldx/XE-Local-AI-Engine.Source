@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The edge-condition truth table. It decides every branch a graph workflow takes, and it is a comparison rather
 ///     than an expression language precisely so it can be enumerated.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GraphWorkflowConditionTests
 {
     private const string Output = """

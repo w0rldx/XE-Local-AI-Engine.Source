@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Tests.WorkSessions;
 ///         the only test that proves the two families are actually wired to each other.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevWorkflowSliceATests
 {
     /// <summary>How long one agent node's session may take to settle before the test calls it stuck.</summary>
@@ -244,6 +245,7 @@ public sealed class DevWorkflowSliceATests
                 return;
             }
 
+            // real-timer: polls the real store while a background service drains; no gate the test can hold.
             await Task.Delay(25).ConfigureAwait(false);
         }
 

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     preserved as part of the canonical token (UD-Q4_K_XL) so a Dynamic quant is a distinct, selectable identity,
 ///     while plain quants are unaffected.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufQuantParserTests
 {
     [Test]

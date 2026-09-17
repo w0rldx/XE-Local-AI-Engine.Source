@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using XE_Local_AI_Engine.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class NodeLoginLockoutIntegrationTests
 {
     private const string Email = "admin@example.test";

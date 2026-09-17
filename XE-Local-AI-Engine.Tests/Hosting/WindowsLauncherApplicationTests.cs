@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.WindowsLauncher;
 
+[Category(TestCategories.Unit)]
 public sealed class WindowsLauncherApplicationTests
 {
     [Test]

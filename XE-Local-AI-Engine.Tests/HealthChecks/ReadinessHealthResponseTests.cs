@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     is serving local inference) with its per-check status, description, and structured reason data — so "degraded" is
 ///     never an indistinguishable 200. A Healthy check with no data carries no reason block.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ReadinessHealthResponseTests
 {
     [Test]

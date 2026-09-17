@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     pinned llama.cpp release <c>b9692</c> (<c>--fit</c>, <c>--metrics</c>, <c>-c</c>, <c>--n-gpu-layers</c>,
 ///     <c>-ts</c>, <c>-ot</c>, <c>-ctk/-ctv</c>, <c>--flash-attn</c>).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorLaunchSpecProfileTests
 {
     private static readonly LlamaServerProcessSupervisor.ProcessKey ChatKey = new("llama3", ModelRole.Chat);

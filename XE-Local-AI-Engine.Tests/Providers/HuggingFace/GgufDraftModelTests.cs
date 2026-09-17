@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>unsloth/Qwen3.6-27B-MTP-GGUF</c> and <c>s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF</c> are ordinary chat repos
 ///     whose NAMES mention MTP — the classifier must separate the two without a false positive in either direction.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class GgufDraftModelTests
 {
     [Test]

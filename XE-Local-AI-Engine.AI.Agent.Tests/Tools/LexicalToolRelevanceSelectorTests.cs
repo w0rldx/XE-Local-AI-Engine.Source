@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     order is always the INPUT order, so a fixed selected set serialises to the same tools array on every round of a
 ///     turn — which is what keeps the llama.cpp prompt prefix and its compiled GBNF grammar stable.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LexicalToolRelevanceSelectorTests
 {
     private const int Threshold = 12;

@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     meant to be compared. The comparison is failed before anything is leased or spawned, which removes the false
 ///     drift warning at its root instead of rendering it.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkComparisonExecutorTests
 {
     private static readonly Guid ComparisonId = new("55555555-5555-5555-5555-555555555555");

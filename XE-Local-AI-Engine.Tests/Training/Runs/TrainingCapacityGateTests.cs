@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     faked and the down-tier loop behind it would try to admit a smaller model that does not exist. The ledger is
 ///     also the part that matters — it is the process-wide byte budget every concurrent spawn decision reads.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingCapacityGateTests
 {
     private const long OneGigabyte = 1024L * 1024 * 1024;

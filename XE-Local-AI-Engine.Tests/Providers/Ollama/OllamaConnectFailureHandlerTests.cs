@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 // The HttpMessageInvoker (disposeHandler defaults to true) owns and disposes the handler chain it is given, so the
 // handler/inner-handler instances constructed inline do not need separate disposal in these tests.
 #pragma warning disable CA2000
+[Category(TestCategories.Unit)]
 public sealed class OllamaConnectFailureHandlerTests
 {
     private static HttpRequestMessage Request()

@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Tests.Training.Runs;
 ///     run alone, that a runtime with no quantizer says so specifically instead of failing at the subprocess, and
 ///     that an architecture this engine cannot serve is rejected before the smoke gate ever runs.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TrainingExportServiceTests : IDisposable
 {
     private readonly List<FixedNodeSqliteKeyHolder> _keyHolders = [];

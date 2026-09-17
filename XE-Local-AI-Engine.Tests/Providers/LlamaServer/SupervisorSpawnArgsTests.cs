@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     localhost only. Verified against the pinned llama.cpp release <c>b10201</c> flag names (<c>--jinja</c>,
 ///     <c>--embeddings</c>, <c>--pooling mean|cls|last</c>).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SupervisorSpawnArgsTests
 {
     [Test]

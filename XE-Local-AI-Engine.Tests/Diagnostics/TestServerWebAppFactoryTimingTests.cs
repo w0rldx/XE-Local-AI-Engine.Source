@@ -30,6 +30,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 /// </summary>
 [NotInParallel]
+[Category(TestCategories.Integration)]
 public sealed class TestServerWebAppFactoryTimingTests
 {
     private const string EnableVariable = "XE_FIXTURE_TIMING";

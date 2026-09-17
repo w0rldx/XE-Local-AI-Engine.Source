@@ -16,6 +16,7 @@ using PersistenceDevelopmentTaskStatus = XE_Local_AI_Engine.Client.Persistence.E
 ///     The two guards that stop an attempt from rewriting the terms it is judged by: the <c>.xe-dev/profile.json</c>
 ///     tamper check, and the test-write policy.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class DevelopmentProfileGuardTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-profile-guard-" + Guid.NewGuid().ToString("N"));

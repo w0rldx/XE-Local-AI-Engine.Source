@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///         is a compile error; a string-keyed <c>assembly.GetTypes()</c> scan elsewhere would simply go green.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class TranscriptionNoAudioPersistenceTests
 {
     private static readonly string[] AudioBearingFragments = ["audio", "pcm", "waveform", "samples"];

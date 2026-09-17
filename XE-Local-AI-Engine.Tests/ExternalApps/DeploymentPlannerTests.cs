@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     each asymmetry is a bug someone would otherwise ship: a literal dollar rewritten, a Compose default passed
 ///     into a container verbatim, or an optional variable's key silently dropped.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DeploymentPlannerTests
 {
     private const string InstallId = "install-1";

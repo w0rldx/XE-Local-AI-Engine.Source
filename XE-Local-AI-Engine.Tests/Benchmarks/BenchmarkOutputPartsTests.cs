@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The live capture appends one part per stream delta; storage and the judge both want the coalesced form. A
 ///     regression here is not cosmetic: the per-delta transcript is what blew the judge's context window.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class BenchmarkOutputPartsTests
 {
     [Test]

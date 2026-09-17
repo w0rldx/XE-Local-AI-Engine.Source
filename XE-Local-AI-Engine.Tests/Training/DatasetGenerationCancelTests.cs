@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     must not rethrow, or the queue would log the operator's own cancel as a "queue failed" error and the next work
 ///     item would still be waiting behind a loop that took the shutdown path.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DatasetGenerationCancelTests
 {
     private static readonly TimeSpan BoundedWait = TimeSpan.FromSeconds(5);

@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The graph-workflow switch and its budgets: what the validator refuses at startup, what the documented defaults
 ///     are, and what a node answers with the feature off.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class GraphWorkflowOptionsTests
 {
     private const string ProbeRoute = "/api/local/v1/graph-workflows/definitions";

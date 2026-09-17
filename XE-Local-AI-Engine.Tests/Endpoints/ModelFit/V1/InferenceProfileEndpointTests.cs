@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     local-only machine key. The <see cref="IInferenceProfileService" /> is substituted so the assertions are
 ///     deterministic and never spawn a real llama-server.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class InferenceProfileEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";

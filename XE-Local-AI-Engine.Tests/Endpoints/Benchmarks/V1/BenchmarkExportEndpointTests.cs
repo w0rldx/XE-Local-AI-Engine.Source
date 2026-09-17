@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     tests assert it still carries what a detail read carries (transcript and decrypted verdict) rather than
 ///     re-describing the shape; the CSV tests pin the RFC 4180 quoting and the quant parse, which have no other home.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class BenchmarkExportEndpointTests
 {
     private const string Api = "/api/local/v1/benchmarks";

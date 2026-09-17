@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>POST custom-tools</c>: operator-gated, 201 + a resolvable Location on success, and 400 when the server-side
 ///     danger acknowledgement is missing — a control that must never be enforceable from the client alone.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class CreateCustomToolEndpointTests
 {
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]

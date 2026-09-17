@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     supervisor mapping for warm/unload/health, and that the deferred chat/embedding clients ensure-run the right
 ///     <c>(model, role)</c> on first use and route to the supervisor's endpoint.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaServerProviderContractTests
 {
     private const string Model = "qwen2.5-coder";

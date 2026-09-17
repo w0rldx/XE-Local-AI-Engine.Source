@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>Capability probing and argument projection coverage for the machine-readable fit helper.</summary>
+[Category(TestCategories.Unit)]
 public sealed class LlamaFitParamsProcessRunnerTests
 {
     [Test]

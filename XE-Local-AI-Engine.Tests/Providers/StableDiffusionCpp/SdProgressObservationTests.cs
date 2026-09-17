@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     whole generation, so every literal in this file is a byte sequence the daemon actually emitted rather than a
 ///     guess at its format.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SdProgressObservationTests
 {
     private const string Esc = "\u001b[K";

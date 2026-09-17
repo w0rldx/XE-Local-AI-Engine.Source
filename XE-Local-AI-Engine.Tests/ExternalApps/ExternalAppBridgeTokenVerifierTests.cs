@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     encrypted column, because what is being asserted is that a token minted at install can be read back out of an
 ///     AEAD-sealed row and matched — a substituted store would prove none of that.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppBridgeTokenVerifierTests
 {
     private const string AppId = "test-app";

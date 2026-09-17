@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     driven by an EXCLUSIVE watermark the caller can resume from without overlap or gap, that a tail above the cap is
 ///     refused rather than quietly shrunk, and that neither feed ever carries an engine-owned value.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class ExternalAppFeedEndpointTests
 {
     private const string LogText = "odysseus ready on :8080";

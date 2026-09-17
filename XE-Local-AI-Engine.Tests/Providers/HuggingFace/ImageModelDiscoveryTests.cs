@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     purpose (a part is one file end-to-end), and an untrusted repo file name can never reach a picker.
 ///     No network — a stubbed <see cref="HttpMessageHandler" /> returns canned Hub JSON.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ImageModelDiscoveryTests
 {
     [Test]

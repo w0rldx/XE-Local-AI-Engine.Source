@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     chat / model-list gates all read <see cref="CodexProviderCapabilities.V0" />, so this single matrix governs the
 ///     behaviour.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class CodexProviderCapabilitiesTests
 {
     [Test]

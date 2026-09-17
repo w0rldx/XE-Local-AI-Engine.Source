@@ -14,6 +14,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     <see cref="ProcessSandboxRuntimeProviderTests" /> keeps the same matrix at the provider level — these cases pin
 ///     the guard directly so a future sandbox surface that calls it gets a failing test, not a silent gap.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SandboxJailPathGuardTests : IDisposable
 {
     private readonly string _jailRoot = Path.Combine(Path.GetTempPath(), "xe-jail-guard-" + Guid.NewGuid().ToString("N"));

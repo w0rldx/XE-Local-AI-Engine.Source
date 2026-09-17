@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         express the one input this middleware decides on.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class ContainerBridgePeerGuardMiddlewareTests
 {
     private const int BridgePort = 18790;

@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     encrypted summary blob, the sequence it covers up to, and when it was written. All three are needed together —
 ///     a summary without its watermark cannot be resumed from, so the reader would re-send the full history.
 /// </summary>
+[Category(TestCategories.Integration)]
 public sealed class AddConversationCompactionSummaryMigrationTests
 {
     [Test]

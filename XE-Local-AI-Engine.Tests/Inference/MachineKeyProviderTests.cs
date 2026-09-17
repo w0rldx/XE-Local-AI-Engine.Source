@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Backed by a tiny in-memory settings store that counts writes and serializes its read-modify-write the way the
 ///     real store's lock does.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class MachineKeyProviderTests
 {
     [Test]

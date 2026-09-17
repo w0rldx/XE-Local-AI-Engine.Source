@@ -41,6 +41,7 @@ using Assembly = System.Reflection.Assembly;
 ///         <see cref="LayerDependencyTests" /> already reports NetArchTest results.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class PlacementConventionTests
 {
     // Marker types anchor each assembly so the rules run over the real compiled IL, not a namespace string. These

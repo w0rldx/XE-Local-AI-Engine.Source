@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     message carries no content part, and a <c>tool</c> message not preceded by its call is what a strict chat
 ///     template rejects.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class InvocationRunnerChatMessageBuilderTests
 {
     [Test]

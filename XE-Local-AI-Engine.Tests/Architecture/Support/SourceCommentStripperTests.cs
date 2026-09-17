@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     string content for a comment start does not merely mangle the construct — it erases the reference that
 ///     follows it, which is exactly the silent pass this helper exists to prevent.
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class SourceCommentStripperTests
 {
     /// <summary>

@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         drain — which is what makes the terminal the highest sequence in the ring.
 ///     </para>
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class IntegrationStreamEventMapperTests
 {
     /// <summary>Test 10 — the non-terminal content row.</summary>

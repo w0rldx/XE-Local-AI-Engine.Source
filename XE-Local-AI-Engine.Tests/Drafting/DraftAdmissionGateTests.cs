@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The draft slot itself: one draft at a time, none while an invocation is in flight, and a lease that releases the
 ///     slot exactly once no matter how often it is disposed (a double release would hand out two concurrent slots).
 /// </summary>
+[Category(TestCategories.Unit)]
 public sealed class DraftAdmissionGateTests
 {
     [Test]

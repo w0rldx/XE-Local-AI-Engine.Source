@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
+[Category(TestCategories.Integration)]
 public sealed class AddAgentDefinitionsMigrationTests : IDisposable
 {
     private const string PreAgentDefinitionsMigrationId = "20260529173005_AddNodeSelectedFolders";

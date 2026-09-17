@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     order fails somewhere with no useful message. These tests parse the bytes back rather than comparing against a
 ///     recorded blob, so a failure names the field that moved.
 /// </remarks>
+[Category(TestCategories.Unit)]
 public sealed class WavPcm16Tests
 {
     [Test]
