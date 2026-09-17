@@ -193,7 +193,12 @@ public abstract class TrainingStoreException : InvalidOperationException
     }
 }
 
-public sealed class TrainingNotFoundException(string message) : TrainingStoreException(message);
+public sealed class TrainingNotFoundException : TrainingStoreException
+{
+    public TrainingNotFoundException(string message) : base(message)
+    {
+    }
+}
 
 public sealed class TrainingValidationException : TrainingStoreException
 {

@@ -420,14 +420,24 @@ public interface IGraphWorkflowStore
         CancellationToken cancellationToken = default);
 }
 
-public sealed class GraphWorkflowNotFoundException(string message) : InvalidOperationException(message);
+public sealed class GraphWorkflowNotFoundException : InvalidOperationException
+{
+    public GraphWorkflowNotFoundException(string message) : base(message)
+    {
+    }
+}
 
 /// <summary>
 ///     Both ways a definition write can lose, under one type because from the client's side they are one story —
 ///     somebody else got there first: a stale <c>version</c> on an update, and a delete refused while a live run pins
 ///     the definition. Maps to a 409 through <c>ConflictExceptionHandler</c>.
 /// </summary>
-public sealed class GraphWorkflowDefinitionConflictException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
+public sealed class GraphWorkflowDefinitionConflictException : InvalidOperationException
+{
+    public GraphWorkflowDefinitionConflictException(string message, Exception? innerException = null) : base(message, innerException)
+    {
+    }
+}
 
 /// <summary>
 ///     The rejection channel for a run write the store refuses: a move the state machine forbids, a stale
@@ -439,4 +449,9 @@ public sealed class GraphWorkflowDefinitionConflictException(string message, Exc
 ///         identity of the rows, and the unique indexes.
 ///     </para>
 /// </summary>
-public sealed class GraphWorkflowInvalidTransitionException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
+public sealed class GraphWorkflowInvalidTransitionException : InvalidOperationException
+{
+    public GraphWorkflowInvalidTransitionException(string message, Exception? innerException = null) : base(message, innerException)
+    {
+    }
+}

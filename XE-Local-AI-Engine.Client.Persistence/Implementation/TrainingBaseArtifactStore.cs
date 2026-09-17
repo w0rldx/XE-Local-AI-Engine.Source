@@ -9,10 +9,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     rest by the node encryption interceptors; everything this store filters or orders by (id, repo, revision, status)
 ///     is structural plaintext, so no query here can depend on a decrypted column.
 /// </summary>
-public sealed class TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : ITrainingBaseArtifactStore
+public sealed class TrainingBaseArtifactStore : ITrainingBaseArtifactStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public TrainingBaseArtifactStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<TrainingBaseArtifactRecord> StartDownloadAsync(string repoId, string revision, CancellationToken cancellationToken = default)
     {

@@ -13,11 +13,17 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     materialization, because the aggregate touches only plaintext columns and spans every conversation — the
 ///     per-conversation write key on the persistence writer is irrelevant to a whole-database read.
 /// </summary>
-public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedbackInsightsStore
+public sealed class FeedbackInsightsStore : IFeedbackInsightsStore
 {
     private const string RatingDown = "down";
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public FeedbackInsightsStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task<AgentFeedbackAggregate?> GetAgentFeedbackAggregateAsync(Guid agentDefinitionId, int exemplarCap, CancellationToken cancellationToken = default)
     {

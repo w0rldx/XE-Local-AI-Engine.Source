@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     Persistence boundary for normalized model-fit recommendation rows. No column is encrypted. The per-snapshot
 ///     replace deletes the snapshot's existing rows and inserts the new set in one transaction.
 /// </summary>
-public sealed class ModelFitRecommendationStore(NodeChatDbContext dbContext) : IModelFitRecommendationStore
+public sealed class ModelFitRecommendationStore : IModelFitRecommendationStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public ModelFitRecommendationStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task<int> ReplaceForSnapshotAsync(Guid snapshotId, IReadOnlyList<ModelFitRecommendationInput> recommendations, CancellationToken cancellationToken = default)
     {

@@ -56,4 +56,9 @@ public sealed class BenchmarkValidationException : BenchmarkStoreException
 ///     The project's judge policy moved while a judging was being prepared for the previous revision. Retryable: the
 ///     caller re-reads the current revision, re-resolves the judge runtime and calls again.
 /// </summary>
-public sealed class BenchmarkJudgePolicyChangedException(string message) : BenchmarkStoreException(message);
+public sealed class BenchmarkJudgePolicyChangedException : BenchmarkStoreException
+{
+    public BenchmarkJudgePolicyChangedException(string message) : base(message)
+    {
+    }
+}

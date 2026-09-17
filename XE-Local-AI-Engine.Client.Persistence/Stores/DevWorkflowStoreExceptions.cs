@@ -2,9 +2,19 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
-public sealed class DevWorkflowConcurrencyException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
+public sealed class DevWorkflowConcurrencyException : InvalidOperationException
+{
+    public DevWorkflowConcurrencyException(string message, Exception? innerException = null) : base(message, innerException)
+    {
+    }
+}
 
-public class DevWorkflowInvalidTransitionException(string message) : InvalidOperationException(message);
+public class DevWorkflowInvalidTransitionException : InvalidOperationException
+{
+    public DevWorkflowInvalidTransitionException(string message) : base(message)
+    {
+    }
+}
 
 /// <summary>
 ///     The one invalid transition that is an ACCOUNTING refusal rather than an illegal move: the run has no re-attempt
@@ -17,15 +27,30 @@ public class DevWorkflowInvalidTransitionException(string message) : InvalidOper
 ///         policy that catches it lives in the application assembly.
 ///     </para>
 /// </summary>
-public sealed class DevWorkflowRetryBudgetExceededException(string message) : DevWorkflowInvalidTransitionException(message);
+public sealed class DevWorkflowRetryBudgetExceededException : DevWorkflowInvalidTransitionException
+{
+    public DevWorkflowRetryBudgetExceededException(string message) : base(message)
+    {
+    }
+}
 
-public sealed class DevWorkflowNotFoundException(string message) : InvalidOperationException(message);
+public sealed class DevWorkflowNotFoundException : InvalidOperationException
+{
+    public DevWorkflowNotFoundException(string message) : base(message)
+    {
+    }
+}
 
 /// <summary>
 ///     A work item that already has a live run was asked for a second one, or asked to be deleted. Its own conflict
 ///     type rather than an invalid transition, because the answer is different: wait for the run, or cancel it.
 /// </summary>
-public sealed class DevWorkflowRunInFlightException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
+public sealed class DevWorkflowRunInFlightException : InvalidOperationException
+{
+    public DevWorkflowRunInFlightException(string message, Exception? innerException = null) : base(message, innerException)
+    {
+    }
+}
 
 /// <summary>
 ///     A second human act on a gate that is already answered — a NEW operation id arriving at a decided node-run,
@@ -35,7 +60,12 @@ public sealed class DevWorkflowRunInFlightException(string message, Exception? i
 ///         of only that their click failed.
 ///     </para>
 /// </summary>
-public sealed class DevWorkflowGateAlreadyDecidedException(string message, DevWorkflowDecisionKind standingDecision) : InvalidOperationException(message)
+public sealed class DevWorkflowGateAlreadyDecidedException : InvalidOperationException
 {
-    public DevWorkflowDecisionKind StandingDecision { get; } = standingDecision;
+    public DevWorkflowGateAlreadyDecidedException(string message, DevWorkflowDecisionKind standingDecision) : base(message)
+    {
+        StandingDecision = standingDecision;
+    }
+
+    public DevWorkflowDecisionKind StandingDecision { get; }
 }

@@ -153,13 +153,23 @@ public sealed record IntegrationExecutionFilter(
 ///     one type because both answer 503 with a <c>Retry-After</c>; telling them apart would be a message change, not a
 ///     second type. Nothing is written when it is thrown.
 /// </summary>
-public sealed class IntegrationQueueFullException(string message) : InvalidOperationException(message);
+public sealed class IntegrationQueueFullException : InvalidOperationException
+{
+    public IntegrationQueueFullException(string message) : base(message)
+    {
+    }
+}
 
 /// <summary>
 ///     A continuation named a session that cannot host it: no such row, another principal's row, or one that is no
 ///     longer <c>Active</c>. Nothing is written when it is thrown — the admission transaction is abandoned.
 /// </summary>
-public sealed class IntegrationSessionUnavailableException(string message) : Exception(message);
+public sealed class IntegrationSessionUnavailableException : Exception
+{
+    public IntegrationSessionUnavailableException(string message) : base(message)
+    {
+    }
+}
 
 /// <summary>
 ///     Persistence boundary for integration executions and their event feed.

@@ -10,14 +10,22 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <see cref="TrainingDatasetStore" />'s claim/terminalize shape rather than generalizing it — the third copy of
 ///     the benchmark pattern, and the first whose target is polymorphic over a work kind.
 /// </summary>
-public sealed class TrainingRunStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : ITrainingRunStore
+public sealed class TrainingRunStore : ITrainingRunStore
 {
     /// <summary>How much trainer output the tail keeps, in characters. Trimmed in chars, not bytes: a byte-wise trim
     ///     would split a multi-byte codepoint and the column would no longer decode.</summary>
     public const int MaxLogTailLength = 16384;
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public TrainingRunStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<TrainingRunRecord> CreateAndEnqueueAsync(TrainingRunEnqueueCommand command, CancellationToken cancellationToken = default)
     {

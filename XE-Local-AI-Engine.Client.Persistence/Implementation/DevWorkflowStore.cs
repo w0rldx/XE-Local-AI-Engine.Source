@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     SQLite runs WAL with a busy timeout. Upgrade path if contention ever shows: per-node-run sequence namespaces
 ///     merged on read.
 /// </remarks>
-internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IDevWorkflowStore
+internal sealed partial class DevWorkflowStore : IDevWorkflowStore
 {
     /// <summary>
     ///     camelCase, matching the Application layer — which has always serialized its own event details with the Web
@@ -34,8 +34,16 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
     /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public DevWorkflowStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     /// <summary>One decision, one event, one transaction: what almost every command on this store is.</summary>
     private Task<DevWorkflowMutationResult> ExecuteMutationAsync(Guid runId,

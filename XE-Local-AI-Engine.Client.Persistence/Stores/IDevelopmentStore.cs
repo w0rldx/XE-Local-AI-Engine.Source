@@ -437,6 +437,16 @@ public interface IDevelopmentStore
     Task<DevelopmentArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default);
 }
 
-public sealed class DevelopmentConcurrencyException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
+public sealed class DevelopmentConcurrencyException : InvalidOperationException
+{
+    public DevelopmentConcurrencyException(string message, Exception? innerException = null) : base(message, innerException)
+    {
+    }
+}
 
-public sealed class DevelopmentInvalidTransitionException(string message) : InvalidOperationException(message);
+public sealed class DevelopmentInvalidTransitionException : InvalidOperationException
+{
+    public DevelopmentInvalidTransitionException(string message) : base(message)
+    {
+    }
+}

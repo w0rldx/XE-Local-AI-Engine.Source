@@ -12,10 +12,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <see cref="ModelFitSnapshotStore" />. All columns are plaintext (no secrets), so this store touches no encryption
 ///     interceptor.
 /// </summary>
-public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IInferenceProfileStore
+public sealed class InferenceProfileStore : IInferenceProfileStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public InferenceProfileStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<InferenceProfileRecord> CreateOrUpdateExploredAsync(InferenceProfileInput input, CancellationToken cancellationToken = default)
     {

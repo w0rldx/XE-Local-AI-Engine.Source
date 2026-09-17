@@ -13,11 +13,17 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     spans every conversation for the agent — the per-conversation write key on the persistence writer is irrelevant
 ///     to a whole-database read. Computed on read; there is no snapshot table.
 /// </summary>
-public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlaybookMonitorStore
+public sealed class PlaybookMonitorStore : IPlaybookMonitorStore
 {
     private const string RatingDown = "down";
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public PlaybookMonitorStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task<CohortComparison> GetCohortComparisonAsync(Guid agentDefinitionId, long enabledAtUtc, string? toolScope, CancellationToken cancellationToken = default)
     {

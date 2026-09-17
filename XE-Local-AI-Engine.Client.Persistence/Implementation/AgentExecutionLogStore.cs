@@ -8,13 +8,21 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     Append-only persistence boundary for agent execution telemetry. Writes metadata-only rows (no message content)
 ///     and reads them back paged, newest first.
 /// </summary>
-public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IAgentExecutionLogStore
+public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
 {
     private const int ChatRunEnvelopeKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope;
     private const long MillisecondsPerDay = 86_400_000L;
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<AgentExecutionLogRecord> AddAsync(AgentExecutionLogInput input, CancellationToken cancellationToken = default)
     {

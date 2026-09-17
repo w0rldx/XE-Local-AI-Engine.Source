@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     is what makes the single <c>last_sequence</c> counter safe: two writers cannot allocate the same watermark, and
 ///     neither can skip one.
 /// </summary>
-internal sealed partial class AgentWorkSessionStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IAgentWorkSessionStore
+internal sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
 {
     private static readonly IReadOnlyDictionary<AgentWorkSessionStatus, HashSet<AgentWorkSessionStatus>> LegalTransitions =
         new Dictionary<AgentWorkSessionStatus, HashSet<AgentWorkSessionStatus>>
@@ -40,8 +40,16 @@ internal sealed partial class AgentWorkSessionStore(NodeChatDbContext dbContext,
     private static readonly HashSet<AgentWorkSessionStatus> TerminalStatuses =
         [AgentWorkSessionStatus.Completed, AgentWorkSessionStatus.Failed, AgentWorkSessionStatus.Cancelled];
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public AgentWorkSessionStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     private async Task<WorkSessionMutationResult> ExecuteMutationAsync(Guid sessionId,
         long expectedVersion,

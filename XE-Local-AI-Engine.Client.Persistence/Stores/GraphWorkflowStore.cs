@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     serialize on it. Accepted — the runtime advances one run at a time behind a single gate, and SQLite runs WAL
 ///     with a busy timeout. Upgrade path if contention ever shows: per-node-run sequence namespaces merged on read.
 /// </remarks>
-internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IGraphWorkflowStore
+internal sealed class GraphWorkflowStore : IGraphWorkflowStore
 {
     /// <summary>camelCase, matching every other document this product puts on a wire — these details are READ by name.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -63,8 +63,16 @@ internal sealed class GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvid
         GraphWorkflowRunStatus.Cancelling
     ];
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public GraphWorkflowStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default)
     {

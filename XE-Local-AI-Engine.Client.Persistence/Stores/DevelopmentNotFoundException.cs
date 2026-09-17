@@ -11,4 +11,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         treating it as the same "the thing is not there" signal.
 ///     </para>
 /// </summary>
-public sealed class DevelopmentNotFoundException(string message) : KeyNotFoundException(message);
+public sealed class DevelopmentNotFoundException : KeyNotFoundException
+{
+    public DevelopmentNotFoundException(string message) : base(message)
+    {
+    }
+}

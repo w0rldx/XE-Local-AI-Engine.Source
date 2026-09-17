@@ -8,12 +8,20 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Persistence boundary for scheduled job run data.
 /// </summary>
-public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IScheduledJobRunStore
+public sealed class ScheduledJobRunStore : IScheduledJobRunStore
 {
     private static readonly ScheduledRunStatus[] ActiveStatuses = [ScheduledRunStatus.Queued, ScheduledRunStatus.Running];
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<ScheduledJobRunRecord> AddAsync(ScheduledJobRunInput input, CancellationToken cancellationToken = default)
     {

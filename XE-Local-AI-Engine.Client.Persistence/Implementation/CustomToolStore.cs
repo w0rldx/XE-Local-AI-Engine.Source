@@ -8,10 +8,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Persistence boundary for the user-defined custom tool library.
 /// </summary>
-public sealed class CustomToolStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : ICustomToolStore
+public sealed class CustomToolStore : ICustomToolStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public CustomToolStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<CustomToolRecord> CreateAsync(CustomToolInput input, CancellationToken cancellationToken = default)
     {

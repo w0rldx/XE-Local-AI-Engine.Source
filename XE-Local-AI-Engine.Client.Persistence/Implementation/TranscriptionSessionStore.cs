@@ -12,9 +12,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     columns, so the interceptor skips the encrypted ones and their ciphertext is preserved. Scoped: one instance per
 ///     DI scope, matching the DbContext lifetime.
 /// </summary>
-public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITranscriptionSessionStore
+public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public TranscriptionSessionStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task CreateAsync(TranscriptionSessionCreate create, CancellationToken cancellationToken)
     {

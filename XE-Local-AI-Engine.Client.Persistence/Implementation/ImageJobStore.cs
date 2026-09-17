@@ -12,9 +12,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     no-tracking path (the materialization interceptor decrypts the prompt columns either way). Scoped: one instance per
 ///     DI scope, matching the DbContext lifetime.
 /// </summary>
-public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
+public sealed class ImageJobStore : IImageJobStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public ImageJobStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task CreateQueuedAsync(ImageJobCreate create, CancellationToken cancellationToken)
     {

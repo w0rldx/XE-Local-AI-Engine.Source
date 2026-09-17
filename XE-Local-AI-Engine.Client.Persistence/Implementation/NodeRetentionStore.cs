@@ -6,9 +6,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Persistence boundary for node retention data.
 /// </summary>
-public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeRetentionStore
+public sealed class NodeRetentionStore : INodeRetentionStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public NodeRetentionStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task<IReadOnlyList<Guid>> ListExpiredConversationCandidatesAsync(long cutoffUtc, CancellationToken cancellationToken = default)
     {

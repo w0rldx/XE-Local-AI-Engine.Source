@@ -9,9 +9,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <see cref="IntegrationExecutionStore.AcceptAsync" /> inserts the session inside the admission transaction, so a
 ///     second insert path would be a second admission gate.
 /// </summary>
-public sealed class IntegrationSessionStore(NodeChatDbContext dbContext) : IIntegrationSessionStore
+public sealed class IntegrationSessionStore : IIntegrationSessionStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public IntegrationSessionStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task<IntegrationSessionSnapshot?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {

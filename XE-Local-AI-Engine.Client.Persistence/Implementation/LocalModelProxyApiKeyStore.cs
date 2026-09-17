@@ -7,10 +7,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Persistence boundary for the singleton inbound model-proxy bearer credential.
 /// </summary>
-public sealed class LocalModelProxyApiKeyStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : ILocalModelProxyApiKeyStore
+public sealed class LocalModelProxyApiKeyStore : ILocalModelProxyApiKeyStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public LocalModelProxyApiKeyStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<LocalModelProxyApiKeyRecord?> GetAsync(CancellationToken cancellationToken = default)
     {

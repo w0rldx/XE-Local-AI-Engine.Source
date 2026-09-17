@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <see cref="BenchmarkStore" />'s claim/terminalize shape rather than generalizing it: dataset generation has a
 ///     single work kind, so the benchmark's <c>(run, kind)</c> pair collapses to one work item per dataset.
 /// </summary>
-public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : ITrainingDatasetStore
+public sealed class TrainingDatasetStore : ITrainingDatasetStore
 {
     /// <summary>Fingerprint algorithm tag. Bump it when the canonical serialization below changes.</summary>
     private const string FingerprintPrefix = "v1:";
@@ -21,8 +21,16 @@ public sealed class TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvid
 
     private static readonly byte[] RecordSeparator = [0x1e];
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public TrainingDatasetStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<TrainingDefinitionRecord> CreateDefinitionAsync(TrainingDefinitionInput input, CancellationToken cancellationToken = default)
     {

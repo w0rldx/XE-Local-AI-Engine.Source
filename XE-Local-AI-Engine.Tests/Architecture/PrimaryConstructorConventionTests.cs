@@ -24,7 +24,6 @@ public sealed class PrimaryConstructorConventionTests
         "XE-Local-AI-Engine.AI.Agent.Tests",
         "XE-Local-AI-Engine.Client",
         "XE-Local-AI-Engine.Client.Application",
-        "XE-Local-AI-Engine.Client.Persistence",
         "XE-Local-AI-Engine.Client.Persistence.Tests",
         "XE-Local-AI-Engine.Tests",
         "XE-Local-AI-Engine.Tests.E2ETests"

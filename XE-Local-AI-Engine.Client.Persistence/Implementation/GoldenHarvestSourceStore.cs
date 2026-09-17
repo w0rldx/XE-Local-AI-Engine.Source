@@ -11,12 +11,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     Reconstructs golden-conversation harvest candidates from an agent's thumbs-up assistant turns. Reads node-local
 ///     data only; never logs turn/answer text (privacy).
 /// </summary>
-public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGoldenHarvestSourceStore
+public sealed class GoldenHarvestSourceStore : IGoldenHarvestSourceStore
 {
     private const string UserRole = "user";
     private const string AssistantRole = "assistant";
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public GoldenHarvestSourceStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task<IReadOnlyList<HarvestCandidateSource>> ListThumbsUpSourcesAsync(Guid agentDefinitionId, int maxScan, CancellationToken cancellationToken = default)
     {

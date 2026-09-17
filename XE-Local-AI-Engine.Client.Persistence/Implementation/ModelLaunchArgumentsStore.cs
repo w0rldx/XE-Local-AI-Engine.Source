@@ -9,10 +9,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <c>model_launch_arguments</c> table is keyed by model name with a <c>NOCASE</c> collation, so name lookups and the
 ///     upsert key are case-insensitive without any LINQ-side comparer. No column is encrypted.
 /// </summary>
-public sealed class ModelLaunchArgumentsStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IModelLaunchArgumentsStore
+public sealed class ModelLaunchArgumentsStore : IModelLaunchArgumentsStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public ModelLaunchArgumentsStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<string?> GetRawArgumentsAsync(string modelName, CancellationToken cancellationToken = default)
     {

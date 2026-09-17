@@ -10,10 +10,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <see cref="TrainingWorkKind.EvaluationRun" /> — the claim, the startup recovery and the FIFO ordering therefore
 ///     stay in one place, and an evaluation can never run beside a training run.
 /// </summary>
-public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : ITrainingEvaluationStore
+public sealed class TrainingEvaluationStore : ITrainingEvaluationStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public TrainingEvaluationStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<TrainingEvaluationRecord> CreateAndEnqueueAsync(TrainingEvaluationEnqueueCommand command,
         CancellationToken cancellationToken = default)

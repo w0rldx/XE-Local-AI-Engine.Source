@@ -273,6 +273,16 @@ public interface IAgentWorkSessionStore
     Task<int> ReconcileRunningSessionsAsync(string sanitizedReason, CancellationToken cancellationToken = default);
 }
 
-public sealed class WorkSessionConcurrencyException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
+public sealed class WorkSessionConcurrencyException : InvalidOperationException
+{
+    public WorkSessionConcurrencyException(string message, Exception? innerException = null) : base(message, innerException)
+    {
+    }
+}
 
-public sealed class WorkSessionInvalidTransitionException(string message) : InvalidOperationException(message);
+public sealed class WorkSessionInvalidTransitionException : InvalidOperationException
+{
+    public WorkSessionInvalidTransitionException(string message) : base(message)
+    {
+    }
+}

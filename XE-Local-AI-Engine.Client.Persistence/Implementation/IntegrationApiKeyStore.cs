@@ -9,10 +9,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     and decrypted by the materialization interceptor, so every read here must materialize an entity rather than
 ///     project the column.
 /// </summary>
-public sealed class IntegrationApiKeyStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IIntegrationApiKeyStore
+public sealed class IntegrationApiKeyStore : IIntegrationApiKeyStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public IntegrationApiKeyStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<IntegrationApiKeySnapshot> CreateAsync(IntegrationApiKeyCreateCommand command, CancellationToken cancellationToken = default)
     {

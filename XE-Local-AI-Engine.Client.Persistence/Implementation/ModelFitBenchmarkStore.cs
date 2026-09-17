@@ -11,9 +11,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     decrypted on the record. The per-snapshot replace deletes the snapshot's existing rows and inserts the new set in
 ///     one transaction.
 /// </summary>
-public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModelFitBenchmarkStore
+public sealed class ModelFitBenchmarkStore : IModelFitBenchmarkStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly NodeChatDbContext _dbContext;
+
+    public ModelFitBenchmarkStore(NodeChatDbContext dbContext)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        _dbContext = dbContext;
+    }
 
     public async Task<int> ReplaceForSnapshotAsync(Guid snapshotId, IReadOnlyList<ModelFitBenchmarkInput> benchmarks, CancellationToken cancellationToken = default)
     {

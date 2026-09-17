@@ -5,10 +5,18 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-public sealed class DevelopmentTemplateStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IDevelopmentTemplateStore
+public sealed class DevelopmentTemplateStore : IDevelopmentTemplateStore
 {
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public DevelopmentTemplateStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<IReadOnlyList<DevelopmentTemplateSnapshot>> ListAsync(CancellationToken cancellationToken = default)
     {

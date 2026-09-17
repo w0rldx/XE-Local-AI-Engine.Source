@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IBenchmarkStore
+public sealed partial class BenchmarkStore : IBenchmarkStore
 {
     private const string InterruptedMessage = "Interrupted by application restart.";
     internal const string FidelityKindPerplexity = "ppl";
@@ -23,8 +23,16 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
     /// <summary>Web defaults, matching the canonical writer the fit's scores were serialized with.</summary>
     private static readonly JsonSerializerOptions PairwiseScoreOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public BenchmarkStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 
     private static void EnsurePolicyHash([NotNull] string? policyHash)
     {

@@ -10,10 +10,18 @@ using Microsoft.Extensions.Logging;
 ///     interceptor pipeline and are covered separately by the shared open-if-needed helpers, which route through
 ///     <see cref="NodeSqlitePragmas.OpenAndConfigureAsync" />.
 /// </summary>
-public sealed class NodeSqliteConnectionInterceptor(NodeSqlitePragmaSettings settings, ILogger<NodeSqliteConnectionInterceptor> logger) : DbConnectionInterceptor
+public sealed class NodeSqliteConnectionInterceptor : DbConnectionInterceptor
 {
-    private readonly NodeSqlitePragmaSettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-    private readonly ILogger<NodeSqliteConnectionInterceptor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly NodeSqlitePragmaSettings _settings;
+    private readonly ILogger<NodeSqliteConnectionInterceptor> _logger;
+
+    public NodeSqliteConnectionInterceptor(NodeSqlitePragmaSettings settings, ILogger<NodeSqliteConnectionInterceptor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(logger);
+        _settings = settings;
+        _logger = logger;
+    }
 
     public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
     {

@@ -4,7 +4,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IDevelopmentStore
+public sealed partial class DevelopmentStore : IDevelopmentStore
 {
     private const string StartupOperationPhase = "StartupInterrupted";
 
@@ -81,6 +81,14 @@ public sealed partial class DevelopmentStore(NodeChatDbContext dbContext, TimePr
             [DevelopmentTaskStatus.Blocked] = [DevelopmentTaskStatus.ChangesRequested]
         };
 
-    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly NodeChatDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
+
+    public DevelopmentStore(NodeChatDbContext dbContext, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _dbContext = dbContext;
+        _timeProvider = timeProvider;
+    }
 }
