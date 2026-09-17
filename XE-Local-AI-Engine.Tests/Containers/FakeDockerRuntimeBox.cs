@@ -50,7 +50,7 @@ internal sealed class FakeDockerRuntimeBox : IAsyncDisposable
             };
 
             var runtime = new DockerContainerRuntimeFactory(new StaticOptionsMonitor<ContainerRuntimeOptions>(runtimeOptions),
-                    NullLoggerFactory.Instance)
+                    NullLoggerFactory.Instance, TimeProvider.System)
                 .CreateRuntime(DockerDaemonEndpointResolver.Resolve(runtimeOptions.DaemonEndpoint));
 
             return new FakeDockerRuntimeBox(docker, runtime);

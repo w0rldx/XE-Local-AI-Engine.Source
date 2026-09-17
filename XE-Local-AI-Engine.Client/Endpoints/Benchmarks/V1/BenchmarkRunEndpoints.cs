@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService store)
+public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService records)
     : Endpoint<ListBenchmarkRunsRequest, ListBenchmarkRunsResponse>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -29,7 +29,7 @@ public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService store)
             return;
         }
 
-        var project = await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
         if (project is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
@@ -38,7 +38,7 @@ public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService store)
 
         var expectedKldDigest = BenchmarkEndpointSupport.ExpectedKldDigest(project);
 
-        var page = await _store.ListRunsAsync(req.ProjectId,
+        var page = await _records.ListRunsAsync(req.ProjectId,
                                    (req.Page - 1) * req.PageSize,
                                    req.PageSize,
                                    req.ModelContentFingerprint,
@@ -208,10 +208,10 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService bat
     }
 }
 
-public sealed class GetBenchmarkRunEndpoint(BenchmarkRecordService store)
+public sealed class GetBenchmarkRunEndpoint(BenchmarkRecordService records)
     : Endpoint<BenchmarkRunRouteRequest, BenchmarkRunDetailResponse>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -222,7 +222,7 @@ public sealed class GetBenchmarkRunEndpoint(BenchmarkRecordService store)
 
     public override async Task HandleAsync(BenchmarkRunRouteRequest req, CancellationToken ct)
     {
-        var run = await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+        var run = await _records.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
         if (run is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found."))).ConfigureAwait(false);
@@ -230,16 +230,16 @@ public sealed class GetBenchmarkRunEndpoint(BenchmarkRecordService store)
         }
 
         // A detail response is the only place the verdict is decrypted: a list of runs must not decrypt one blob per row.
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
                   .ConfigureAwait(false);
     }
 }
 
-public sealed class DeleteBenchmarkRunEndpoint(BenchmarkRecordService store)
+public sealed class DeleteBenchmarkRunEndpoint(BenchmarkRecordService records)
     : Endpoint<DeleteBenchmarkRunRequest>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -251,16 +251,16 @@ public sealed class DeleteBenchmarkRunEndpoint(BenchmarkRecordService store)
 
     public override async Task HandleAsync(DeleteBenchmarkRunRequest req, CancellationToken ct)
     {
-        await _store.DeleteRunAsync(req.RunId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await _records.DeleteRunAsync(req.RunId, req.ExpectedVersion, ct).ConfigureAwait(false);
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 
-public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation, BenchmarkRecordService store)
+public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation, BenchmarkRecordService records)
     : Endpoint<CancelBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
     private readonly IBenchmarkCancellationService _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -273,16 +273,16 @@ public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService can
     public override async Task HandleAsync(CancelBenchmarkRunRequest req, CancellationToken ct)
     {
         var run = await _cancellation.CancelAsync(req.RunId, req.ExpectedVersion, req.Target, ct).ConfigureAwait(false);
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
                   .ConfigureAwait(false);
     }
 }
 
-public sealed class ScoreBenchmarkRunEndpoint(BenchmarkRecordService store)
+public sealed class ScoreBenchmarkRunEndpoint(BenchmarkRecordService records)
     : Endpoint<ScoreBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -303,18 +303,18 @@ public sealed class ScoreBenchmarkRunEndpoint(BenchmarkRecordService store)
             return;
         }
 
-        var run = await _store.SetUserScoreAsync(req.RunId, score, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+        var run = await _records.SetUserScoreAsync(req.RunId, score, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
                   .ConfigureAwait(false);
     }
 }
 
 /// <summary>Clears the operator override, so the run ranks by its judge score again (or not at all).</summary>
-public sealed class ClearBenchmarkRunScoreEndpoint(BenchmarkRecordService store)
+public sealed class ClearBenchmarkRunScoreEndpoint(BenchmarkRecordService records)
     : Endpoint<ClearBenchmarkRunScoreRequest, BenchmarkRunDetailResponse>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -326,19 +326,19 @@ public sealed class ClearBenchmarkRunScoreEndpoint(BenchmarkRecordService store)
 
     public override async Task HandleAsync(ClearBenchmarkRunScoreRequest req, CancellationToken ct)
     {
-        var run = await _store.SetUserScoreAsync(req.RunId, score: null, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+        var run = await _records.SetUserScoreAsync(req.RunId, score: null, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
                   .ConfigureAwait(false);
     }
 }
 
 /// <summary>Judges one succeeded run again under the project's current policy.</summary>
-public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
+public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
     : Endpoint<RejudgeBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -351,10 +351,10 @@ public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService project
     public override async Task HandleAsync(RejudgeBenchmarkRunRequest req, CancellationToken ct)
     {
         _ = await _projects.RejudgeRunAsync(req.RunId, req.ExpectedVersion, req.Force, ct).ConfigureAwait(false);
-        var run = await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false)
+        var run = await _records.GetRunAsync(req.RunId, ct).ConfigureAwait(false)
                   ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
-        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+        await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_records, run, ct).ConfigureAwait(false),
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
                   .ConfigureAwait(false);
     }
 }

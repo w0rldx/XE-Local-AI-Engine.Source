@@ -17,9 +17,10 @@ using XE_Local_AI_Engine.Tests.Endpoints.ExternalApps.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The subscription side of the instance hub. The store is the replay authority — the same
-///     <c>ListEventsAsync</c> the events endpoint pages — so what these cases pin is the ORDER of the join and the
-///     read, the watermark the replay honours, and that nothing reaches a group before the instance is known to exist.
+///     The subscription side of the instance hub. <see cref="IExternalAppService.ListEventsAsync" /> is the replay
+///     authority — literally the same member the events endpoint pages — so what these cases pin is the ORDER of the
+///     join and the read, the watermark the replay honours, and that nothing reaches a group before the instance is
+///     known to exist.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ExternalAppHubTests
@@ -31,8 +32,8 @@ public sealed class ExternalAppHubTests
     [Test]
     public async Task Subscribe_JoinsTheGroupBeforeReadingTheReplay()
     {
-        var store = Store();
-        using var fixture = CreateHub(store, Apps());
+        var apps = Apps();
+        using var fixture = CreateHub(apps);
 
         _ = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0).ConfigureAwait(false);
 
@@ -40,14 +41,14 @@ public sealed class ExternalAppHubTests
         Received.InOrder(() =>
         {
             fixture.Groups.AddToGroupAsync("connection", $"external-app-{InstanceId:N}", Arg.Any<CancellationToken>());
-            store.ListEventsAsync(InstanceId, 0, ReplayCap + 1, Arg.Any<CancellationToken>());
+            apps.ListEventsAsync(InstanceId, 0, ReplayCap + 1, Arg.Any<CancellationToken>());
         });
     }
 
     [Test]
     public async Task Subscribe_ReturnsTheInstanceStateItsWatermarkAndTheEventsAfterIt()
     {
-        using var fixture = CreateHub(Store([Event(8), Event(9)]), Apps());
+        using var fixture = CreateHub(Apps(events: [Event(8), Event(9)]));
 
         var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 7).ConfigureAwait(false);
 
@@ -68,7 +69,7 @@ public sealed class ExternalAppHubTests
         {
             FailureCategory = ExternalAppFailureCategory.ImagePullFailed
         };
-        using var fixture = CreateHub(Store(), Apps(summary));
+        using var fixture = CreateHub(Apps(summary));
 
         var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0).ConfigureAwait(false);
 
@@ -79,7 +80,7 @@ public sealed class ExternalAppHubTests
     [Test]
     public async Task Subscribe_AtTheReplayCap_IsNotTruncated()
     {
-        using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayCap).Select(sequence => Event(sequence))]), Apps());
+        using var fixture = CreateHub(Apps(events: [.. Enumerable.Range(1, ReplayCap).Select(sequence => Event(sequence))]));
 
         var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0).ConfigureAwait(false);
 
@@ -90,7 +91,7 @@ public sealed class ExternalAppHubTests
     [Test]
     public async Task Subscribe_OneOverTheReplayCap_TruncatesAndSaysSo()
     {
-        using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayCap + 1).Select(sequence => Event(sequence))]), Apps());
+        using var fixture = CreateHub(Apps(events: [.. Enumerable.Range(1, ReplayCap + 1).Select(sequence => Event(sequence))]));
 
         var snapshot = await fixture.Hub.Subscribe(InstanceId, afterSequence: 0).ConfigureAwait(false);
 
@@ -103,7 +104,7 @@ public sealed class ExternalAppHubTests
     {
         var apps = Substitute.For<IExternalAppService>();
         apps.GetAsync(InstanceId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new ExternalAppNotFoundException("gone"));
-        using var fixture = CreateHub(Store(), apps);
+        using var fixture = CreateHub(apps);
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0)).ConfigureAwait(false);
 
@@ -113,7 +114,7 @@ public sealed class ExternalAppHubTests
     [Test]
     public async Task Subscribe_WithAnEmptyInstanceId_ThrowsWithoutJoiningAGroup()
     {
-        using var fixture = CreateHub(Store(), Apps());
+        using var fixture = CreateHub(Apps());
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(Guid.Empty, afterSequence: 0)).ConfigureAwait(false);
 
@@ -123,7 +124,7 @@ public sealed class ExternalAppHubTests
     [Test]
     public async Task Subscribe_WithANegativeWatermark_ThrowsWithoutJoiningAGroup()
     {
-        using var fixture = CreateHub(Store(), Apps());
+        using var fixture = CreateHub(Apps());
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: -1)).ConfigureAwait(false);
 
@@ -135,7 +136,7 @@ public sealed class ExternalAppHubTests
     public async Task Subscribe_WhenTheFeatureIsDisabled_ThrowsWithoutReachingTheService()
     {
         var apps = Apps();
-        using var fixture = CreateHub(Store(), apps, enabled: false);
+        using var fixture = CreateHub(apps, enabled: false);
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0)).ConfigureAwait(false);
 
@@ -151,10 +152,10 @@ public sealed class ExternalAppHubTests
     [Test]
     public async Task Subscribe_WhenTheReplayReadFails_LeavesTheGroupAndRethrows()
     {
-        var store = Substitute.For<IExternalAppInstanceStore>();
-        store.ListEventsAsync(InstanceId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .ThrowsAsyncForAnyArgs(new InvalidOperationException("the replay read failed."));
-        using var fixture = CreateHub(store, Apps());
+        var apps = Apps();
+        apps.ListEventsAsync(InstanceId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ThrowsAsyncForAnyArgs(new InvalidOperationException("the replay read failed."));
+        using var fixture = CreateHub(apps);
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0))
                           .ConfigureAwait(false);
@@ -166,10 +167,30 @@ public sealed class ExternalAppHubTests
         });
     }
 
+    /// <summary>
+    ///     The instance can be deleted between the detail read and the replay read, and the replay read carries its
+    ///     own existence check — so it is the call that notices. The caller must be told the same thing the first read
+    ///     would have told it: a bare rethrow here reaches the client as a generic invocation failure, which reads as
+    ///     a node fault rather than as the routine race it is.
+    /// </summary>
+    [Test]
+    public async Task Subscribe_WhenTheInstanceIsDeletedBeforeTheReplayRead_LeavesTheGroupAndSaysItWasNotFound()
+    {
+        var apps = Apps();
+        apps.ListEventsAsync(InstanceId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ThrowsAsyncForAnyArgs(new ExternalAppNotFoundException("gone"));
+        using var fixture = CreateHub(apps);
+
+        var error = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.Subscribe(InstanceId, afterSequence: 0)).ConfigureAwait(false);
+
+        AssertEx.Equal("External app instance was not found.", error.Message);
+        await fixture.Groups.Received(1).RemoveFromGroupAsync("connection", $"external-app-{InstanceId:N}", Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task Unsubscribe_LeavesTheInstanceGroup()
     {
-        using var fixture = CreateHub(Store(), Apps());
+        using var fixture = CreateHub(Apps());
 
         await fixture.Hub.Unsubscribe(InstanceId).ConfigureAwait(false);
 
@@ -199,17 +220,12 @@ public sealed class ExternalAppHubTests
         AssertEx.Equal(JwtBearerDefaults.AuthenticationScheme, authorize.AuthenticationSchemes);
     }
 
-    private static IExternalAppInstanceStore Store(IReadOnlyList<ExternalAppInstanceEventSnapshot>? events = null)
-    {
-        var store = Substitute.For<IExternalAppInstanceStore>();
-        store.ListEventsAsync(InstanceId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(events ?? []);
-        return store;
-    }
-
-    private static IExternalAppService Apps(ExternalAppInstanceSummary? summary = null)
+    private static IExternalAppService Apps(ExternalAppInstanceSummary? summary = null,
+        IReadOnlyList<ExternalAppInstanceEventSnapshot>? events = null)
     {
         var apps = Substitute.For<IExternalAppService>();
         apps.GetAsync(InstanceId, Arg.Any<CancellationToken>()).Returns(ExternalAppEndpointPayloads.Detail(summary));
+        apps.ListEventsAsync(InstanceId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(events ?? []);
         return apps;
     }
 
@@ -219,7 +235,7 @@ public sealed class ExternalAppHubTests
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
         Justification = "HubFixture takes ownership of the constructed hub and every test disposes the fixture.")]
-    private static HubFixture CreateHub(IExternalAppInstanceStore store, IExternalAppService apps, bool enabled = true)
+    private static HubFixture CreateHub(IExternalAppService apps, bool enabled = true)
     {
         var context = Substitute.For<HubCallerContext>();
         context.ConnectionId.Returns("connection");
@@ -227,7 +243,6 @@ public sealed class ExternalAppHubTests
         var groups = Substitute.For<IGroupManager>();
         var clients = Substitute.For<IHubCallerClients>();
         var hub = new ExternalAppHub(apps,
-            store,
             Options.Create(new ExternalAppsOptions
             {
                 Enabled = enabled

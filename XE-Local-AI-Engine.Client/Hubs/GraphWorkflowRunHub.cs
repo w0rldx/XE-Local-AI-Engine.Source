@@ -37,17 +37,16 @@ public sealed record GraphWorkflowRunSubscriptionSnapshot(
 ///     Operator-only live notifications for one graph workflow run.
 ///     <para>
 ///         Modelled on <see cref="DevWorkflowRunHub" /> and explicitly NOT on a per-run subscription hub: there is no
-///         in-memory buffer, because run events are persisted append-only with a monotonic sequence and the store IS
-///         the replay authority. Nor does a disconnect cancel anything — a workflow run is durable and outlives both
+///         in-memory buffer, because run events are persisted append-only with a monotonic sequence and the persisted
+///         log IS the replay authority. Nor does a disconnect cancel anything — a workflow run is durable and outlives both
 ///         the browser tab and the engine, which is the property this module exists to prove.
 ///     </para>
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class GraphWorkflowRunHub(IGraphWorkflowStore store, IGraphWorkflowRunService runs, IOptions<GraphWorkflowOptions> options) : Hub
+public sealed class GraphWorkflowRunHub(IGraphWorkflowRunService runs, IOptions<GraphWorkflowOptions> options) : Hub
 {
     private readonly GraphWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
     private readonly IGraphWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
-    private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<GraphWorkflowRunSubscriptionSnapshot> SubscribeRun(Guid runId, long afterSeq)
     {
@@ -82,28 +81,20 @@ public sealed class GraphWorkflowRunHub(IGraphWorkflowStore store, IGraphWorkflo
         // keyed by sequence.
         await Groups.AddToGroupAsync(Context.ConnectionId, GraphWorkflowHubGroups.Run(runId), cancellationToken).ConfigureAwait(false);
 
-        // One over the configured replay window, so "there is more" is observed rather than inferred from a full page.
-        // The window is the OPTION the event endpoint pages by, not a second constant that could drift from it.
-        var replayLimit = _options.EventReplayLimit;
-        var events = await _store.ListEventsAsync(runId, afterSeq, replayLimit + 1, cancellationToken).ConfigureAwait(false);
-        var replayed = events.Take(replayLimit).ToList();
-
-        // The watermark the subscriber may resume from is the last row it was actually HANDED, and nothing else — the
-        // same rule the event endpoint pages by, so a client can move between the two without a gap or a repeat.
-        //
-        // Deliberately NOT the run's own sequence: on a truncated page that number is past the events this snapshot
-        // carried, and a client resuming from it would skip every row between the cap and the run — for good, because
-        // nothing ever replays them again. An empty page keeps the caller's own watermark for the same reason: it has
-        // seen nothing new, so it has moved nowhere.
-        var lastSeq = replayed.Count == 0 ? afterSeq : replayed[^1].Seq;
+        // The same paged read the event endpoint answers with, capped at the same configured window and carrying the
+        // same watermark: a client can move between a subscription and the feed without a gap or a repeat, because
+        // neither side owns a copy of that arithmetic. The watermark is the last row actually HANDED over — never the
+        // run's own sequence, which on a truncated page is past events this snapshot did not carry and nothing ever
+        // replays again.
+        var replay = await _runs.ListEventsAsync(runId, afterSeq, cancellationToken).ConfigureAwait(false);
         return new GraphWorkflowRunSubscriptionSnapshot(runId,
             detail.Run.Status.ToString(),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval),
-            lastSeq,
-            [.. replayed.Select(static @event => @event.ToResponse())],
-            events.Count > replayLimit);
+            replay.LastSeq,
+            [.. replay.Events.Select(static @event => @event.ToResponse())],
+            replay.ReplayTruncated);
     }
 
     public Task UnsubscribeRun(Guid runId) =>

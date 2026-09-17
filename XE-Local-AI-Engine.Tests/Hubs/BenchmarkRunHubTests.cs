@@ -144,7 +144,10 @@ public sealed class BenchmarkRunHubTests
         var caller = Substitute.For<ISingleClientProxy>();
         var clients = Substitute.For<IHubCallerClients>();
         clients.Caller.Returns(caller);
-        var hub = new BenchmarkRunHub(store, events)
+        // The real pass-through service over the substituted store: the hub's door onto the run row is
+        // BenchmarkRecordService, and wrapping rather than substituting it keeps every assertion below on the
+        // store call the hub actually causes.
+        var hub = new BenchmarkRunHub(new BenchmarkRecordService(store), events)
         {
             Context = context,
             Groups = groups,

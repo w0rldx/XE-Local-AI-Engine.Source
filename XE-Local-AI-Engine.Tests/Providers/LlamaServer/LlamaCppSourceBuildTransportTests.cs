@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Validators;
 using XE_Local_AI_Engine.Client.Hubs;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -23,6 +24,18 @@ using OS = TUnit.Core.Enums.OS;
 [Category(TestCategories.Integration)]
 public sealed class LlamaCppSourceBuildTransportTests
 {
+    private const string CudaBuildCancelRoute = "/api/local/v1/model-fit/llamacpp/cuda-build/cancel";
+
+    private const string CudaBuildPrerequisitesRoute = "/api/local/v1/model-fit/llamacpp/cuda-build/prerequisites";
+
+    private const string CudaBuildRemoveRoute = "/api/local/v1/model-fit/llamacpp/cuda-build/remove";
+
+    private const string CudaBuildStatusRoute = "/api/local/v1/model-fit/llamacpp/cuda-build/status";
+
+    private const string SourceBuildPrerequisitesRoute = "/api/local/v1/model-fit/llamacpp/source-build/prerequisites";
+
+    private const string SourceBuildRemoveRoute = "/api/local/v1/model-fit/llamacpp/source-build/remove";
+
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
 
     [Test]
@@ -536,6 +549,303 @@ public sealed class LlamaCppSourceBuildTransportTests
         await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent("Building", ["line"], 42, false, null, legacy));
 
         await legacyProxy.Received(1).SendCoreAsync(CudaBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CudaPrerequisitesEndpoint_ProjectsTheProbeChecklistItemByItem()
+    {
+        var probe = Substitute.For<ICudaBuildPrerequisiteProbe>();
+        probe.ProbeAsync(Arg.Any<CancellationToken>())
+             .Returns(new CudaBuildPrerequisiteReport(CanBuild: false,
+             [
+                 new CudaBuildPrerequisiteItem("os-is-linux", Satisfied: true, "Linux"),
+                 new CudaBuildPrerequisiteItem("nvcc", Satisfied: false, "not found")
+             ]));
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
+                                     CudaBuildPrerequisitesRoute,
+                                     services => ReplaceSingleton(services, probe))
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        var report = AssertEx.NotNull(JsonSerializer.Deserialize<CudaBuildPrerequisitesResponse>(body, WebJsonOptions));
+        AssertEx.False(report.CanBuild);
+        AssertEx.Equal(expected: 2, report.Items.Count);
+        AssertEx.Equal("os-is-linux", report.Items[0].Key);
+        AssertEx.True(report.Items[0].Satisfied);
+        AssertEx.Equal("nvcc", report.Items[1].Key);
+        AssertEx.False(report.Items[1].Satisfied);
+        AssertEx.Equal("not found", report.Items[1].Detail);
+    }
+
+    [Test]
+    public async Task CudaStatusEndpoint_SurfacesTheServiceSnapshotUnchanged()
+    {
+        var service = Substitute.For<ICudaBuildService>();
+        service.GetStatus()
+               .Returns(new CudaBuildStatus(CudaBuildPhase.Building,
+                   IsRunning: true,
+                   Terminal: false,
+                   ["compiling llama-server"],
+                   SanitizedError: null,
+                   "b9692",
+                   StartedAtUtc: null,
+                   CompletedAtUtc: null));
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
+                                     CudaBuildStatusRoute,
+                                     services => ReplaceSingleton(services, service))
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        var payload = AssertEx.NotNull(JsonSerializer.Deserialize<CudaBuildStatusResponse>(body, WebJsonOptions));
+        // The mapper emits the enum's own name, not a camelCased wire token — the client matches on this string.
+        AssertEx.Equal("Building", payload.Phase);
+        AssertEx.True(payload.IsRunning);
+        AssertEx.False(payload.Terminal);
+        AssertEx.Equal("compiling llama-server", payload.LogLines.Single());
+        AssertEx.Equal("b9692", payload.Tag);
+    }
+
+    [Test]
+    public async Task SourceBuildPrerequisitesEndpoint_RefusesAnUndefinedBackendWithoutProbing()
+    {
+        // The refusal comes from the query BINDER, not from the request validator: an out-of-range value never binds to
+        // the enum, so nothing undefined ever reaches the validator's Enum.IsDefined rule over HTTP (which is why
+        // PrerequisiteValidator_RejectsUndefinedBackend above exercises that rule directly). Assert the problem names
+        // the offending query parameter — the client maps the refusal by name, not by the binder's wording.
+        var probe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
+                                     SourceBuildPrerequisitesRoute + "?backend=99",
+                                     services => ReplaceSingleton(services, probe))
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, status);
+        using var problem = JsonDocument.Parse(body);
+        AssertEx.Equal("backend", problem.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await probe.DidNotReceiveWithAnyArgs().ProbeAsync(default, default);
+    }
+
+    [Test]
+    public async Task SourceBuildPrerequisitesEndpoint_EchoesTheRequestedBackendWithTheReport()
+    {
+        var probe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
+        probe.ProbeAsync(LlamaCppSourceBackend.Vulkan, Arg.Any<CancellationToken>())
+             .Returns(new LlamaCppSourceBuildPrerequisiteReport(CanBuild: true,
+             [
+                 new LlamaCppSourceBuildPrerequisiteItem("cmake", Satisfied: true, "4.0.1"),
+                 new LlamaCppSourceBuildPrerequisiteItem("vulkan-sdk", Satisfied: true, "1.4")
+             ]));
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Get,
+                                     SourceBuildPrerequisitesRoute + "?backend=vulkan",
+                                     services => ReplaceSingleton(services, probe))
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        using var payload = JsonDocument.Parse(body);
+        AssertEx.Equal("vulkan", payload.RootElement.GetProperty("backend").GetString());
+        AssertEx.True(payload.RootElement.GetProperty("canBuild").GetBoolean());
+        var items = payload.RootElement.GetProperty("items");
+        AssertEx.Equal(expected: 2, items.GetArrayLength());
+        AssertEx.Equal("cmake", items[0].GetProperty("key").GetString());
+        AssertEx.True(items[0].GetProperty("satisfied").GetBoolean());
+        await probe.Received(1).ProbeAsync(LlamaCppSourceBackend.Vulkan, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(true, CudaBuildPhase.Building)]
+    [Arguments(false, CudaBuildPhase.Idle)]
+    public async Task CudaCancelEndpoint_RequestsCancellationAndAnswersWithTheCurrentStatus(bool cancelAccepted, CudaBuildPhase phase)
+    {
+        var service = Substitute.For<ICudaBuildService>();
+        service.Cancel().Returns(cancelAccepted);
+        service.GetStatus()
+               .Returns(new CudaBuildStatus(phase,
+                   cancelAccepted,
+                   Terminal: false,
+                   [],
+                   SanitizedError: null,
+                   Tag: null,
+                   StartedAtUtc: null,
+                   CompletedAtUtc: null));
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Post,
+                                     CudaBuildCancelRoute,
+                                     services => ReplaceSingleton(services, service))
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        var payload = AssertEx.NotNull(JsonSerializer.Deserialize<CudaBuildStatusResponse>(body, WebJsonOptions));
+        AssertEx.Equal(phase.ToString(), payload.Phase);
+        AssertEx.Equal(cancelAccepted, payload.IsRunning);
+        _ = service.Received(1).Cancel();
+    }
+
+    [Test]
+    [Arguments(CudaBuildRemoveRoute)]
+    [Arguments(SourceBuildRemoveRoute)]
+    public async Task RemoveEndpoints_WhenKeepModelWarmEnabled_BlockBeforeTheRemoveGate(string route)
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithKeepModelWarm(enabled: true, modelName: "model-a")
+                                                     .Build();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.CountRunningProcesses().Returns(2);
+        var cacheInvalidator = Substitute.For<ILocalChatClientCacheInvalidator>();
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Post,
+                                     route,
+                                     services =>
+                                     {
+                                         ReplaceSingleton(services, runtimeSettings);
+                                         ReplaceSingleton(services, supervisor);
+                                         ReplaceSingleton(services, cacheInvalidator);
+                                     })
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, status);
+        using var blocked = JsonDocument.Parse(body);
+        AssertEx.Equal("keep-model-warm-enabled", blocked.RootElement.GetProperty("reason").GetString());
+        AssertEx.Equal(expected: 2, blocked.RootElement.GetProperty("runningProcessCount").GetInt32());
+        AssertEx.Contains(blocked.RootElement.GetProperty("message").GetString()!, "Disable Keep Model Warm", StringComparison.Ordinal);
+        // The gate is never entered, so no mutation lease is taken and no cached chat client is dropped.
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        cacheInvalidator.DidNotReceive().ClearClientCache();
+    }
+
+    [Test]
+    public async Task RemoveCudaBuildEndpoint_WhenProcessesAreRunning_RefusesWithTheEjectFirstReason()
+    {
+#pragma warning disable CA2000 // Ownership transfers through the supervisor to the shared remove gate, which disposes the lease.
+        var lease = new RecordingMutationLease([]);
+#pragma warning restore CA2000
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
+        supervisor.CountRunningProcesses().Returns(3);
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var cacheInvalidator = Substitute.For<ILocalChatClientCacheInvalidator>();
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Post,
+                                     CudaBuildRemoveRoute,
+                                     services =>
+                                     {
+                                         ReplaceSingleton(services, StubNodeRuntimeSettings.Create().Build());
+                                         ReplaceSingleton(services, supervisor);
+                                         ReplaceSingleton(services, binaryManager);
+                                         ReplaceSingleton(services, cacheInvalidator);
+                                     })
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, status);
+        using var blocked = JsonDocument.Parse(body);
+        AssertEx.Equal("processes-running", blocked.RootElement.GetProperty("reason").GetString());
+        AssertEx.Equal(expected: 3, blocked.RootElement.GetProperty("runningProcessCount").GetInt32());
+        await binaryManager.DidNotReceiveWithAnyArgs().RemoveCudaSourceBuildAsync(default);
+        cacheInvalidator.DidNotReceive().ClearClientCache();
+    }
+
+    [Test]
+    public async Task RemoveCudaBuildEndpoint_WhenABuildIsActive_RefusesWithTheAlreadyBuildingReason()
+    {
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
+        activity.ActiveBuildId.Returns(Guid.NewGuid());
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var cacheInvalidator = Substitute.For<ILocalChatClientCacheInvalidator>();
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Post,
+                                     CudaBuildRemoveRoute,
+                                     services =>
+                                     {
+                                         ReplaceSingleton(services, StubNodeRuntimeSettings.Create().Build());
+                                         ReplaceSingleton(services, activity);
+                                         ReplaceSingleton(services, supervisor);
+                                         ReplaceSingleton(services, binaryManager);
+                                         ReplaceSingleton(services, cacheInvalidator);
+                                     })
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, status);
+        using var blocked = JsonDocument.Parse(body);
+        AssertEx.Equal("already-building", blocked.RootElement.GetProperty("reason").GetString());
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await binaryManager.DidNotReceiveWithAnyArgs().RemoveCudaSourceBuildAsync(default);
+        cacheInvalidator.DidNotReceive().ClearClientCache();
+    }
+
+    [Test]
+    [Arguments(CudaBuildRemoveRoute)]
+    [Arguments(SourceBuildRemoveRoute)]
+    public async Task RemoveEndpoints_WhenTheGatePasses_DropTheChatClientCacheAndReturnTheRecomposedStatus(string route)
+    {
+#pragma warning disable CA2000 // Ownership transfers through the supervisor to the shared remove gate, which disposes the lease.
+        var lease = new RecordingMutationLease([]);
+#pragma warning restore CA2000
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
+        supervisor.CountRunningProcesses().Returns(0);
+        var installedRuntimeStore = Substitute.For<IInstalledRuntimeStore>();
+        installedRuntimeStore.ReadAsync(Arg.Any<CancellationToken>())
+                             .Returns(new InstalledRuntimeState("b9999",
+                                 "(source-build:cuda)",
+                                 new string('a', 64),
+                                 GpuVariant.Cuda,
+                                 DateTimeOffset.UnixEpoch,
+                                 "/managed/source"));
+        var cacheInvalidator = Substitute.For<ILocalChatClientCacheInvalidator>();
+        // Substituted so the gate's removal stays in memory: the real manager deletes the managed build tree under the
+        // shared user-level cache root, which no test may touch. Which member each route removes through is already
+        // pinned by the static remove-gate tests above.
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+
+        var (status, body) = await SendOperatorRequestAsync(HttpMethod.Post,
+                                     route,
+                                     services =>
+                                     {
+                                         ReplaceSingleton(services, StubNodeRuntimeSettings.Create().Build());
+                                         ReplaceSingleton(services, supervisor);
+                                         ReplaceSingleton(services, installedRuntimeStore);
+                                         ReplaceSingleton(services, binaryManager);
+                                         ReplaceSingleton(services, cacheInvalidator);
+                                     })
+                                 .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        var payload = AssertEx.NotNull(JsonSerializer.Deserialize<LlamaCppRuntimeStatusResponse>(body, WebJsonOptions));
+        AssertEx.Equal("b9999", AssertEx.NotNull(payload.Installed).Tag);
+        AssertEx.True(payload.IsSourceBuild);
+        AssertEx.Equal(StoredNodeSettings.DefaultRecommendedLlamaCppTag, payload.RecommendedTag);
+        AssertEx.Equal(expected: 0, payload.RunningProcessCount);
+        // A cached deferred chat client still points at the removed binary's endpoint until this runs.
+        cacheInvalidator.Received(1).ClearClientCache();
+    }
+
+    private static async Task<(HttpStatusCode Status, string Body)> SendOperatorRequestAsync(HttpMethod method,
+        string route,
+        Action<IServiceCollection> configureServices)
+    {
+        await using var factory = new TestServerWebAppFactory
+        {
+            EnableDevelopmentMode = true,
+            ConfigureAdditionalTestServices = configureServices
+        };
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(method, route);
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+    }
+
+    private static void ReplaceSingleton<TService>(IServiceCollection services, TService instance)
+        where TService : class
+    {
+        services.RemoveAll<TService>();
+        services.AddSingleton(instance);
     }
 
     private sealed class RecordingMutationLease(List<string> order) : ILlamaServerRuntimeMutationLease

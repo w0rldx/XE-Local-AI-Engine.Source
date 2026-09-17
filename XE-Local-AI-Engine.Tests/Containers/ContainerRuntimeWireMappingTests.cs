@@ -332,6 +332,7 @@ public sealed class ContainerRuntimeWireMappingTests
         // is called here.
         return new DockerDotNetRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///xe-health-mapping-tests.sock"), DockerDaemonEndpointSource.Configuration),
             TimeSpan.FromSeconds(1),
+            TimeProvider.System,
             requestTimeout: null,
             pullTimeout: null,
             logger);

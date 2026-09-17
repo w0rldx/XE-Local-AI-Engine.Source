@@ -4,7 +4,9 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
 ///     Composes the two read shapes that need more than one row: a run with its pinned graph and every node summary,
@@ -14,12 +16,21 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 ///         run and its node runs, the definition names, the agent definitions, and the artifact rows. A per-node query
 ///         here would be an N+1 on the one request a live view repeats.
 ///     </para>
+///     <para>
+///         Built by DI and reached only from the endpoints in this folder, so it lives under the same fence they do: it
+///         composes <c>Client.Application</c> services and takes no store of its own.
+///     </para>
 /// </summary>
-public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefinitionStore agents, IAgentWorkSessionStore sessions)
+public sealed class DevWorkflowRunComposer(
+    DevWorkflowRunQueryService queries,
+    DevWorkflowAuthoringService authoring,
+    IAgentDefinitionService agents,
+    IWorkSessionService sessions)
 {
-    private readonly IAgentDefinitionStore _agents = agents ?? throw new ArgumentNullException(nameof(agents));
-    private readonly IAgentWorkSessionStore _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IAgentDefinitionService _agents = agents ?? throw new ArgumentNullException(nameof(agents));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
+    private readonly DevWorkflowRunQueryService _queries = queries ?? throw new ArgumentNullException(nameof(queries));
+    private readonly IWorkSessionService _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
 
     public async Task<DevWorkflowRunResponse> ComposeAsync(DevWorkflowRunDetail detail, CancellationToken cancellationToken)
     {
@@ -33,7 +44,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var agentsById = await ResolveAgentsAsync(detail.NodeRuns, cancellationToken).ConfigureAwait(false);
         var staleInputs = await ResolveStaleInputsAsync(run.Id, detail.NodeRuns, cancellationToken).ConfigureAwait(false);
 
-        var definitions = await _store.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
+        var definitions = await _authoring.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
         var definitionName = definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name;
 
         // Read off the wire graph, which already carries the parser's answer per node: one parse for the run, not one
@@ -101,8 +112,8 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
 
     public async Task<DevWorkflowNodeRunDetailResponse> ComposeNodeAsync(Guid runId, Guid nodeRunId, CancellationToken cancellationToken)
     {
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
-        var nodeRun = await _store.GetNodeRunAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
+        var run = await _queries.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        var nodeRun = await _queries.GetNodeRunAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
         if (nodeRun.RunId != runId)
         {
             // Reads as absent rather than as another run's node, so one run's route can never surface another's rows.
@@ -113,16 +124,16 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var node = graph.Nodes.FirstOrDefault(entry => string.Equals(entry.NodeKey, nodeRun.NodeKey, StringComparison.Ordinal));
         var agentsById = await ResolveAgentsAsync([nodeRun], cancellationToken).ConfigureAwait(false);
 
-        var artifacts = await _store.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var artifacts = await _queries.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
         var produced = artifacts.Where(artifact => artifact.ProducedByNodeRunId == nodeRunId).OrderBy(static artifact => artifact.Sequence).ToList();
-        var consumed = await _store.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
-        var decisions = await _store.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false);
+        var consumed = await _queries.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
+        var decisions = await _queries.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false);
 
         // One list, and only when this node actually recorded a resolution: rule sets are a handful of bodyless rows,
         // so listing them beats a lookup per recorded id, and a node with no policy pays nothing at all.
         var ruleSets = nodeRun.PolicyResolutionJson is null
             ? []
-            : await _store.ListRuleSetsAsync(cancellationToken).ConfigureAwait(false);
+            : await _authoring.ListRuleSetsAsync(cancellationToken).ConfigureAwait(false);
 
         // Read from the other family on the loose session id, never stored here: a purged session leaves the node run
         // intact and the drill-down renders "transcript no longer available" instead of a broken link.
@@ -422,7 +433,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         CancellationToken cancellationToken)
     {
-        var artifacts = await _store.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
+        var artifacts = await _queries.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
         var stale = artifacts.Where(static artifact => artifact.IsStale).Select(static artifact => artifact.Id).ToHashSet();
         if (stale.Count == 0)
         {
@@ -434,7 +445,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var affected = new HashSet<Guid>();
         foreach (var nodeRunId in nodeRuns.Select(static nodeRun => nodeRun.Id))
         {
-            var consumed = await _store.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
+            var consumed = await _queries.ListConsumedArtifactIdsAsync(nodeRunId, cancellationToken).ConfigureAwait(false);
             if (consumed.Any(stale.Contains))
             {
                 _ = affected.Add(nodeRunId);

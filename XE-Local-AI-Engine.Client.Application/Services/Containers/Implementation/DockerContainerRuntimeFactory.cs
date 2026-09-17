@@ -27,12 +27,16 @@ internal sealed class DockerContainerRuntimeFactory : IContainerRuntimeFactory
 
     private readonly ILogger _clientLogger;
     private readonly IOptionsMonitor<ContainerRuntimeOptions> _options;
+    private readonly TimeProvider _timeProvider;
 
-    public DockerContainerRuntimeFactory(IOptionsMonitor<ContainerRuntimeOptions> options, ILoggerFactory loggerFactory)
+    public DockerContainerRuntimeFactory(IOptionsMonitor<ContainerRuntimeOptions> options,
+        ILoggerFactory loggerFactory,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
 
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         // Categorised as the client rather than as this factory: the two things it logs — an unrecognised daemon
         // health string, and a failed write probe — are the client's observations, and an operator reading them needs
@@ -60,6 +64,7 @@ internal sealed class DockerContainerRuntimeFactory : IContainerRuntimeFactory
 
         return new DockerDotNetRuntimeClient(endpoint,
             probeTimeout,
+            _timeProvider,
             probeTimeout > stopTimeout ? probeTimeout : stopTimeout,
             TimeSpan.FromMinutes(options.PullTimeoutMinutes),
             _clientLogger);

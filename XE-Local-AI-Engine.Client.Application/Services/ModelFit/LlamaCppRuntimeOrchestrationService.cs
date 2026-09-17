@@ -138,7 +138,7 @@ public sealed class LlamaCppRuntimeOrchestrationService(
         return TryRemoveAsync(_supervisor, _buildActivity, _binaryManager.RemoveCudaSourceBuildAsync, ct);
     }
 
-    internal static bool IsSourceBuildActive(ILlamaCppSourceBuildActivity sourceBuildActivity)
+    private static bool IsSourceBuildActive(ILlamaCppSourceBuildActivity sourceBuildActivity)
     {
         return sourceBuildActivity.ActiveBuildId is not null;
     }

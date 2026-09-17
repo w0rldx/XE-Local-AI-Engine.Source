@@ -55,7 +55,10 @@ after the type it declares, the plural `*Endpoints.cs` groupings named in an all
 every endpoint `sealed`, and every route derived from `LocalApiRoutes` rather than written as a string literal.
 `EndpointDependencyTests` enforces the dependency rule above the same way, for every endpoint in the host and with
 no exemption list. Generic arguments are walked recursively, so a forbidden type wrapped in an allowed generic
-counts too. The test once carried a shrink-only allowlist keyed by fully-qualified endpoint-and-parameter pairs,
+counts too. The same rule covers every SignalR hub and every DI-constructed class that lives under `Endpoints/`,
+such as a run composer, because both answer a client the way an endpoint does; background services and the
+local-model proxy forwarder are deliberately outside it. The test once carried a shrink-only allowlist keyed by
+fully-qualified endpoint-and-parameter pairs,
 frozen at the persistence-store and concrete-provider injections that existed when the rule was written; slices
 S6a–S6m migrated those sites area by area until it was empty and then deleted it. Nothing may be added back: a
 violation is fixed by moving the dependency into a `Client.Application` service the endpoint injects instead. Such

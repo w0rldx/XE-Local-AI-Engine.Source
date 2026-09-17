@@ -448,7 +448,7 @@ public sealed class ExternalAppRealDaemonTests
         /// <summary>A runtime client built exactly the way the composition root builds one.</summary>
         public static IContainerRuntime BuildRuntime(ContainerRuntimeOptions options)
         {
-            return new DockerContainerRuntimeFactory(new StaticOptionsMonitor<ContainerRuntimeOptions>(options), NullLoggerFactory.Instance)
+            return new DockerContainerRuntimeFactory(new StaticOptionsMonitor<ContainerRuntimeOptions>(options), NullLoggerFactory.Instance, TimeProvider.System)
                 .CreateRuntime(DockerDaemonEndpointResolver.Resolve(options.DaemonEndpoint));
         }
 
@@ -482,7 +482,7 @@ public sealed class ExternalAppRealDaemonTests
             settingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(new StoredNodeSettings()));
             var resolver = new ContainerRuntimeResolver(settingsStore,
                 new StaticOptionsMonitor<ContainerRuntimeOptions>(runtimeOptions),
-                new DockerContainerRuntimeFactory(new StaticOptionsMonitor<ContainerRuntimeOptions>(runtimeOptions), NullLoggerFactory.Instance),
+                new DockerContainerRuntimeFactory(new StaticOptionsMonitor<ContainerRuntimeOptions>(runtimeOptions), NullLoggerFactory.Instance, TimeProvider.System),
                 new InMemoryDaemonAttestationStore(),
                 TimeProvider.System,
                 NullLogger<ContainerRuntimeResolver>.Instance);

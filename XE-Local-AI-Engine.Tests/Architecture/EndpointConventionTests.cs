@@ -363,7 +363,18 @@ public sealed class EndpointConventionTests
             // A literal-skipper that reads @"""a"" b" as a raw literal never finds the closing run, so the argument
             // list never closes and the call site is dropped instead of judged — a silent pass, not a loud failure.
             ("non-route argument after a verbatim string opening with an escaped quote",
-                """"Configure() { Get(Wrap(@"""a"" b"), LocalApiRoutes.Images.List); }"""")
+                """"Configure() { Get(Wrap(@"""a"" b"), LocalApiRoutes.Images.List); }""""),
+
+            // Same silent pass from the other side: a regular literal cannot hold a raw newline, so a skipper that
+            // scans past one closes the unterminated string on a quote belonging to a LATER line — here the route's
+            // own — and the argument list never closes, dropping the call instead of judging it.
+            ("literal route behind an unterminated string", """
+                                                            Configure()
+                                                            {
+                                                                Get(Wrap("unterminated,
+                                                                    "/literal");
+                                                            }
+                                                            """)
         ];
 
         foreach (var (name, source) in accepted)
@@ -777,6 +788,13 @@ public sealed class EndpointConventionTests
                     continue;
                 }
 
+                // A char literal cannot hold a raw newline, so an unterminated one ends at the line break. Scanning
+                // past it would close on a quote from a later line and swallow every call site in between.
+                if (text[scan] == '\n')
+                {
+                    return scan;
+                }
+
                 if (text[scan] == '\'')
                 {
                     return scan + 1;
@@ -832,6 +850,14 @@ public sealed class EndpointConventionTests
             {
                 scan += 2;
                 continue;
+            }
+
+            // Same bail-out as the char loop, and only for the non-verbatim form: @"…" and """…""" legitimately span
+            // lines, a regular literal never does. Known limit: this skipper does not track interpolation holes, so a
+            // $"…" whose hole spans lines ends here early and the rest of it is scanned as code. No endpoint writes one.
+            if (!verbatim && text[scan] == '\n')
+            {
+                return scan;
             }
 
             if (text[scan] == '"')

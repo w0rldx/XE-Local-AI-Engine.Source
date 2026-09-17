@@ -13,8 +13,18 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
+/// <summary>
+///     The subscription side of the graph-workflow run hub. The hub reads its replay through
+///     <see cref="IGraphWorkflowRunService.ListEventsAsync" /> — the same paged member the event endpoint answers
+///     with — so every case below drives the REAL run service over a substituted store rather than substituting the
+///     service: what these assertions are about is the page the subscriber is handed, and a stubbed page would be the
+///     test asserting its own arithmetic.
+/// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GraphWorkflowRunHubTests
 {
@@ -27,7 +37,7 @@ public sealed class GraphWorkflowRunHubTests
     public async Task SubscribeRun_JoinsTheGroupBeforeReadingTheReplay()
     {
         var store = Store();
-        using var fixture = CreateHub(store, Runs());
+        using var fixture = CreateHub(store);
 
         _ = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
 
@@ -42,7 +52,7 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_ReturnsTheRunStateItsCountersAndTheEventsAfterTheWatermark()
     {
-        using var fixture = CreateHub(Store([Event(8), Event(9)]), Runs());
+        using var fixture = CreateHub(Store([Event(8), Event(9)]));
 
         var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 7).ConfigureAwait(false);
 
@@ -64,7 +74,7 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_WhenTheReplayOutrunsTheRunItWasReadFrom_ReportsTheDeliveredWatermark()
     {
-        using var fixture = CreateHub(Store([Event(10), Event(12)]), Runs());
+        using var fixture = CreateHub(Store([Event(10), Event(12)]));
 
         var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
 
@@ -75,7 +85,7 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_WithNothingAfterTheWatermark_KeepsTheCallersOwnWatermark()
     {
-        using var fixture = CreateHub(Store(), Runs());
+        using var fixture = CreateHub(Store());
 
         var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 4).ConfigureAwait(false);
 
@@ -86,7 +96,7 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_AtTheReplayCap_IsNotTruncated()
     {
-        using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayLimit).Select(sequence => Event(sequence))]), Runs());
+        using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayLimit).Select(sequence => Event(sequence))]));
 
         var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
 
@@ -97,7 +107,7 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_OneOverTheReplayCap_TruncatesAndSaysSo()
     {
-        using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayLimit + 1).Select(sequence => Event(sequence))]), Runs());
+        using var fixture = CreateHub(Store([.. Enumerable.Range(1, ReplayLimit + 1).Select(sequence => Event(sequence))]));
 
         var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
 
@@ -116,7 +126,7 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_ResumedFromItsOwnCursor_DeliversExactlyTheEventsTheCapCutOff()
     {
-        using var fixture = CreateHub(PagingStore([.. Enumerable.Range(1, 7).Select(sequence => Event(sequence))]), Runs());
+        using var fixture = CreateHub(PagingStore([.. Enumerable.Range(1, 7).Select(sequence => Event(sequence))]));
 
         var first = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0).ConfigureAwait(false);
         AssertEx.True(first.ReplayTruncated);
@@ -137,9 +147,9 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_WhenTheRunIsUnknown_ThrowsWithoutJoiningAGroup()
     {
-        var runs = Substitute.For<IGraphWorkflowRunService>();
-        runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new GraphWorkflowNotFoundException("gone"));
-        using var fixture = CreateHub(Store(), runs);
+        var store = Store();
+        store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new GraphWorkflowNotFoundException("gone"));
+        using var fixture = CreateHub(store);
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0)).ConfigureAwait(false);
 
@@ -149,7 +159,7 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_WithAnEmptyRunId_ThrowsWithoutJoiningAGroup()
     {
-        using var fixture = CreateHub(Store(), Runs());
+        using var fixture = CreateHub(Store());
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(Guid.Empty, afterSeq: 0)).ConfigureAwait(false);
 
@@ -159,7 +169,7 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_WithANegativeWatermark_ThrowsWithoutJoiningAGroup()
     {
-        using var fixture = CreateHub(Store(), Runs());
+        using var fixture = CreateHub(Store());
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: -1)).ConfigureAwait(false);
 
@@ -169,19 +179,19 @@ public sealed class GraphWorkflowRunHubTests
     [Test]
     public async Task SubscribeRun_WhenTheFeatureIsDisabled_ThrowsWithoutReachingTheRuntime()
     {
-        var runs = Runs();
-        using var fixture = CreateHub(Store(), runs, enabled: false);
+        var store = Store();
+        using var fixture = CreateHub(store, enabled: false);
 
         _ = await AssertEx.ThrowsAsync<HubException>(() => fixture.Hub.SubscribeRun(RunId, afterSeq: 0)).ConfigureAwait(false);
 
-        AssertEx.Empty(runs.ReceivedCalls());
+        AssertEx.Empty(store.ReceivedCalls());
         await fixture.Groups.DidNotReceiveWithAnyArgs().AddToGroupAsync(default!, default!, default);
     }
 
     [Test]
     public async Task UnsubscribeRun_LeavesTheRunGroup()
     {
-        using var fixture = CreateHub(Store(), Runs());
+        using var fixture = CreateHub(Store());
 
         await fixture.Hub.UnsubscribeRun(RunId).ConfigureAwait(false);
 
@@ -202,29 +212,12 @@ public sealed class GraphWorkflowRunHubTests
     {
         var store = Substitute.For<IGraphWorkflowStore>();
         store.ListEventsAsync(RunId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(events ?? []);
-        return store;
+        return WithRun(store);
     }
 
-    /// <summary>
-    ///     A store that actually PAGES: it honours the watermark and the limit it is called with, which is what a test
-    ///     about resuming from a cursor needs — one that answers the same rows whatever it is asked cannot see a gap.
-    /// </summary>
-    private static IGraphWorkflowStore PagingStore(IReadOnlyList<GraphWorkflowRunEventSnapshot> all)
+    /// <summary>The run row and its node runs — the two reads the run service composes its detail from.</summary>
+    private static IGraphWorkflowStore WithRun(IGraphWorkflowStore store)
     {
-        var store = Substitute.For<IGraphWorkflowStore>();
-        store.ListEventsAsync(RunId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(call =>
-             {
-                 IReadOnlyList<GraphWorkflowRunEventSnapshot> page =
-                     [.. all.Where(@event => @event.Seq > call.ArgAt<long>(1)).Take(call.ArgAt<int>(2))];
-                 return page;
-             });
-        return store;
-    }
-
-    private static IGraphWorkflowRunService Runs()
-    {
-        var runs = Substitute.For<IGraphWorkflowRunService>();
         var run = new GraphWorkflowRunSnapshot(RunId,
             RequestId: Guid.NewGuid(),
             DefinitionId: Guid.NewGuid(),
@@ -241,14 +234,33 @@ public sealed class GraphWorkflowRunHubTests
             StartedAtUtc: 11,
             CompletedAtUtc: null,
             CreatedAtUtc: 10);
-        runs.GetRunAsync(RunId, Arg.Any<CancellationToken>())
-            .Returns(new GraphWorkflowRunDetail(run,
-            [
-                NodeRun("draft", GraphWorkflowNodeRunStatus.Running),
-                NodeRun("review", GraphWorkflowNodeRunStatus.Queued),
-                NodeRun("finish", GraphWorkflowNodeRunStatus.Pending)
-            ]));
-        return runs;
+        store.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
+        store.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>())
+             .Returns<IReadOnlyList<GraphWorkflowNodeRunSnapshot>>(
+             [
+                 NodeRun("draft", GraphWorkflowNodeRunStatus.Running),
+                 NodeRun("review", GraphWorkflowNodeRunStatus.Queued),
+                 NodeRun("finish", GraphWorkflowNodeRunStatus.Pending)
+             ]);
+        return store;
+    }
+
+    /// <summary>
+    ///     A store that actually PAGES: it honours the watermark and the limit it is called with, which is what a test
+    ///     about resuming from a cursor needs — one that answers the same rows whatever it is asked cannot see a gap.
+    /// </summary>
+    private static IGraphWorkflowStore PagingStore(IReadOnlyList<GraphWorkflowRunEventSnapshot> all)
+    {
+        var store = Substitute.For<IGraphWorkflowStore>();
+        _ = WithRun(store);
+        store.ListEventsAsync(RunId, Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 IReadOnlyList<GraphWorkflowRunEventSnapshot> page =
+                     [.. all.Where(@event => @event.Seq > call.ArgAt<long>(1)).Take(call.ArgAt<int>(2))];
+                 return page;
+             });
+        return store;
     }
 
     private static GraphWorkflowNodeRunSnapshot NodeRun(string nodeKey, GraphWorkflowNodeRunStatus status) =>
@@ -273,23 +285,37 @@ public sealed class GraphWorkflowRunHubTests
     private static GraphWorkflowRunEventSnapshot Event(long sequence) =>
         new(Guid.NewGuid(), RunId, sequence, "node.started", NodeKey: "draft", DetailJson: null, CreatedAtUtc: 100);
 
+    private static HubFixture CreateHub(IGraphWorkflowStore store, bool enabled = true)
+    {
+        var options = Options.Create(new GraphWorkflowOptions
+        {
+            Enabled = enabled,
+            EventReplayLimit = ReplayLimit
+        });
+
+        // The REAL run service over the substituted store. The replay window, the one-over-the-cap probe and the
+        // delivered watermark are its arithmetic and the hub only reports the page it is handed, so substituting the
+        // service would leave the cases below asserting numbers the test itself computed.
+        // The dispatcher signal is the repo's own recording double rather than a substitute: its interface is
+        // internal, which NSubstitute cannot proxy, and nothing a subscription does signals the dispatcher anyway.
+        return CreateHub(new GraphWorkflowRunService(store,
+                new RecordingGraphWorkflowDispatcherSignal(),
+                Substitute.For<IToolInvocationService>(),
+                options),
+            options);
+    }
+
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
         Justification = "HubFixture takes ownership of the constructed hub and every test disposes the fixture.")]
-    private static HubFixture CreateHub(IGraphWorkflowStore store, IGraphWorkflowRunService runs, bool enabled = true)
+    private static HubFixture CreateHub(IGraphWorkflowRunService runs, IOptions<GraphWorkflowOptions> options)
     {
         var context = Substitute.For<HubCallerContext>();
         context.ConnectionId.Returns("connection");
         context.ConnectionAborted.Returns(CancellationToken.None);
         var groups = Substitute.For<IGroupManager>();
         var clients = Substitute.For<IHubCallerClients>();
-        var hub = new GraphWorkflowRunHub(store,
-            runs,
-            Options.Create(new GraphWorkflowOptions
-            {
-                Enabled = enabled,
-                EventReplayLimit = ReplayLimit
-            }))
+        var hub = new GraphWorkflowRunHub(runs, options)
         {
             Context = context,
             Groups = groups,

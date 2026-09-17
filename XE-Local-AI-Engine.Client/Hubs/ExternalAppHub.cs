@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1;
 using XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1.Mappers;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 
@@ -43,13 +42,13 @@ public sealed record ExternalAppSubscriptionSnapshot(
 ///     Operator-only live notifications for one external application instance.
 ///     <para>
 ///         There is no in-memory buffer: instance events are persisted append-only with a monotonic sequence and
-///         <see cref="IExternalAppInstanceStore.ListEventsAsync" /> IS the replay authority — the same member the
+///         <see cref="IExternalAppService.ListEventsAsync" /> IS the replay authority — literally the same member the
 ///         events endpoint pages, so a subscription and the History tab cannot show two different pasts. Nor does a
 ///         disconnect cancel anything: an install outlives the browser tab that started it.
 ///     </para>
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class ExternalAppHub(IExternalAppService apps, IExternalAppInstanceStore store, IOptions<ExternalAppsOptions> options) : Hub
+public sealed class ExternalAppHub(IExternalAppService apps, IOptions<ExternalAppsOptions> options) : Hub
 {
     /// <summary>
     ///     How many persisted events one subscribe hands back. Past this the snapshot says so and the client pages the
@@ -58,9 +57,14 @@ public sealed class ExternalAppHub(IExternalAppService apps, IExternalAppInstanc
     /// </summary>
     private const int ReplayCap = 200;
 
+    /// <summary>
+    ///     One wording for "no such instance", because BOTH reads below can be the one that notices: the instance can
+    ///     be deleted between them, and the replay read carries its own existence check.
+    /// </summary>
+    private const string InstanceNotFoundMessage = "External app instance was not found.";
+
     private readonly IExternalAppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
     private readonly ExternalAppsOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IExternalAppInstanceStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<ExternalAppSubscriptionSnapshot> Subscribe(Guid instanceId, long afterSequence)
     {
@@ -87,7 +91,7 @@ public sealed class ExternalAppHub(IExternalAppService apps, IExternalAppInstanc
         }
         catch (ExternalAppNotFoundException)
         {
-            throw new HubException("External app instance was not found.");
+            throw new HubException(InstanceNotFoundMessage);
         }
 
         // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
@@ -98,7 +102,7 @@ public sealed class ExternalAppHub(IExternalAppService apps, IExternalAppInstanc
         try
         {
             // One over the cap, so "there is more" is observed rather than inferred from a full page.
-            var events = await _store.ListEventsAsync(instanceId, afterSequence, ReplayCap + 1, cancellationToken).ConfigureAwait(false);
+            var events = await _apps.ListEventsAsync(instanceId, afterSequence, ReplayCap + 1, cancellationToken).ConfigureAwait(false);
 
             return new ExternalAppSubscriptionSnapshot(instanceId,
                 detail.Summary.Status.ToString(),
@@ -108,20 +112,31 @@ public sealed class ExternalAppHub(IExternalAppService apps, IExternalAppInstanc
                 [.. events.Take(ReplayCap).Select(ExternalAppMapper.ToEventView)],
                 events.Count > ReplayCap);
         }
+        catch (ExternalAppNotFoundException)
+        {
+            // The instance was deleted between the two reads. The caller is told what it would have been told had the
+            // first read noticed — a generic hub failure would make a routine race look like a node fault.
+            await LeaveAfterFailedSubscribeAsync(instanceId).ConfigureAwait(false);
+            throw new HubException(InstanceNotFoundMessage);
+        }
         catch
         {
-            // A subscribe that threw hands its caller no watermark and no handle to unsubscribe with, so a membership
-            // left behind would push this instance's changes at a connection that never received its replay. Rolled
-            // back with CancellationToken.None: the failure being an aborted connection is exactly the case where the
-            // rollback must still run rather than inherit the cancellation and mask the original exception.
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), CancellationToken.None)
-                        .ConfigureAwait(false);
+            await LeaveAfterFailedSubscribeAsync(instanceId).ConfigureAwait(false);
             throw;
         }
     }
 
     public Task Unsubscribe(Guid instanceId) =>
         Groups.RemoveFromGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), Context.ConnectionAborted);
+
+    /// <summary>
+    ///     A subscribe that threw hands its caller no watermark and no handle to unsubscribe with, so a membership left
+    ///     behind would push this instance's changes at a connection that never received its replay. Rolled back with
+    ///     <see cref="CancellationToken.None" />: the failure being an aborted connection is exactly the case where the
+    ///     rollback must still run rather than inherit the cancellation and mask the original exception.
+    /// </summary>
+    private Task LeaveAfterFailedSubscribeAsync(Guid instanceId) =>
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), CancellationToken.None);
 }
 
 internal static class ExternalAppHubGroups

@@ -12,11 +12,11 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     over a measured bytes-per-logit constant, and the formula is returned with it so the figure is checkable rather
 ///     than magic.
 /// </summary>
-public sealed class GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService store, BenchmarkKldBaseCache cache)
+public sealed class GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService records, BenchmarkKldBaseCache cache)
     : Endpoint<GetKldDiskEstimateRequest, GetKldDiskEstimateResponse>
 {
     private readonly BenchmarkKldBaseCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -28,7 +28,7 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService s
     public override async Task HandleAsync(GetKldDiskEstimateRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var project = await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
         if (project is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
@@ -63,11 +63,11 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint(BenchmarkRecordService s
 ///         reading IS the honest answer, and the operator re-measures the runs they care about.
 ///     </para>
 /// </summary>
-public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
+public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
     : Endpoint<UpdateBenchmarkProjectFidelityRequest, BenchmarkProjectFidelityChangeResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -90,10 +90,10 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectServ
                                         req.MeasureExisting,
                                         ct)
                                     .ConfigureAwait(false);
-        var runCount = await _store.CountRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var runCount = await _records.CountRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
         await Send.OkAsync(new BenchmarkProjectFidelityChangeResponse
                   {
-                      Project = await BenchmarkProjectDetailProjection.ReadAsync(_store, change.Project, runCount, ct).ConfigureAwait(false),
+                      Project = await BenchmarkProjectDetailProjection.ReadAsync(_records, change.Project, runCount, ct).ConfigureAwait(false),
                       EnqueuedRunIds = change.EnqueuedRunIds,
                       EnqueuedCount = change.EnqueuedRunIds.Count
                   }, ct)
@@ -102,11 +102,11 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectServ
 }
 
 /// <summary>Re-measures one run's quant fidelity. A new immutable attempt, never an overwrite of the last one.</summary>
-public sealed class StartBenchmarkRunFidelityEndpoint(BenchmarkRecordService store, IBenchmarkQueueSignal signal)
+public sealed class StartBenchmarkRunFidelityEndpoint(BenchmarkRecordService records, IBenchmarkQueueSignal signal)
     : Endpoint<StartRunFidelityRequest>
 {
     private readonly IBenchmarkQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -119,25 +119,25 @@ public sealed class StartBenchmarkRunFidelityEndpoint(BenchmarkRecordService sto
     public override async Task HandleAsync(StartRunFidelityRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        var run = await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+        var run = await _records.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
         if (run is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found."))).ConfigureAwait(false);
             return;
         }
 
-        var project = await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false);
-        _ = await _store.EnqueueFidelityAsync(req.RunId, project?.FidelityKldEnabled == true ? "kld" : "ppl", ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false);
+        _ = await _records.EnqueueFidelityAsync(req.RunId, project?.FidelityKldEnabled == true ? "kld" : "ppl", ct).ConfigureAwait(false);
         _signal.Wake();
         await Send.ResultAsync(Results.Accepted()).ConfigureAwait(false);
     }
 }
 
 /// <summary>The immutable measurement history behind a run's displayed numbers.</summary>
-public sealed class ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService store)
+public sealed class ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService records)
     : Endpoint<ListBenchmarkFidelityAttemptsRequest, ListBenchmarkFidelityAttemptsResponse>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -149,13 +149,13 @@ public sealed class ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService
     public override async Task HandleAsync(ListBenchmarkFidelityAttemptsRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetRunAsync(req.RunId, ct).ConfigureAwait(false) is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found."))).ConfigureAwait(false);
             return;
         }
 
-        var attempts = await _store.ListFidelityAttemptsAsync(req.RunId, ct).ConfigureAwait(false);
+        var attempts = await _records.ListFidelityAttemptsAsync(req.RunId, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListBenchmarkFidelityAttemptsResponse
                   {
                       Items =
@@ -192,11 +192,11 @@ public sealed class ListBenchmarkFidelityAttemptsEndpoint(BenchmarkRecordService
 ///     Clears the base-logit cache. Refused while any fidelity work item is live: deleting a file a queued
 ///     measurement is on its way to reading would fail that measurement for a reason the operator never sees.
 /// </summary>
-public sealed class ClearBenchmarkFidelityCacheEndpoint(BenchmarkRecordService store, BenchmarkKldBaseCache cache)
+public sealed class ClearBenchmarkFidelityCacheEndpoint(BenchmarkRecordService records, BenchmarkKldBaseCache cache)
     : Endpoint<GetKldDiskEstimateRequest>
 {
     private readonly BenchmarkKldBaseCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -209,13 +209,13 @@ public sealed class ClearBenchmarkFidelityCacheEndpoint(BenchmarkRecordService s
     public override async Task HandleAsync(GetKldDiskEstimateRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
             return;
         }
 
-        if (await _store.HasLiveFidelityWorkAsync(ct).ConfigureAwait(false))
+        if (await _records.HasLiveFidelityWorkAsync(ct).ConfigureAwait(false))
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkConflictException("FidelityWorkInFlight"))).ConfigureAwait(false);
             return;

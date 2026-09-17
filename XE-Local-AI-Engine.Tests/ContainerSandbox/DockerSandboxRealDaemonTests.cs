@@ -464,19 +464,19 @@ public sealed class DockerSandboxRealDaemonTests
 
         // Deliberately NOT disposed: disposing is the graceful teardown whose absence creates the leak.
         var crashed = new DockerSandboxRuntimeProvider(monitor,
-            new DockerDotNetRuntimeClientFactory(monitor),
+            new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
             new FixedNodeDataDirectory(workspace.Path),
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
         var handle = await crashed.CreateOrAttachAsync(request);
-        await using var client = new DockerDotNetRuntimeClientFactory(monitor).Create(DockerDaemonEndpointResolver.Resolve(options));
+        await using var client = new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System).Create(DockerDaemonEndpointResolver.Resolve(options));
         // The handle carries the provider's sandbox id, not the daemon's container id, so the container is located by
         // the deterministic name the provider gives it.
         var leaked = (await client.InspectContainerAsync("xe-dev-" + handle.SandboxId)).ContainerId;
 
         await using var restarted = new DockerSandboxRuntimeProvider(monitor,
-            new DockerDotNetRuntimeClientFactory(monitor),
+            new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
             new FixedNodeDataDirectory(workspace.Path),
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
@@ -511,7 +511,7 @@ public sealed class DockerSandboxRealDaemonTests
 
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
         await using var theirs = new DockerSandboxRuntimeProvider(monitor,
-            new DockerDotNetRuntimeClientFactory(monitor),
+            new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
             new FixedNodeDataDirectory(theirWorkspace.Path),
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
@@ -535,7 +535,7 @@ public sealed class DockerSandboxRealDaemonTests
         });
 
         await using var ours = new DockerSandboxRuntimeProvider(monitor,
-            new DockerDotNetRuntimeClientFactory(monitor),
+            new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
             new FixedNodeDataDirectory(ourWorkspace.Path),
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
@@ -544,7 +544,7 @@ public sealed class DockerSandboxRealDaemonTests
 
         // Still there, and still usable by the installation that owns it — which is the whole point of the install
         // label. A sweep keyed on the owner label alone would have taken this one out from under a running engine.
-        await using var client = new DockerDotNetRuntimeClientFactory(monitor).Create(DockerDaemonEndpointResolver.Resolve(options));
+        await using var client = new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System).Create(DockerDaemonEndpointResolver.Resolve(options));
         var settings = await client.InspectContainerAsync("xe-dev-" + handle.SandboxId);
         AssertEx.Equal("none", settings.NetworkMode);
     }
@@ -578,7 +578,7 @@ public sealed class DockerSandboxRealDaemonTests
 
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(mismatched);
         await using var provider = new DockerSandboxRuntimeProvider(monitor,
-            new DockerDotNetRuntimeClientFactory(monitor),
+            new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
             new FixedNodeDataDirectory(workspace.Path),
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
@@ -735,7 +735,7 @@ public sealed class DockerSandboxRealDaemonTests
             var endpoint = DockerDaemonEndpointResolver.Resolve(candidate);
             DockerDaemonIdentity identity;
 
-            await using (var client = new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(candidate))
+            await using (var client = new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(candidate), TimeProvider.System)
                              .Create(endpoint))
             {
                 try
@@ -889,7 +889,7 @@ public sealed class DockerSandboxRealDaemonTests
     /// <summary>Whether the reachable daemon reports itself rootless, read through the same probe production uses.</summary>
     private static async Task<bool> IsRootlessAsync(ContainerSandboxOptions options)
     {
-        await using var client = new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(options))
+        await using var client = new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(options), TimeProvider.System)
             .Create(DockerDaemonEndpointResolver.Resolve(options));
 
         return (await client.ProbeAsync()).IsRootless;
@@ -1027,7 +1027,7 @@ public sealed class DockerSandboxRealDaemonTests
             }
 
             var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
-            var factory = new DockerDotNetRuntimeClientFactory(monitor);
+            var factory = new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System);
             var provider = new DockerSandboxRuntimeProvider(monitor,
                 factory,
                 new FixedNodeDataDirectory(workspace.Path),

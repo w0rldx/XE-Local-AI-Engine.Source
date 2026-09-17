@@ -12,11 +12,11 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     route, deliberately: splitting them would let a client render a strength beside a verdict set that did not
 ///     produce it, and nothing on the wire would say so.
 /// </summary>
-public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService store)
+public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService records)
     : Endpoint<ListBenchmarkComparisonsRequest, ListBenchmarkComparisonsResponse>
 {
     private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -28,14 +28,14 @@ public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService stor
     public override async Task HandleAsync(ListBenchmarkComparisonsRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
             return;
         }
 
-        var cohort = await _store.GetPairwiseCohortAsync(req.ProjectId, ct).ConfigureAwait(false);
-        var fit = await _store.GetActivePairwiseFitAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var cohort = await _records.GetPairwiseCohortAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var fit = await _records.GetActivePairwiseFitAsync(req.ProjectId, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListBenchmarkComparisonsResponse
                   {
                       CohortGeneration = cohort.CohortGeneration,
@@ -111,11 +111,11 @@ public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService stor
 ///     What pairwise judging this project will cost, answered BEFORE the operator saves the mode. Pairwise is
 ///     quadratic in the cohort — twelve runs is 132 judge calls — so the number goes in front of the decision.
 /// </summary>
-public sealed class GetBenchmarkPairwiseEstimateEndpoint(BenchmarkRecordService store, IBenchmarkPairwisePlanner planner)
+public sealed class GetBenchmarkPairwiseEstimateEndpoint(BenchmarkRecordService records, IBenchmarkPairwisePlanner planner)
     : Endpoint<GetBenchmarkPairwiseEstimateRequest, GetBenchmarkPairwiseEstimateResponse>
 {
     private readonly IBenchmarkPairwisePlanner _planner = planner ?? throw new ArgumentNullException(nameof(planner));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -127,7 +127,7 @@ public sealed class GetBenchmarkPairwiseEstimateEndpoint(BenchmarkRecordService 
     public override async Task HandleAsync(GetBenchmarkPairwiseEstimateRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
             return;

@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-public sealed class ListBenchmarkProjectsEndpoint(BenchmarkRecordService store)
+public sealed class ListBenchmarkProjectsEndpoint(BenchmarkRecordService records)
     : EndpointWithoutRequest<ListBenchmarkProjectsResponse>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -20,11 +20,11 @@ public sealed class ListBenchmarkProjectsEndpoint(BenchmarkRecordService store)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var projects = await _store.ListProjectsAsync(ct).ConfigureAwait(false);
+        var projects = await _records.ListProjectsAsync(ct).ConfigureAwait(false);
         var items = new List<BenchmarkProjectSummaryResponse>(projects.Count);
         foreach (var project in projects)
         {
-            var count = await _store.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
+            var count = await _records.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
             items.Add(project.ToSummary(count));
         }
 
@@ -35,11 +35,11 @@ public sealed class ListBenchmarkProjectsEndpoint(BenchmarkRecordService store)
     }
 }
 
-public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
+public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
     : Endpoint<BenchmarkProjectMutationRequest, BenchmarkProjectDetailResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -55,16 +55,16 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
         await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
                       {
                           projectId = project.Id
-                      }, await BenchmarkProjectDetailProjection.ReadAsync(_store, project, runCount: 0, ct).ConfigureAwait(false),
+                      }, await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct).ConfigureAwait(false),
                       cancellation: ct)
                   .ConfigureAwait(false);
     }
 }
 
-public sealed class GetBenchmarkProjectEndpoint(BenchmarkRecordService store)
+public sealed class GetBenchmarkProjectEndpoint(BenchmarkRecordService records)
     : Endpoint<BenchmarkProjectRouteRequest, BenchmarkProjectDetailResponse>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -75,23 +75,23 @@ public sealed class GetBenchmarkProjectEndpoint(BenchmarkRecordService store)
 
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
-        var project = await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false);
         if (project is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
             return;
         }
 
-        var runCount = await _store.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
-        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_store, project, runCount, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        var runCount = await _records.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
+        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 }
 
-public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
+public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
     : Endpoint<UpdateBenchmarkProjectRequest, BenchmarkProjectDetailResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -106,14 +106,14 @@ public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
     public override async Task HandleAsync(UpdateBenchmarkProjectRequest req, CancellationToken ct)
     {
         var project = await _projects.UpdateAsync(req.ProjectId, req.ExpectedVersion, req.ToDraft(req.ProjectId), ct).ConfigureAwait(false);
-        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_store, project, runCount: 0, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_records, project, runCount: 0, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 }
 
-public sealed class DeleteBenchmarkProjectEndpoint(BenchmarkRecordService store)
+public sealed class DeleteBenchmarkProjectEndpoint(BenchmarkRecordService records)
     : Endpoint<DeleteBenchmarkProjectRequest>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -125,7 +125,7 @@ public sealed class DeleteBenchmarkProjectEndpoint(BenchmarkRecordService store)
 
     public override async Task HandleAsync(DeleteBenchmarkProjectRequest req, CancellationToken ct)
     {
-        await _store.DeleteProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await _records.DeleteProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
@@ -135,11 +135,11 @@ public sealed class DeleteBenchmarkProjectEndpoint(BenchmarkRecordService store)
 ///     can still turn, and turning it re-scores every run — so it is its own resource with its own confirmation, never
 ///     a field that rides along on the project PUT.
 /// </summary>
-public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
+public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
     : Endpoint<UpdateBenchmarkJudgePolicyRequest, BenchmarkJudgeChangeResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -161,17 +161,17 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
                 req.Policy.ReferenceAnswer,
                 req.Policy.Mode);
         var change = await _projects.UpdateJudgePolicyAsync(req.ProjectId, req.ExpectedVersion, draft, req.ConfirmRejudge, ct).ConfigureAwait(false);
-        await Send.OkAsync(await ToResponseAsync(_store, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        await Send.OkAsync(await ToResponseAsync(_records, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 
-    internal static async Task<BenchmarkJudgeChangeResponse> ToResponseAsync(BenchmarkRecordService store,
+    internal static async Task<BenchmarkJudgeChangeResponse> ToResponseAsync(BenchmarkRecordService records,
         BenchmarkJudgePolicyChange change,
         CancellationToken ct)
     {
-        var runCount = await store.CountRunsAsync(change.Project.Id, ct).ConfigureAwait(false);
+        var runCount = await records.CountRunsAsync(change.Project.Id, ct).ConfigureAwait(false);
         return new BenchmarkJudgeChangeResponse
         {
-            Project = await BenchmarkProjectDetailProjection.ReadAsync(store, change.Project, runCount, ct).ConfigureAwait(false),
+            Project = await BenchmarkProjectDetailProjection.ReadAsync(records, change.Project, runCount, ct).ConfigureAwait(false),
             EnqueuedRunIds = change.EnqueuedRunIds,
             CohortGeneration = change.CohortGeneration
         };
@@ -179,11 +179,11 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
 }
 
 /// <summary>Moves the project's rank cohort to the current judge runtime by re-judging every succeeded run.</summary>
-public sealed class RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
+public sealed class RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService records)
     : Endpoint<RejudgeBenchmarkProjectRequest, BenchmarkJudgeChangeResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -196,7 +196,7 @@ public sealed class RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService pro
     public override async Task HandleAsync(RejudgeBenchmarkProjectRequest req, CancellationToken ct)
     {
         var change = await _projects.RejudgeProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
-        await Send.OkAsync(await UpdateBenchmarkJudgePolicyEndpoint.ToResponseAsync(_store, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        await Send.OkAsync(await UpdateBenchmarkJudgePolicyEndpoint.ToResponseAsync(_records, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 }
 
@@ -226,29 +226,29 @@ public sealed class GetBenchmarkRubricPresetsEndpoint : EndpointWithoutRequest<B
 /// </summary>
 internal static class BenchmarkProjectDetailProjection
 {
-    public static async Task<BenchmarkProjectDetailResponse> ReadAsync(BenchmarkRecordService store,
+    public static async Task<BenchmarkProjectDetailResponse> ReadAsync(BenchmarkRecordService records,
         BenchmarkProjectRecord project,
         int runCount,
         CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(project);
 
         // A plain LIST, never get-or-create: materializing item 0 for a project created before task items existed is a
         // write, and exactly one endpoint may perform it — the items GET. Every other project read stays a read, so a
         // page refresh cannot race two item-0 rows into existence.
         return project.ToDetail(runCount,
-            await BenchmarkJudgePolicyProjection.ReadAsync(store, project.Id, ct).ConfigureAwait(false),
-            await store.ListTaskItemsAsync(project.Id, ct).ConfigureAwait(false));
+            await BenchmarkJudgePolicyProjection.ReadAsync(records, project.Id, ct).ConfigureAwait(false),
+            await records.ListTaskItemsAsync(project.Id, ct).ConfigureAwait(false));
     }
 }
 
 /// <summary>Reads and decrypts a project's current judge policy for the wire.</summary>
 internal static class BenchmarkJudgePolicyProjection
 {
-    public static async Task<BenchmarkJudgePolicyResponse> ReadAsync(BenchmarkRecordService store, Guid projectId, CancellationToken ct)
+    public static async Task<BenchmarkJudgePolicyResponse> ReadAsync(BenchmarkRecordService records, Guid projectId, CancellationToken ct)
     {
-        var revision = await store.GetCurrentJudgePolicyRevisionAsync(projectId, ct).ConfigureAwait(false);
+        var revision = await records.GetCurrentJudgePolicyRevisionAsync(projectId, ct).ConfigureAwait(false);
         var policy = revision?.PolicyJson is { } payload && !payload.IsEmpty
             ? BenchmarkJudgeSerialization.DeserializePolicy(payload.Span)
             : null;

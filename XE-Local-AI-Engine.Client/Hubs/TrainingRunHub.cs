@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
@@ -20,10 +19,10 @@ public sealed record TrainingRunReplayReset(Guid RunId, long LatestSequence, lon
 ///     subscribe-after-publish race closes; the overlap is deduplicated client-side by event sequence.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class TrainingRunHub(ITrainingRunStore store, ITrainingRunEventBuffer events) : Hub
+public sealed class TrainingRunHub(ITrainingRunService runs, ITrainingRunEventBuffer events) : Hub
 {
     private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly ITrainingRunStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ITrainingRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
 
     public static string RunGroup(Guid runId) =>
         $"training-run-{runId:N}";
@@ -41,7 +40,7 @@ public sealed class TrainingRunHub(ITrainingRunStore store, ITrainingRunEventBuf
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var run = await _store.GetAsync(runId, cancellationToken).ConfigureAwait(false)
+        var run = await _runs.GetAsync(runId, cancellationToken).ConfigureAwait(false)
                   ?? throw new HubException("The training run was not found.");
         await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken).ConfigureAwait(false);
 

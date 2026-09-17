@@ -498,7 +498,7 @@ public sealed class ContainerRuntimeContractTests
         return implementation switch
         {
             ContainerRuntimeUnderTest.Fake => new FakeDockerRuntimeClient(endpoint),
-            ContainerRuntimeUnderTest.DockerClient => new DockerDotNetRuntimeClient(endpoint, TimeSpan.FromSeconds(1)),
+            ContainerRuntimeUnderTest.DockerClient => new DockerDotNetRuntimeClient(endpoint, TimeSpan.FromSeconds(1), TimeProvider.System),
             _ => throw new ArgumentOutOfRangeException(nameof(implementation), implementation, "Unknown container runtime implementation.")
         };
     }

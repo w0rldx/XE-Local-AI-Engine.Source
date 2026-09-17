@@ -12,11 +12,11 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     because each write recomputes the project's item-set hash — and a moved set hash resets the rank cohort, which
 ///     is not something a field could express.
 /// </summary>
-public sealed class ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService store)
+public sealed class ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService records)
     : Endpoint<BenchmarkProjectRouteRequest, ListBenchmarkTaskItemsResponse>
 {
     private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -30,10 +30,10 @@ public sealed class ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService ite
         // Get-or-create, not a plain list: a project created before task items existed has none, and materializing
         // item 0 needs the node encryption key that a migration does not have. Every project created since gets its
         // items with itself, so this is a read for all of them.
-        var records = await _items.GetOrCreateItemsAsync(req.ProjectId, ct).ConfigureAwait(false);
-        var project = await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)
+        var taskItems = await _items.GetOrCreateItemsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
-        await Send.OkAsync(records.ToResponse(project), ct).ConfigureAwait(false);
+        await Send.OkAsync(taskItems.ToResponse(project), ct).ConfigureAwait(false);
     }
 }
 
@@ -104,11 +104,11 @@ public sealed class DeleteBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService it
 ///     Renumbers the whole item list at once. Not a revision bump and not a cohort reset: the index is a display
 ///     position that no hash carries, so a drag-and-drop must not unrank a completed suite.
 /// </summary>
-public sealed class ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService store)
+public sealed class ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService records)
     : Endpoint<ReorderBenchmarkTaskItemsRequest, ListBenchmarkTaskItemsResponse>
 {
     private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -122,7 +122,7 @@ public sealed class ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService 
     public override async Task HandleAsync(ReorderBenchmarkTaskItemsRequest req, CancellationToken ct)
     {
         var reordered = await _items.ReorderAsync(req.ProjectId, req.ItemIds, ct).ConfigureAwait(false);
-        var project = await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)
+        var project = await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
         await Send.OkAsync(reordered.ToResponse(project), ct).ConfigureAwait(false);
     }

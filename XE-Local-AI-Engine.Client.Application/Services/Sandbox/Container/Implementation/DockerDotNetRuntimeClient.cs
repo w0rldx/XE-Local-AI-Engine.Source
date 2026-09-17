@@ -36,11 +36,13 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     private readonly DockerClient _client;
     private readonly TimeSpan _probeTimeout;
     private readonly TimeSpan _pullTimeout;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
     private int _unrecognisedHealthLogged;
 
     /// <param name="endpoint">The daemon endpoint this client talks to.</param>
     /// <param name="probeTimeout">Bounds <see cref="ProbeAsync" />, and floors the transport timeout.</param>
+    /// <param name="timeProvider">Clock, for the pull-progress aggregator's throttling of downstream reports.</param>
     /// <param name="requestTimeout">
     ///     The HTTP request timeout. Separate from the probe timeout because the two consumers have opposite time
     ///     budgets: a ten-second transport timeout sized for a preflight would cut off a thirty-second graceful stop.
@@ -57,11 +59,13 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     /// </param>
     public DockerDotNetRuntimeClient(DockerDaemonEndpoint endpoint,
         TimeSpan probeTimeout,
+        TimeProvider timeProvider,
         TimeSpan? requestTimeout = null,
         TimeSpan? pullTimeout = null,
         ILogger? logger = null)
     {
         Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _probeTimeout = probeTimeout;
         _pullTimeout = pullTimeout ?? TimeSpan.FromMinutes(30);
         _logger = logger ?? NullLogger.Instance;
@@ -617,7 +621,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 nameof(imageReference));
         }
 
-        var aggregator = new PullProgressAggregator(imageReference, TimeProvider.System);
+        var aggregator = new PullProgressAggregator(imageReference, _timeProvider);
         var sink = new PullProgressSink(aggregator, progress);
 
         // Its own deadline rather than the transport's: an application image is large, and a pull sized by the

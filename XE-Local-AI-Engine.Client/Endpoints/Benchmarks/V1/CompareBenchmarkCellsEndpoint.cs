@@ -12,13 +12,13 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     difference is a read-time projection over the cell table — nothing here is stored, so it is always computed
 ///     from the scores the project holds right now.
 /// </summary>
-public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService store)
+public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService records)
     : Endpoint<CompareBenchmarkCellsRequest, CompareBenchmarkCellsResponse>
 {
     private const int MinimumCells = 2;
     private const int MaximumCells = 6;
 
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -45,13 +45,13 @@ public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService store)
             return;
         }
 
-        if (await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
             return;
         }
 
-        var page = await _store.ListCellsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var page = await _records.ListCellsAsync(req.ProjectId, ct).ConfigureAwait(false);
 
         // Which leaves count toward a quality number. A NIAH case is judged and carries its own score, but that score
         // is a recall figure on its own axis and never enters the cell mean, so it must not enter a paired delta
@@ -59,7 +59,7 @@ public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService store)
         // can, which costs one extra read whose payloads get decrypted to reach one boolean. That is acceptable on a
         // compare an operator triggers by hand. If it ever stops being acceptable, surface the scorable id set on the
         // ranking instead of widening this read.
-        var items = await _store.ListTaskItemsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var items = await _records.ListTaskItemsAsync(req.ProjectId, ct).ConfigureAwait(false);
         var scorable = items.Where(static item => item.IsLeaf && item.CountsTowardScore).Select(static item => item.Id).ToHashSet();
         var byKey = page.Cells.ToDictionary(static cell => cell.CellKey, StringComparer.Ordinal);
         var selected = new List<BenchmarkCellRecord>(requested.Count);

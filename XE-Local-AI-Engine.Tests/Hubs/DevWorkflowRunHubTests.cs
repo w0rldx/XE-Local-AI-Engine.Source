@@ -216,7 +216,10 @@ public sealed class DevWorkflowRunHubTests
         context.ConnectionAborted.Returns(CancellationToken.None);
         var groups = Substitute.For<IGroupManager>();
         var clients = Substitute.For<IHubCallerClients>();
-        var hub = new DevWorkflowRunHub(store,
+        // The real pass-through service over the substituted store: the hub's door onto the event log is
+        // DevWorkflowRunQueryService, and wrapping rather than substituting it keeps every assertion below on the
+        // store call the hub actually causes.
+        var hub = new DevWorkflowRunHub(new DevWorkflowRunQueryService(store),
             runs,
             Options.Create(new DevWorkflowOptions
             {

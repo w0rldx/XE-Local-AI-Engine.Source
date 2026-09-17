@@ -20,16 +20,16 @@ internal static class BenchmarkEndpointSupport
     ///     endpoint that returns the run detail shape reads it here: a mutation response that skipped it would render
     ///     as "not judged" for a run whose GET shows a full verdict.
     /// </summary>
-    public static async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(BenchmarkRecordService store, BenchmarkRunRecord run, CancellationToken ct)
+    public static async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(BenchmarkRecordService records, BenchmarkRunRecord run, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(run);
         if (run.Judge?.AttemptId is not { } attemptId)
         {
             return null;
         }
 
-        var attempt = await store.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
+        var attempt = await records.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
         return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
     }
 

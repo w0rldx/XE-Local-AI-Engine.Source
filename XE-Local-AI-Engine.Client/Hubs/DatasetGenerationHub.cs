@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
@@ -20,10 +19,10 @@ public sealed record DatasetGenerationReplayReset(Guid DatasetId, long LatestSeq
 ///     subscribe-after-publish race closes; the overlap is deduplicated client-side by event sequence.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class DatasetGenerationHub(ITrainingDatasetStore store, IDatasetGenerationEventBuffer events) : Hub
+public sealed class DatasetGenerationHub(TrainingDatasetService datasets, IDatasetGenerationEventBuffer events) : Hub
 {
+    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
     private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public static string DatasetGroup(Guid datasetId) =>
         $"dataset-generation-{datasetId:N}";
@@ -41,7 +40,7 @@ public sealed class DatasetGenerationHub(ITrainingDatasetStore store, IDatasetGe
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var dataset = await _store.GetDatasetAsync(datasetId, cancellationToken).ConfigureAwait(false)
+        var dataset = await _datasets.GetAsync(datasetId, cancellationToken).ConfigureAwait(false)
                       ?? throw new HubException("The training dataset was not found.");
         await Groups.AddToGroupAsync(Context.ConnectionId, DatasetGroup(datasetId), cancellationToken).ConfigureAwait(false);
 

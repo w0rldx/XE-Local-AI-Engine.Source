@@ -46,7 +46,7 @@ public sealed class DockerSandboxFakeServerTests
         using var store = new DockerDaemonAttestationStore(new FixedNodeDataDirectory(attestationRoot.Path),
             NullLogger<DockerDaemonAttestationStore>.Instance);
         var service = new DockerDaemonPreflightService(monitor,
-            new DockerDotNetRuntimeClientFactory(monitor),
+            new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
             store,
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerDaemonPreflightService>.Instance);
@@ -106,7 +106,7 @@ public sealed class DockerSandboxFakeServerTests
         using var workspace = new TemporaryDirectory();
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(new ContainerSandboxOptions());
         await using var provider = new DockerSandboxRuntimeProvider(monitor,
-            new DockerDotNetRuntimeClientFactory(monitor),
+            new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System),
             new FixedNodeDataDirectory(workspace.Path),
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
@@ -239,7 +239,7 @@ public sealed class DockerSandboxFakeServerTests
 
                 var options = Options(docker);
                 var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
-                var factory = new DockerDotNetRuntimeClientFactory(monitor);
+                var factory = new DockerDotNetRuntimeClientFactory(monitor, TimeProvider.System);
                 var provider = new DockerSandboxRuntimeProvider(monitor,
                     factory,
                     new FixedNodeDataDirectory(workspace.Path),

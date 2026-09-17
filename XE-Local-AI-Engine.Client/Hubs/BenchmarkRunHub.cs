@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
@@ -20,10 +19,10 @@ public sealed record BenchmarkRunReplayReset(Guid RunId, long LatestSequence, lo
 ///     subscribe-after-publish race; clients deduplicate the possible overlap by the event sequence.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class BenchmarkRunHub(IBenchmarkStore store, IBenchmarkEventBuffer events) : Hub
+public sealed class BenchmarkRunHub(BenchmarkRecordService records, IBenchmarkEventBuffer events) : Hub
 {
     private readonly IBenchmarkEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public static string RunGroup(Guid runId) =>
         $"benchmark-run-{runId:N}";
@@ -41,7 +40,7 @@ public sealed class BenchmarkRunHub(IBenchmarkStore store, IBenchmarkEventBuffer
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false)
+        var run = await _records.GetRunAsync(runId, cancellationToken).ConfigureAwait(false)
                   ?? throw new HubException("Benchmark run was not found.");
         await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken).ConfigureAwait(false);
 

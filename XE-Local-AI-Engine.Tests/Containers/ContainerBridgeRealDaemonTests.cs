@@ -250,7 +250,7 @@ public sealed class ContainerBridgeRealDaemonTests
 
         public static IContainerRuntime CreateRuntime(ContainerRuntimeOptions options)
         {
-            return new DockerContainerRuntimeFactory(new StaticOptionsMonitor<ContainerRuntimeOptions>(options), NullLoggerFactory.Instance)
+            return new DockerContainerRuntimeFactory(new StaticOptionsMonitor<ContainerRuntimeOptions>(options), NullLoggerFactory.Instance, TimeProvider.System)
                 .CreateRuntime(DockerDaemonEndpointResolver.Resolve(options.DaemonEndpoint));
         }
 

@@ -38,13 +38,13 @@ public sealed record DevWorkflowRunSubscriptionSnapshot(
 ///     Operator-only live notifications for one development workflow run.
 ///     <para>
 ///         Modelled on <see cref="WorkSessionHub" /> and explicitly NOT on a per-run subscription hub: there is no
-///         in-memory buffer, because run events are persisted append-only with a monotonic sequence and the store IS
-///         the replay authority. Nor does a disconnect cancel anything — a workflow run is durable and outlives both
+///         in-memory buffer, because run events are persisted append-only with a monotonic sequence and the persisted
+///         log IS the replay authority. Nor does a disconnect cancel anything — a workflow run is durable and outlives both
 ///         the browser tab and the engine, which is the property this module exists to prove.
 ///     </para>
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
-public sealed class DevWorkflowRunHub(IDevWorkflowStore store, IDevWorkflowRunService runs, IOptions<DevWorkflowOptions> options) : Hub
+public sealed class DevWorkflowRunHub(DevWorkflowRunQueryService queries, IDevWorkflowRunService runs, IOptions<DevWorkflowOptions> options) : Hub
 {
     /// <summary>
     ///     How many persisted events one subscribe hands back. Past this the snapshot says so and the client pages the
@@ -54,8 +54,8 @@ public sealed class DevWorkflowRunHub(IDevWorkflowStore store, IDevWorkflowRunSe
     private const int ReplayCap = 200;
 
     private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly DevWorkflowRunQueryService _queries = queries ?? throw new ArgumentNullException(nameof(queries));
     private readonly IDevWorkflowRunService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<DevWorkflowRunSubscriptionSnapshot> SubscribeRun(Guid runId, long afterSeq)
     {
@@ -91,7 +91,7 @@ public sealed class DevWorkflowRunHub(IDevWorkflowStore store, IDevWorkflowRunSe
         await Groups.AddToGroupAsync(Context.ConnectionId, DevWorkflowHubGroups.Run(runId), cancellationToken).ConfigureAwait(false);
 
         // One over the cap, so "there is more" is observed rather than inferred from a full page.
-        var events = await _store.ListEventsAsync(runId, afterSeq, ReplayCap + 1, cancellationToken).ConfigureAwait(false);
+        var events = await _queries.ListEventsAsync(runId, afterSeq, ReplayCap + 1, cancellationToken).ConfigureAwait(false);
         return new DevWorkflowRunSubscriptionSnapshot(runId,
             detail.Run.Status.ToString(),
             detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),

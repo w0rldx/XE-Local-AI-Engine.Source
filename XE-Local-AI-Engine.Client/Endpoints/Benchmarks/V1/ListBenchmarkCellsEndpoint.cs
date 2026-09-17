@@ -11,10 +11,10 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     The project's measurement cells. A cell is what ranks, so a comparison reads this shape rather than the run
 ///     listing: the runs of one cell are its answers, and the items MISSING from it are why it does not rank.
 /// </summary>
-public sealed class ListBenchmarkCellsEndpoint(BenchmarkRecordService store)
+public sealed class ListBenchmarkCellsEndpoint(BenchmarkRecordService records)
     : Endpoint<ListBenchmarkCellsRequest, ListBenchmarkCellsResponse>
 {
-    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _records = records ?? throw new ArgumentNullException(nameof(records));
 
     public override void Configure()
     {
@@ -25,13 +25,13 @@ public sealed class ListBenchmarkCellsEndpoint(BenchmarkRecordService store)
 
     public override async Task HandleAsync(ListBenchmarkCellsRequest req, CancellationToken ct)
     {
-        if (await _store.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
+        if (await _records.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false) is null)
         {
             await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found."))).ConfigureAwait(false);
             return;
         }
 
-        var cells = await _store.ListCellsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var cells = await _records.ListCellsAsync(req.ProjectId, ct).ConfigureAwait(false);
         await Send.OkAsync(cells.ToResponse(), ct).ConfigureAwait(false);
     }
 }

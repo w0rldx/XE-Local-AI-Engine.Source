@@ -661,7 +661,7 @@ public sealed class ContainerRuntimeRealDaemonTests
         public static IContainerRuntime CreateRuntime(ContainerRuntimeOptions options)
         {
             return new DockerContainerRuntimeFactory(new StaticOptionsMonitor<ContainerRuntimeOptions>(options),
-                    NullLoggerFactory.Instance)
+                    NullLoggerFactory.Instance, TimeProvider.System)
                 .CreateRuntime(DockerDaemonEndpointResolver.Resolve(options.DaemonEndpoint));
         }
 
