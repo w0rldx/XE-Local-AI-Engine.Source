@@ -4,16 +4,17 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
+using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
 ///     The poll route for a running or last-finished source build: its phase, a bounded sanitized log tail, and the
 ///     descriptor of what is being built. Operator-gated.
 /// </summary>
-public sealed class GetWhisperCppSourceBuildStatusEndpoint(IWhisperCppSourceBuildService buildService)
+public sealed class GetWhisperCppSourceBuildStatusEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
     : EndpointWithoutRequest<WhisperCppSourceBuildStatusResponse>
 {
-    private readonly IWhisperCppSourceBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
+        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
 
     public override void Configure()
     {
@@ -24,6 +25,6 @@ public sealed class GetWhisperCppSourceBuildStatusEndpoint(IWhisperCppSourceBuil
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(_buildService.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
     }
 }

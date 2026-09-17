@@ -4,16 +4,17 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
+using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
 ///     Requests cancellation of a running source build and returns the status that results. Cancelling when nothing
 ///     is running is a success, not an error — the caller asked for a state that already holds. Operator-gated.
 /// </summary>
-public sealed class CancelWhisperCppSourceBuildEndpoint(IWhisperCppSourceBuildService buildService)
+public sealed class CancelWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
     : Endpoint<TranscriptionRuntimeActionRequest, WhisperCppSourceBuildStatusResponse>
 {
-    private readonly IWhisperCppSourceBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
+        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
 
     public override void Configure()
     {
@@ -28,7 +29,7 @@ public sealed class CancelWhisperCppSourceBuildEndpoint(IWhisperCppSourceBuildSe
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        _ = _buildService.Cancel();
-        await Send.OkAsync(_buildService.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        _ = _whisperRuntime.Cancel();
+        await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
     }
 }

@@ -84,7 +84,7 @@ public sealed class EndpointDependencyTests
     ///     sides, because a short name can collide across endpoint areas, and because a per-endpoint key would let an
     ///     already-listed endpoint acquire a SECOND forbidden dependency unnoticed. Sorted, one pair per line.
     ///     <para>
-    ///         86 pairs across 70 endpoint types today: 43 a persistence store, 42 a concrete provider's contract or
+    ///         78 pairs across 64 endpoint types today: 43 a persistence store, 34 a concrete provider's contract or
     ///         options type, and one an <c>AI.Agent</c> tool policy — that last one is a dependency the rule's allow
     ///         list does not name, caught only because a leaf outside the allow list is a violation in its own right
     ///         rather than something the forbid list has to have anticipated.
@@ -174,14 +174,6 @@ public sealed class EndpointDependencyTests
         "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.StartCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ICudaBuildService",
         "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.StartCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildService",
         "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.StartLlamaCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.CancelWhisperCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.WhisperCpp.Contracts.IWhisperCppSourceBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.GetTranscriptionRecommendationEndpoint|XE_Local_AI_Engine.Providers.WhisperCpp.Contracts.IWhisperBackendSelector",
-        "XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.GetWhisperCppSourceBuildPrerequisitesEndpoint|XE_Local_AI_Engine.Providers.WhisperCpp.Contracts.IWhisperCppSourceBuildPrerequisiteProbe",
-        "XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.GetWhisperCppSourceBuildStatusEndpoint|XE_Local_AI_Engine.Providers.WhisperCpp.Contracts.IWhisperCppSourceBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.RemoveWhisperCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.WhisperCpp.Contracts.IWhisperCppSourceBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.RemoveWhisperCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.WhisperCpp.Contracts.IWhisperRuntimeActivityGate",
-        "XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.StartWhisperCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.WhisperCpp.Contracts.IWhisperCppSourceBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.StartWhisperCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.WhisperCpp.Contracts.IWhisperRuntimeActivityGate"
     ];
 
     [Test]

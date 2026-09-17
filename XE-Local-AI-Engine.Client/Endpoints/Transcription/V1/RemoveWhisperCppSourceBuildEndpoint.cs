@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -12,13 +13,11 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     without it, a record proven unusable can only be cleared by hand. Refuses with <c>409 runtime-busy</c> while
 ///     anything holds the runtime. Operator-gated.
 /// </summary>
-public sealed class RemoveWhisperCppSourceBuildEndpoint(
-    IWhisperCppSourceBuildService buildService,
-    IWhisperRuntimeActivityGate activityGate)
+public sealed class RemoveWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
     : Endpoint<TranscriptionRuntimeActionRequest, WhisperCppSourceBuildStatusResponse>
 {
-    private readonly IWhisperRuntimeActivityGate _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
-    private readonly IWhisperCppSourceBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
+        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
 
     public override void Configure()
     {
@@ -36,12 +35,12 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint(
 
         try
         {
-            var result = await _buildService.RemoveAsync(ct).ConfigureAwait(false);
+            var result = await _whisperRuntime.RemoveAsync(ct).ConfigureAwait(false);
             if (result.Outcome == WhisperCppSourceBuildRemoveOutcome.RuntimeBusy)
             {
                 await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy(
                               "Wait for active transcriptions and transcription-runtime processes to finish before removing the managed runtime.",
-                              result.Activity ?? _activityGate.GetSnapshot()))
+                              result.Activity ?? _whisperRuntime.GetActivitySnapshot()))
                           .ConfigureAwait(false);
                 return;
             }
@@ -53,7 +52,7 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint(
                 throw new InvalidOperationException($"Unknown whisper.cpp source-build remove outcome: {result.Outcome}.");
             }
 
-            await Send.OkAsync(_buildService.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+            await Send.OkAsync(_whisperRuntime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
         }
         catch (WhisperRuntimeException exception)
         {
@@ -62,7 +61,7 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint(
             // sanitized, so it is safe to surface.
             await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.Blocked("source-build-error",
                           exception.Message,
-                          _activityGate.GetSnapshot()))
+                          _whisperRuntime.GetActivitySnapshot()))
                       .ConfigureAwait(false);
         }
     }

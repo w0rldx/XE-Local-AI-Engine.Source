@@ -4,17 +4,17 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
+using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
 ///     Reports the toolchain checklist for a backend, so the operator sees which prerequisite is missing instead of
 ///     only that one is. Operator-gated.
 /// </summary>
-public sealed class GetWhisperCppSourceBuildPrerequisitesEndpoint(IWhisperCppSourceBuildPrerequisiteProbe prerequisiteProbe)
+public sealed class GetWhisperCppSourceBuildPrerequisitesEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
     : Endpoint<GetWhisperCppSourceBuildPrerequisitesRequest, WhisperCppSourceBuildPrerequisitesResponse>
 {
-    private readonly IWhisperCppSourceBuildPrerequisiteProbe _prerequisiteProbe =
-        prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
+        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
 
     public override void Configure()
     {
@@ -30,7 +30,7 @@ public sealed class GetWhisperCppSourceBuildPrerequisitesEndpoint(IWhisperCppSou
         ArgumentNullException.ThrowIfNull(request);
 
         var backend = request.Backend.ToContract();
-        var report = await _prerequisiteProbe.ProbeAsync(backend, ct).ConfigureAwait(false);
+        var report = await _whisperRuntime.ProbeAsync(backend, ct).ConfigureAwait(false);
         await Send.OkAsync(report.ToResponse(backend), ct).ConfigureAwait(false);
     }
 }

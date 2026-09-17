@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -12,13 +13,11 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     status route. Every refusal is a 409 carrying a reason code and the activity snapshot, so the operator is told
 ///     what to wait for or what to install. Operator-gated.
 /// </summary>
-public sealed class StartWhisperCppSourceBuildEndpoint(
-    IWhisperCppSourceBuildService buildService,
-    IWhisperRuntimeActivityGate activityGate)
+public sealed class StartWhisperCppSourceBuildEndpoint(WhisperRuntimeOrchestrationService whisperRuntime)
     : Endpoint<StartWhisperCppSourceBuildRequest, StartWhisperCppSourceBuildResponse>
 {
-    private readonly IWhisperRuntimeActivityGate _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
-    private readonly IWhisperCppSourceBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+    private readonly WhisperRuntimeOrchestrationService _whisperRuntime =
+        whisperRuntime ?? throw new ArgumentNullException(nameof(whisperRuntime));
 
     public override void Configure()
     {
@@ -44,7 +43,7 @@ public sealed class StartWhisperCppSourceBuildEndpoint(
 
         try
         {
-            var result = await _buildService.StartAsync(request.ToContract(), ct).ConfigureAwait(false);
+            var result = await _whisperRuntime.StartAsync(request.ToContract(), ct).ConfigureAwait(false);
             switch (result.Outcome)
             {
                 case WhisperCppSourceBuildStartOutcome.AlreadyRunning:
@@ -78,7 +77,7 @@ public sealed class StartWhisperCppSourceBuildEndpoint(
             await Send.OkAsync(new StartWhisperCppSourceBuildResponse
             {
                 Started = true,
-                Status = _buildService.GetStatus().ToResponse()
+                Status = _whisperRuntime.GetStatus().ToResponse()
             }, ct).ConfigureAwait(false);
         }
         catch (WhisperRuntimeException exception)
@@ -89,5 +88,5 @@ public sealed class StartWhisperCppSourceBuildEndpoint(
     }
 
     private Task BlockAsync(string reason, string message, WhisperRuntimeActivitySnapshot? activity = null) =>
-        Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.Blocked(reason, message, activity ?? _activityGate.GetSnapshot()));
+        Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.Blocked(reason, message, activity ?? _whisperRuntime.GetActivitySnapshot()));
 }

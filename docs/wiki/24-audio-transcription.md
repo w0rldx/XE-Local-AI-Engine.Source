@@ -27,6 +27,7 @@ Linux CUDA source build, the slice order, and the never-persist-audio rule — a
 |---|---|
 | Runtime supervision, transcriber, argument builder, pins, catalogue | `XE-Local-AI-Engine.Providers.WhisperCpp/` (`IWhisperServerSupervisor`, `IWhisperTranscriber`, `WhisperCppReleasePins`, `WhisperModelCatalog`) |
 | Runtime/model application services | `XE-Local-AI-Engine.Client.Application/Services/Transcription/` (`ITranscriptionRuntimeService`, `IWhisperModelDownloadCoordinator`, `WhisperModelPathResolver`) |
+| Runtime endpoints' door onto the provider (endpoint-dependency rule) | `…/Services/Transcription/WhisperRuntimeOrchestrationService.cs` — pass-through over `IWhisperCppSourceBuildService`, `IWhisperCppSourceBuildPrerequisiteProbe`, `IWhisperRuntimeActivityGate` and `IWhisperBackendSelector`; the six source-build/recommendation endpoints inject it, never the provider contracts |
 | Session lifecycle + batch transcription | `…/Services/Transcription/Implementation/TranscriptionService.cs` (`ITranscriptionService`) |
 | Windows per-application capture | `…/Services/Transcription/Capture/` (`IProcessAudioCaptureSource`, `WindowsProcessAudioCaptureSource`, `NotSupportedProcessAudioCaptureSource`, `ProcessAudioCaptureCoordinator`, `ProcessAudioCaptureSupport`, `ProcessAudioCaptureCandidates`, `Wasapi16kMonoPcmConverter`) |
 | Container sniffing and engine-side transcode | `…/Services/Transcription/AudioContainerSniffer.cs`, `…/Implementation/FfmpegAudioTranscoder.cs` (`IAudioTranscoder`) |

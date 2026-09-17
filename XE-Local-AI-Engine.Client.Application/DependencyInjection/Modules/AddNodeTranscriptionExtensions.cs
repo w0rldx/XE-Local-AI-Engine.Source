@@ -54,6 +54,11 @@ internal static class AddNodeTranscriptionExtensions
         });
         builder.Services.AddWhisperCppRuntime();
 
+        // The six runtime and source-build endpoints' only path to the provider. Singleton, matching all four wrapped
+        // registrations: WhisperCppServiceCollectionExtensions TryAddSingletons IWhisperRuntimeActivityGate,
+        // IWhisperBackendSelector, IWhisperCppSourceBuildPrerequisiteProbe and IWhisperCppSourceBuildService.
+        builder.Services.AddSingleton<WhisperRuntimeOrchestrationService>();
+
         builder.Services.AddSingleton<ITranscriptionRuntimeService, TranscriptionRuntimeService>();
 
         // Persistence boundary for the session registry. Scoped: one NodeChatDbContext per operation (title, config
