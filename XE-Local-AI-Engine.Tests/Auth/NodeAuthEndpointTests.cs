@@ -59,8 +59,12 @@ public sealed class NodeAuthEndpointTests
         AssertRefreshCookieCleared(logoutResponse);
     }
 
+    // Every document load refreshes (the SPA holds the access token in memory only), so a reload with a refresh already
+    // in flight — or a second tab — presents one cookie twice. The loser must be answered with a cookie, not with the
+    // 401 that CLEARS it and would wipe the winner's fresh one. Past the grace window the same replay is a 401 again:
+    // NodeAuthRefreshRotationGraceTests.RefreshEndpoint_WhenTheCookieIsReplayedAfterTheWindow_….
     [Test]
-    public async Task Refresh_WhenRotatedTokenIsReplayed_ReturnsUnauthorizedAndClearsCookie()
+    public async Task Refresh_WhenTheRotationLoserPresentsItsCookie_ReturnsOkAndSetsACookie()
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
@@ -74,13 +78,17 @@ public sealed class NodeAuthEndpointTests
         refreshRequest.Headers.Add("Cookie", originalRefreshCookie);
         using var refreshResponse = await client.SendAsync(refreshRequest);
         AssertEx.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
+        var winnerRefreshCookie = GetRefreshCookie(refreshResponse);
 
         using var replayRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
         replayRequest.Headers.Add("Cookie", originalRefreshCookie);
         using var replayResponse = await client.SendAsync(replayRequest);
 
-        AssertEx.Equal(HttpStatusCode.Unauthorized, replayResponse.StatusCode);
-        AssertRefreshCookieCleared(replayResponse);
+        AssertEx.Equal(HttpStatusCode.OK, replayResponse.StatusCode);
+        var loserRefreshCookie = GetRefreshCookie(replayResponse);
+        AssertEx.NotEqual($"{NodeAuthCookie.RefreshCookieName}=", loserRefreshCookie);
+        AssertEx.NotEqual(originalRefreshCookie, loserRefreshCookie);
+        AssertEx.NotEqual(winnerRefreshCookie, loserRefreshCookie);
     }
 
     [Test]

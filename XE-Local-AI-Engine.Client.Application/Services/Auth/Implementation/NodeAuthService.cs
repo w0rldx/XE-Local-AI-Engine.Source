@@ -14,6 +14,15 @@ public sealed class NodeAuthService : INodeAuthService
 {
     private static readonly SemaphoreSlim SetupLock = new(initialCount: 1, maxCount: 1);
 
+    /// <summary>
+    ///     How long a refresh token that ROTATION replaced still buys a successor. The SPA keeps its access token in
+    ///     memory only, so every document load refreshes; a reload while a refresh is already in flight, or a second tab,
+    ///     makes two requests present the same cookie, and single-use rotation would answer the loser 401 — which clears
+    ///     the cookie and signs the operator out although nothing was compromised. Not an option: an operator has no
+    ///     reason to tune it, and every second of it is a second a captured cookie stays replayable.
+    /// </summary>
+    private static readonly TimeSpan RotationGraceWindow = TimeSpan.FromSeconds(10);
+
     private readonly NodeIdentityDbContext _dbContext;
     private readonly ILogger<NodeAuthService> _logger;
     private readonly INodeSettingsStore _nodeSettingsStore;
@@ -149,7 +158,7 @@ public sealed class NodeAuthService : INodeAuthService
                 : FailedTokenResult();
         }
 
-        return await CreateTokenResultAsync(user, cancellationToken);
+        return await CreateTokenResultAsync(user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
     }
 
     public async Task<NodeAuthTokenResult> RefreshAsync(string? refreshToken, CancellationToken cancellationToken)
@@ -167,10 +176,20 @@ public sealed class NodeAuthService : INodeAuthService
                                           .SingleOrDefaultAsync(token => token.TokenHash == refreshTokenHash, cancellationToken);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        if (storedToken is null || storedToken.RevokedAtUtc is not null || storedToken.ExpiresAtUtc <= now)
+        if (storedToken is null || storedToken.ExpiresAtUtc <= now)
         {
             await transaction.RollbackAsync(cancellationToken);
-            _logger.LogWarning("Node refresh failed: missing, revoked, or expired refresh token.");
+            _logger.LogWarning("Node refresh failed: missing or expired refresh token.");
+            return FailedTokenResult();
+        }
+
+        var withinRotationGrace = storedToken.RevokedAtUtc is { } revokedAtUtc
+                                  && await WasReplacedByRotationAsync(storedToken.UserId, revokedAtUtc, now, cancellationToken);
+
+        if (storedToken.RevokedAtUtc is not null && !withinRotationGrace)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            _logger.LogWarning("Node refresh failed: revoked refresh token.");
             return FailedTokenResult();
         }
 
@@ -182,10 +201,20 @@ public sealed class NodeAuthService : INodeAuthService
             return FailedTokenResult();
         }
 
-        storedToken.RevokedAtUtc = now;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (withinRotationGrace)
+        {
+            // Deliberately NOT re-stamped: the window is measured from the ORIGINAL rotation, so presenting the same
+            // token again every few seconds cannot walk it forward into an unbounded replay window.
+            _logger.LogInformation("Node refresh honoured a token that rotation replaced inside the grace window for user {UserId}.",
+                storedToken.UserId);
+        }
+        else
+        {
+            storedToken.RevokedAtUtc = now;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
 
-        var result = await CreateTokenResultAsync(user, cancellationToken);
+        var result = await CreateTokenResultAsync(user, now, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
     }
@@ -198,7 +227,7 @@ public sealed class NodeAuthService : INodeAuthService
             return;
         }
 
-        await RevokeActiveTokensAsync(user.Id, cancellationToken);
+        await RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
     }
 
     public async Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken)
@@ -218,7 +247,7 @@ public sealed class NodeAuthService : INodeAuthService
             return new NodePasswordChangeResult(Succeeded: false, ToErrorList(result));
         }
 
-        await RevokeActiveTokensAsync(user.Id, cancellationToken);
+        await RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
         return new NodePasswordChangeResult(Succeeded: true, []);
     }
 
@@ -260,7 +289,7 @@ public sealed class NodeAuthService : INodeAuthService
         await _userManager.ResetAccessFailedCountAsync(user);
         await _userManager.SetLockoutEndDateAsync(user, lockoutEnd: null);
 
-        await RevokeActiveTokensAsync(user.Id, cancellationToken);
+        await RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         _logger.LogWarning("Node admin password reset for user {UserId}; refresh tokens revoked and the rotated security "
@@ -280,15 +309,38 @@ public sealed class NodeAuthService : INodeAuthService
         return new NodeCurrentUser(user.UserName ?? user.Email ?? user.Id, roles.ToArray());
     }
 
-    private async Task<NodeAuthTokenResult> CreateTokenResultAsync(NodeUser user, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Whether the revocation at <paramref name="revokedAtUtc" /> was ROTATION replacing the presented token, rather
+    ///     than logout, a password change or a reset revoking it. Nothing records WHY a token was revoked, so the
+    ///     discriminator is the successor: rotation stamps the revocation and the replacement from one instant (both
+    ///     take the caller's <c>now</c>), so a still-live token created at exactly that instant is rotation's own
+    ///     successor. <see cref="RevokeRefreshTokensAsync" />, <see cref="ChangePasswordAsync" /> and
+    ///     <see cref="ResetAdminPasswordAsync" /> revoke without issuing anything, so they leave no such token and a
+    ///     logged-out cookie can never be resurrected here.
+    /// </summary>
+    private Task<bool> WasReplacedByRotationAsync(string userId, DateTime revokedAtUtc, DateTime now, CancellationToken cancellationToken)
+    {
+        if (revokedAtUtc > now || now - revokedAtUtc > RotationGraceWindow)
+        {
+            return Task.FromResult(false);
+        }
+
+        return _dbContext.RefreshTokens
+                         .AnyAsync(token => token.UserId == userId
+                                            && token.RevokedAtUtc == null
+                                            && token.ExpiresAtUtc > now
+                                            && token.CreatedAtUtc == revokedAtUtc,
+                             cancellationToken);
+    }
+
+    private async Task<NodeAuthTokenResult> CreateTokenResultAsync(NodeUser user, DateTime now, CancellationToken cancellationToken)
     {
         var roles = await _userManager.GetRolesAsync(user);
         var (accessToken, accessTokenExpiresAtUtc) = _tokenService.CreateAccessToken(user, roles);
         var refreshToken = _tokenService.CreateRefreshTokenRaw();
-        var refreshTokenExpiresAtUtc = _timeProvider.GetUtcNow().AddDays(_options.Value.RefreshTokenDays).UtcDateTime;
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var refreshTokenExpiresAtUtc = now.AddDays(_options.Value.RefreshTokenDays);
 
-        await RevokeActiveTokensAsync(user.Id, cancellationToken);
+        await RevokeActiveTokensAsync(user.Id, now, cancellationToken);
         _dbContext.RefreshTokens.Add(new NodeRefreshToken
         {
             UserId = user.Id,
@@ -301,9 +353,13 @@ public sealed class NodeAuthService : INodeAuthService
         return new NodeAuthTokenResult(Succeeded: true, accessToken, accessTokenExpiresAtUtc, refreshToken, refreshTokenExpiresAtUtc);
     }
 
-    private async Task RevokeActiveTokensAsync(string userId, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Revokes every live refresh token of <paramref name="userId" />, stamping <paramref name="now" />. The caller
+    ///     supplies the instant so that rotation's revoke-and-reissue share one — the clock read that
+    ///     <see cref="WasReplacedByRotationAsync" /> reads back as "this token was replaced, not logged out".
+    /// </summary>
+    private async Task RevokeActiveTokensAsync(string userId, DateTime now, CancellationToken cancellationToken)
     {
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var activeTokens = await _dbContext.RefreshTokens
                                            .Where(token => token.UserId == userId && token.RevokedAtUtc == null)
                                            .ToListAsync(cancellationToken);

@@ -27,6 +27,11 @@
     <!-- Tests construct the internal OS/arch-pinned constructors + invoke the pure variant-selection rule directly,
          rather than shelling out to GPU probes or downloading real binaries. -->
     <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+    <!-- The host's raw-model proxy forwarder matches the SAME "the child is gone" exception family this provider
+         already recognizes (DeferredLlamaServerChatClient.IsServerGone). A private copy of that match in the host is
+         exactly how the two would come to disagree about what a force-eject looks like on the wire. Mirrors the
+         grant Providers.Ollama already makes to the host. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Client" />
   </ItemGroup>
 
 </Project>

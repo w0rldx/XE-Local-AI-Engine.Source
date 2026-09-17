@@ -155,6 +155,36 @@ impersonate another: an operator JWT does not open the MCP endpoint or the proxy
 neither key opens the key-management endpoints (or anything else). Both directions are asserted for
 MCP in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
 
+The browser's session is a short-lived access token held **in memory only** plus an HttpOnly, Secure,
+SameSite=Strict refresh cookie, so every document load calls `auth/refresh`. `NodeAuthService.RefreshAsync`
+rotates that token single-use — the presented token is revoked and a successor issued inside one serializable
+transaction — with a **10-second reuse grace for rotation alone**: a token that rotation replaced still buys a
+successor until the window closes, because a reload racing its own in-flight refresh (or a second tab) otherwise
+loses, and the loser's 401 clears the cookie and signs a blameless operator out. The grace never re-opens a
+session an operator closed. Nothing records *why* a token was revoked, so the discriminator is the successor:
+rotation stamps the revocation and its replacement from **one** instant, so a still-live token whose
+`CreatedAtUtc` equals the presented token's `RevokedAtUtc` is rotation's own successor and nothing else's.
+`RevokeRefreshTokensAsync` (logout), `ChangePasswordAsync` and `ResetAdminPasswordAsync` revoke without issuing
+anything, so they leave no such token — and a later login creates one at its own, later instant, which is why the
+match is equality and not "created after". Presenting a rotated token again does **not** re-stamp it, so the
+window is measured from the original rotation and cannot be walked forward. Expiry is checked first and is never
+graced. `XE-Local-AI-Engine.Tests/Auth/NodeAuthRefreshRotationGraceTests.cs` walks each revoke path.
+
+The match rests on an assumption the schema cannot enforce: that two **unrelated** writes for one user — a
+logout's `RevokedAtUtc` and a later login's `CreatedAtUtc` — never land on the identical instant. Only clock
+granularity separates them, which for two HTTP requests with a password verification between them is ample but
+is not a guarantee; the re-login test advances the clock between the two rather than proving a same-tick
+collision impossible.
+
+Two further limits follow from storing only the token **hash** and from the one-live-token-per-user index: the grace path
+must rotate again rather than hand the caller the winner's token, which it cannot reconstruct. So (a) a **third**
+presenter of the same original token inside the window is refused — the grace rotation revoked the first
+successor, and the live token's `CreatedAtUtc` no longer equals the original `RevokedAtUtc` — and (b) if the
+winner's and the loser's `Set-Cookie` responses reach one browser out of order, the jar keeps the first
+successor, which is itself a rotated token honoured only for its own window: a refresh inside that window
+recovers the session, a refresh after it is a 401. The grace narrows the race to two presenters, it does not
+abolish it.
+
 Authorization is **deny-by-default, in two layers**. At the FastEndpoints layer a global configurator applies
 the `NodeOperator` policy to every discovered endpoint whether or not that endpoint's own `Configure()` asked
 for it, so a forgotten `Policies()` call cannot ship an anonymous route; an endpoint that deliberately opted

@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Proxy;
 
 using System.Buffers;
+using System.Net.Mime;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 /// <summary>
 ///     The inbound OpenAI-compatible model proxy. Provisions the requested local model through the llama-server
@@ -49,6 +52,22 @@ internal sealed class LocalModelProxyForwarder
     ///     default so both streaming surfaces bound a silent runtime the same way.
     /// </summary>
     private static readonly TimeSpan DefaultUpstreamIdleTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    ///     Terminal frames for an event-stream response whose upstream child vanished mid-stream (the expected shape of
+    ///     an operator force-eject). Mirrors the OpenAI error envelope <see cref="WriteErrorAsync" /> writes before the
+    ///     headers are sent — same <c>message</c>/<c>type</c>/<c>code</c> fields — so a client sees ONE error shape from
+    ///     this proxy whether the failure landed before or after the status. Deliberately NOT a
+    ///     <c>finish_reason: "stop"</c> chunk: the generation did not complete, and saying it did would be a lie the
+    ///     caller cannot detect.
+    ///     <para>
+    ///         Leads with a blank-line terminator because the child can die MID-LINE: appended straight onto a partial
+    ///         <c>data: {"cho</c> the error frame would be swallowed into that broken event and never reach the client.
+    ///         On an event boundary the extra blank lines cost nothing — an event carrying no data is not dispatched.
+    ///     </para>
+    /// </summary>
+    private static readonly byte[] UpstreamGoneSseFrames = Encoding.UTF8.GetBytes(
+        "\n\ndata: {\"error\":{\"message\":\"The local model runtime stopped while streaming this response (it may have been ejected). Try again shortly.\",\"type\":\"server_error\",\"code\":null}}\n\ndata: [DONE]\n\n");
 
     private readonly IGgufModelStore _ggufModelStore;
     private readonly ILlamaServerProcessSupervisor _supervisor;
@@ -220,7 +239,7 @@ internal sealed class LocalModelProxyForwarder
             context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
             await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
-            await PumpWithIdleDeadlineAsync(upstreamStream, context, ct);
+            await PumpWithIdleDeadlineAsync(upstreamStream, context, model, upstreamPath, ct);
         }
     }
 
@@ -230,8 +249,17 @@ internal sealed class LocalModelProxyForwarder
     ///     graceful eject can drain the model — the naive <see cref="Stream.CopyToAsync(Stream, CancellationToken)" />
     ///     would instead wait forever on a silent-but-open child. Writes flow under the caller token (a slow CLIENT must
     ///     not trip the upstream-idle timer); only the upstream read carries the idle deadline.
+    ///     <para>
+    ///         A child that DIES mid-stream (a forced eject is an expected operator action, not an error) ends the read
+    ///         with the same "server is gone" exception family the provider already recognizes. That is not an
+    ///         unhandled failure: it ends the exchange deliberately — see <see cref="EndAfterUpstreamGoneAsync" />.
+    ///     </para>
     /// </summary>
-    private async Task PumpWithIdleDeadlineAsync(Stream upstream, HttpContext context, CancellationToken ct)
+    private async Task PumpWithIdleDeadlineAsync(Stream upstream,
+        HttpContext context,
+        string model,
+        string upstreamPath,
+        CancellationToken ct)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(StreamCopyBufferSize);
         try
@@ -254,6 +282,17 @@ internal sealed class LocalModelProxyForwarder
                         context.Abort();
                         return;
                     }
+                    catch (Exception ex) when (!ct.IsCancellationRequested && DeferredLlamaServerChatClient.IsServerGone(ex))
+                    {
+                        // The child died mid-stream — typically a forced eject, which is an operator action and not an
+                        // error. Left to propagate this reaches the pipeline AFTER the response started, which logs an
+                        // unhandled ERROR and cuts the caller's stream mid-token with no terminal frame at all.
+                        // The token check pairs with the match exactly as both sites in DeferredLlamaServerChatClient
+                        // do: a caller that disconnected aborts the same read, and reporting that as the child dying
+                        // would write an error frame to nobody and log a runtime failure that never happened.
+                        await EndAfterUpstreamGoneAsync(context, model, upstreamPath, ex, ct);
+                        return;
+                    }
                 }
 
                 if (read == 0)
@@ -268,6 +307,39 @@ internal sealed class LocalModelProxyForwarder
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    ///     Ends an exchange whose upstream child vanished after the response started. The status is already on the wire
+    ///     and can no longer become a 503, so the contract is per body shape: an event stream gets one error frame plus
+    ///     <c>[DONE]</c> (a client that speaks SSE then sees a reason instead of a truncated stream), and anything else
+    ///     — a half-written JSON document that cannot be repaired — is aborted, exactly like the idle-deadline arm.
+    /// </summary>
+    private async Task EndAfterUpstreamGoneAsync(HttpContext context,
+        string model,
+        string upstreamPath,
+        Exception ex,
+        CancellationToken ct)
+    {
+        _logger.LogWarning(ex, "Model proxy lost the llama-server child for model {Model} while streaming {UpstreamPath}; ending the response.", model, upstreamPath);
+
+        if (context.Response.ContentType?.StartsWith(MediaTypeNames.Text.EventStream, StringComparison.OrdinalIgnoreCase) != true)
+        {
+            context.Abort();
+            return;
+        }
+
+        try
+        {
+            await context.Response.Body.WriteAsync(UpstreamGoneSseFrames, ct);
+            await context.Response.Body.FlushAsync(ct);
+        }
+        catch (Exception writeFailure) when (writeFailure is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            // The caller went away too. There is nobody left to tell, and throwing here would re-create the very
+            // unhandled post-header exception this method exists to prevent.
+            _logger.LogDebug(writeFailure, "Model proxy could not deliver the terminal frame for model {Model}; the caller is gone as well.", model);
         }
     }
 

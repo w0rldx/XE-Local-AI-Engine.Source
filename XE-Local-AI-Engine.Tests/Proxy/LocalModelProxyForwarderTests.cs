@@ -221,6 +221,50 @@ public sealed class LocalModelProxyForwarderTests
             "The idle watchdog must abort the request when the upstream goes silent, so the inference lease is released.");
     }
 
+    [Test]
+    public async Task ForwardChatCompletions_WhenTheUpstreamDiesMidEventStream_EndsWithAnErrorFrameAndDone()
+    {
+        // A forced eject kills the child mid-stream: the open body ends as HttpIOException(ResponseEnded). That is an
+        // expected operator action, so the caller must get a reason and a stream terminator rather than a stream that
+        // stops mid-token (and the node must not log it as an unhandled pipeline error).
+        using var upstream = new DyingHandler("text/event-stream");
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[],\"stream\":true}", out var responseBody);
+
+        await forwarder.ForwardChatCompletionsAsync(context);
+
+        var written = Encoding.UTF8.GetString(responseBody.ToArray());
+        AssertEx.True(written.StartsWith(DyingStream.PartialLine, StringComparison.Ordinal),
+            $"The bytes already relayed must survive. Got: {written}");
+        // The child died mid-line, so the frame must open its OWN event: appended straight onto the partial line it
+        // would read as "…\"content\":\"heldata: {\"error\"…" and no SSE parser would ever dispatch it.
+        AssertEx.Contains(written, "\n\ndata: {\"error\":{\"message\":");
+        AssertEx.Contains(written, "\"type\":\"server_error\"");
+        AssertEx.True(written.EndsWith("data: [DONE]\n\n", StringComparison.Ordinal),
+            $"An SSE client needs the stream terminator after the error frame. Got: {written}");
+        AssertEx.False(written.Contains("finish_reason", StringComparison.Ordinal),
+            "A finish_reason chunk would claim the generation completed cleanly, which it did not.");
+        AssertEx.False(context.RequestAborted.IsCancellationRequested,
+            "An event stream is ended deliberately, not aborted — the caller must be able to read the terminal frames.");
+    }
+
+    [Test]
+    public async Task ForwardChatCompletions_WhenTheUpstreamDiesMidNonEventStream_AbortsInsteadOfWritingAFrame()
+    {
+        // A half-written JSON document cannot be repaired into a valid one, so the only honest end is the same abort
+        // the idle watchdog uses.
+        using var upstream = new DyingHandler("application/json");
+        var forwarder = CreateForwarder(out _, out _, upstream);
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[]}", out var responseBody);
+
+        await forwarder.ForwardChatCompletionsAsync(context);
+
+        AssertEx.True(context.RequestAborted.IsCancellationRequested,
+            "A truncated JSON body must abort the connection rather than pretend to be a complete document.");
+        AssertEx.False(Encoding.UTF8.GetString(responseBody.ToArray()).Contains("\"error\"", StringComparison.Ordinal),
+            "No error envelope may be appended to a half-written JSON document.");
+    }
+
     private static CapturingHandler Idle()
     {
         return new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
@@ -335,6 +379,78 @@ public sealed class LocalModelProxyForwarderTests
             response.Content.Headers.ContentType = new MediaTypeHeaderValue("text/event-stream");
             return Task.FromResult(response);
         }
+    }
+
+    /// <summary>Stands in for a child killed MID-RESPONSE (forced eject): some bytes arrive, then the body ends prematurely.</summary>
+    private sealed class DyingHandler(string contentType) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new DyingStream())
+            };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            return Task.FromResult(response);
+        }
+    }
+
+    /// <summary>
+    ///     Yields one chunk, then fails the way a killed llama-server's open body does — the exact shape
+    ///     <see cref="XE_Local_AI_Engine.Tests.Providers.LlamaServer.DeferredLlamaServerChatClientServerGoneTests" />
+    ///     pins as "the server is gone".
+    /// </summary>
+    private sealed class DyingStream : Stream
+    {
+        // A PARTIAL SSE line: a child is killed wherever it happens to be, which is far more often mid-line than on
+        // an event boundary. Anything appended without its own terminator is swallowed into this broken event.
+        internal const string PartialLine = "data: {\"choices\":[{\"delta\":{\"content\":\"hel";
+
+        private static readonly byte[] FirstChunk = Encoding.UTF8.GetBytes(PartialLine);
+
+        private bool _delivered;
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_delivered)
+            {
+                throw new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely.");
+            }
+
+            _delivered = true;
+            FirstChunk.CopyTo(buffer);
+            return ValueTask.FromResult(FirstChunk.Length);
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 
     /// <summary>A readable stream whose reads never complete until the read's own token is cancelled (the idle deadline).</summary>

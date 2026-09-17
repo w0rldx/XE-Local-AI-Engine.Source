@@ -49,7 +49,6 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -468,10 +467,9 @@ public static class ConfigureServices
         });
         builder.Services.AddAntiforgery();
 
-        // Inbound model proxy forwarder + its dedicated forwarding client. Scoped: it resolves the per-request GGUF
-        // catalog and streams one response. The client has an INFINITE timeout because a long generation must not be
-        // severed by a client-side timeout — the caller's disconnect (request-abort) is the cancellation signal instead.
-        builder.Services.AddScoped<LocalModelProxyForwarder>();
+        // Inbound model proxy forwarder + its dedicated forwarding client, whose deadline contract (infinite timeout,
+        // no resilience pipeline) lives with the registration.
+        builder.Services.AddNodeModelProxy();
 
         // The external integration API's hand-mapped handler, scoped like the proxy forwarder for the same reason: its
         // collaborators are scoped stores and application services.
@@ -480,8 +478,6 @@ public static class ConfigureServices
         // Singleton: it owns the process-wide open-stream semaphore, and a scoped one would give every request its own
         // cap, which is no cap at all.
         builder.Services.AddSingleton<IntegrationSseWriter>();
-        builder.Services.AddHttpClient(LocalModelProxyForwarder.HttpClientName)
-               .ConfigureHttpClient(static client => client.Timeout = Timeout.InfiniteTimeSpan);
 
         // Production limit is 10/min per client IP. Test environments drive many auth calls from a
         // single loopback IP (one partition), so relax the cap there to keep E2E/integration runs
