@@ -5,11 +5,12 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>The rule-set list. Never loads a body: it is the encrypted column, and the list has no use for it.</summary>
-public sealed class ListDevWorkflowRuleSetsEndpoint(IDevWorkflowStore store) : EndpointWithoutRequest<ListDevWorkflowRuleSetsResponse>
+public sealed class ListDevWorkflowRuleSetsEndpoint(DevWorkflowAuthoringService authoring) : EndpointWithoutRequest<ListDevWorkflowRuleSetsResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     public override void Configure()
     {
@@ -19,14 +20,14 @@ public sealed class ListDevWorkflowRuleSetsEndpoint(IDevWorkflowStore store) : E
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var ruleSets = await _store.ListRuleSetsAsync(ct).ConfigureAwait(false);
+        var ruleSets = await _authoring.ListRuleSetsAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ListDevWorkflowRuleSetsResponse([.. ruleSets.Select(DevWorkflowContractMapper.ToResponse)]), ct).ConfigureAwait(false);
     }
 }
 
-public sealed class CreateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : Endpoint<CreateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
+public sealed class CreateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<CreateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     public override void Configure()
     {
@@ -42,7 +43,7 @@ public sealed class CreateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : 
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var created = await _store.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(),
+        var created = await _authoring.CreateRuleSetAsync(new CreateDevWorkflowRuleSetCommand(Guid.NewGuid(),
                                           req.Name,
                                           req.Body,
                                           DevWorkflowContractMapper.ToScopeJson(req.Scope),
@@ -59,9 +60,9 @@ public sealed class CreateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : 
     }
 }
 
-public sealed class GetDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : Endpoint<DevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
+public sealed class GetDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<DevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     public override void Configure()
     {
@@ -74,7 +75,7 @@ public sealed class GetDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : End
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var ruleSet = await _store.GetRuleSetAsync(req.RuleSetId, ct).ConfigureAwait(false);
+        var ruleSet = await _authoring.GetRuleSetAsync(req.RuleSetId, ct).ConfigureAwait(false);
         await Send.OkAsync(ruleSet.ToResponse(), ct).ConfigureAwait(false);
     }
 }
@@ -87,9 +88,9 @@ public sealed class GetDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : End
 ///         and the hash is what says the current document is no longer that text.
 ///     </para>
 /// </summary>
-public sealed class UpdateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : Endpoint<UpdateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
+public sealed class UpdateDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<UpdateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     public override void Configure()
     {
@@ -104,7 +105,7 @@ public sealed class UpdateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : 
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var updated = await _store.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(req.RuleSetId,
+        var updated = await _authoring.UpdateRuleSetAsync(new UpdateDevWorkflowRuleSetCommand(req.RuleSetId,
                                           req.Version,
                                           req.Name,
                                           req.Body,
@@ -122,9 +123,9 @@ public sealed class UpdateDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : 
 ///     foreign key to a rule set, and what a node run needs from one — which document applied, at which text — it
 ///     copied onto its own row at materialization. The objective composer skips a document that is gone.
 /// </summary>
-public sealed class DeleteDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : Endpoint<DevWorkflowRuleSetRequest>
+public sealed class DeleteDevWorkflowRuleSetEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<DevWorkflowRuleSetRequest>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     public override void Configure()
     {
@@ -137,7 +138,7 @@ public sealed class DeleteDevWorkflowRuleSetEndpoint(IDevWorkflowStore store) : 
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await _store.DeleteRuleSetAsync(req.RuleSetId, ct).ConfigureAwait(false);
+        await _authoring.DeleteRuleSetAsync(req.RuleSetId, ct).ConfigureAwait(false);
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

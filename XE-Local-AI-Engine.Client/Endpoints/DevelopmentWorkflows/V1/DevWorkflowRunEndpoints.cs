@@ -4,13 +4,12 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
-public sealed class ListDevWorkflowRunsEndpoint(IDevWorkflowStore store) : Endpoint<ListDevWorkflowRunsRequest, ListDevWorkflowRunsResponse>
+public sealed class ListDevWorkflowRunsEndpoint(DevWorkflowRunQueryService runQueries) : Endpoint<ListDevWorkflowRunsRequest, ListDevWorkflowRunsResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
 
     public override void Configure()
     {
@@ -25,7 +24,7 @@ public sealed class ListDevWorkflowRunsEndpoint(IDevWorkflowStore store) : Endpo
 
         // Safe to parse rather than TryParse: the validator has already refused anything that is not a member.
         var status = req.Status is null ? (DevWorkflowRunStatus?)null : Enum.Parse<DevWorkflowRunStatus>(req.Status, ignoreCase: true);
-        var runs = await _store.ListRunSummariesAsync(req.WorkItemId, status, req.Limit, ct).ConfigureAwait(false);
+        var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, status, req.Limit, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListDevWorkflowRunsResponse([.. runs.Select(DevWorkflowContractMapper.ToResponse)]), ct).ConfigureAwait(false);
     }
 }
@@ -168,9 +167,9 @@ public sealed class CancelDevWorkflowRunEndpoint(IDevWorkflowRunService runs, De
 ///     pages; its sequences are strictly increasing but NOT contiguous, because the run's counter is shared with node
 ///     runs and artifacts.
 /// </summary>
-public sealed class ListDevWorkflowRunEventsEndpoint(IDevWorkflowStore store) : Endpoint<DevWorkflowRunEventFeedRequest, ListDevWorkflowRunEventsResponse>
+public sealed class ListDevWorkflowRunEventsEndpoint(DevWorkflowRunQueryService runQueries) : Endpoint<DevWorkflowRunEventFeedRequest, ListDevWorkflowRunEventsResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
 
     public override void Configure()
     {
@@ -185,10 +184,10 @@ public sealed class ListDevWorkflowRunEventsEndpoint(IDevWorkflowStore store) : 
 
         // The run is read first so an unknown one answers 404 rather than an empty page — a feed that pretends a
         // missing run is a quiet one is the shape a client cannot tell apart from "nothing happened yet".
-        _ = await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+        _ = await _runQueries.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
 
         // One over the limit, so "there is more" is observed rather than inferred from a full page.
-        var events = await _store.ListEventsAsync(req.RunId, req.SinceSeq, req.Limit + 1, ct).ConfigureAwait(false);
+        var events = await _runQueries.ListEventsAsync(req.RunId, req.SinceSeq, req.Limit + 1, ct).ConfigureAwait(false);
         var page = events.Take(req.Limit).Select(DevWorkflowContractMapper.ToResponse).ToList();
         await Send.OkAsync(new ListDevWorkflowRunEventsResponse(page,
                 DevWorkflowContractMapper.HighestSequence(page.Select(static item => item.Sequence)),

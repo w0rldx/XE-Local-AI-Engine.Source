@@ -84,7 +84,7 @@ public sealed class EndpointDependencyTests
     ///     sides, because a short name can collide across endpoint areas, and because a per-endpoint key would let an
     ///     already-listed endpoint acquire a SECOND forbidden dependency unnoticed. Sorted, one pair per line.
     ///     <para>
-    ///         44 pairs across 44 endpoint types today: 43 a persistence store and one an <c>AI.Agent</c> tool policy.
+    ///         26 pairs across 26 endpoint types today: 25 a persistence store and one an <c>AI.Agent</c> tool policy.
     ///         No concrete provider contract or options type is left on the list. The <c>AI.Agent</c> pair is a
     ///         dependency the rule's allow list does not name, caught only because a leaf outside the allow list is a
     ///         violation in its own right rather than something the forbid list has to have anticipated.
@@ -121,24 +121,6 @@ public sealed class EndpointDependencyTests
         "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.UpdateBenchmarkJudgePolicyEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
         "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.UpdateBenchmarkProjectEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
         "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.UpdateBenchmarkProjectFidelityEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.ArchiveDevWorkflowDefinitionEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.CreateDevWorkflowDefinitionEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.CreateDevWorkflowRuleSetEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.CreateDevWorkflowWorkItemEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.DeleteDevWorkflowRuleSetEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.GetDevWorkflowArtifactContentEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.GetDevWorkflowDefinitionEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.GetDevWorkflowRuleSetEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.GetDevWorkflowWorkItemEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.ListDevWorkflowArtifactsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.ListDevWorkflowDefinitionsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.ListDevWorkflowRuleSetsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.ListDevWorkflowRunEventsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.ListDevWorkflowRunsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.ListDevWorkflowWorkItemsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.UpdateDevWorkflowDefinitionEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.UpdateDevWorkflowRuleSetEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
-        "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.UpdateDevWorkflowWorkItemEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
         "XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.GetToolCatalogEndpoint|XE_Local_AI_Engine.AI.Agent.Tools.IToolApprovalPolicy",
     ];
 

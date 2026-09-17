@@ -10,10 +10,10 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>The definition picker's feed. Never loads a graph blob: the node count is a column, not a parse.</summary>
-public sealed class ListDevWorkflowDefinitionsEndpoint(IDevWorkflowStore store)
+public sealed class ListDevWorkflowDefinitionsEndpoint(DevWorkflowAuthoringService authoring)
     : Endpoint<ListDevWorkflowDefinitionsRequest, ListDevWorkflowDefinitionsResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     public override void Configure()
     {
@@ -25,7 +25,7 @@ public sealed class ListDevWorkflowDefinitionsEndpoint(IDevWorkflowStore store)
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var definitions = await _store.ListDefinitionsAsync(req.IncludeArchived, ct).ConfigureAwait(false);
+        var definitions = await _authoring.ListDefinitionsAsync(req.IncludeArchived, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListDevWorkflowDefinitionsResponse([.. definitions.Select(DevWorkflowContractMapper.ToResponse)]), ct).ConfigureAwait(false);
     }
 }
@@ -39,10 +39,10 @@ public sealed class ListDevWorkflowDefinitionsEndpoint(IDevWorkflowStore store)
 ///         every other domain refusal produces.
 ///     </para>
 /// </summary>
-public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store, IOptions<DevWorkflowOptions> options)
+public sealed class CreateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring, IOptions<DevWorkflowOptions> options)
     : Endpoint<CreateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
@@ -70,7 +70,7 @@ public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
 
         var graphJson = DevWorkflowContractMapper.ToGraphJson(req.Graph);
         var nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
-        var created = await _store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), req.Name, graphJson, nodeCount), ct)
+        var created = await _authoring.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), req.Name, graphJson, nodeCount), ct)
                                   .ConfigureAwait(false);
         await Send.CreatedAtAsync<GetDevWorkflowDefinitionEndpoint>(new
             {
@@ -81,9 +81,9 @@ public sealed class CreateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
     }
 }
 
-public sealed class GetDevWorkflowDefinitionEndpoint(IDevWorkflowStore store) : Endpoint<DevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
+public sealed class GetDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<DevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     public override void Configure()
     {
@@ -96,15 +96,15 @@ public sealed class GetDevWorkflowDefinitionEndpoint(IDevWorkflowStore store) : 
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var definition = await _store.GetDefinitionAsync(req.DefinitionId, ct).ConfigureAwait(false);
+        var definition = await _authoring.GetDefinitionAsync(req.DefinitionId, ct).ConfigureAwait(false);
         await Send.OkAsync(definition.ToResponse(), ct).ConfigureAwait(false);
     }
 }
 
-public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store, IOptions<DevWorkflowOptions> options)
+public sealed class UpdateDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring, IOptions<DevWorkflowOptions> options)
     : Endpoint<UpdateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
@@ -139,7 +139,7 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
             nodeCount = DevWorkflowGraphContract.ValidateAndCountNodes(graphJson, _options.MaxNodesPerDefinition);
         }
 
-        var updated = await _store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(req.DefinitionId, req.Version, req.Name, graphJson, nodeCount), ct)
+        var updated = await _authoring.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(req.DefinitionId, req.Version, req.Name, graphJson, nodeCount), ct)
                                   .ConfigureAwait(false);
         await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
     }
@@ -150,9 +150,9 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint(IDevWorkflowStore store,
 ///     cannot become permanently undeletable because a year-old run still references it. It disappears from the
 ///     picker and from the default list.
 /// </summary>
-public sealed class ArchiveDevWorkflowDefinitionEndpoint(IDevWorkflowStore store) : Endpoint<DevWorkflowDefinitionRequest>
+public sealed class ArchiveDevWorkflowDefinitionEndpoint(DevWorkflowAuthoringService authoring) : Endpoint<DevWorkflowDefinitionRequest>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowAuthoringService _authoring = authoring ?? throw new ArgumentNullException(nameof(authoring));
 
     public override void Configure()
     {
@@ -165,7 +165,7 @@ public sealed class ArchiveDevWorkflowDefinitionEndpoint(IDevWorkflowStore store
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        _ = await _store.ArchiveDefinitionAsync(req.DefinitionId, ct).ConfigureAwait(false);
+        _ = await _authoring.ArchiveDefinitionAsync(req.DefinitionId, ct).ConfigureAwait(false);
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

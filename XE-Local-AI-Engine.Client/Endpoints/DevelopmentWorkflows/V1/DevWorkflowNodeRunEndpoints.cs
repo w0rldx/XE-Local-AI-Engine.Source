@@ -40,9 +40,9 @@ public sealed class GetDevWorkflowNodeRunEndpoint(DevWorkflowRunComposer compose
 ///     superseded rows behind a flag would cost an endpoint to get them back; the client groups by
 ///     <c>lineageId</c> and reads <c>isLatest</c>, which is computed here rather than re-derived there.
 /// </summary>
-public sealed class ListDevWorkflowArtifactsEndpoint(IDevWorkflowStore store) : Endpoint<DevWorkflowArtifactFeedRequest, ListDevWorkflowArtifactsResponse>
+public sealed class ListDevWorkflowArtifactsEndpoint(DevWorkflowRunQueryService runQueries) : Endpoint<DevWorkflowArtifactFeedRequest, ListDevWorkflowArtifactsResponse>
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
 
     public override void Configure()
     {
@@ -56,9 +56,9 @@ public sealed class ListDevWorkflowArtifactsEndpoint(IDevWorkflowStore store) : 
         ArgumentNullException.ThrowIfNull(req);
 
         // The run is read first so an unknown one answers 404 rather than an empty page.
-        _ = await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
+        _ = await _runQueries.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
 
-        var artifacts = await _store.ListArtifactsAsync(req.RunId, req.SinceSeq, ct).ConfigureAwait(false);
+        var artifacts = await _runQueries.ListArtifactsAsync(req.RunId, req.SinceSeq, ct).ConfigureAwait(false);
         var items = artifacts.Select(DevWorkflowContractMapper.ToResponse).ToList();
         await Send.OkAsync(new ListDevWorkflowArtifactsResponse(items, DevWorkflowContractMapper.HighestSequence(items.Select(static item => item.Sequence))), ct)
                   .ConfigureAwait(false);
@@ -69,12 +69,12 @@ public sealed class ListDevWorkflowArtifactsEndpoint(IDevWorkflowStore store) : 
 ///     One artifact's bytes as JSON rather than a stream: a binary response would leave the generated SDK and need
 ///     hand-wiring on the client's HTTP layer for the one route that does not go through it.
 /// </summary>
-public sealed class GetDevWorkflowArtifactContentEndpoint(IDevWorkflowStore store, IDevWorkflowArtifactBlobStore blobs, IOptions<DevWorkflowOptions> options)
+public sealed class GetDevWorkflowArtifactContentEndpoint(DevWorkflowRunQueryService runQueries, IDevWorkflowArtifactBlobStore blobs, IOptions<DevWorkflowOptions> options)
     : Endpoint<DevWorkflowArtifactRequest, DevWorkflowArtifactContentResponse>
 {
     private readonly IDevWorkflowArtifactBlobStore _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
     private readonly DevWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevWorkflowRunQueryService _runQueries = runQueries ?? throw new ArgumentNullException(nameof(runQueries));
 
     public override void Configure()
     {
@@ -87,7 +87,7 @@ public sealed class GetDevWorkflowArtifactContentEndpoint(IDevWorkflowStore stor
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var artifact = await _store.GetArtifactAsync(req.ArtifactId, ct).ConfigureAwait(false);
+        var artifact = await _runQueries.GetArtifactAsync(req.ArtifactId, ct).ConfigureAwait(false);
         if (artifact.RunId != req.RunId || !artifact.IsValid)
         {
             // An artifact of another run — or one the node already marked invalid — reads as absent, so one run's

@@ -75,6 +75,11 @@ internal static class AddNodeDevWorkflowsExtensions
         builder.Services.AddScoped<DevWorkflowDevTaskExecutor>();
         builder.Services.AddScoped<IDevWorkflowRunService, DevWorkflowRunService>();
 
+        // Scoped because the store they front is: these two are the authoring and run-feed endpoints' only door onto
+        // IDevWorkflowStore under the endpoint-dependency rule, and they hold nothing of their own between calls.
+        builder.Services.AddScoped<DevWorkflowAuthoringService>();
+        builder.Services.AddScoped<DevWorkflowRunQueryService>();
+
         // A singleton, unlike the agent executor: the sandbox lane's slot count and its in-flight registry outlive a
         // tick and a scope, and a second instance would hand the same slots out twice.
         builder.Services.AddSingleton<DevWorkflowToolExecutor>();
