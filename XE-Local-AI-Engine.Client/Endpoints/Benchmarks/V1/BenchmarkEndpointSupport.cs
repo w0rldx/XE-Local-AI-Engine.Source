@@ -20,7 +20,7 @@ internal static class BenchmarkEndpointSupport
     ///     endpoint that returns the run detail shape reads it here: a mutation response that skipped it would render
     ///     as "not judged" for a run whose GET shows a full verdict.
     /// </summary>
-    public static async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(IBenchmarkStore store, BenchmarkRunRecord run, CancellationToken ct)
+    public static async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(BenchmarkRecordService store, BenchmarkRunRecord run, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(run);

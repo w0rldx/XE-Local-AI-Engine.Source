@@ -15,6 +15,10 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkStore, BenchmarkStore>();
         builder.Services.AddScoped<IBenchmarkInstalledModelLeaseProvider, BenchmarkInstalledModelLeaseProvider>();
         builder.Services.AddScoped<IBenchmarkProjectService, BenchmarkProjectService>();
+
+        // Scoped because the store it fronts is: this is the Benchmarks endpoints' only door onto IBenchmarkStore
+        // under the endpoint-dependency rule, and it holds nothing of its own between calls.
+        builder.Services.AddScoped<BenchmarkRecordService>();
         builder.Services.AddScoped<IBenchmarkTaskItemService, BenchmarkTaskItemService>();
         builder.Services.AddScoped<IBenchmarkExportFactsResolver, BenchmarkExportFactsResolver>();
         builder.Services.AddScoped<IBenchmarkExportQuery, BenchmarkExportQuery>();

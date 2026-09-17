@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-public sealed class ListBenchmarkRunsEndpoint(IBenchmarkStore store)
+public sealed class ListBenchmarkRunsEndpoint(BenchmarkRecordService store)
     : Endpoint<ListBenchmarkRunsRequest, ListBenchmarkRunsResponse>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -208,10 +208,10 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService bat
     }
 }
 
-public sealed class GetBenchmarkRunEndpoint(IBenchmarkStore store)
+public sealed class GetBenchmarkRunEndpoint(BenchmarkRecordService store)
     : Endpoint<BenchmarkRunRouteRequest, BenchmarkRunDetailResponse>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -236,10 +236,10 @@ public sealed class GetBenchmarkRunEndpoint(IBenchmarkStore store)
     }
 }
 
-public sealed class DeleteBenchmarkRunEndpoint(IBenchmarkStore store)
+public sealed class DeleteBenchmarkRunEndpoint(BenchmarkRecordService store)
     : Endpoint<DeleteBenchmarkRunRequest>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -256,11 +256,11 @@ public sealed class DeleteBenchmarkRunEndpoint(IBenchmarkStore store)
     }
 }
 
-public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation, IBenchmarkStore store)
+public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService cancellation, BenchmarkRecordService store)
     : Endpoint<CancelBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
     private readonly IBenchmarkCancellationService _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -279,10 +279,10 @@ public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService can
     }
 }
 
-public sealed class ScoreBenchmarkRunEndpoint(IBenchmarkStore store)
+public sealed class ScoreBenchmarkRunEndpoint(BenchmarkRecordService store)
     : Endpoint<ScoreBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -311,10 +311,10 @@ public sealed class ScoreBenchmarkRunEndpoint(IBenchmarkStore store)
 }
 
 /// <summary>Clears the operator override, so the run ranks by its judge score again (or not at all).</summary>
-public sealed class ClearBenchmarkRunScoreEndpoint(IBenchmarkStore store)
+public sealed class ClearBenchmarkRunScoreEndpoint(BenchmarkRecordService store)
     : Endpoint<ClearBenchmarkRunScoreRequest, BenchmarkRunDetailResponse>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -334,11 +334,11 @@ public sealed class ClearBenchmarkRunScoreEndpoint(IBenchmarkStore store)
 }
 
 /// <summary>Judges one succeeded run again under the project's current policy.</summary>
-public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService projects, IBenchmarkStore store)
+public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
     : Endpoint<RejudgeBenchmarkRunRequest, BenchmarkRunDetailResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {

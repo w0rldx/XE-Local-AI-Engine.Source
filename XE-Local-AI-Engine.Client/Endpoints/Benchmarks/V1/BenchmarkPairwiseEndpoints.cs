@@ -12,11 +12,11 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     route, deliberately: splitting them would let a client render a strength beside a verdict set that did not
 ///     produce it, and nothing on the wire would say so.
 /// </summary>
-public sealed class ListBenchmarkComparisonsEndpoint(IBenchmarkStore store)
+public sealed class ListBenchmarkComparisonsEndpoint(BenchmarkRecordService store)
     : Endpoint<ListBenchmarkComparisonsRequest, ListBenchmarkComparisonsResponse>
 {
     private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -111,11 +111,11 @@ public sealed class ListBenchmarkComparisonsEndpoint(IBenchmarkStore store)
 ///     What pairwise judging this project will cost, answered BEFORE the operator saves the mode. Pairwise is
 ///     quadratic in the cohort — twelve runs is 132 judge calls — so the number goes in front of the decision.
 /// </summary>
-public sealed class GetBenchmarkPairwiseEstimateEndpoint(IBenchmarkStore store, IBenchmarkPairwisePlanner planner)
+public sealed class GetBenchmarkPairwiseEstimateEndpoint(BenchmarkRecordService store, IBenchmarkPairwisePlanner planner)
     : Endpoint<GetBenchmarkPairwiseEstimateRequest, GetBenchmarkPairwiseEstimateResponse>
 {
     private readonly IBenchmarkPairwisePlanner _planner = planner ?? throw new ArgumentNullException(nameof(planner));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {

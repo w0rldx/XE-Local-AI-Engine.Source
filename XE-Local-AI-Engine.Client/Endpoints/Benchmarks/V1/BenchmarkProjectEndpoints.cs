@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-public sealed class ListBenchmarkProjectsEndpoint(IBenchmarkStore store)
+public sealed class ListBenchmarkProjectsEndpoint(BenchmarkRecordService store)
     : EndpointWithoutRequest<ListBenchmarkProjectsResponse>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -35,11 +35,11 @@ public sealed class ListBenchmarkProjectsEndpoint(IBenchmarkStore store)
     }
 }
 
-public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, IBenchmarkStore store)
+public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
     : Endpoint<BenchmarkProjectMutationRequest, BenchmarkProjectDetailResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -61,10 +61,10 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
     }
 }
 
-public sealed class GetBenchmarkProjectEndpoint(IBenchmarkStore store)
+public sealed class GetBenchmarkProjectEndpoint(BenchmarkRecordService store)
     : Endpoint<BenchmarkProjectRouteRequest, BenchmarkProjectDetailResponse>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -87,11 +87,11 @@ public sealed class GetBenchmarkProjectEndpoint(IBenchmarkStore store)
     }
 }
 
-public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, IBenchmarkStore store)
+public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
     : Endpoint<UpdateBenchmarkProjectRequest, BenchmarkProjectDetailResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -110,10 +110,10 @@ public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
     }
 }
 
-public sealed class DeleteBenchmarkProjectEndpoint(IBenchmarkStore store)
+public sealed class DeleteBenchmarkProjectEndpoint(BenchmarkRecordService store)
     : Endpoint<DeleteBenchmarkProjectRequest>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -135,11 +135,11 @@ public sealed class DeleteBenchmarkProjectEndpoint(IBenchmarkStore store)
 ///     can still turn, and turning it re-scores every run — so it is its own resource with its own confirmation, never
 ///     a field that rides along on the project PUT.
 /// </summary>
-public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService projects, IBenchmarkStore store)
+public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
     : Endpoint<UpdateBenchmarkJudgePolicyRequest, BenchmarkJudgeChangeResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -164,7 +164,7 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
         await Send.OkAsync(await ToResponseAsync(_store, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 
-    internal static async Task<BenchmarkJudgeChangeResponse> ToResponseAsync(IBenchmarkStore store,
+    internal static async Task<BenchmarkJudgeChangeResponse> ToResponseAsync(BenchmarkRecordService store,
         BenchmarkJudgePolicyChange change,
         CancellationToken ct)
     {
@@ -179,11 +179,11 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
 }
 
 /// <summary>Moves the project's rank cohort to the current judge runtime by re-judging every succeeded run.</summary>
-public sealed class RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService projects, IBenchmarkStore store)
+public sealed class RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService projects, BenchmarkRecordService store)
     : Endpoint<RejudgeBenchmarkProjectRequest, BenchmarkJudgeChangeResponse>
 {
     private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -226,7 +226,7 @@ public sealed class GetBenchmarkRubricPresetsEndpoint : EndpointWithoutRequest<B
 /// </summary>
 internal static class BenchmarkProjectDetailProjection
 {
-    public static async Task<BenchmarkProjectDetailResponse> ReadAsync(IBenchmarkStore store,
+    public static async Task<BenchmarkProjectDetailResponse> ReadAsync(BenchmarkRecordService store,
         BenchmarkProjectRecord project,
         int runCount,
         CancellationToken ct)
@@ -246,7 +246,7 @@ internal static class BenchmarkProjectDetailProjection
 /// <summary>Reads and decrypts a project's current judge policy for the wire.</summary>
 internal static class BenchmarkJudgePolicyProjection
 {
-    public static async Task<BenchmarkJudgePolicyResponse> ReadAsync(IBenchmarkStore store, Guid projectId, CancellationToken ct)
+    public static async Task<BenchmarkJudgePolicyResponse> ReadAsync(BenchmarkRecordService store, Guid projectId, CancellationToken ct)
     {
         var revision = await store.GetCurrentJudgePolicyRevisionAsync(projectId, ct).ConfigureAwait(false);
         var policy = revision?.PolicyJson is { } payload && !payload.IsEmpty

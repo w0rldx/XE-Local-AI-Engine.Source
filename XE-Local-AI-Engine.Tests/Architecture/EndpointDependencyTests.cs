@@ -84,10 +84,10 @@ public sealed class EndpointDependencyTests
     ///     sides, because a short name can collide across endpoint areas, and because a per-endpoint key would let an
     ///     already-listed endpoint acquire a SECOND forbidden dependency unnoticed. Sorted, one pair per line.
     ///     <para>
-    ///         26 pairs across 26 endpoint types today: 25 a persistence store and one an <c>AI.Agent</c> tool policy.
-    ///         No concrete provider contract or options type is left on the list. The <c>AI.Agent</c> pair is a
-    ///         dependency the rule's allow list does not name, caught only because a leaf outside the allow list is a
-    ///         violation in its own right rather than something the forbid list has to have anticipated.
+    ///         One pair across one endpoint type today: an <c>AI.Agent</c> tool policy. No persistence store, concrete
+    ///         provider contract or options type is left on the list. That last pair is a dependency the rule's allow
+    ///         list does not name, caught only because a leaf outside the allow list is a violation in its own right
+    ///         rather than something the forbid list has to have anticipated.
     ///     </para>
     ///     <para>
     ///         Slice S6 deletes entries from this list as it migrates each area behind a
@@ -96,31 +96,6 @@ public sealed class EndpointDependencyTests
     /// </summary>
     private static readonly string[] AllowedViolations =
     [
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.CancelBenchmarkRunEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ClearBenchmarkFidelityCacheEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ClearBenchmarkRunScoreEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.CompareBenchmarkCellsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.CreateBenchmarkProjectEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.DeleteBenchmarkProjectEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.DeleteBenchmarkRunEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.GetBenchmarkKldDiskEstimateEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.GetBenchmarkPairwiseEstimateEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.GetBenchmarkProjectEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.GetBenchmarkRunEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ListBenchmarkCellsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ListBenchmarkComparisonsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ListBenchmarkFidelityAttemptsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ListBenchmarkProjectsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ListBenchmarkRunsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ListBenchmarkTaskItemsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.RejudgeBenchmarkProjectEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.RejudgeBenchmarkRunEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ReorderBenchmarkTaskItemsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.ScoreBenchmarkRunEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.StartBenchmarkRunFidelityEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.UpdateBenchmarkJudgePolicyEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.UpdateBenchmarkProjectEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.UpdateBenchmarkProjectFidelityEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IBenchmarkStore",
         "XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.GetToolCatalogEndpoint|XE_Local_AI_Engine.AI.Agent.Tools.IToolApprovalPolicy",
     ];
 

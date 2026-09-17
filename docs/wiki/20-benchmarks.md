@@ -462,6 +462,7 @@ Rules the UI is built on, all of them consequences of the backend contracts abov
 | Executors, freeze, planner, fitter, bootstrap, NIAH generator, contracts | `XE-Local-AI-Engine.Client.Application/Services/Benchmarks/` |
 | Scheduled matrix handler | `…Client.Application/Services/Scheduler/Handlers/RunBenchmarkBatchHandler.cs` |
 | Training hand-off | `…Client.Application/Services/Training/Comparison/ComparisonBenchmarkHandoffService.cs` |
+| Endpoints' door onto the store (endpoint-dependency rule) | `XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkRecordService.cs` — pass-through over the seventeen `IBenchmarkStore` members the project, run, task-item, cell, fidelity and pairwise endpoints read; the twenty-five of them inject it, never the store. Domain writes stay on `IBenchmarkProjectService`, `IBenchmarkTaskItemService`, `IBenchmarkRunFreezeService`, `IBenchmarkRunBatchService` and `IBenchmarkCancellationService` |
 | Entities, configurations, hashing, store | `XE-Local-AI-Engine.Client.Persistence/{Entities,Configurations,Implementation,Stores}/` |
 | Endpoints, DTOs, mappers | `XE-Local-AI-Engine.Client/Endpoints/Benchmarks/V1/` |
 | Routes | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`LocalApiRoutes.Benchmarks`; the hand-off is `LocalApiRoutes.Training.ComparisonBenchmark`) |

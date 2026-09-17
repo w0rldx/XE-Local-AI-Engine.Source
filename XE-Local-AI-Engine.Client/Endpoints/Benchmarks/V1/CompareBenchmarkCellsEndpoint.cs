@@ -12,13 +12,13 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     difference is a read-time projection over the cell table — nothing here is stored, so it is always computed
 ///     from the scores the project holds right now.
 /// </summary>
-public sealed class CompareBenchmarkCellsEndpoint(IBenchmarkStore store)
+public sealed class CompareBenchmarkCellsEndpoint(BenchmarkRecordService store)
     : Endpoint<CompareBenchmarkCellsRequest, CompareBenchmarkCellsResponse>
 {
     private const int MinimumCells = 2;
     private const int MaximumCells = 6;
 
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {

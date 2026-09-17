@@ -12,11 +12,11 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     because each write recomputes the project's item-set hash — and a moved set hash resets the rank cohort, which
 ///     is not something a field could express.
 /// </summary>
-public sealed class ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, IBenchmarkStore store)
+public sealed class ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService store)
     : Endpoint<BenchmarkProjectRouteRequest, ListBenchmarkTaskItemsResponse>
 {
     private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
@@ -104,11 +104,11 @@ public sealed class DeleteBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService it
 ///     Renumbers the whole item list at once. Not a revision bump and not a cohort reset: the index is a display
 ///     position that no hash carries, so a drag-and-drop must not unrank a completed suite.
 /// </summary>
-public sealed class ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, IBenchmarkStore store)
+public sealed class ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService store)
     : Endpoint<ReorderBenchmarkTaskItemsRequest, ListBenchmarkTaskItemsResponse>
 {
     private readonly IBenchmarkTaskItemService _items = items ?? throw new ArgumentNullException(nameof(items));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {

@@ -5,15 +5,16 @@ using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
 ///     The project's measurement cells. A cell is what ranks, so a comparison reads this shape rather than the run
 ///     listing: the runs of one cell are its answers, and the items MISSING from it are why it does not rank.
 /// </summary>
-public sealed class ListBenchmarkCellsEndpoint(IBenchmarkStore store)
+public sealed class ListBenchmarkCellsEndpoint(BenchmarkRecordService store)
     : Endpoint<ListBenchmarkCellsRequest, ListBenchmarkCellsResponse>
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly BenchmarkRecordService _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public override void Configure()
     {
