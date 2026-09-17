@@ -85,7 +85,7 @@ public sealed class AgentSkillServiceTests
         // sub-agent spawn path both perform. Anything else is the same defect wearing a different hat.
         if (serviceAccepted)
         {
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
             _ = new AgentInlineSkill(candidate, "desc", "body");
 #pragma warning restore MAAI001
         }
@@ -130,7 +130,7 @@ public sealed class AgentSkillServiceTests
     [Test]
     public void AgentSkillService_CompatibilityCap_DoesNotExceedWhatMafAccepts()
     {
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
         AssertEx.True(AgentSkillFrontmatter.ValidateCompatibility(new string(c: 'a', count: 500), out _),
             "A compatibility value at our cap must still satisfy MAF's own validator.");
         AssertEx.False(AgentSkillFrontmatter.ValidateCompatibility(new string(c: 'a', count: 501), out _),

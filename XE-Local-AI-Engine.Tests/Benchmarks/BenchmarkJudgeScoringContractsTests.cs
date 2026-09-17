@@ -51,6 +51,21 @@ public sealed class BenchmarkJudgeScoringContractsTests
         AssertEx.Equal(0, result.Score);
     }
 
+    /// <summary>
+    ///     The judge's answer failing to parse is reported to the operator as one sentence; the reader's own exception
+    ///     is the only thing that says where the model's output stopped being JSON, so the wrap keeps it as the inner
+    ///     exception.
+    /// </summary>
+    [Test]
+    public void Parser_WhenTheJudgeAnswerIsNotJson_KeepsTheReaderFailureAsTheInnerException()
+    {
+        var failure = AssertEx.Throws<BenchmarkExecutionException>(
+            () => BenchmarkJudgeResultParser.Parse("not json at all", Rubric(("alpha", 1)), "v1:fingerprint"));
+
+        var inner = AssertEx.NotNull(failure.InnerException, "The JSON reader's own failure must survive the wrap.");
+        AssertEx.True(inner is JsonException, $"Expected the inner exception to be a JsonException, got {inner.GetType().Name}.");
+    }
+
     [Test]
     public void Parser_RejectsEveryMalformedShape()
     {

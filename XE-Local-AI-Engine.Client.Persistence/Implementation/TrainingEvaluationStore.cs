@@ -483,14 +483,14 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         }
         catch (DbUpdateConcurrencyException exception)
         {
-            throw new TrainingConflictException("VersionConflict")
+            throw new TrainingConflictException("VersionConflict", exception)
             {
                 Source = exception.Source
             };
         }
         catch (DbUpdateException exception) when (exception.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true)
         {
-            throw new TrainingConflictException("DuplicateWork")
+            throw new TrainingConflictException("DuplicateWork", exception)
             {
                 Source = exception.Source
             };

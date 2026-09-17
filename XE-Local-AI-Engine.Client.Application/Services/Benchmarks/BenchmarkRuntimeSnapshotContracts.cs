@@ -282,7 +282,7 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         }
         catch (ArgumentException exception)
         {
-            throw new BenchmarkSnapshotException("The frozen llama.cpp runtime configuration is invalid.")
+            throw new BenchmarkSnapshotException("The frozen llama.cpp runtime configuration is invalid.", exception)
             {
                 Source = exception.Source
             };
@@ -334,4 +334,15 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
     }
 }
 
-public sealed class BenchmarkSnapshotException(string message) : InvalidOperationException(message);
+public sealed class BenchmarkSnapshotException : InvalidOperationException
+{
+    public BenchmarkSnapshotException(string message)
+        : base(message)
+    {
+    }
+
+    public BenchmarkSnapshotException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}

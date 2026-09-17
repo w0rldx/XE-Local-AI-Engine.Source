@@ -245,7 +245,7 @@ public sealed class ToolRelevanceChatClientTests
     [Test]
     public async Task GetResponseAsync_AlwaysIncludesTheMafSkillTools()
     {
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
         string[] skills = [AgentSkillsProvider.LoadSkillToolName, AgentSkillsProvider.ReadSkillResourceToolName, AgentSkillsProvider.RunSkillScriptToolName];
 #pragma warning restore MAAI001
         var (tools, _) = BuildArray([.. FillerNames(20), .. skills]);

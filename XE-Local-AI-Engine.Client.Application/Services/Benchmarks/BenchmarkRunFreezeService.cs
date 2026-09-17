@@ -428,7 +428,7 @@ public sealed class BenchmarkRunFreezeService(
         catch (InstalledGgufSnapshotException exception)
         {
             _logger.LogWarning(exception, "Benchmark freeze: installed model {ModelName} could not be verified.", modelName);
-            throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.");
+            throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.", exception);
         }
     }
 

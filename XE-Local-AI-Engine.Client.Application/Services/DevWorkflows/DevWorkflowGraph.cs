@@ -307,7 +307,7 @@ internal sealed class DevWorkflowGraph
         }
         catch (JsonException exception)
         {
-            throw new DevWorkflowValidationException($"The workflow graph is not valid JSON: {exception.Message}");
+            throw new DevWorkflowValidationException($"The workflow graph is not valid JSON: {exception.Message}", exception);
         }
     }
 
@@ -462,7 +462,7 @@ internal sealed class DevWorkflowGraph
         }
         catch (DevWorkflowValidationException exception)
         {
-            throw new DevWorkflowValidationException($"{exception.Message.TrimEnd('.')} (invariant GRAPH-C4-4).");
+            throw new DevWorkflowValidationException($"{exception.Message.TrimEnd('.')} (invariant GRAPH-C4-4).", exception);
         }
 
         if (maxLoopIterations is not null && retryTarget is null)

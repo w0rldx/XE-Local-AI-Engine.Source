@@ -180,13 +180,43 @@ public sealed record ToolMockRecord(
     long CreatedAtUtc,
     long UpdatedAtUtc);
 
-public abstract class TrainingStoreException(string message) : InvalidOperationException(message);
+public abstract class TrainingStoreException : InvalidOperationException
+{
+    protected TrainingStoreException(string message)
+        : base(message)
+    {
+    }
+
+    protected TrainingStoreException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
 
 public sealed class TrainingNotFoundException(string message) : TrainingStoreException(message);
 
-public sealed class TrainingValidationException(string message) : TrainingStoreException(message);
-
-public sealed class TrainingConflictException(string code) : TrainingStoreException(code)
+public sealed class TrainingValidationException : TrainingStoreException
 {
-    public string Code { get; } = code;
+    public TrainingValidationException(string message)
+        : base(message)
+    {
+    }
+
+    public TrainingValidationException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
+public sealed class TrainingConflictException : TrainingStoreException
+{
+    public TrainingConflictException(string code)
+        : base(code) =>
+        Code = code;
+
+    public TrainingConflictException(string code, Exception innerException)
+        : base(code, innerException) =>
+        Code = code;
+
+    public string Code { get; }
 }

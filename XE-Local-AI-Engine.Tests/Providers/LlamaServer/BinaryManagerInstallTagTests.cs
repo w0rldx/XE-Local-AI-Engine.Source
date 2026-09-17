@@ -4,11 +4,13 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     <see cref="LlamaCppBinaryManager.InstallTagAsync" />: a digest-matched download installs into the versioned dir,
@@ -50,13 +52,10 @@ public sealed class BinaryManagerInstallTagTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task InstallTag_AndSourceAdoption_SerializeRecordMutationWithSourceWinningLast()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var cache = new TempDir();
         var archive = BuildExecutableTarGz();
         using var handler = new GatedHandler(archive);
@@ -99,13 +98,9 @@ public sealed class BinaryManagerInstallTagTests
     ///     re-checked under it immediately before the write.
     /// </summary>
     [Test]
+    [ExcludeOn(OS.Windows)]
     public async Task InstallTag_WhenSourceRecordAppearsDuringDownload_RefusesTheWrite()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var cache = new TempDir();
         var archive = BuildExecutableTarGz();
         using var handler = new GatedHandler(archive);
@@ -133,15 +128,11 @@ public sealed class BinaryManagerInstallTagTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
     public async Task InstallTag_WhenDigestMatches_AtomicallyInstallsAndWritesState()
     {
         // The smoke test spawns the extracted llama-server (here a POSIX shell stub). On Windows the stub is not
         // executable, so the spawn semantics differ — exercise the install+state contract on POSIX hosts only.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var cache = new TempDir();
         var archive = BuildExecutableTarGz();
         var digest = Sha256Hex(archive);
@@ -295,15 +286,11 @@ public sealed class BinaryManagerInstallTagTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
     public async Task InstallTag_WhenSmokeTestFails_RemovesExtractedVariantDir_NoState()
     {
         // POSIX only: the smoke test spawns the extracted server. Here the extracted "server" exits non-zero, failing
         // the self-check; the just-extracted variant dir must be removed so a later resolve can't serve it unverified.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var cache = new TempDir();
         var archive = BuildFailingServerTarGz();
         var digest = Sha256Hex(archive);

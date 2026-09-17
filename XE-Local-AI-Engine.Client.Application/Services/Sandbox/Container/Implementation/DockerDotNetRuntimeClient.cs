@@ -715,7 +715,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 throw new ContainerPolicyException(ContainerPolicyException.ForeignNetworkReason,
                     $"The network name '{specification.Name}' is in use by a foreign container network "
                     + $"(id '{existing.ID}', driver '{existing.Driver}'). It was not created by this application "
-                    + "instance, so it is not reused.");
+                    + "instance, so it is not reused.", apiException);
             }
 
             return existing.ID;

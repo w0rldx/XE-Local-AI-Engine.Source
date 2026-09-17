@@ -374,7 +374,7 @@ public sealed class BenchmarkJudgeExecutor(
         {
             // Fail the attempt rather than judge under the policy's configuration: silently ignoring the override
             // would grade this item against another item's expected answer and call the result a score.
-            throw new BenchmarkExecutionException($"The task item's verifier override is not valid JSON: {exception.Message}")
+            throw new BenchmarkExecutionException($"The task item's verifier override is not valid JSON: {exception.Message}", exception)
             {
                 Source = exception.Source
             };

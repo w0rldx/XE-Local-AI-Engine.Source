@@ -49,4 +49,15 @@ public sealed class InstalledModelProviderMapSupersededException()
 ///     tests freeze that graph), and because 500 is the wrong answer for a request that was understood perfectly and
 ///     simply names the wrong lifecycle: external models are removed by unregistering them on their connection.
 /// </remarks>
-public sealed class ModelOperationNotSupportedByProviderException(string message) : InvalidOperationException(message);
+public sealed class ModelOperationNotSupportedByProviderException : InvalidOperationException
+{
+    public ModelOperationNotSupportedByProviderException(string message)
+        : base(message)
+    {
+    }
+
+    public ModelOperationNotSupportedByProviderException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}

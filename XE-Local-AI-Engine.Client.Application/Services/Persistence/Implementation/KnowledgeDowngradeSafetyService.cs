@@ -229,7 +229,7 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         try
         {
             await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-#pragma warning disable CA2100, S2077
+#pragma warning disable CA2100, S2077 // SQLite cannot parameterize VACUUM INTO; the destination path is quote-escaped above.
             command.CommandText = $"VACUUM INTO '{escapedPath}';";
 #pragma warning restore CA2100, S2077
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

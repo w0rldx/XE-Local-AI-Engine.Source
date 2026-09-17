@@ -193,4 +193,6 @@ internal readonly record struct DevelopmentConfinedPath(bool IsAccepted, string 
 public class DevelopmentWorkspaceSecurityException : InvalidOperationException
 {
     public DevelopmentWorkspaceSecurityException(string message) : base(message) { }
+
+    public DevelopmentWorkspaceSecurityException(string message, Exception innerException) : base(message, innerException) { }
 }

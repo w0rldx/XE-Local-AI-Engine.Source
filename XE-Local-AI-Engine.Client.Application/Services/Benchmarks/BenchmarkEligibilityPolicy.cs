@@ -39,7 +39,18 @@ public sealed class BenchmarkEligibilityPolicy : IBenchmarkEligibilityPolicy
     }
 }
 
-public sealed class BenchmarkEligibilityException(string message) : InvalidOperationException(message);
+public sealed class BenchmarkEligibilityException : InvalidOperationException
+{
+    public BenchmarkEligibilityException(string message)
+        : base(message)
+    {
+    }
+
+    public BenchmarkEligibilityException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
 
 internal static class BenchmarkModelEligibility
 {

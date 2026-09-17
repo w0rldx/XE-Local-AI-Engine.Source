@@ -179,7 +179,7 @@ internal static class BenchmarkExclusiveSpawn
                 {
                     // The refusal's own sentence is the SKIP wording ("Retry when the model is idle"), which reads as
                     // advice on a row that is now terminal. The typed fields say the same thing as an outcome.
-                    throw new BenchmarkExecutionException($"{refusal.ModelName} ({refusal.Role}) was still in use after {budget.Budget.TotalSeconds:0} s; the benchmark did not run.");
+                    throw new BenchmarkExecutionException($"{refusal.ModelName} ({refusal.Role}) was still in use after {budget.Budget.TotalSeconds:0} s; the benchmark did not run.", refusal);
                 }
             }
 

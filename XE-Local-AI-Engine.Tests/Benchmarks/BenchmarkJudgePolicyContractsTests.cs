@@ -385,6 +385,20 @@ public sealed class BenchmarkJudgePolicyContractsTests
         AssertEx.True(BenchmarkJudgePolicyValidator.VersionsAreCurrent(Policy(BenchmarkJudgeRubricDefaults.Default())));
     }
 
+    /// <summary>
+    ///     A stored policy that no longer reads is an operator-facing refusal, but the reader's own exception is the
+    ///     only thing that says which byte broke it — so the wrap keeps it as the inner exception.
+    /// </summary>
+    [Test]
+    public void DeserializePolicy_WhenTheStoredBytesAreNotJson_KeepsTheReaderFailureAsTheInnerException()
+    {
+        var refusal = AssertEx.Throws<BenchmarkSnapshotException>(
+            () => BenchmarkJudgeSerialization.DeserializePolicy("not json at all"u8));
+
+        var inner = AssertEx.NotNull(refusal.InnerException, "The JSON reader's own failure must survive the wrap.");
+        AssertEx.True(inner is JsonException, $"Expected the inner exception to be a JsonException, got {inner.GetType().Name}.");
+    }
+
     [Test]
     public void DeserializePolicy_ForAStoredOlderPromptVersion_RoundTripsItVerbatim()
     {

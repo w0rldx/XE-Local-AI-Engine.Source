@@ -197,6 +197,20 @@ public sealed class BenchmarkNiahGeneratorTests
         _ = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahCase.TryRead(ItemCarrying(BenchmarkTaskItemKinds.NiahCase, null)));
     }
 
+    /// <summary>
+    ///     The refusal names the case; only the reader's exception says where the stored parameters stopped being
+    ///     readable, so the wrap keeps it as the inner exception.
+    /// </summary>
+    [Test]
+    public void TryRead_WhenTheStoredParametersAreNotJson_KeepsTheReaderFailureAsTheInnerException()
+    {
+        var refusal = AssertEx.Throws<BenchmarkValidationException>(
+            () => BenchmarkNiahCase.TryRead(ItemCarrying(BenchmarkTaskItemKinds.NiahCase, "not json at all"u8.ToArray())));
+
+        var inner = AssertEx.NotNull(refusal.InnerException, "The JSON reader's own failure must survive the wrap.");
+        AssertEx.True(inner is JsonException, $"Expected the inner exception to be a JsonException, got {inner.GetType().Name}.");
+    }
+
     private static BenchmarkJudgeRubricCriterionV1 ExactCriterionFrom(string expectedAnswer)
     {
         var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(BenchmarkNiahGenerator.VerifierConfigJson(BenchmarkNiahGenerator.DefaultCriterionId, expectedAnswer))!;

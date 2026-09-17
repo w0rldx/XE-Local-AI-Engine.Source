@@ -89,7 +89,7 @@ public sealed class DatasetDefinitionService(
         }
         catch (JsonException exception)
         {
-            throw new TrainingValidationException($"The dataset definition body is not valid JSON: {exception.Message}");
+            throw new TrainingValidationException($"The dataset definition body is not valid JSON: {exception.Message}", exception);
         }
     }
 

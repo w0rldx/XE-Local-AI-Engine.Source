@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using System.Reflection;
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
@@ -899,6 +900,19 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"allowUngatedWrites":"true","nodes":[{"nodeKey":"a","nodeType":"Agent"}],"edges":[]}""", "must be true or false")]
     public void Parse_RejectsAGraphItCannotRoute(string json, string expectedMessage) =>
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, expectedMessage);
+
+    /// <summary>
+    ///     The refusal's own sentence names the rule; only the reader's exception says where in the document parsing
+    ///     stopped, so the wrap keeps it as the inner exception rather than collapsing the chain to one sentence.
+    /// </summary>
+    [Test]
+    public void Parse_WhenTheDocumentIsNotJson_KeepsTheReaderFailureAsTheInnerException()
+    {
+        var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse("not json at all"));
+
+        var inner = AssertEx.NotNull(refusal.InnerException, "The JSON reader's own failure must survive the wrap.");
+        AssertEx.True(inner is JsonException, $"Expected the inner exception to be a JsonException, got {inner.GetType().Name}.");
+    }
 
     /// <summary>
     ///     Every <c>GRAPH-C4-4</c> parse refusal names the rule, the shared number parsers' own complaints included —

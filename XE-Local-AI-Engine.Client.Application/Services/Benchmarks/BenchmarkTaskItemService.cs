@@ -116,7 +116,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         }
         catch (JsonException exception)
         {
-            throw new BenchmarkValidationException($"The stored task-item payload is invalid: {exception.Message}");
+            throw new BenchmarkValidationException($"The stored task-item payload is invalid: {exception.Message}", exception);
         }
     }
 
@@ -255,7 +255,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
             catch (BenchmarkJudgePolicyValidationException exception)
             {
                 throw new BenchmarkValidationException(
-                    $"The verifier override for criterion '{criterionId}' is not a valid '{BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind)}' configuration: {exception.Message}")
+                    $"The verifier override for criterion '{criterionId}' is not a valid '{BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind)}' configuration: {exception.Message}", exception)
                 {
                     Source = exception.Source
                 };
@@ -301,7 +301,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         }
         catch (JsonException exception)
         {
-            throw new BenchmarkValidationException($"The long-context probe configuration is invalid: {exception.Message}");
+            throw new BenchmarkValidationException($"The long-context probe configuration is invalid: {exception.Message}", exception);
         }
 
         if (config is null)

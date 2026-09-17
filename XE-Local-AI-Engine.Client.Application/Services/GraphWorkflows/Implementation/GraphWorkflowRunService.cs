@@ -205,7 +205,7 @@ internal sealed class GraphWorkflowRunService(
             // Unreachable while the payload cap stays strictly under the envelope budget, and kept because that is a
             // relation between two options rather than a fact: an operator's oversized answer is their 400 to fix, not
             // a node failure they cannot see the cause of.
-            throw new GraphWorkflowValidationException(exception.Message);
+            throw new GraphWorkflowValidationException(exception.Message, exception);
         }
 
         // 7. ONE conditional write: the status move, the decision columns, the output and the gate.decided event. It

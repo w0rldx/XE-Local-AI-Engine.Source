@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
@@ -9,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
+using OS = TUnit.Core.Enums.OS;
 
 public sealed class CloudCredentialStoreTests : IDisposable
 {
@@ -50,13 +52,10 @@ public sealed class CloudCredentialStoreTests : IDisposable
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task SaveAsync_WhenRunningOnUnix_SetsCredentialFileModeToUserReadWrite()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-        {
-            return;
-        }
-
         using var store = CreateStore();
 
         await store.SaveAsync(CreateCredentials());
@@ -75,13 +74,10 @@ public sealed class CloudCredentialStoreTests : IDisposable
     ///     </para>
     /// </summary>
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task SaveAsync_WhenCredentialFileWasLeftWorldReadable_NarrowsItBackToUserReadWrite()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-        {
-            return;
-        }
-
         using var store = CreateStore();
         await store.SaveAsync(CreateCredentials());
 

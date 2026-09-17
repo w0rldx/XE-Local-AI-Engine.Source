@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
@@ -8,6 +9,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Verifies the ported <see cref="CodexTokenStore" /> persists the OAuth session encrypted at rest, applies
@@ -56,13 +58,10 @@ public sealed class CodexTokenStoreTests : IDisposable
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task SaveAsync_WhenRunningOnUnix_SetsTokenFileModeToUserReadWrite()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-        {
-            return;
-        }
-
         using var store = CreateStore();
 
         await store.SaveAsync(CreateTokens());

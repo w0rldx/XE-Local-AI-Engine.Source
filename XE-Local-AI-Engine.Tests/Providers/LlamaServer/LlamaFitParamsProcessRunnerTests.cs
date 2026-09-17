@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>Capability probing and argument projection coverage for the machine-readable fit helper.</summary>
 public sealed class LlamaFitParamsProcessRunnerTests
@@ -23,13 +25,10 @@ public sealed class LlamaFitParamsProcessRunnerTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task RunAsync_WhenHelperFails_ReturnsBoundedSanitizedStandardErrorExcerpt()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var temp = new TestDirectory();
         var helper = Path.Combine(temp.Path, "llama-fit-params");
         await File.WriteAllTextAsync(helper,

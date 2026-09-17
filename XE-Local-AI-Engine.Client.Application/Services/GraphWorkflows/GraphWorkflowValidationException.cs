@@ -58,6 +58,11 @@ public sealed class GraphWorkflowValidationException : InvalidOperationException
         : base(message) =>
         Result = new GraphWorkflowValidationResult([new GraphWorkflowValidationError(Key: null, message)]);
 
+    /// <summary>The same single failure, wrapping the parse or validation error that produced it.</summary>
+    public GraphWorkflowValidationException(string message, Exception innerException)
+        : base(message, innerException) =>
+        Result = new GraphWorkflowValidationResult([new GraphWorkflowValidationError(Key: null, message)]);
+
     /// <summary>Every per-node and per-edge failure a structurally sound graph collected.</summary>
     public GraphWorkflowValidationException(GraphWorkflowValidationResult result)
         : base(BuildMessage(result)) =>

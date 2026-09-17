@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     <see cref="LlamaCppBinaryManager" /> runtime-acquisition reporting: the download → verify → extract lifecycle is
@@ -262,17 +263,13 @@ public sealed class RuntimeAcquisitionProgressTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
     public async Task InstallTag_WhenTheFirstAttemptFailsAndTheRetrySucceeds_EndsAtCompletedWithNoFailed()
     {
         // The pipeline retries once on a hash mismatch. Failed is reported ONLY from the outer catch, and the retry is
         // driven by a returned exception rather than a thrown one — so a recovered acquisition must end at Completed
         // with no Failed anywhere in the stream, or the banner would latch onto a failure that was already repaired.
         // POSIX only: the post-install smoke test spawns the extracted shell stub, which needs a real exec bit.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var cache = new TempCacheDir();
         var archive = BuildExecutableTarGz();
         var attempt = 0;

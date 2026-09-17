@@ -44,7 +44,7 @@ public sealed class AgentSkillsProviderContractTests
     [Arguments("under_score", false)]
     public void AgentSkillFrontmatter_NameRule_MatchesTheSpecification(string candidate, bool expected)
     {
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
         AssertEx.Equal(expected, AgentSkillFrontmatter.ValidateName(candidate, out _),
             $"The Agent Skills name rule for '{candidate}' changed; AgentSkillService and AgentDefinitionResolver both delegate to it.");
 #pragma warning restore MAAI001
@@ -57,7 +57,7 @@ public sealed class AgentSkillsProviderContractTests
         var threw = false;
         try
         {
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001 // Agent Skills are [Experimental] in Microsoft.Agents.AI at the pinned version.
             _ = new AgentInlineSkill("foo--bar", "desc", "body");
 #pragma warning restore MAAI001
         }

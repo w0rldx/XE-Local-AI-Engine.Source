@@ -241,7 +241,7 @@ public sealed class BenchmarkProjectService(
         }
         catch (JsonException exception)
         {
-            throw new BenchmarkValidationException($"The benchmark task payload is invalid: {exception.Message}");
+            throw new BenchmarkValidationException($"The benchmark task payload is invalid: {exception.Message}", exception);
         }
     }
 
@@ -484,7 +484,7 @@ public sealed class BenchmarkProjectService(
             }
             catch (BenchmarkValidationException exception)
             {
-                throw new BenchmarkValidationException($"Task item {item.Index + 1} cannot be judged under this rubric. {exception.Message}")
+                throw new BenchmarkValidationException($"Task item {item.Index + 1} cannot be judged under this rubric. {exception.Message}", exception)
                 {
                     Source = exception.Source
                 };
@@ -518,21 +518,21 @@ public sealed class BenchmarkProjectService(
         }
         catch (KeyNotFoundException exception)
         {
-            throw new BenchmarkValidationException("The selected judge model is not installed or eligible.")
+            throw new BenchmarkValidationException("The selected judge model is not installed or eligible.", exception)
             {
                 Source = exception.Source
             };
         }
         catch (BenchmarkEligibilityException exception)
         {
-            throw new BenchmarkValidationException(exception.Message)
+            throw new BenchmarkValidationException(exception.Message, exception)
             {
                 Source = exception.Source
             };
         }
         catch (BenchmarkJudgePolicyValidationException exception)
         {
-            throw new BenchmarkValidationException(exception.Message)
+            throw new BenchmarkValidationException(exception.Message, exception)
             {
                 Source = exception.Source
             };

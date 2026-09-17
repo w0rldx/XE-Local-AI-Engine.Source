@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Unit coverage for the self-contained desktop bootstrap (SEC-1 + SEC-2): given neither the operator-secret env var
@@ -236,15 +238,12 @@ public sealed class DesktopBootstrapTests : IDisposable
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public void EnsureLocalDataConfiguration_OnNonWindows_PersistsKeyFileWithOwnerOnlyPermissions()
     {
         // The key file protects the DB-encryption secret, so on non-Windows it must be 0600 (owner read/write only).
         // Windows relies on the per-user %LOCALAPPDATA% ACL instead (no Unix file mode), so skip there.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var temp = new TempDirectory();
         using var configuration = new ConfigurationManager();
 

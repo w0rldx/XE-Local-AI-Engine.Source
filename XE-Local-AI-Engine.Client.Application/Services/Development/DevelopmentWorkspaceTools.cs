@@ -225,7 +225,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         {
             // Keep Development's own security-exception type at its boundary: the attempt lane distinguishes a security
             // refusal from an operational failure, and the scanner's neutral type would be read as the latter.
-            throw new DevelopmentWorkspaceSecurityException(exception.Message);
+            throw new DevelopmentWorkspaceSecurityException(exception.Message, exception);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -233,6 +233,8 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // No inner exception on purpose: the filesystem exception's message carries the host worktree path, and
+            // this failure is rendered into a tool result the sandboxed model reads.
             throw new InvalidOperationException($"The fixed Development {operation} operation failed.");
         }
     }

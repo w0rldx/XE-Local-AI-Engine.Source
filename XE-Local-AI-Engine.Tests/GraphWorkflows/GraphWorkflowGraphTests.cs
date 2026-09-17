@@ -184,6 +184,19 @@ public sealed class GraphWorkflowGraphTests
         AssertEx.Contains(AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse(json)).Message, expectedMessage);
 
     /// <summary>
+    ///     The refusal's own sentence names the rule; only the reader's exception says where in the document parsing
+    ///     stopped, so the wrap keeps it as the inner exception rather than collapsing the chain to one sentence.
+    /// </summary>
+    [Test]
+    public void Parse_WhenTheDocumentIsNotJson_KeepsTheReaderFailureAsTheInnerException()
+    {
+        var refusal = AssertEx.Throws<GraphWorkflowValidationException>(() => GraphWorkflowGraph.Parse("not json at all"));
+
+        var inner = AssertEx.NotNull(refusal.InnerException, "The JSON reader's own failure must survive the wrap.");
+        AssertEx.True(inner is JsonException, $"Expected the inner exception to be a JsonException, got {inner.GetType().Name}.");
+    }
+
+    /// <summary>
     ///     A cycle below the Start node, so the cycle rule is the one that has to catch it. Cycles are forbidden
     ///     because a run that revisits a node has no bound on its own length.
     /// </summary>

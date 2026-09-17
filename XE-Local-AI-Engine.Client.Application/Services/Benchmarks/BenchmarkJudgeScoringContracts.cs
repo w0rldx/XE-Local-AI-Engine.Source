@@ -149,7 +149,7 @@ public static class BenchmarkJudgeResultParser
         }
         catch (JsonException exception)
         {
-            throw new BenchmarkExecutionException(InvalidResultMessage)
+            throw new BenchmarkExecutionException(InvalidResultMessage, exception)
             {
                 Source = exception.Source
             };

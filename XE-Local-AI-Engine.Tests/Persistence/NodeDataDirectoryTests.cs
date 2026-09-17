@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Persistence;
 
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The node-data-directory abstraction is the single seam that relocates per-node runtime state into the per-user
@@ -120,14 +122,11 @@ public sealed class NodeDataDirectoryTests : IDisposable
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task NodeSettingsStore_OnNonWindows_CreatesSettingsFileWith0600()
     {
         // The settings file joins the key file in the data dir; on non-Windows it must be owner read/write only.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var dataDir = Path.Combine(_root, "data");
         Directory.CreateDirectory(dataDir);
         using var store = new NodeSettingsStore(new FakeNodeDataDirectory(dataDir), NullLogger<NodeSettingsStore>.Instance);

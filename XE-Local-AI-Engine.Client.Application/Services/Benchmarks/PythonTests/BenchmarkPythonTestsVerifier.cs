@@ -57,7 +57,7 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
         }
         catch (BenchmarkJudgePolicyValidationException exception)
         {
-            throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' cannot be verified: {exception.Message}");
+            throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' cannot be verified: {exception.Message}", exception);
         }
 
         var candidate = BenchmarkPythonCodeExtraction.Extract(answer, config.Extract);

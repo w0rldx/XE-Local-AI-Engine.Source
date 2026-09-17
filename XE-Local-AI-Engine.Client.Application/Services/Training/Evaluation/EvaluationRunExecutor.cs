@@ -340,7 +340,7 @@ public sealed class EvaluationRunExecutor(
         }
         catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException)
         {
-            throw new EvaluationRejectedException("The exact installed model identity recorded for this evaluation is no longer available.");
+            throw new EvaluationRejectedException("The exact installed model identity recorded for this evaluation is no longer available.", exception);
         }
 
         if (string.IsNullOrWhiteSpace(expectedFingerprint)

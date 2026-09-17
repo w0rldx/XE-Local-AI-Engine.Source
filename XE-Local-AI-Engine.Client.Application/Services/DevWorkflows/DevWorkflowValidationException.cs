@@ -6,4 +6,15 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 ///     <c>DevWorkflowNotFoundException</c> and <c>DevWorkflowInvalidTransitionException</c> from the store; the API layer
 ///     maps it to 400.
 /// </summary>
-public sealed class DevWorkflowValidationException(string message) : InvalidOperationException(message);
+public sealed class DevWorkflowValidationException : InvalidOperationException
+{
+    public DevWorkflowValidationException(string message)
+        : base(message)
+    {
+    }
+
+    public DevWorkflowValidationException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}

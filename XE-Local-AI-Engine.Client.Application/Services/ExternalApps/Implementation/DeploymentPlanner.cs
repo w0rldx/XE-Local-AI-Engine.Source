@@ -414,7 +414,7 @@ internal sealed record ServiceDeployment(
     IReadOnlyList<ServiceDependency> DependsOn,
     IReadOnlyList<int> UiContainerPorts)
 {
-#pragma warning disable CA1822, S2325, S1172, IDE0060
+#pragma warning disable CA1822, S2325, S1172, IDE0060 // Suppressed printer, same rationale as the record above.
     private bool PrintMembers(StringBuilder builder)
     {
         return false;

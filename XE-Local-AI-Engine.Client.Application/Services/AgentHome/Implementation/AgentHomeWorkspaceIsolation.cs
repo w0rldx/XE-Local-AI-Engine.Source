@@ -46,7 +46,7 @@ internal sealed class AgentHomeWorkspaceIsolation : IAgentHomeWorkspaceIsolation
             {
                 _leases.MarkPoisoned(key);
                 _logger.LogError(killException, "Selected workspace reset and sandbox kill both failed; owner-node is poisoned.");
-                throw new AgentHomeWorkspacePoisonedException();
+                throw new AgentHomeWorkspacePoisonedException(killException);
             }
         }
     }
@@ -75,7 +75,7 @@ internal sealed class AgentHomeWorkspaceIsolation : IAgentHomeWorkspaceIsolation
         {
             _leases.MarkPoisoned(key);
             _logger.LogError(exception, "Could not recover the existing AgentHome sandbox; owner-node is poisoned.");
-            throw new AgentHomeWorkspacePoisonedException();
+            throw new AgentHomeWorkspacePoisonedException(exception);
         }
     }
 }

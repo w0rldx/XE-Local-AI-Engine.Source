@@ -330,7 +330,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
         }
         catch (Exception exception) when (exception is ExternalAppConfigurationException or ExternalAppManifestException or ContainerPolicyException)
         {
-            throw new ExternalAppValidationException(exception.Message);
+            throw new ExternalAppValidationException(exception.Message, exception);
         }
     }
 

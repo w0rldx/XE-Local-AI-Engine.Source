@@ -36,7 +36,7 @@ public static class BenchmarkNiahCase
         }
         catch (JsonException exception)
         {
-            throw new BenchmarkValidationException($"A long-context probe case carries unreadable parameters: {exception.Message}");
+            throw new BenchmarkValidationException($"A long-context probe case carries unreadable parameters: {exception.Message}", exception);
         }
     }
 }

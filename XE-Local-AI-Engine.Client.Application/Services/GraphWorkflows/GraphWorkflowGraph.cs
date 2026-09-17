@@ -290,7 +290,7 @@ internal sealed class GraphWorkflowGraph
         }
         catch (JsonException exception)
         {
-            throw new GraphWorkflowValidationException($"The graph workflow definition is not valid JSON: {exception.Message}");
+            throw new GraphWorkflowValidationException($"The graph workflow definition is not valid JSON: {exception.Message}", exception);
         }
     }
 

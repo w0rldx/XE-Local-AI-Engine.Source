@@ -21,8 +21,16 @@ internal enum AgentHomeWorkspaceClearResult
 
 internal sealed class AgentHomeWorkspacePoisonedException : InvalidOperationException
 {
+    private const string DefaultMessage =
+        "The AgentHome workspace could not be isolated safely and is unavailable until recovery succeeds.";
+
     public AgentHomeWorkspacePoisonedException()
-        : base("The AgentHome workspace could not be isolated safely and is unavailable until recovery succeeds.")
+        : base(DefaultMessage)
+    {
+    }
+
+    public AgentHomeWorkspacePoisonedException(Exception innerException)
+        : base(DefaultMessage, innerException)
     {
     }
 

@@ -178,6 +178,8 @@ internal sealed class DevelopmentRepositoryBindingService(
         }
         catch (Exception exception) when (exception is DirectoryNotFoundException or IOException or UnauthorizedAccessException)
         {
+            // No inner exception on purpose: the filesystem exception's message carries the host path, and this type is
+            // rendered to the operator and logged whole.
             throw new DevelopmentWorkspaceSecurityException("The selected repository is unavailable.");
         }
     }

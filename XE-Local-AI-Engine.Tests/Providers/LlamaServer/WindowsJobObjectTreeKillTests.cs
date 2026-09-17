@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Runtime verification of the Windows Job Object containment path — the mirror of
@@ -41,15 +42,11 @@ public sealed class WindowsJobObjectTreeKillTests
     /// <summary>Upper bound on how long the spawned child host parks waiting to be terminated by its parent.</summary>
     private static readonly TimeSpan OrphanParkLimit = TimeSpan.FromMinutes(5);
 
+    // Windows-only runtime verification; LinuxProcessGroupTreeKillTests covers the other branch.
     [Test]
+    [RunOn(OS.Windows)]
     public async Task Launch_ThenTreeKill_ReapsDescendants_NoOrphan()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            // Windows-only runtime verification; LinuxProcessGroupTreeKillTests covers the other branch.
-            return;
-        }
-
         var markerFile = NewMarkerPath();
         var launcher = new LlamaServerProcessLauncher(NullLogger<LlamaServerProcessLauncher>.Instance);
         var handle = launcher.Launch(BuildDescendantSpawningSpec(markerFile));
@@ -87,13 +84,9 @@ public sealed class WindowsJobObjectTreeKillTests
     ///     descendant is reaped anyway.
     /// </summary>
     [Test]
+    [RunOn(OS.Windows)]
     public async Task HardKillOfOwningProcess_ReapsDescendants_NoOrphan()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return;
-        }
-
         var testHost = ResolveTestHostPath();
         AssertEx.True(testHost is not null,
             $"Could not locate the test host executable next to {AppContext.BaseDirectory}. This test cannot run "
@@ -155,6 +148,9 @@ public sealed class WindowsJobObjectTreeKillTests
     public async Task HardKillHelper_ContainsDescendantThenWaitsToBeKilled()
     {
         var markerFile = Environment.GetEnvironmentVariable(HardKillMarkerVariable);
+
+        // Not a platform skip: this is the helper's entry point, and it only acts inside the child host the hard-kill
+        // test spawns with the marker variable set. Returning is what it does on every other run, by design.
         if (string.IsNullOrWhiteSpace(markerFile) || !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             return;

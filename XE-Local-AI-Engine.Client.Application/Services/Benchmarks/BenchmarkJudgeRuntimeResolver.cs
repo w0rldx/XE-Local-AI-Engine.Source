@@ -312,7 +312,7 @@ public static class BenchmarkJudgeSerialization
         }
         catch (JsonException exception)
         {
-            throw new BenchmarkSnapshotException("The stored judge policy is invalid.")
+            throw new BenchmarkSnapshotException("The stored judge policy is invalid.", exception)
             {
                 Source = exception.Source
             };
@@ -366,7 +366,7 @@ public static class BenchmarkJudgeSerialization
         }
         catch (JsonException exception)
         {
-            throw new BenchmarkSnapshotException("The frozen judge runtime is invalid.")
+            throw new BenchmarkSnapshotException("The frozen judge runtime is invalid.", exception)
             {
                 Source = exception.Source
             };

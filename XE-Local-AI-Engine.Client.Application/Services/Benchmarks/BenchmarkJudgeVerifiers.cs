@@ -86,7 +86,7 @@ public static class BenchmarkJudgeVerifiers
         }
         catch (BenchmarkJudgePolicyValidationException exception)
         {
-            throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' cannot be verified: {exception.Message}")
+            throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' cannot be verified: {exception.Message}", exception)
             {
                 Source = exception.Source
             };
@@ -109,7 +109,7 @@ public static class BenchmarkJudgeVerifiers
         {
             // Practically unreachable under NonBacktracking, which is linear in the input — but a timeout is a
             // verifier that did not finish, so it fails the judging rather than reporting "not matched".
-            throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' timed out while matching.")
+            throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' timed out while matching.", exception)
             {
                 Source = exception.Source
             };

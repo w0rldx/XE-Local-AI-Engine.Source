@@ -23,9 +23,17 @@ public sealed record StartGgufImportCommand(
 
 public sealed record GgufImportTicket(Guid OperationId, string OperationKind, string ModelName);
 
-public sealed class GgufImportApplicationException(string errorCode, string sanitizedMessage) : Exception(sanitizedMessage)
+public sealed class GgufImportApplicationException : Exception
 {
-    public string ErrorCode { get; } = errorCode;
+    public GgufImportApplicationException(string errorCode, string sanitizedMessage)
+        : base(sanitizedMessage) =>
+        ErrorCode = errorCode;
+
+    public GgufImportApplicationException(string errorCode, string sanitizedMessage, Exception innerException)
+        : base(sanitizedMessage, innerException) =>
+        ErrorCode = errorCode;
+
+    public string ErrorCode { get; }
 }
 
 public interface IGgufImportTransactionCoordinator

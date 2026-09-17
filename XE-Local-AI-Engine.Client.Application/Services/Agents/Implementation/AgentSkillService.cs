@@ -102,7 +102,7 @@ internal sealed class AgentSkillService : IAgentSkillService
             throw new AgentSkillValidationException("Description is required.");
         }
 
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001 // Same [Experimental] Agent Skills validators as the scoped block above.
         if (!AgentSkillFrontmatter.ValidateDescription(input.Description, out var descriptionError))
         {
             throw new AgentSkillValidationException(descriptionError);

@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Runtime verification of the Linux process-group tree-kill path — the Linux branch a WSL2/Linux
@@ -19,14 +19,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </remarks>
 public sealed class LinuxProcessGroupTreeKillTests
 {
+    // Linux-only runtime verification; the Windows path is operator-verified.
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Launch_ThenTreeKill_KillsChildProcessGroup_NoOrphan()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            return; // Linux-only runtime verification; the Windows path is operator-verified.
-        }
-
         var launcher = new LlamaServerProcessLauncher(NullLogger<LlamaServerProcessLauncher>.Instance);
 
         // A shell that spawns a long-lived grandchild and writes its PID, then sleeps. setsid makes the shell a

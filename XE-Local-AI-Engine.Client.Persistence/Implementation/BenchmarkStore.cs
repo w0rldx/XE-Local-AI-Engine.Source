@@ -100,14 +100,14 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
         }
         catch (DbUpdateConcurrencyException exception)
         {
-            throw new BenchmarkConflictException("VersionConflict")
+            throw new BenchmarkConflictException("VersionConflict", exception)
             {
                 Source = exception.Source
             };
         }
         catch (DbUpdateException exception) when (exception.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true)
         {
-            throw new BenchmarkConflictException("DuplicateWork")
+            throw new BenchmarkConflictException("DuplicateWork", exception)
             {
                 Source = exception.Source
             };

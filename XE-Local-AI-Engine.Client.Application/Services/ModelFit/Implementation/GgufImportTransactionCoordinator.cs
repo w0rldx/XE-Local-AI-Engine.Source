@@ -118,7 +118,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         catch (ArgumentException exception)
         {
             _logger.LogDebug(exception, "Rejected a GGUF import identity before acquisition preflight.");
-            throw new GgufImportApplicationException("UnsupportedQuantization", "The model name or quantization is not supported.");
+            throw new GgufImportApplicationException("UnsupportedQuantization", "The model name or quantization is not supported.", exception);
         }
 
         if (!preview.CanonicalQuantizationChoices.Contains(requestedIdentity.CanonicalQuantization, StringComparer.Ordinal))
@@ -147,7 +147,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         catch (ArgumentException exception)
         {
             _logger.LogDebug(exception, "Rejected a GGUF import identity during acquisition preflight.");
-            throw new GgufImportApplicationException("UnsupportedQuantization", "The model name or quantization is not supported.");
+            throw new GgufImportApplicationException("UnsupportedQuantization", "The model name or quantization is not supported.", exception);
         }
         catch (GgufAcquisitionConflictException)
         {
@@ -398,7 +398,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         }
         catch (GgufImportException exception)
         {
-            throw new GgufImportApplicationException(MapRejectionCode(exception.Reason), exception.Message);
+            throw new GgufImportApplicationException(MapRejectionCode(exception.Reason), exception.Message, exception);
         }
     }
 

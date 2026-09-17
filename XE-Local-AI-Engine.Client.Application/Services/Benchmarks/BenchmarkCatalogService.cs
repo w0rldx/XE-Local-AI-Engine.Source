@@ -151,7 +151,7 @@ internal sealed class BenchmarkCatalogService(
         }
         catch (KeyNotFoundException exception)
         {
-            throw new BenchmarkNotFoundException("Benchmark model was not found.")
+            throw new BenchmarkNotFoundException("Benchmark model was not found.", exception)
             {
                 Source = exception.Source
             };
@@ -159,7 +159,7 @@ internal sealed class BenchmarkCatalogService(
         catch (InstalledGgufSnapshotException exception)
         {
             _logger.LogWarning(exception, "Benchmark catalog: installed model {ModelName} could not be read and is excluded.", modelName);
-            throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.");
+            throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.", exception);
         }
 
         if (facts is null)
@@ -180,7 +180,7 @@ internal sealed class BenchmarkCatalogService(
         }
         catch (KeyNotFoundException exception)
         {
-            throw new BenchmarkNotFoundException("Benchmark model was not found.")
+            throw new BenchmarkNotFoundException("Benchmark model was not found.", exception)
             {
                 Source = exception.Source
             };
@@ -191,7 +191,7 @@ internal sealed class BenchmarkCatalogService(
             // BenchmarkEligibilityException per entry, and the single-model path turns this into the typed 422 the
             // endpoint already declares instead of a bare 500. The store's own reason is logged, never returned.
             _logger.LogWarning(exception, "Benchmark catalog: installed model {ModelName} could not be verified and is excluded.", modelName);
-            throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.");
+            throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.", exception);
         }
 
         try

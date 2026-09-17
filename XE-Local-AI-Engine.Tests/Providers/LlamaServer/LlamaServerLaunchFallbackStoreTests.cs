@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     <see cref="LlamaServerLaunchFallbackStore" /> keying: the optimized-config verdict is per (backend, KV-cache
@@ -106,13 +108,10 @@ public sealed class LlamaServerLaunchFallbackStoreTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task UnwritableStateFile_IsToleratedOnTheReadPath()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var root = new TempCacheRoot();
         // The legacy drop writes on the read path, which is the spawn hot path. A read-only cache root must therefore
         // degrade to "nothing disabled" instead of faulting the launch.

@@ -60,7 +60,7 @@ internal sealed class LocalModelAdministrationService(
             // The external provider owns no weights on this node, so it refuses deletion rather than reporting a
             // success the model table would then render as a completed removal. Translated here, in the layer that
             // may reference the provider, so the host maps it to a 409 without taking a dependency of its own.
-            throw new ModelOperationNotSupportedByProviderException(exception.Message);
+            throw new ModelOperationNotSupportedByProviderException(exception.Message, exception);
         }
 
         providerResolver.InvalidateModelProviderMap();

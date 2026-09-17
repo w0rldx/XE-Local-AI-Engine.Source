@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalProviders;
 
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
@@ -9,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The encrypted external-provider store's contract: what it refuses to store, what it canonicalizes on the way in,
@@ -332,13 +334,10 @@ public sealed class ExternalProviderStoreTests : IDisposable
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task SaveConnectionAsync_WhenRunningOnUnix_CreatesTheFileUserReadWriteOnly()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-        {
-            return;
-        }
-
         using var store = CreateStore();
 
         _ = await SaveAsync(store, Request(apiKey: "sk-unsloth-secret"));
