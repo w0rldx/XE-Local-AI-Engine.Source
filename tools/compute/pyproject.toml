@@ -22,8 +22,8 @@ version = "0.1.0"
 description = "Pinned Python runtime for the XE Local AI Engine sandboxed compute tool."
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "numpy==2.3.5",
-    "scipy==1.16.3",
+    "numpy==2.5.3",
+    "scipy==1.18.1",
     "sympy==1.14.0",
 ]
 

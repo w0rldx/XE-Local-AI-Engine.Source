@@ -13,7 +13,7 @@ public sealed class RuntimeLicensePackagingTests
         var releaseVersion = XDocument.Load(releaseVersionPath);
         var buildProps = XDocument.Load(RepositoryPaths.Combine("Directory.Build.props"));
 
-        AssertEx.Equal("10.0.11", Property(releaseVersion, "DotNetRuntimeVersion"));
+        AssertEx.Equal("10.0.12", Property(releaseVersion, "DotNetRuntimeVersion"));
         AssertEx.NotEmpty(Property(releaseVersion, "VersionPrefix"));
         AssertEx.Equal("14.0", Property(buildProps, "LangVersion"));
         AssertEx.True(buildProps.Descendants("Import").Any(import =>

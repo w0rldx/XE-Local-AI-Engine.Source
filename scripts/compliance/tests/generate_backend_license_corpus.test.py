@@ -71,7 +71,6 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             self.write_provenance(standard / f"{name}.source.txt", text_path)
         nuget = self.license_root / "nuget"
         for filename, contents in (
-            ("SQLite-3.50.3-public-domain.html", "SQLite blessing\n"),
             ("UTF.Unknown-2.7.0-MPL-1.1.txt", "MPL 1.1\n"),
             (
                 "UTF.Unknown-2.7.0-SOURCE-AVAILABILITY.txt",
@@ -311,21 +310,11 @@ class BackendLicenseCorpusTests(unittest.TestCase):
     def test_maps_special_licenses_only_to_exact_reviewed_packages(self) -> None:
         document = deps(
             "linux-x64",
-            {
-                "SQLitePCLRaw.lib.e_sqlite3/3.50.3": {"native": {"libe_sqlite3.so": {}}},
-                "UTF.Unknown/2.7.0": {"runtime": {"UtfUnknown.dll": {}}},
-            },
+            {"UTF.Unknown/2.7.0": {"runtime": {"UtfUnknown.dll": {}}}},
         )
-        output = self.generate(
-            [
-                package("SQLitePCLRaw.lib.e_sqlite3", "3.50.3", "blessing"),
-                package("UTF.Unknown", "2.7.0", "MPL-1.1"),
-            ],
-            document,
-        )
+        output = self.generate([package("UTF.Unknown", "2.7.0", "MPL-1.1")], document)
         packages = json.loads((output / "backend-components.json").read_text())["packages"]
         paths = {entry["name"]: entry["licenseTextPath"] for entry in packages}
-        self.assertIn("SQLite-3.50.3-public-domain.html", paths["SQLitePCLRaw.lib.e_sqlite3"])
         self.assertIn("UTF.Unknown-2.7.0-MPL-1.1.txt", paths["UTF.Unknown"])
         utf_unknown = next(entry for entry in packages if entry["name"] == "UTF.Unknown")
         self.assertEqual(

@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-07-21
 - **Scope:** Development Mode cloud-egress carrier and enforcement boundary
-- **Pinned dependency (current):** `Microsoft.Extensions.AI` 10.9.0 / `Microsoft.Extensions.AI.Abstractions` 10.9.0 (`Directory.Packages.props`)
+- **Pinned dependency (current):** `Microsoft.Extensions.AI` 10.10.0 / `Microsoft.Extensions.AI.Abstractions` 10.10.0 (`Directory.Packages.props`)
 - **Pinned dependency (at decision):** `Microsoft.Extensions.AI` / `Microsoft.Extensions.AI.Abstractions` 10.7.0 — see "Re-verification 2026-08-17"
 
 ## Context

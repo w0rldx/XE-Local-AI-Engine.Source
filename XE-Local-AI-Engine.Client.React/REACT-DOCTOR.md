@@ -14,14 +14,14 @@ React-specific correctness, performance, security, and accessibility heuristics 
 
 ## Pinned artifact and reproducibility
 
-The development dependency is pinned exactly to `react-doctor@0.9.12` in `package.json` and `pnpm-lock.yaml`.
+The development dependency is pinned exactly to `react-doctor@0.9.13` in `package.json` and `pnpm-lock.yaml`.
 Use `pnpm install --frozen-lockfile` and `pnpm run doctor`; do not substitute `npx react-doctor@latest`, because that
 would run an unreviewed artifact and make results irreproducible.
 
-- Registry: <https://www.npmjs.com/package/react-doctor/v/0.9.12>
-- Tarball: <https://registry.npmjs.org/react-doctor/-/react-doctor-0.9.12.tgz>
-- Integrity: `sha512-H7RNg13RYKwpQvi3+O3IkSj8pAD1pGTxSetxu7aOwXX3wmF+BydCLDiWxkPT9Pq7bIMHjuJ0taSZLsxEjlNjcA==`
-- Tarball SHA-1: `01c7adc95237508786f2cfc1812526395ff6c21b`
+- Registry: <https://www.npmjs.com/package/react-doctor/v/0.9.13>
+- Tarball: <https://registry.npmjs.org/react-doctor/-/react-doctor-0.9.13.tgz>
+- Integrity: `sha512-OGzhgLmH+eFlYa3gOv8Y/yOaR6yswRxiLJ37wWc9/fm57bP8/3n5/TZQLMctv/8izKvqtmblIpW+0SqMYKP7Xg==`
+- Tarball SHA-1: `20a2862320e660e55ca326eb884c70c0dde9a951`
 
 ## Configuration and authority
 
@@ -37,7 +37,7 @@ vulnerabilities.
 ## License and security decision
 
 The published package declares `SEE LICENSE IN LICENSE`, not SPDX `MIT`. Its exact 1,732-byte license text is
-preserved in `config/react-doctor-0.9.12-license.txt`; SHA-256:
+preserved in `config/react-doctor-0.9.13-license.txt`; SHA-256:
 `aa9b278de35d20d320e40789db8b3e242096ed4a89c5aaf8fbe23a5e55c08ff1`.
 
 That modified MIT text requires prior written permission for model-training/improvement pipelines and for a paid

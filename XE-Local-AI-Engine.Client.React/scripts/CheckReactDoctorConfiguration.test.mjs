@@ -37,7 +37,7 @@ function supportsProjectBaseline(projectRange, dependencyRange) {
 }
 
 test("keeps React Doctor exact-pinned, engine-compatible, offline, advisory, and outside validate", () => {
-	assert.equal(packageJson.devDependencies["react-doctor"], "0.9.12");
+	assert.equal(packageJson.devDependencies["react-doctor"], "0.9.13");
 	assert.equal(packageJson.engines.node, ">=22.13.0");
 	assert.equal(supportsProjectBaseline(packageJson.engines.node, reactDoctorPackageJson.engines.node), true);
 	assert.equal(supportsProjectBaseline(packageJson.engines.node, "^20.19.0"), false);

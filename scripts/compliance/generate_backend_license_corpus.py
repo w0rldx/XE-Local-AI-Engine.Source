@@ -31,10 +31,6 @@ STANDARD_LICENSE_TEXTS = {
     "ISC": (Path("nuget/standard/ISC.txt"), Path("nuget/standard/ISC.source.txt")),
 }
 SPECIAL_LICENSE_TEXTS = {
-    ("sqlitepclraw.lib.e_sqlite3", "3.50.3", "blessing"): (
-        Path("nuget/SQLite-3.50.3-public-domain.html"),
-        Path("nuget/SQLite-3.50.3-public-domain.html.source.txt"),
-    ),
     ("utf.unknown", "2.7.0", "MPL-1.1"): (
         Path("nuget/UTF.Unknown-2.7.0-MPL-1.1.txt"),
         Path("nuget/UTF.Unknown-2.7.0-MPL-1.1.txt.source.txt"),
@@ -232,7 +228,7 @@ def license_mapping(name: str, version: str, expression: str, copyright_text: st
     exact_key = (name.casefold(), version, expression)
     if exact_key in UPSTREAM_PACKAGE_LICENSE_TEXTS:
         return UPSTREAM_PACKAGE_LICENSE_TEXTS[exact_key]
-    if expression in {"blessing", "MPL-1.1"}:
+    if expression == "MPL-1.1":
         try:
             return SPECIAL_LICENSE_TEXTS[exact_key]
         except KeyError as error:
@@ -330,7 +326,7 @@ def build_component(
     expression = required_text(metadata.get("License"), f"package {name}/{version} License")
     if expression.upper() in INVALID_LICENSES:
         raise ValueError(f"package {name}/{version} has unreviewable license metadata: {expression}")
-    if expression not in {*STANDARD_LICENSE_TEXTS, "blessing", "MPL-1.1"}:
+    if expression not in {*STANDARD_LICENSE_TEXTS, "MPL-1.1"}:
         raise ValueError(f"package {name}/{version} has unsupported license expression: {expression}")
     authors_value = metadata.get("Authors")
     copyright_value = metadata.get("Copyright")
