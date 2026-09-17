@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { McpServerForm } from "@/features/mcp/components/McpServerForm";
@@ -115,5 +115,16 @@ describe("McpServerForm env row layout", () => {
 
 		expect(key?.style.flexBasis).toBe("140px");
 		expect(value?.style.flexBasis).toBe("200px");
+	});
+
+	// Both boxes were named only by their placeholder, and the value box's placeholder is a sentence about the row's
+	// masked state — neither reaches a screen reader as a name.
+	it("names both env boxes, masked row included", () => {
+		renderForm(vi.fn());
+
+		const row = within(screen.getByTestId("mcp-form-env-row-0"));
+
+		expect(row.getByRole("textbox", { name: "KEY" })).toBeTruthy();
+		expect(row.getByRole("textbox", { name: "value" })).toBe(screen.getByTestId("mcp-form-env-value-0"));
 	});
 });

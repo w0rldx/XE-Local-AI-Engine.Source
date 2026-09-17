@@ -142,7 +142,7 @@ describe("DialogShell", () => {
 			</DialogShell>,
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: "close" }));
+		fireEvent.click(screen.getByRole("button", { name: "Close" }));
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
@@ -154,7 +154,7 @@ describe("DialogShell", () => {
 			</DialogShell>,
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: "close" }));
+		fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
 		// Confirmation copy appears; onClose is not called yet.
 		await waitFor(() => {
@@ -176,7 +176,7 @@ describe("DialogShell", () => {
 			</DialogShell>,
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: "close" }));
+		fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
 		await waitFor(() => {
 			expect(screen.getByText("Discard unsaved changes?")).toBeTruthy();

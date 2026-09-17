@@ -94,4 +94,40 @@ describe("TranscriptionSessionList", () => {
 		expect(card.textContent).toContain("1 segment ");
 		expect(card.textContent).not.toContain("1 segments");
 	});
+
+	// The card itself stays a plain container — an ARIA button around the delete icon would make that nested control
+	// presentational. The title is the real button, so the keyboard reaches it natively.
+	it("makes the session title a real button named after the session", () => {
+		renderWithProviders(
+			<TranscriptionSessionList sessions={[session()]} deletingSessionId={null} onOpen={vi.fn()} onDelete={vi.fn()} />,
+		);
+
+		expect(screen.getByRole("button", { name: "Standup recording" }).tagName).toBe("BUTTON");
+	});
+
+	it("names an untitled recording on the button rather than exposing a nameless one", () => {
+		renderWithProviders(
+			<TranscriptionSessionList
+				sessions={[session({ title: null })]}
+				deletingSessionId={null}
+				onOpen={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByRole("button", { name: "Untitled recording" })).toBeTruthy();
+	});
+
+	// The title button sits inside the card, whose onClick opens the same session: without stopPropagation one
+	// activation would open it twice.
+	it("opens the session exactly once when the title button is activated", () => {
+		const onOpen = vi.fn();
+		renderWithProviders(
+			<TranscriptionSessionList sessions={[session()]} deletingSessionId={null} onOpen={onOpen} onDelete={vi.fn()} />,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Standup recording" }));
+
+		expect(onOpen).toHaveBeenCalledExactlyOnceWith("session-1");
+	});
 });

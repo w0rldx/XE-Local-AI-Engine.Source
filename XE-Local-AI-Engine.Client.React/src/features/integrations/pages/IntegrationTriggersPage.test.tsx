@@ -320,7 +320,7 @@ describe("IntegrationTriggersPage", () => {
 		await openCreateEditor();
 
 		fireEvent.change(screen.getByTestId("integration-trigger-form-display-name"), { target: { value: "Dirty" } });
-		fireEvent.click(screen.getByLabelText("close"));
+		fireEvent.click(screen.getByLabelText("Close"));
 
 		await waitFor(() => {
 			expect(confirmMock).toHaveBeenCalledTimes(1);

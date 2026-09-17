@@ -289,4 +289,105 @@ describe("ConversationList management actions", () => {
 
 		expect(screen.getByTestId("conversation-item-archived-1")).toBeTruthy();
 	});
+
+	// The row itself stays a plain container — an ARIA button around the actions menu would make those nested
+	// controls presentational. The title is the real button, so the keyboard reaches it natively.
+	it("makes the conversation title a real button named after the conversation", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", title: "A conversation" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByRole("button", { name: "A conversation" }).tagName).toBe("BUTTON");
+	});
+
+	it("names an untitled conversation rather than exposing a nameless row", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", title: "   " })]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByRole("button", { name: "Untitled conversation" })).toBeTruthy();
+	});
+
+	// The title button sits inside the row, whose onClick selects the same conversation: without stopPropagation one
+	// activation would select twice.
+	it("selects the conversation exactly once when the title button is activated", () => {
+		const onSelect = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", title: "A conversation" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={onSelect}
+				onToggleCollapse={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "A conversation" }));
+
+		expect(onSelect).toHaveBeenCalledExactlyOnceWith("local-1");
+	});
+
+	it("marks the selected conversation with aria-current", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", title: "A conversation" })]}
+				selectedConversationId="local-1"
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByRole("button", { name: "A conversation" }).getAttribute("aria-current")).toBe("true");
+	});
+
+	// A space is a legal character in a title, and the rename box sits inside the row: typing must never reach the
+	// row's own click path.
+	it("does not select the conversation when a space is typed in the rename input", async () => {
+		const onSelect = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", origin: "local", title: "Old title" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={onSelect}
+				onToggleCollapse={vi.fn()}
+				onRename={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-local-1"));
+		fireEvent.click(await screen.findByTestId("conversation-rename-local-1"));
+
+		const input = await screen.findByTestId("conversation-rename-input-local-1");
+		fireEvent.keyDown(input, { key: " " });
+
+		expect(onSelect).not.toHaveBeenCalled();
+	});
+
+	// Activating the actions icon opens the menu; it must not also select the row the menu belongs to.
+	it("does not select the conversation when the nested actions control is activated", () => {
+		const onSelect = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", origin: "local" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={onSelect}
+				onToggleCollapse={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-local-1"));
+
+		expect(onSelect).not.toHaveBeenCalled();
+	});
 });

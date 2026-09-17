@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -260,6 +260,59 @@ describe("CustomToolForm narrow-width row layout", () => {
 		expect(row.style.getPropertyValue("--group-wrap")).not.toBe("nowrap");
 		expect(name?.style.flexBasis).toBe("140px");
 		expect(value.style.flexBasis).toBe("200px");
+	});
+
+	// One case for the whole folder of row editors: their placeholders are example values ("city", "api.example.com",
+	// "--city={city}"), so every box in a repeated row reached a screen reader as an unnamed text field.
+	it("names every box in the parameter, host and header row editors", () => {
+		renderForm({
+			mode: "Parameterized",
+			parameters: [{ name: "city", type: "string", description: "", required: true }],
+			http: {
+				method: "GET",
+				urlTemplate: "https://{host}/forecast",
+				headers: [
+					{ name: "Authorization", value: "", isSecret: false },
+					{ name: "X-Api-Key", value: "", isSecret: true },
+				],
+				bodyTemplate: "",
+				allowedHosts: ["api.example.com"],
+			},
+		});
+
+		const parameterRow = within(screen.getByTestId("custom-tool-form-parameter-row-0"));
+		expect(parameterRow.getByRole("textbox", { name: "Name" })).toBeTruthy();
+		expect(parameterRow.getByRole("textbox", { name: "description" })).toBeTruthy();
+		expect(parameterRow.getByLabelText("Parameter type")).toBeTruthy();
+
+		expect(
+			within(screen.getByTestId("custom-tool-form-http-hosts")).getByRole("textbox", { name: "Allowed hosts" }),
+		).toBeTruthy();
+
+		const headerRow = within(screen.getByTestId("custom-tool-form-http-headers-row-0"));
+		expect(headerRow.getByRole("textbox", { name: "Name" })).toBeTruthy();
+		expect(headerRow.getByRole("textbox", { name: "Value" })).toBeTruthy();
+		// A secret row swaps in the shared stored-secret box, which has to carry the same name.
+		expect(within(screen.getByTestId("custom-tool-form-http-headers-row-1")).getByLabelText("Value")).toBeTruthy();
+	});
+
+	it("names every box in the command argument and environment row editors", () => {
+		renderForm({
+			kind: "Command",
+			command: {
+				executable: "/opt/tool",
+				argsTemplate: ["--city={city}"],
+				workingDirectory: "",
+				timeoutSeconds: 0,
+				env: [{ name: "TOKEN", value: "", isSecret: false }],
+			},
+		});
+
+		expect(within(screen.getByTestId("custom-tool-form-command")).getByRole("textbox", { name: "Arguments" })).toBeTruthy();
+
+		const envRow = within(screen.getByTestId("custom-tool-form-command-env-row-0"));
+		expect(envRow.getByRole("textbox", { name: "Name" })).toBeTruthy();
+		expect(envRow.getByRole("textbox", { name: "Value" })).toBeTruthy();
 	});
 
 	it("lets the executable path and its Validate button wrap", () => {

@@ -1,6 +1,7 @@
 import { Code, Skeleton } from "@mantine/core";
 import { lazy, Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
+import { useTranslation } from "react-i18next";
 
 import type { CodeEditorProps } from "@/core/ui/components/CodeEditor/CodeEditor.types";
 
@@ -14,11 +15,21 @@ const MonacoCodeEditor = lazy(() => import("@/core/ui/components/CodeEditor/Mona
  * cannot be loaded (offline chunk miss, blocked worker) — the content stays readable either way.
  */
 export function CodeEditor(props: CodeEditorProps) {
+	const { t } = useTranslation();
 	const height = props.height ?? 320;
 	return (
 		<ErrorBoundary
 			fallback={
-				<Code block={true} data-testid={props["data-testid"]} style={{ maxHeight: height, overflow: "auto" }}>
+				// The fallback clips its content to `height` and scrolls, which a keyboard-only user could not reach
+				// (Monaco provides its own focusable surface; this plain <Code> had none). `tabIndex={0}` makes the
+				// region focusable and scrollable by arrow key, and a focusable region needs a name of its own.
+				<Code
+					block={true}
+					tabIndex={0}
+					aria-label={props["aria-label"] ?? t("components.codeEditor.fallbackLabel")}
+					data-testid={props["data-testid"]}
+					style={{ maxHeight: height, overflow: "auto" }}
+				>
 					{props.value}
 				</Code>
 			}

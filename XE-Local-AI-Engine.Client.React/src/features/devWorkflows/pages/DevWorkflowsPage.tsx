@@ -167,10 +167,16 @@ export function DevWorkflowsPage() {
 						) : (
 							<SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} data-testid="dev-workflows-list">
 								{workItems.map((item) => (
+									// The card IS the control: opening the work item is the only thing a row does, and nothing
+									// interactive nests inside it, so it can be a real button and reach the keyboard.
 									<Card
 										key={item.id}
+										component="button"
+										type="button"
 										withBorder={true}
 										padding="md"
+										ta="left"
+										w="100%"
 										data-testid={`dev-workflow-card-${item.id}`}
 										onClick={() => {
 											navigate({ to: "/development-workflows/$workItemId", params: { workItemId: item.id ?? "" } });

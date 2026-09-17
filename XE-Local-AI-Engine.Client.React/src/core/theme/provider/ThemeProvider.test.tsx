@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { Table, useMantineTheme } from "@mantine/core";
-import { cleanup, render, renderHook } from "@testing-library/react";
+import { Alert, Table, useMantineTheme } from "@mantine/core";
+import { cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
@@ -50,5 +50,52 @@ describe("ThemeProvider table scroll affordance", () => {
 
 		const horizontalScrollbar = container.querySelector('.mantine-ScrollArea-scrollbar[data-orientation="horizontal"]');
 		expect(horizontalScrollbar).not.toBeNull();
+	});
+
+	// Same affordance one level down, for the ScrollAreas the app mounts directly. ScrollArea and
+	// ScrollArea.Autosize read SEPARATE theme keys, so declaring only "ScrollArea" would leave every autosize
+	// call site on Mantine's 12px hover bar — which is the regression this pins.
+	it.each(["ScrollArea", "ScrollAreaAutosize"])("defaults %s to a thin, overflow-driven, offset scrollbar", (key) => {
+		const { result } = renderHook(() => useMantineTheme(), { wrapper: ThemeProvider });
+		const defaultProps = result.current.components[key]?.defaultProps as
+			| { type?: string; scrollbarSize?: number; offsetScrollbars?: boolean | string }
+			| undefined;
+
+		expect(defaultProps?.type).toBe("auto");
+		expect(defaultProps?.scrollbarSize).toBe(8);
+		expect(defaultProps?.offsetScrollbars).toBe("present");
+	});
+});
+
+describe("ThemeProvider alert close button", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	// Mantine's Alert close button is icon-only; without `closeButtonLabel` it reaches a screen reader as a
+	// nameless "button". Only one of the app's `withCloseButton` call sites passed one, so the default is set in
+	// the theme and asserted here — at the level the fix actually lives.
+	it("gives every Alert close button the shipped Close label", () => {
+		const { result } = renderHook(() => useMantineTheme(), { wrapper: ThemeProvider });
+		const defaultProps = result.current.components["Alert"]?.defaultProps as { closeButtonLabel?: string } | undefined;
+
+		expect(defaultProps?.closeButtonLabel).toBe("Close");
+	});
+
+	// The theme value is only worth anything if it reaches the rendered button, which is what names it.
+	it("renders a named close button for an Alert that asks for one", () => {
+		render(
+			<ThemeProvider>
+				<Alert withCloseButton={true} title="Heads up">
+					body
+				</Alert>
+			</ThemeProvider>,
+		);
+
+		expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
 	});
 });

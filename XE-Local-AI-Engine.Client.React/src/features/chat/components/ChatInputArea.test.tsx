@@ -203,6 +203,18 @@ describe("ChatInputArea image attachment gate", () => {
 		expect(fileInput?.getAttribute("accept")).toContain("image/*");
 	});
 
+	// The paperclip ActionIcon is the labelled control; the input behind it is display:none and only opens the OS
+	// picker, so it belongs out of the accessibility tree rather than in it as a nameless file field.
+	it("keeps the hidden file input out of the accessibility tree", () => {
+		const { container } = renderWithProviders(
+			<ChatInputArea {...baseProps()} capabilities={attachmentCapabilities()} onUploadFiles={vi.fn()} />,
+		);
+
+		const fileInput = container.querySelector('input[type="file"]');
+		expect(fileInput?.getAttribute("aria-hidden")).toBe("true");
+		expect(fileInput?.getAttribute("tabindex")).toBe("-1");
+	});
+
 	it("still shows the paperclip trigger for image-only attachments when file attachments are off", () => {
 		renderWithProviders(
 			<ChatInputArea
@@ -458,5 +470,17 @@ describe("ChatInputArea message-size pre-check", () => {
 
 		fireEvent.keyDown(screen.getByTestId("chat-input"), { key: "Enter" });
 		expect(onSend).toHaveBeenCalledTimes(1);
+	});
+
+	// The placeholder was the composer's only naming, and it vanishes as soon as there is a draft: the box a screen
+	// reader lands in must still say what it is.
+	it("names the composer for assistive technology, draft or not", () => {
+		renderWithProviders(<ChatInputArea {...baseProps()} onSend={vi.fn()} />);
+
+		expect(screen.getByRole("textbox", { name: "Type your message" })).toBe(screen.getByTestId("chat-input"));
+
+		typeDraft("already typing");
+
+		expect(screen.getByRole("textbox", { name: "Type your message" })).toBe(screen.getByTestId("chat-input"));
 	});
 });

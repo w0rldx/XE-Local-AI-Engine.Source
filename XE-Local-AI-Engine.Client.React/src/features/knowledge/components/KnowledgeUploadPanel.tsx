@@ -112,6 +112,10 @@ export function KnowledgeUploadPanel({ pendingUploads, onUpload }: KnowledgeUplo
 					accept={KNOWLEDGE_ACCEPT_ATTRIBUTE}
 					onChange={handleInputChange}
 					style={{ display: "none" }}
+					// The drop zone above IS the labelled control; this input only opens the OS picker. Marked hidden so
+					// it is not reported as an unnamed form control.
+					aria-hidden={true}
+					tabIndex={-1}
 					data-testid="knowledge-upload-input"
 				/>
 			</Box>

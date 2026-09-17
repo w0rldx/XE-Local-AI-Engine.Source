@@ -2,7 +2,7 @@ import { Collapse, Menu, ScrollArea, Text, Tooltip, UnstyledButton } from "@mant
 import { IconChevronRight, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { m } from "framer-motion";
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { LogoMark } from "@/components/Logo/LogoMark";
@@ -27,6 +27,9 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
+	// Prefix for the nested-links containers a group toggle points `aria-controls` at. React owns it, so two
+	// mounted navigation bars (app + a test render) cannot collide on the same DOM id.
+	const groupIdPrefix = useId();
 
 	// Explicit open/closed state per group id, persisted so the user's choices survive a reload. A group with
 	// no explicit entry falls back to "open when it contains the active route" so the active page is always
@@ -94,6 +97,10 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 		const groupActive = hasNestedLinks && isGroupActive(item);
 		const itemActive = !hasNestedLinks && matchesNavRoute(pathname, item.to);
 		const open = hasNestedLinks && isGroupOpen(item);
+		// Only the expanded rail renders the Collapse; the collapsed rail swaps in a Menu, which owns its own
+		// expanded state, so the disclosure wiring must not be announced there.
+		const isDisclosure = hasNestedLinks && !sideBarCollapsed;
+		const nestedLinksId = `${groupIdPrefix}${item.id}`;
 
 		const handleControlClick = () => {
 			if (hasNestedLinks) {
@@ -119,6 +126,8 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 				onClick={handleControlClick}
 				className={controlClassName}
 				aria-current={itemActive ? "page" : undefined}
+				aria-expanded={isDisclosure ? open : undefined}
+				aria-controls={isDisclosure ? nestedLinksId : undefined}
 				data-tour={`nav-item-${item.id}`}
 			>
 				<m.div
@@ -189,8 +198,11 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 		return (
 			<div key={item.id}>
 				{buttonWrapper}
-				{hasNestedLinks && !sideBarCollapsed && (
-					<Collapse expanded={open} transitionDuration={150}>
+				{isDisclosure && (
+					// The id lives on the Collapse, not on the inner column: Collapse only keeps its CONTENT mounted
+					// while open, so an id one level down would be a dangling aria-controls target whenever the group
+					// is closed — exactly the state the attribute has to describe.
+					<Collapse id={nestedLinksId} expanded={open} transitionDuration={150}>
 						<div className={classes["nested-links"]}>
 							{item.nestedLinks!.map((nestedLink) => {
 								const nestedActive = matchesNavRoute(pathname, nestedLink.to);
@@ -215,6 +227,7 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 	return (
 		<m.nav
 			className={classes["navbar"]}
+			aria-label={t("components.sideNavigationBar.ariaLabel")}
 			variants={navVariants}
 			initial={false}
 			animate={sideBarCollapsed ? "collapsed" : "expanded"}
@@ -231,7 +244,12 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 				</m.div>
 			</div>
 
-			<ScrollArea className={classes["links"]}>
+			{/* Every prop here is deliberate and overrides the app-wide ScrollArea defaults set in ThemeProvider:
+			    a 6px bar (the 12px default painted over the chevrons and the active highlight), `scrollbars="y"`
+			    because the inner column already clips X, and `offsetScrollbars={false}` because the theme's
+			    "present" would pad the content away from the bar and undo the gutter the CSS just carved out.
+			    `type="auto"` is the theme default, repeated so the whole scroll contract reads in one place. */}
+			<ScrollArea className={classes["links"]} type="auto" scrollbarSize={6} scrollbars="y" offsetScrollbars={false}>
 				<div className={classes["links-inner"]}>{viewableNavigationLinks.map((item) => renderNavigationItem(item))}</div>
 			</ScrollArea>
 

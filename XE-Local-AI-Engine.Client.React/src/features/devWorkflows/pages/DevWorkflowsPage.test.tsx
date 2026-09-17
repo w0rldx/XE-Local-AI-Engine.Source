@@ -125,6 +125,21 @@ describe("DevWorkflowsPage", () => {
 		expect(navigate).toHaveBeenCalledWith({ to: "/development-workflows/$workItemId", params: { workItemId } });
 	});
 
+	// Opening the work item is the only thing a card does and nothing interactive nests inside it, so the card is the
+	// button: a keyboard reaches it through the tab order and Enter/Space, with no key handler of our own.
+	it("renders each card as a real button so the keyboard can open it", async () => {
+		server.use(
+			jsonRoute("get", "development-workflows/work-items", { items: [devWorkflowWorkItemSummary()] }),
+			definitionsRoute(),
+			projectsRoute(),
+		);
+		renderWithProviders(<DevWorkflowsPage />);
+
+		const card = await screen.findByRole("button", { name: /Survey the vector-store options/ });
+		expect(card.tagName).toBe("BUTTON");
+		expect(card.getAttribute("type")).toBe("button");
+	});
+
 	it("creates the work item and starts its run as two calls, then opens the detail page", async () => {
 		const startBodies: unknown[] = [];
 		server.use(

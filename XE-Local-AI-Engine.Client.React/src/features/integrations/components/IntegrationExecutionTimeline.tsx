@@ -121,6 +121,8 @@ function OutputPayload({ text, language }: { text: string; language: string }) {
 			<Code
 				block={true}
 				aria-label={label}
+				// A scroll container that only a pointer can reach strands a keyboard on the first visible line.
+				tabIndex={0}
 				data-testid="integration-execution-output"
 				style={{ maxHeight: 240, overflow: "auto" }}
 			>

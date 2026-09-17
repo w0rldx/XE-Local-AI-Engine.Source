@@ -202,8 +202,15 @@ export function ChatComposerToolbar({
 						onSelectAgent={onSelectAgent ?? (() => undefined)}
 					/>
 				) : null}
+				{/* The ActionIcon below IS the labelled control; FileButton's own input is display:none and exists only to
+				    open the OS picker. Marked hidden so it is not reported as an unnamed form control. */}
 				{attachmentControlsAvailable ? (
-					<FileButton onChange={onPickFiles} multiple={true} accept={attachmentAccept}>
+					<FileButton
+						onChange={onPickFiles}
+						multiple={true}
+						accept={attachmentAccept}
+						inputProps={{ "aria-hidden": true, tabIndex: -1 }}
+					>
 						{(fileButtonProps) => (
 							<Tooltip label={t("pages.chat.composer.attach", "Attach file")}>
 								<ActionIcon

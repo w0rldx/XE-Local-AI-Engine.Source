@@ -404,6 +404,9 @@ export function ChatInputArea({
 						ref={inputRef}
 						data-testid="chat-input"
 						placeholder={t("pages.chat.inputPlaceholder", "Type your message")}
+						// The placeholder is the only visible naming of the composer, and a placeholder is not an
+						// accessible name — it disappears the moment there is a draft. Same string, as a real name.
+						aria-label={t("pages.chat.inputPlaceholder", "Type your message")}
 						value={content}
 						onChange={(event) => {
 							const target = event.currentTarget;

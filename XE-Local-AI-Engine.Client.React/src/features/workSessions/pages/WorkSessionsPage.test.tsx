@@ -121,6 +121,17 @@ describe("WorkSessionsPage", () => {
 		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
 	});
 
+	// Opening a session is the only thing a card does and nothing interactive nests inside it, so the card is the
+	// button: a keyboard reaches it through the tab order and Enter/Space, with no key handler of our own.
+	it("renders each card as a real button so the keyboard can open it", async () => {
+		server.use(jsonRoute("get", "work-sessions", { items: [summary()] }), agentsRoute());
+		renderWithProviders(<WorkSessionsPage />);
+
+		const card = await screen.findByRole("button", { name: /Survey the vector-store options/ });
+		expect(card.tagName).toBe("BUTTON");
+		expect(card.getAttribute("type")).toBe("button");
+	});
+
 	it("creates a session from the dialog and navigates to it", async () => {
 		server.use(
 			jsonRoute("get", "work-sessions", { items: [] }),

@@ -37,9 +37,20 @@ async function loadLocale(language: string | undefined): Promise<void> {
 	}
 }
 
+// Keeps `<html lang>` on the language actually being rendered. index.html ships a static `lang="en"`, so a
+// German session used to be announced to screen readers — and hyphenated, and offered to translation tools —
+// as English. Guarded because this module is also loaded by node-environment tests, which have no document.
+function syncDocumentLanguage(language: string | undefined): void {
+	const resolved = language ?? i18next.resolvedLanguage ?? i18next.language;
+	if (typeof document !== "undefined" && resolved) {
+		document.documentElement.lang = resolved;
+	}
+}
+
 // A language switch at runtime changes the active language BEFORE its bundle exists, so the chunk is fetched
 // here and `bindI18nStore: "added"` (below) re-renders subscribers once it lands.
 i18next.on("languageChanged", (language: string) => {
+	syncDocumentLanguage(language);
 	loadLocale(language).catch(() => undefined);
 });
 
@@ -67,6 +78,9 @@ i18next
 		// fallback until some unrelated render happened to flush it.
 		react: { bindI18nStore: "added" },
 	});
+
+// `languageChanged` does not fire for the language `init` itself detected, so the initial value is set here.
+syncDocumentLanguage(undefined);
 
 // Resolves once the detected language is renderable. Already-resolved for "en" (statically bundled), so an
 // English session paints exactly as before; a non-English session waits on one same-origin chunk instead of

@@ -1,19 +1,26 @@
 import {
+	Alert,
 	alpha,
 	Card,
 	createTheme,
 	defaultVariantColorsResolver,
 	MantineProvider,
 	parseThemeColor,
+	ScrollArea,
+	ScrollAreaAutosize,
 	TableScrollContainer,
 	type VariantColorsResolver,
 } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
+import { useTranslation } from "react-i18next";
 
 import { useThemeStore } from "@/core/theme/stores/ThemeStore";
 import type { ThemeProviderProperties } from "@/core/theme/provider/ThemeProvider.types";
 
 export function ThemeProvider({ children }: ThemeProviderProperties) {
+	// The theme object is rebuilt on every render (it always was), so the translated defaults below follow a
+	// language switch: useTranslation re-renders this provider, which hands MantineProvider a fresh theme.
+	const { t } = useTranslation();
 	const mode = useThemeStore((state) => state.mode);
 	const themeConfiguration = useThemeStore((state) => state.themeConfiguration);
 	const primaryScale = themeConfiguration.palette.primary.scale;
@@ -70,6 +77,38 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 			TableScrollContainer: TableScrollContainer.extend({
 				defaultProps: {
 					scrollAreaProps: { type: "auto" },
+				},
+			}),
+			// The same argument one level down, for every ScrollArea the app mounts directly: "hover" hides the bar
+			// until a pointer enters, which never happens on touch, so an overflowing region looks like it simply
+			// ends. "auto" shows a bar exactly when the content overflows, on every input device.
+			//
+			// 8 rather than Mantine's 12 because the default bar is wide enough to sit on top of trailing controls in
+			// a narrow region (live-observed over the side nav's group chevrons), and "present" reserves the gutter
+			// only while that bar is actually shown, so nothing is painted over and no space is wasted when it is not.
+			//
+			// ScrollArea and ScrollArea.Autosize read SEPARATE theme keys ("ScrollArea" / "ScrollAreaAutosize"), so
+			// both have to be declared or the autosize variant silently keeps Mantine's defaults.
+			ScrollArea: ScrollArea.extend({
+				defaultProps: {
+					type: "auto",
+					scrollbarSize: 8,
+					offsetScrollbars: "present",
+				},
+			}),
+			ScrollAreaAutosize: ScrollAreaAutosize.extend({
+				defaultProps: {
+					type: "auto",
+					scrollbarSize: 8,
+					offsetScrollbars: "present",
+				},
+			}),
+			// Mantine's Alert close button is an icon-only button with no text, and `closeButtonLabel` is what gives
+			// it an accessible name. Almost every `withCloseButton` call site omitted it, so a screen reader read a
+			// nameless "button". Defaulting it here fixes all of them at once; a call site can still pass its own.
+			Alert: Alert.extend({
+				defaultProps: {
+					closeButtonLabel: t("common.close"),
 				},
 			}),
 		},

@@ -144,4 +144,14 @@ describe("DiagnosticsPanel", () => {
 		expect(fixtures.importMutate).toHaveBeenCalledTimes(1);
 		expect(fixtures.importMutate.mock.calls[0]?.[0]).toBe(file);
 	});
+
+	// The Import button is the labelled control; the input behind it is display:none and only opens the OS picker, so
+	// it belongs out of the accessibility tree rather than in it as a nameless file field.
+	it("keeps the hidden import input out of the accessibility tree", () => {
+		const { container } = renderPanel(<DiagnosticsPanel />);
+
+		const input = container.querySelector('input[type="file"]');
+		expect(input?.getAttribute("aria-hidden")).toBe("true");
+		expect(input?.getAttribute("tabindex")).toBe("-1");
+	});
 });

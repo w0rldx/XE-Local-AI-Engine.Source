@@ -1,5 +1,9 @@
-import { createInstance } from "i18next";
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+//
+// jsdom for the `<html lang>` block at the bottom; the rest of this file is environment-agnostic.
+
+import i18next, { createInstance } from "i18next";
+import { afterAll, describe, expect, it } from "vitest";
 
 import en from "@/locales/en.json";
 import { nonEnglishLocales } from "@/test/Locales";
@@ -68,4 +72,24 @@ describe("i18n locale parity", () => {
 			expect(collectKeyPaths(resource).some((key) => key.includes("approvedImages"))).toBe(false);
 		},
 	);
+});
+
+// index.html ships a static lang="en", so before this a German session was announced to screen readers — and
+// hyphenated, and offered to translation tooling — as English. src/i18n.ts is the app's own instance and is
+// imported by vitest setup, so asserting through it exercises the real wiring, not a stand-in.
+describe("i18n document language", () => {
+	afterAll(async () => {
+		await i18next.changeLanguage("en");
+	});
+
+	it("puts the initialised language on the document element", () => {
+		expect(document.documentElement.lang).toBe(i18next.resolvedLanguage);
+		expect(document.documentElement.lang).toBe("en");
+	});
+
+	it("follows a language switch", async () => {
+		await i18next.changeLanguage("de");
+
+		expect(document.documentElement.lang).toBe("de");
+	});
 });

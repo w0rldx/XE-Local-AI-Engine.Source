@@ -20,6 +20,8 @@ interface StoredSecretInputProps {
 	readonly storedPlaceholder: string;
 	readonly placeholder?: string;
 	readonly label?: ReactNode;
+	/** Names the box for a caller that renders it without a visible label, e.g. one cell of a row editor. */
+	readonly "aria-label"?: string;
 	readonly description?: ReactNode;
 	readonly error?: ReactNode;
 	readonly withAsterisk?: boolean;
@@ -49,6 +51,7 @@ export function StoredSecretInput({
 	storedPlaceholder,
 	placeholder,
 	label,
+	"aria-label": ariaLabel,
 	description,
 	error,
 	withAsterisk,
@@ -65,6 +68,7 @@ export function StoredSecretInput({
 	const action = cleared ? "undo" : "clear";
 	const inputProps = {
 		label,
+		"aria-label": ariaLabel,
 		description,
 		error,
 		withAsterisk,

@@ -111,6 +111,7 @@ export function DevWorkflowRunSummaryPanel({
 							<Select
 								size="xs"
 								placeholder={t("pages.devWorkflows.create.definitionPlaceholder", "Pick a template")}
+								aria-label={t("pages.devWorkflows.create.definitionPlaceholder", "Pick a template")}
 								data={startableDefinitions.map((definition) => ({
 									value: definition.id ?? "",
 									label: definition.name ?? "",

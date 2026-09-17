@@ -45,8 +45,14 @@
 	white-space: nowrap;
 }
 
+/* The ScrollArea is pulled out into the navbar's right padding so its overlay scrollbar paints in that
+   gutter next to the border instead of on top of the items. `.links-inner` gives the same padding back, so
+   every control still ends var(--mantine-spacing-xs) from the border in both rails — only the bar moved.
+   `.navbar` clips overflow-x at the border, which is exactly where this ends, so nothing is cut off. */
+
 .links {
 	min-height: 0;
+	margin-right: calc(-1 * var(--mantine-spacing-xs));
 }
 
 .links-inner {
@@ -55,6 +61,7 @@
 	gap: 4px;
 	padding-top: var(--mantine-spacing-sm);
 	padding-bottom: var(--mantine-spacing-sm);
+	padding-right: var(--mantine-spacing-xs);
 
 	/* Prevents animated gap/label from triggering a horizontal scrollbar inside ScrollArea */
 	overflow-x: hidden;

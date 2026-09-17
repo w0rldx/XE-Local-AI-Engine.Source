@@ -4,7 +4,7 @@ import "@mantine/notifications/styles.css";
 import "virtual:uno.css";
 import "./global.css";
 
-import { domAnimation, LazyMotion } from "framer-motion";
+import { domAnimation, LazyMotion, MotionConfig } from "framer-motion";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
 
@@ -43,7 +43,12 @@ if (rootElement && !rootElement.innerHTML) {
 			root.render(
 				<StrictMode>
 					<LazyMotion features={domAnimation}>
-						<App />
+						{/* "user" honours the OS `prefers-reduced-motion` setting: transform and layout animations
+						    (the sidebar collapse, the mobile drawer, the content-area reflow) snap to their end
+						    state, while opacity still crossfades, so nothing becomes invisible. */}
+						<MotionConfig reducedMotion="user">
+							<App />
+						</MotionConfig>
 					</LazyMotion>
 				</StrictMode>,
 			);

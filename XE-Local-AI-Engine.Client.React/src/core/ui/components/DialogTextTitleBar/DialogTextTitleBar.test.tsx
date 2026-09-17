@@ -32,13 +32,16 @@ describe("DialogTextTitleBar", () => {
 		cleanup();
 	});
 
-	it("renders the title and a close button", () => {
+	// The close button's accessible name is the shipped "Close" string, not the untranslated literal "close" it
+	// carried before: a German session announced an English word, and it disagreed with its own tooltip.
+	it("renders the title and a close button named from the bundle", () => {
 		const handleClose = vi.fn();
 		renderWithProviders(<DialogTextTitleBar title="My dialog" handleClose={handleClose} />);
 
 		expect(screen.getByText("My dialog")).toBeTruthy();
+		expect(screen.queryByRole("button", { name: "close" })).toBeNull();
 
-		fireEvent.click(screen.getByRole("button", { name: "close" }));
+		fireEvent.click(screen.getByRole("button", { name: "Close" }));
 		expect(handleClose).toHaveBeenCalledTimes(1);
 	});
 

@@ -4,6 +4,10 @@ interface LogoMarkProperties {
 
 // Inline SVG (not <img>) so the mark inherits `currentColor`; color is set to the
 // Mantine primary so the logo always matches the active theme's primary color.
+//
+// Decorative on purpose. Every call site (LogoCombined, the desktop nav header) renders it immediately beside
+// LogoText, which carries the wordmark's own accessible name: with a role and label of its own the pair was
+// announced twice for one lockup, and the label was an untranslated "logo" at that.
 export function LogoMark({ className = "object-contain h-full w-full" }: LogoMarkProperties) {
 	return (
 		<svg
@@ -13,8 +17,7 @@ export function LogoMark({ className = "object-contain h-full w-full" }: LogoMar
 			height="391"
 			viewBox="0 0 363 391"
 			fill="currentColor"
-			role="img"
-			aria-label="logo"
+			aria-hidden="true"
 			style={{ color: "var(--mantine-primary-color-filled)" }}
 		>
 			<g transform="translate(-140 -352)">

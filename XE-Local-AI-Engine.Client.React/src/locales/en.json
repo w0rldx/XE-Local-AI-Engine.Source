@@ -4933,6 +4933,7 @@
 					"empty": "No parameters declared yet.",
 					"namePlaceholder": "city",
 					"nameInvalid": "Identifier only",
+					"typeAria": "Parameter type",
 					"descriptionPlaceholder": "description",
 					"required": "Required",
 					"remove": "Remove parameter"
@@ -6982,7 +6983,14 @@
 				"expand": "Expand"
 			},
 			"ariaCollapse": "Collapse sidebar",
-			"ariaExpand": "Expand sidebar"
+			"ariaExpand": "Expand sidebar",
+			"ariaLabel": "Main navigation"
+		},
+		"layout": {
+			"skipToContent": "Skip to main content"
+		},
+		"codeEditor": {
+			"fallbackLabel": "Code"
 		},
 		"headerBar": {
 			"logout": "Logout",

@@ -199,7 +199,7 @@ export function ChatMessageList({
 	};
 
 	return (
-		<ScrollArea type="hover" scrollbarSize={8} offsetScrollbars="y" viewportRef={viewportRef} style={{ flex: 1, minHeight: 0 }}>
+		<ScrollArea type="auto" scrollbarSize={8} offsetScrollbars="y" viewportRef={viewportRef} style={{ flex: 1, minHeight: 0 }}>
 			{virtualize ? (
 				// Windowed path for long threads: absolutely-positioned measured rows inside a total-height spacer.
 				// Row spacing rides each row wrapper's paddingBottom so measured heights include the gap.

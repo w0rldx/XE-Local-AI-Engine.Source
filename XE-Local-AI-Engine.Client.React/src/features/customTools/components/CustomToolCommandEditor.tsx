@@ -84,6 +84,8 @@ export function CommandEditor({ values, errors, update, storedSecrets }: CustomT
 					<Group key={argRowKeys[index]} gap="xs" align="center" wrap="nowrap">
 						<TextInput
 							placeholder="--city={city}"
+							// The placeholder is an example argument, not a name; the section heading labels the row.
+							aria-label={t("pages.customTools.form.command.args", "Arguments")}
 							value={arg}
 							onChange={(event) => patchArg(index, event.currentTarget.value)}
 							style={{ flex: 1 }}

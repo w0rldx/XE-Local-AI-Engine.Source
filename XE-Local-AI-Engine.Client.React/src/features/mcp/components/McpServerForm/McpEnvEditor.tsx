@@ -39,6 +39,7 @@ export function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, 
 				<Group key={row.id} gap="xs" align="flex-start" data-testid={`mcp-form-env-row-${index}`}>
 					<TextInput
 						placeholder={t("pages.mcp.form.env.keyPlaceholder", "KEY")}
+						aria-label={t("pages.mcp.form.env.keyPlaceholder", "KEY")}
 						value={row.key}
 						error={errors[`env.${index}.key`]}
 						onChange={(event) => onKeyChange(row.id, event.currentTarget.value)}
@@ -51,6 +52,9 @@ export function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, 
 								? t("pages.mcp.form.env.maskedPlaceholder", "unchanged — enter a new value to replace")
 								: t("pages.mcp.form.env.valuePlaceholder", "value")
 						}
+						// Always the plain value wording: the masked placeholder above is a sentence about this row's state,
+						// which would make a poor accessible name.
+						aria-label={t("pages.mcp.form.env.valuePlaceholder", "value")}
 						value={row.value === maskedEnvValue ? "" : row.value}
 						onChange={(event) => onValueChange(row.id, event.currentTarget.value)}
 						style={{ flex: "2 1 200px" }}

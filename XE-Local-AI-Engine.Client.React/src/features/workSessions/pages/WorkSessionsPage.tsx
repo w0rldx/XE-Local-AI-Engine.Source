@@ -78,10 +78,16 @@ export function WorkSessionsPage() {
 			) : (
 				<SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} data-testid="work-sessions-list">
 					{sessions.map((session) => (
+						// The card IS the control: opening the session is the only thing a row does, and nothing
+						// interactive nests inside it, so it can be a real button and reach the keyboard.
 						<Card
 							key={session.id}
+							component="button"
+							type="button"
 							withBorder={true}
 							padding="md"
+							ta="left"
+							w="100%"
 							data-testid={`work-session-card-${session.id}`}
 							onClick={() => {
 								navigate({ to: "/work-sessions/$sessionId", params: { sessionId: session.id ?? "" } });

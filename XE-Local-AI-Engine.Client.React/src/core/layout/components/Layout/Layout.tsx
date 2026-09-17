@@ -3,6 +3,7 @@ import "./Layout.css";
 import { Outlet } from "@tanstack/react-router";
 import { m } from "framer-motion";
 import { lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
@@ -24,6 +25,7 @@ const DevelopmentUi = import.meta.env.DEV
 	: null;
 
 export function Layout() {
+	const { t } = useTranslation();
 	const sideBarCollapsed = useDesktopNavigationBarStore((state) => state.sidebarState);
 	const setSideBarCollapsed = useDesktopNavigationBarStore((state) => state.actions.setSidebarState);
 	// The desktop breakpoint is resolved in JS (not a CSS media query) because the
@@ -48,6 +50,12 @@ export function Layout() {
 
 	return (
 		<>
+			{/* First focusable element on every page, off-screen until it takes focus: a keyboard or screen-reader
+			    user would otherwise tab through the whole sidebar and header on every navigation before reaching
+			    the page. Serves both layouts — the desktop rail and the mobile drawer share this one <main>. */}
+			<a href="#main-content" className="layout-skip-link">
+				{t("components.layout.skipToContent")}
+			</a>
 			<div className="flex flex-row h-dvh w-full overflow-hidden">
 				<div className="hidden md:block">
 					<DesktopNavigationBar sideBarCollapsed={sideBarCollapsed} setSideBarCollapsed={setSideBarCollapsed} />
@@ -74,9 +82,12 @@ export function Layout() {
 						<RuntimeAcquisitionBanner />
 					</div>
 
-					<div className="flex-1 min-h-0 overflow-y-auto md:px-8 px-2 pt-2">
+					{/* The routed content is the `main` landmark and the skip link's target. `tabIndex={-1}` makes it
+					    programmatically focusable so the jump moves the caret, not just the scroll position; it also
+					    keeps this the element that scrolls, so page scrolling is unchanged. */}
+					<main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto md:px-8 px-2 pt-2">
 						<Outlet />
-					</div>
+					</main>
 				</m.div>
 			</div>
 

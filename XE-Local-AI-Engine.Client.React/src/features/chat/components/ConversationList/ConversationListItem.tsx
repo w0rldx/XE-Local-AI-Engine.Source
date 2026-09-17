@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Group, Menu, Paper, Stack, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Group, Menu, Paper, Stack, Text, TextInput, Tooltip, UnstyledButton } from "@mantine/core";
 import { IconArchive, IconArchiveOff, IconDots, IconPencil, IconPin, IconPinned, IconTrash } from "@tabler/icons-react";
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -66,17 +66,23 @@ export function ConversationListItem({
 	const { t } = useTranslation();
 	const isRemote = conversation.origin === "remote";
 	const canManage = !isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive) || Boolean(onDelete));
+	const title = conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled conversation");
+
+	const activate = (): void => {
+		if (!disabled && !isRenaming) {
+			onSelect(conversation.id);
+		}
+	};
 
 	return (
+		// The row stays a plain container: it holds the actions menu and the rename box, and an ARIA `button` around
+		// them makes children presentational, which would hide the very controls it wraps. The title below is a real
+		// button instead — the row's onClick is only the pointer affordance.
 		<Paper
 			p="sm"
 			radius="md"
 			data-testid={`conversation-item-${conversation.id}`}
-			onClick={() => {
-				if (!disabled && !isRenaming) {
-					onSelect(conversation.id);
-				}
-			}}
+			onClick={activate}
 			style={{
 				cursor: disabled || isRenaming ? "default" : "pointer",
 				background: selected ? "var(--mantine-primary-color-light)" : "transparent",
@@ -98,9 +104,22 @@ export function ConversationListItem({
 							aria-label={t("pages.chat.conversationList.renameAria", "Rename conversation")}
 						/>
 					) : (
-						<Text fw={600} size="sm" lineClamp={1} style={{ flex: 1, minWidth: 0 }}>
-							{conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled conversation")}
-						</Text>
+						// The control a keyboard and a screen reader reach, named by its own text. A click here also bubbles
+						// to the row, so it stops propagating rather than selecting the same conversation twice.
+						<UnstyledButton
+							onClick={(event) => {
+								event.stopPropagation();
+								activate();
+							}}
+							disabled={disabled}
+							aria-current={selected ? "true" : undefined}
+							style={{ flex: 1, minWidth: 0, textAlign: "inherit" }}
+							data-testid={`conversation-select-${conversation.id}`}
+						>
+							<Text fw={600} size="sm" lineClamp={1}>
+								{title}
+							</Text>
+						</UnstyledButton>
 					)}
 					{isRenaming ? null : (
 						<Group gap={4} wrap="nowrap">

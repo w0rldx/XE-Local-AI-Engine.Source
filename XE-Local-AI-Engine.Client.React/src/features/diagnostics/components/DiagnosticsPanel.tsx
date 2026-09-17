@@ -87,7 +87,9 @@ export function DiagnosticsPanel() {
 				actions={
 					<>
 						<ReportProblemButton variant="button" />
-						<FileButton onChange={handleImport} accept="application/zip,.zip">
+						{/* The Button below IS the labelled control; FileButton's own input is display:none and only opens the
+						    OS picker. Marked hidden so it is not reported as an unnamed form control. */}
+						<FileButton onChange={handleImport} accept="application/zip,.zip" inputProps={{ "aria-hidden": true, tabIndex: -1 }}>
 							{(props) => (
 								<Button {...props} variant="default" leftSection={<IconUpload size={16} />} loading={importSnapshot.isPending}>
 									{t("diagnostics.import")}

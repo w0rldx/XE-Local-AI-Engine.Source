@@ -204,4 +204,28 @@ describe("ModelSelectorCard", () => {
 
 		expect(onModelChange).toHaveBeenCalledWith("o4-mini");
 	});
+
+	// The search box appears only past the threshold, and its placeholder was its only naming.
+	it("names the search box for assistive technology", async () => {
+		renderWithProviders(
+			<ModelSelectorCard
+				modelOptions={[
+					localDefaultOption(),
+					chatOption("llama3:8b"),
+					chatOption("qwen3:8b"),
+					chatOption("gemma3:12b"),
+					chatOption("phi4:14b"),
+					chatOption("mistral:7b"),
+				]}
+				selectedModel={localDefaultModelValue}
+				onModelChange={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		expect(await screen.findByRole("textbox", { name: "Search models..." })).toBe(
+			screen.getByTestId("chat-model-selector-search"),
+		);
+	});
 });

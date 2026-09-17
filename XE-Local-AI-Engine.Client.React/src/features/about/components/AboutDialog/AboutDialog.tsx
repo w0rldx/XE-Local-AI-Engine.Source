@@ -194,6 +194,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 							value={licenseFilter}
 							onChange={handleFilterChange}
 							placeholder={t("pages.about.searchPackages", "Search packages")}
+							aria-label={t("pages.about.searchPackages", "Search packages")}
 							leftSection={<IconSearch size={16} />}
 						/>
 						<ScrollArea.Autosize mah="50vh">

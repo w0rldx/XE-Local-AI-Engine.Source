@@ -60,6 +60,8 @@ export function ParameterBuilder({ values, errors, update }: CustomToolEditorSec
 				<Group key={rowKeys[index]} gap="xs" align="flex-start" data-testid={`custom-tool-form-parameter-row-${index}`}>
 					<TextInput
 						placeholder={t("pages.customTools.form.parameters.namePlaceholder", "city")}
+						// The placeholder is an example value ("city"), not a name, so the label comes from the field's own heading.
+						aria-label={t("pages.customTools.form.name.label", "Name")}
 						value={parameter.name}
 						error={
 							fieldError(errors, `parameters.${index}.name`)
@@ -71,6 +73,7 @@ export function ParameterBuilder({ values, errors, update }: CustomToolEditorSec
 						data-testid={`custom-tool-form-parameter-name-${index}`}
 					/>
 					<Select
+						aria-label={t("pages.customTools.form.parameters.typeAria", "Parameter type")}
 						value={parameter.type}
 						data={CUSTOM_TOOL_PARAMETER_TYPES.map((type) => ({ label: type, value: type }))}
 						onChange={(value) => patchRow(index, { type: (value ?? "string") as CustomToolParameterType })}
@@ -80,6 +83,7 @@ export function ParameterBuilder({ values, errors, update }: CustomToolEditorSec
 					/>
 					<TextInput
 						placeholder={t("pages.customTools.form.parameters.descriptionPlaceholder", "description")}
+						aria-label={t("pages.customTools.form.parameters.descriptionPlaceholder", "description")}
 						value={parameter.description}
 						onChange={(event) => patchRow(index, { description: event.currentTarget.value })}
 						style={{ flex: "3 1 200px" }}

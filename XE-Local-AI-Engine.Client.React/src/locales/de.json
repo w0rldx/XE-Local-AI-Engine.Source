@@ -4933,6 +4933,7 @@
 					"empty": "Noch keine Parameter deklariert.",
 					"namePlaceholder": "stadt",
 					"nameInvalid": "Nur Bezeichner",
+					"typeAria": "Parametertyp",
 					"descriptionPlaceholder": "Beschreibung",
 					"required": "Erforderlich",
 					"remove": "Parameter entfernen"
@@ -6982,7 +6983,14 @@
 				"expand": "Ausklappen"
 			},
 			"ariaCollapse": "Seitenleiste einklappen",
-			"ariaExpand": "Seitenleiste ausklappen"
+			"ariaExpand": "Seitenleiste ausklappen",
+			"ariaLabel": "Hauptnavigation"
+		},
+		"layout": {
+			"skipToContent": "Zum Hauptinhalt springen"
+		},
+		"codeEditor": {
+			"fallbackLabel": "Code"
 		},
 		"headerBar": {
 			"logout": "Abmelden",

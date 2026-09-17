@@ -197,6 +197,7 @@ export function AgentSelectorCard({
 						<Box px="xs" pt={4} pb={2}>
 							<TextInput
 								placeholder={t("pages.chat.agentSelector.search", "Search agents...")}
+								aria-label={t("pages.chat.agentSelector.search", "Search agents...")}
 								size="xs"
 								leftSection={<IconSearch size={14} />}
 								value={searchQuery}
@@ -236,7 +237,7 @@ export function AgentSelectorCard({
 						</Group>
 					</UnstyledButton>
 					<Divider my={4} />
-					<ScrollArea.Autosize mah={320} type="hover" offsetScrollbars={true}>
+					<ScrollArea.Autosize mah={320} type="auto" offsetScrollbars={true}>
 						<Stack gap={2}>
 							{filtered.map((agent) => (
 								<AgentOptionItem

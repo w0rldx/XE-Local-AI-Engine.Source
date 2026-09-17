@@ -184,4 +184,18 @@ describe("ImageModelBrowsePanel", () => {
 
 		expect((screen.getByTestId("image-model-browse-install") as HTMLButtonElement).disabled).toBe(true);
 	});
+
+	// One role picker per file: the column heading alone would name every row the same, so the file name goes into the
+	// label exactly as it already does on the checkbox beside it.
+	it("names each role picker after its file", () => {
+		repositories = [repository()];
+		files = fluxFiles;
+		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		search();
+		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
+
+		expect(screen.getByRole("combobox", { name: "Role: flux1-schnell-Q4_0.gguf" })).toBe(
+			screen.getByTestId("image-model-browse-file-role-flux1-schnell-Q4_0.gguf"),
+		);
+	});
 });

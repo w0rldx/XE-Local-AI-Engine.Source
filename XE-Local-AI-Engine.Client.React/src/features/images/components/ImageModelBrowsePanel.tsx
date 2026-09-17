@@ -254,6 +254,9 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 														<Select
 															size="xs"
 															w={190}
+															// One role picker per file, so the column heading alone would name them all the same;
+															// the file name distinguishes them, exactly as it does on the checkbox beside it.
+															aria-label={`${t("pages.images.models.browse.files.columns.role", "Role")}: ${file.fileName}`}
 															disabled={picked === undefined}
 															data={imageModelPartRoles.map((role) => ({
 																value: role,

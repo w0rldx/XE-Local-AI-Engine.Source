@@ -175,4 +175,19 @@ describe("AgentSelectorCard", () => {
 		// Trigger falls back to the Default Assistant label when the persisted id maps to no live agent.
 		expect(screen.getByTestId("chat-agent-selector-trigger").textContent).toContain("Default Assistant");
 	});
+
+	// The search box appears only past the threshold, and its placeholder was its only naming.
+	it("names the search box for assistive technology", async () => {
+		const options = Array.from({ length: 6 }, (_, index) => makeOption({ id: `agent-${index}`, name: `Agent ${index}` }));
+
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="agent-0" onSelectAgent={vi.fn()} />,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-agent-selector-trigger"));
+
+		expect(await screen.findByRole("textbox", { name: "Search agents..." })).toBe(
+			screen.getByTestId("chat-agent-selector-search"),
+		);
+	});
 });

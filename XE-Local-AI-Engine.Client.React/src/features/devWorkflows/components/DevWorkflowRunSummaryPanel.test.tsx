@@ -11,14 +11,17 @@ import { DevWorkflowRunSummaryPanel } from "@/features/devWorkflows/components/D
 import { devWorkflowNodeRunSummary } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
-function renderPanel(nodes: Parameters<typeof DevWorkflowRunSummaryPanel>[0]["nodes"]) {
+function renderPanel(
+	nodes: Parameters<typeof DevWorkflowRunSummaryPanel>[0]["nodes"],
+	startableDefinitions: Parameters<typeof DevWorkflowRunSummaryPanel>[0]["startableDefinitions"] = [],
+) {
 	return renderWithProviders(
 		<DevWorkflowRunSummaryPanel
 			runs={[]}
 			selectedRunId="run"
 			nodes={nodes}
 			pendingDecisionCount={0}
-			startableDefinitions={[]}
+			startableDefinitions={startableDefinitions}
 			selectedDefinitionId={null}
 			onSelectDefinition={() => undefined}
 			isStarting={false}
@@ -50,5 +53,13 @@ describe("DevWorkflowRunSummaryPanel", () => {
 		]);
 
 		expect(screen.getByTestId("dev-workflow-progress-counts").textContent).toBe("1 running · 0 queued · 1/2 done");
+	});
+
+	// The template picker carried no label at all: its placeholder was the only wording on screen, and that vanishes
+	// the moment a template is picked.
+	it("names the template picker for assistive technology", () => {
+		renderPanel([devWorkflowNodeRunSummary({ id: "a", status: "Succeeded" })], [{ id: "definition-1", name: "Build and test" }]);
+
+		expect(screen.getByRole("combobox", { name: "Pick a template" })).toBe(screen.getByTestId("dev-workflow-start-definition"));
 	});
 });

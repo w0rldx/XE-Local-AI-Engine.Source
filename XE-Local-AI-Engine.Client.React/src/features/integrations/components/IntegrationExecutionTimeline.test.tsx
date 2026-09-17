@@ -88,6 +88,13 @@ describe("IntegrationExecutionTimeline", () => {
 		expect(screen.queryByTestId("integration-execution-output-toggle")).toBeNull();
 	});
 
+	// The payload box scrolls: without a tab stop a keyboard is stranded on whatever line happens to be visible.
+	it("puts the scrolling payload box in the tab order", () => {
+		renderWithMantine(<IntegrationExecutionTimeline events={events} isLoading={false} />);
+
+		expect(screen.getByTestId("integration-execution-output").getAttribute("tabindex")).toBe("0");
+	});
+
 	it("keeps a large payload behind a disclosure so its editor mounts only once opened", () => {
 		renderWithMantine(
 			<IntegrationExecutionTimeline

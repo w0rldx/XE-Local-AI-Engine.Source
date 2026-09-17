@@ -1,6 +1,29 @@
 /*
  * The main content area's marginLeft/width are driven solely by Layout.tsx and
  * Framer Motion layout projection (single source of truth), so no margin/width classes
- * live here. This file is intentionally empty of layout sizing rules; keep the import
- * in Layout.tsx in case component-scoped styles are added later.
+ * live here. This file is intentionally empty of layout sizing rules.
  */
+
+/*
+ * Skip-to-content link. Off-screen rather than `display: none` or `visibility: hidden`, because both of those
+ * also remove it from the tab order — which is the one thing it exists for. It comes back on :focus only,
+ * so a pointer user never sees it.
+ */
+
+.layout-skip-link {
+	position: fixed;
+	top: var(--mantine-spacing-xs);
+	left: -10000px;
+	z-index: 200;
+	padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+	background-color: var(--mantine-color-body);
+	color: var(--mantine-color-text);
+	border: 1px solid var(--mantine-primary-color-filled);
+	border-radius: var(--mantine-radius-sm);
+	font-size: var(--mantine-font-size-sm);
+	text-decoration: none;
+}
+
+.layout-skip-link:focus {
+	left: var(--mantine-spacing-xs);
+}

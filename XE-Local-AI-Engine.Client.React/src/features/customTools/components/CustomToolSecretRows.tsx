@@ -65,6 +65,7 @@ export function CustomToolSecretRows({
 					<Group key={rowKeys[index]} gap="xs" align="flex-start" data-testid={`${testid}-row-${index}`}>
 						<TextInput
 							placeholder={t("pages.customTools.form.secretRows.namePlaceholder", "Name")}
+							aria-label={t("pages.customTools.form.secretRows.namePlaceholder", "Name")}
 							value={row.name}
 							onChange={(event) => onPatch(index, { name: event.currentTarget.value })}
 							style={{ flex: "2 1 140px" }}
@@ -78,12 +79,14 @@ export function CustomToolSecretRows({
 								onChange={(value) => onPatch(index, { value })}
 								storedPlaceholder={t("pages.customTools.form.secretRows.storedPlaceholder", "•••• stored — leave to keep")}
 								placeholder={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
+								aria-label={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
 								style={{ flex: "3 1 200px" }}
 								data-testid={`${testid}-value-${index}`}
 							/>
 						) : (
 							<TextInput
 								placeholder={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
+								aria-label={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
 								value={row.value}
 								onChange={(event) => onPatch(index, { value: event.currentTarget.value })}
 								style={{ flex: "3 1 200px" }}

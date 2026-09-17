@@ -217,6 +217,7 @@ export function ModelSelectorCard({
 							<Box px="xs" pt={4} pb={2}>
 								<TextInput
 									placeholder={t("pages.chat.modelSelector.search", "Search models...")}
+									aria-label={t("pages.chat.modelSelector.search", "Search models...")}
 									size="xs"
 									leftSection={<IconSearch size={14} />}
 									value={searchQuery}
@@ -226,7 +227,7 @@ export function ModelSelectorCard({
 								/>
 							</Box>
 						) : null}
-						<ScrollArea.Autosize mah={320} type="hover" offsetScrollbars={true}>
+						<ScrollArea.Autosize mah={320} type="auto" offsetScrollbars={true}>
 							<Stack gap={2}>
 								<ModelSelectorSection
 									items={availableOptions}

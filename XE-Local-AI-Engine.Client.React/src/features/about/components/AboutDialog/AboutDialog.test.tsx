@@ -208,4 +208,13 @@ describe("AboutDialog", () => {
 		expect(screen.getByText("Serilog")).toBeTruthy();
 		expect(screen.queryByText("react")).toBeNull();
 	});
+
+	// The placeholder was the filter box's only naming, and it disappears the moment a query is typed.
+	it("names the package filter for assistive technology", () => {
+		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+
+		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
+
+		expect(screen.getByRole("textbox", { name: "Search packages" })).toBeTruthy();
+	});
 });
