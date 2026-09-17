@@ -40,18 +40,21 @@ public sealed partial class LlamaServerProcessSupervisor
 
         // Synchronous in-memory read (no HTTP): the effective context was captured once after readiness. Null when the
         // process is not running, has exited, or /props did not report a usable value.
-        // A profiling-owned process is excluded: its context comes from explore/replay launch args, not from serving
-        // policy, so reporting it would size a chat's context budget off a measurement spawn.
         var key = new ProcessKey(modelName, role);
-        if (_processes.TryGetValue(key, out var running)
-            && !running.Handle.HasExited
-            && !running.IsProfilingOwned
-            && running.EffectiveContextTokens is { } effectiveContext)
+        if (!_processes.TryGetValue(key, out var running)
+            || running.Handle.HasExited
+            || running.EffectiveContextTokens is not { } effectiveContext)
         {
-            return new LlamaServerRuntimeInfo(effectiveContext);
+            return null;
         }
 
-        return null;
+        // A profiling-owned process is excluded: its context comes from explore/replay launch args, not from serving
+        // policy, so reporting it would size a chat's context budget off a measurement spawn. The exclusive operation
+        // that pinned it is the exception — that window IS the one its own measurement runs in, and withholding it
+        // leaves a benchmark's context admission nothing to size against, failing the run it just warmed.
+        return !running.IsProfilingOwned || ReferenceEquals(running, GetOwnExclusiveProfilingProcess(key, out _))
+            ? new LlamaServerRuntimeInfo(effectiveContext)
+            : null;
     }
 
     private async Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthCoreAsync(KeyValuePair<ProcessKey, RunningProcess>[] snapshot,

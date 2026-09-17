@@ -1759,6 +1759,31 @@ recipe in `Plans/static-quality-enforcement-2026-09-15/S5-ollamasharp-boundary-m
 `MSB4006` circular-dependency diagnostic the restore itself prints, naming `_GenerateRestoreProjectPathWalk` and the
 mutated csproj.
 
+### PROPOSED (awaiting operator approval): a callback that runs under the supervisor's per-key gate must never re-enter the gated path for that key
+
+**Rule:** `RunExclusiveProfilingCoreAsync` holds `_ensureGates[key]` — a non-reentrant `SemaphoreSlim(1,1)` — across
+its whole `body` callback, and for a benchmark that `body` is the entire normal invocation pipeline. Every supervisor
+member the body can reach for the SAME key therefore has to be answered from the process that operation pinned, not
+routed into the "a profiling-owned process is never handed out" exclusion: that exclusion's fall-through is
+`DecideEnsureAsync`, which waits on the very semaphore the body's own frame holds. When you add a guard that excludes
+a profiling-owned process from a lookup, ask which of the exclusive body's own calls reach it, and give the owning
+flow an identity-matched way past it (here an `AsyncLocal` marker naming the pinned `ProcessKey` **and** the process
+INSTANCE, deactivated before the body's flow unwinds so detached work does not inherit ownership of a torn-down
+process). A marker that matches the key but no longer resolves a live process must FAIL with the classified runtime
+error — falling through would take the gate and hang. **Prevents:** the hang that made every real local benchmark run
+sit at zero output until the 900 s invocation timeout. `EnsureRunningAsync` (via the provider's warm) deadlocked, and
+`GetRuntimeInfo` — excluded for the same reason — returned null one step later, which a benchmark's own context
+admission rejects as `EffectiveContextUnavailable`; a fix for only the first would have traded a hang for a failure.
+It also prevents believing a mocked runner covers this: `BenchmarkRunExecutorTests` substitutes `IInvocationRunner`
+wholesale and the supervisor's profiling tests drive a synthetic `body` that never re-enters the supervisor, so the
+two sides of the deadlock were never exercised together by any test. **Authority:** `30a514d00` (the commit that added
+the exclusion, for a real race — an unrelated chat handed a profiling process that is then killed mid-generation),
+the live `dumpasync --coalesce` capture whose pending chain ends
+`RunExclusiveProfilingCoreAsync → … → EnsureRunningAsync → DecideEnsureAsync → SemaphoreSlim.WaitUntilCountOrTimeoutAsync`,
+and `SupervisorProfilingReentrancyTests`, whose deadlock-detector tests hang (then red) against the unpatched
+supervisor while `SupervisorProfilingTests.Profiling_ConcurrentEnsureForSameKey_NeverReusesTheProfilingProcess` keeps
+the exclusion honest for every other caller.
+
 ---
 
 ## 4. Agent Mode, MAF, sandbox, cloud providers

@@ -59,6 +59,10 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     // section, NOT for the whole spawn — the spawn itself runs detached (see _inflightSpawns).
     private readonly ConcurrentDictionary<ProcessKey, SemaphoreSlim> _ensureGates = new();
 
+    // WHICH logical call flow is the exclusive profiling operation that pinned a process, and which process it pinned.
+    // Set only around the body callback, so it identifies that operation's OWN re-entrant calls and nobody else's.
+    private readonly AsyncLocal<ExclusiveProfilingScope?> _exclusiveProfiling = new();
+
     // The in-flight, DETACHED spawn task per (model, role) key. A caller AWAITS this task but never owns its lifetime:
     // a caller cancelling its own wait does not abort the model load, which continues under its own readiness deadline
     // and leaves the model warm for the next send (the deliberate design — a user who cancels before the first token
@@ -252,6 +256,24 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
                 var key = new ProcessKey(modelName, role);
 
+                // Re-entrancy: an exclusive profiling operation holds this key's single-flight gate across its WHOLE
+                // body callback, so the body's own ensure must be answered from the process that operation pinned.
+                // Routed into the profiling-owned exclusion below it would park on a semaphore its own frame holds —
+                // a self-deadlock, not a wait. Every OTHER caller still falls through and queues behind profiling.
+                var ownProfilingProcess = GetOwnExclusiveProfilingProcess(key, out var isOwnProfilingFlow);
+                if (isOwnProfilingFlow)
+                {
+                    // Never fall through from here: the gate is held by this flow's own frame, so a pinned process that
+                    // exited during the body fails with the classified non-retryable error rather than waiting forever.
+                    if (ownProfilingProcess is null)
+                    {
+                        throw NonRetryable("The llama-server process this exclusive measurement spawned is no longer running.");
+                    }
+
+                    ownProfilingProcess.MarkUsed(_timeProvider.GetUtcNow());
+                    return ownProfilingProcess.Endpoint;
+                }
+
                 // Fast path: an already-running, live process is reused without taking the spawn gate — subject to a
                 // rate-limited liveness probe so a wedged (alive but unresponsive) process is respawned instead of handed out.
                 // A profiling-owned process is never handed out: its teardown evicts unconditionally, so a reuse here would
@@ -312,6 +334,29 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     /// <summary>The registered process for a key, or <see langword="null" />. Test seam for process-state assertions.</summary>
     internal RunningProcess? GetRegisteredProcess(string modelName, ModelRole role) =>
         _processes.TryGetValue(new ProcessKey(modelName, role), out var running) ? running : null;
+
+    /// <summary>
+    ///     The process the CALLER's own exclusive profiling operation pinned for <paramref name="key" />, or
+    ///     <see langword="null" /> when this flow pinned none — or no longer owns what it pinned. Matched on the process
+    ///     INSTANCE as well as the key, so a marker that outlived the process it named can never hand out a replacement
+    ///     this flow never pinned. <paramref name="isOwnFlow" /> reports the KEY match alone: a caller that must not
+    ///     touch the per-key gate, because its own frame holds it, has to know it is inside the body even when the
+    ///     pinned process is gone.
+    /// </summary>
+    private RunningProcess? GetOwnExclusiveProfilingProcess(ProcessKey key, out bool isOwnFlow)
+    {
+        var scope = _exclusiveProfiling.Value;
+        if (scope is not { IsActive: true } || !scope.Key.Equals(key))
+        {
+            isOwnFlow = false;
+            return null;
+        }
+
+        isOwnFlow = true;
+        return _processes.TryGetValue(key, out var running) && ReferenceEquals(running, scope.Process) && !running.Handle.HasExited
+            ? running
+            : null;
+    }
 
     /// <summary>
     ///     The single-flight decision, taken under the per-key gate held only briefly: reuse a now-registered process,
@@ -470,6 +515,36 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
     /// <summary>The outcome of <see cref="DecideEnsureAsync" />: a reused endpoint XOR the shared detached spawn task.</summary>
     private readonly record struct EnsureDecision(LlamaServerEndpoint? Reused, Task<RunningProcess>? SpawnTask);
+
+    /// <summary>
+    ///     Marks the caller's flow as the exclusive profiling operation that pinned <see cref="Process" /> for
+    ///     <see cref="Key" />. Carried in an <see cref="AsyncLocal{T}" /> set only around the body callback, so it
+    ///     identifies that operation's OWN re-entrant calls and nobody else's. <see cref="IsActive" /> is cleared
+    ///     before the body's flow unwinds: work the body DETACHED (fire-and-forget, <c>Task.Run</c>) inherited this
+    ///     execution context and would otherwise still resolve as the owning flow after teardown removed the process.
+    ///     Cleared, such work queues on the per-key gate and spawns its own process, exactly as any other caller does.
+    /// </summary>
+    private sealed class ExclusiveProfilingScope
+    {
+        private int _inactive;
+
+        public ExclusiveProfilingScope(ProcessKey key, RunningProcess process)
+        {
+            Key = key;
+            Process = process;
+        }
+
+        public ProcessKey Key { get; }
+
+        public RunningProcess Process { get; }
+
+        public bool IsActive => Volatile.Read(ref _inactive) == 0;
+
+        public void Deactivate()
+        {
+            Interlocked.Exchange(ref _inactive, value: 1);
+        }
+    }
 
     private sealed record InflightSpawn(
         TaskCompletionSource<RunningProcess> Completion,
@@ -702,7 +777,23 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                                 LoadObservation = running.LoadObservation,
                                 LaunchReceipt = running.LaunchReceipt
                             };
-                            return await body(context, ct).ConfigureAwait(false);
+
+                            // Mark THIS flow as the owner of the pinned process for the body's duration, so the body's
+                            // own re-entrant ensure and runtime-info reads for this key are answered from it instead of
+                            // deadlocking on the gate this frame holds. The prior value is RESTORED, not cleared, so a
+                            // nested exclusive operation for another key unwinds to its parent's marker.
+                            var priorScope = _exclusiveProfiling.Value;
+                            var scope = new ExclusiveProfilingScope(key, running);
+                            _exclusiveProfiling.Value = scope;
+                            try
+                            {
+                                return await body(context, ct).ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                scope.Deactivate();
+                                _exclusiveProfiling.Value = priorScope;
+                            }
                         }
                         finally
                         {
