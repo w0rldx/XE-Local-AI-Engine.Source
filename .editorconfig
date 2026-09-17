@@ -168,7 +168,9 @@ csharp_preserve_single_line_statements = true
 csharp_style_namespace_declarations = file_scoped:none
 csharp_style_prefer_method_group_conversion = true:silent
 csharp_style_prefer_top_level_statements = true:silent
-csharp_style_prefer_primary_constructors = true:suggestion
+# Project convention: conventional constructors only — dependencies guarded into private readonly fields, and a
+# wide constructor stays visible as the responsibility smell it is (docs/wiki/16-code-conventions.md).
+csharp_style_prefer_primary_constructors = false:suggestion
 csharp_style_prefer_null_check_over_type_check = true:suggestion
 csharp_style_prefer_local_over_anonymous_function = true:suggestion
 csharp_style_implicit_object_creation_when_type_is_apparent = false

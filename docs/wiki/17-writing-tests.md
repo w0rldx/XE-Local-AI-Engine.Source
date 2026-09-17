@@ -82,6 +82,40 @@ build error instead of a silently passing test.
 Never mock the thing the test exists to verify — a security or approval gate, the AEAD cipher, a migration's schema
 change. Substituting those proves only that the test calls the mock.
 
+## 1b. Test categories
+
+Every test class carries **exactly one** class-level `[Category(...)]`, from three values:
+
+| Category | What it means |
+|---|---|
+| `Unit` | Pure logic against in-memory collaborators: no host, no real database, no socket, no child process. A hand-written fake or an NSubstitute double is still `Unit`. |
+| `Integration` | Deterministic, but boots something real in-process: a `TestServerWebAppFactory` host, a real SQLite file (including a `MigratedDatabaseTemplate` copy), a `FakeOllama`/`FakeDocker` server on a loopback socket, or a real child process. |
+| `ExternalInfra` | Needs infrastructure the box may not have — today only the real-Docker-daemon suites behind `XE_REQUIRE_DOCKER_TESTS=1`. Never part of the default gate. |
+
+The line between `Unit` and `Integration` is **mechanism, not speed**: what the test starts decides its category,
+not how long it takes. The gate runs `Unit` and `Integration`; the split exists so a failure's *class* is readable
+from the lane that reported it.
+
+Filter by category with TUnit's `--treenode-filter` property syntax — four path segments, then the property in
+brackets (`!=` excludes; combine properties inside one bracket, `[(Category=Unit)&(Other=Value)]`):
+
+```bash
+--treenode-filter '/*/*/*/*[Category=Unit]'
+--treenode-filter '/*/*/*/*[Category!=ExternalInfra]'
+```
+
+*Migration status:* the attribute and the guard test — every class has exactly one category, and a `Unit` class may
+not reference the host factory, `DbContext` options, a fake server or `Process.Start` — arrive with slice **S2**.
+Until then, write the attribute on any test class you add or touch.
+
+### Naming
+
+A test method name is **subject + scenario + expected outcome**, underscore-separated, matching the dominant shape
+in every project: `Subject_WhenScenario_ExpectedOutcome` — `Upload_WhenOversize_Rejects`,
+`Import_WhenTheSelectedFolderInputIsRejected_ReturnsBadRequest`. Drop the middle part only when the subject has a
+single scenario worth naming (`MigratedSchema_MatchesWhatEnsureCreatedBuilds`). A name that states the mechanism
+instead of the outcome ("…_Works", "…_Test") hides what broke when it reds.
+
 ## 2. `TestServerWebAppFactory` — the backend host fixture
 
 `XE-Local-AI-Engine.Tests/TestServerWebAppFactory.cs` builds the real app through `Program.CreateAppAsync` and

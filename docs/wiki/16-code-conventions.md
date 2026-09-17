@@ -1,8 +1,13 @@
 # Code Organization Conventions
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-09-17 · Code-grounded.
 > Updated 2026-08-07: endpoint areas now fold DTOs/mappers/validators into `V1/{Dtos,Mappers,Validators}/`
 > subfolders (only endpoints stay at the top level); `Dtos/` keeps a flat namespace by design.
+> Updated 2026-09-17: the backend sections below state the **C# baseline** — conventional constructors,
+> `sealed class` DTOs, contextual `ConfigureAwait`, `*Store`-only data access, comment budgets. The baseline
+> is the rule for code you write or touch **now**; the migration of existing code runs as a slice series, and
+> each rule names the slice that carries it. **Existing code that still shows the old shape is migration debt,
+> not a pattern to copy** — and equally, it is not to be "repaired" back to the old shape.
 
 This page states **where a new type or file goes and which house patterns to follow** — the conventions
 that [02-project-layout.md](02-project-layout.md) (the *project* inventory and layering map) does not
@@ -34,9 +39,15 @@ under `Endpoints/{Area}/V1/`; a small number of areas group several into a plura
 (for example `NodeAuthEndpoints.cs`). Both are acceptable — **match the area you are editing**, don't
 mass-convert either way. There is **no MediatR / `ISender` / CQRS vertical-slice layer** anywhere; an
 endpoint injects and calls `Client.Application` services directly and stays **orchestration-only**
-(no business logic, no persistence). It returns a **DTO record, never an EF entity**.
-Canonical shape: `Endpoints/LocalChat/V1/DeleteNodeChatConversationEndpoint.cs` (sealed, primary-ctor
-null-guards, `ct` + `ConfigureAwait(false)`, DTO return).
+(no business logic, no persistence). It returns a **DTO, never an EF entity** — and a DTO is a `sealed class`
+with `required`/`init` members (see [DTOs, records and type choice](#dtos-records-and-type-choice)).
+
+Canonical shape: sealed, one endpoint per `*Endpoint.cs`, route derived from `LocalApiRoutes`, a conventional
+constructor guarding its dependencies into `private readonly` fields, the request's `CancellationToken` threaded
+through every call, no `ConfigureAwait` (the host is not a library — see
+[ConfigureAwait is contextual](#configureawait-is-contextual)), DTO return.
+`Endpoints/LocalChat/V1/DeleteNodeChatConversationEndpoint.cs` is the structural reference; its constructor and
+`ConfigureAwait` usage still show the pre-baseline shape until slices S3/S4 reach it.
 
 Both halves of that shape are now regression guards rather than review habits.
 `EndpointConventionTests` freezes the file and type conventions: one endpoint per `*Endpoint.cs` file named
@@ -56,13 +67,14 @@ do. The last such site was the tool-catalog endpoint's `AI.Agent` approval polic
 ### A service's own model types live in `*ServiceModels.cs`
 
 Gold standard: `Services/AgentHome/` in `Client.Application` — interfaces in `IAgentHome*.cs`, shared
-records/exceptions in `AgentHomeServiceModels.cs`, concrete class under `Implementation/`. A service
+models/exceptions in `AgentHomeServiceModels.cs`, concrete class under `Implementation/`. A service
 (`*Service.cs`, `*Runner.cs`, `*Coordinator.cs`, `*Manager.cs`, `*Detector.cs`) should **not** inline its
-own top-level input/result `record`s, `enum`s, or exceptions; move them to a sibling
-`<ServiceName>Models.cs` in the same folder.
+own top-level input/result types, `enum`s, or exceptions; move them to a sibling
+`<ServiceName>Models.cs` in the same folder. Those models are `sealed class`es — see
+[DTOs, records and type choice](#dtos-records-and-type-choice).
 
-**Stays put:** a single small param/result record colocated with its only consumer; `private`/nested
-records scoped inside a service; an interface file (`IXxx.cs`) carrying its own small contract records.
+**Stays put:** `private`/nested types scoped inside a service. A top-level param/result type sharing a file with
+its only consumer is migration debt under the one-type-per-file rule below, not an exemption.
 
 ### Subfolders under `V1/` must nest their namespace — IDE0130 is a build error
 
@@ -102,13 +114,25 @@ at its top level. Supporting types are sorted into subfolders:
 
 Small endpoint-support helpers that are neither DTO, mapper, nor validator (a route-name constant, a wire
 enum, a request-size-limit, a filename sanitizer) may **stay colocated at the top level** — they are
-endpoint infrastructure, not a category worth a folder of one. An endpoint's own single request/response
-record inlined in its `*Endpoint.cs` also stays put.
+endpoint infrastructure, not a category worth a folder of one. An endpoint's **own** request/response DTO does
+**not**: it is a DTO like any other and belongs in `Dtos/`.
+
+### One top-level type per file — the family files are the exception
+
+A `.cs` file declares one top-level type, named after the file. The documented exceptions are the DTO/contract
+and service-model **family files** below (`*Dtos.cs`, `*Contracts.cs`, `*ServiceModels.cs`/`*Models.cs`), which
+group a related family on purpose. Everything else is drift in one of two directions: a DTO inlined in an
+`*Endpoint.cs`, or a stray type riding along in a `*Service.cs`. Both move out — the DTO to the area's `Dtos/`
+family file (the namespace stays flat, so this is a pure move), the stray type to the service's sibling
+`*ServiceModels.cs`.
+
+*Migration status:* slice **S7f** moves the DTOs still inline in endpoint files and triages the remaining
+multi-type files; `ServiceModelColocationTests` already fails the gate for the `Services/` folders it covers.
 
 ### DTO families still aggregate in one `*Dtos.cs` / `*Contracts.cs` — on purpose
 
-Inside `Dtos/`, a file like `DevelopmentContracts.cs` (40+ records) deliberately holds a whole family of
-related request/response records. Intentional — do **not** explode into one-record-per-file.
+Inside `Dtos/`, a file like `DevelopmentContracts.cs` (40+ types) deliberately holds a whole family of
+related request/response DTOs. Intentional — do **not** explode into one-type-per-file.
 
 ### Mappers are standalone files under `Mappers/`
 
@@ -121,19 +145,74 @@ an `*Endpoint(s).cs` file is the outlier — extract it into `Mappers/`.
 ### Persistence: EF Core + SQLite behind a `*Store` layer
 
 `Client.Persistence` is EF Core + **SQLite** with per-column AEAD encryption (`UseSqlite` in
-`NodeIdentityDbContextFactory.cs`), **not** Npgsql/PostgreSQL. Data access goes through a `*Store`
-abstraction (`Client.Persistence/Stores` + `/Implementation`), not raw `DbContext` in services/endpoints.
-Reads use `AsNoTracking`; set operations use `ExecuteUpdate/DeleteAsync`.
+`NodeIdentityDbContextFactory.cs`), **not** Npgsql/PostgreSQL. Reads use `AsNoTracking`; set operations use
+`ExecuteUpdate/DeleteAsync`.
+
+### The repository abstraction is `*Store` — an Application service never holds a `DbContext`
+
+There is no `IRepository` in this repo and none is to be introduced: the abstraction over persisted state is a
+`*Store` (`Client.Persistence/Stores` + `/Implementation`). A service or endpoint that needs data injects a store;
+EF and raw SQL stay behind it, in `Client.Persistence`. A query the stores cannot express is a missing store
+method, not a reason to inject `NodeChatDbContext`/`NodeIdentityDbContext` into `Client.Application`.
+
+A `DbContext` outside `Client.Persistence` is legitimate only where the code creates or owns its scope for
+infrastructure reasons rather than doing domain work: the **composition root** (DI registration, ASP.NET
+Identity's `AddEntityFrameworkStores<T>` generic argument), the **health check**, the **migration bootstrap** and
+the **retention sweeper**. Every other holder is migration debt.
+
+*Migration status:* slice **S7** fences this with a shrink-only architecture test whose allowlist is the
+authoritative list of remaining holders, then migrates them behind stores. The database-maintenance services
+under `Services/Persistence/` (backup, migration recovery, encryption backfill) are decided there case by case:
+move into `Client.Persistence`, or join the legitimate set.
 
 ### DI + class house style
 
-Constructor injection via **primary constructors**, with each dependency null-guarded
-(`?? throw new ArgumentNullException(...)`) into a `readonly` field — this is the house style throughout
-`Client.Application`, heavier than a plain primary ctor. Classes are `sealed` by default. Options bind from config via
-the `*Options` pattern. Never read ambient time (`DateTimeOffset.UtcNow`/`.Now`, `DateTime.*`) directly; inject
-`TimeProvider` (registered once in `Client/ConfigureServices.cs`, no `?? TimeProvider.System` defaults) and call
-`GetUtcNow()`/`GetLocalNow()` — enforced by `BannedSymbols.txt` (RS0030), documented in
-[Security & Privacy](12-security-and-privacy.md) §8.
+**Conventional constructors — no primary constructors on classes or structs.** Each dependency is assigned to a
+`private readonly` field and guarded with `ArgumentNullException.ThrowIfNull(x)`, never
+`?? throw new ArgumentNullException(...)`. This is a project convention, not a judgement about the language
+feature: a uniform shape keeps the guard, the field and the injected name in one readable block, and keeps
+constructor bodies (validation, derived state) available without a later rewrite from primary-ctor form.
+
+A class whose constructor takes **many** dependencies is a responsibility smell. Converting it to a conventional
+constructor makes that visible — which is the point; **report it, do not hide it** behind a terser syntax.
+Decomposing such a class is its own reviewed change, never a drive-by inside a mechanical pass.
+
+Classes are `sealed` by default. Options bind from config via the `*Options` pattern. Never read ambient time
+(`DateTimeOffset.UtcNow`/`.Now`, `DateTime.*`) directly; inject `TimeProvider` (registered once in
+`Client/ConfigureServices.cs`, no `?? TimeProvider.System` defaults) and call `GetUtcNow()`/`GetLocalNow()` —
+enforced by `BannedSymbols.txt` (RS0030), documented in [Security & Privacy](12-security-and-privacy.md) §8.
+
+*Migration status:* `.editorconfig` sets `csharp_style_prefer_primary_constructors = false`, but IDE0290 does not
+flag a primary constructor that already exists, so the rule needs a source-scan guard. Slice **S4** converts the
+existing classes project by project and lands that guard.
+
+### DTOs, records and type choice
+
+**Default to a `sealed class` with `required`/`init` members.** That covers API request/response DTOs, SignalR hub
+payloads, `Client.Application` service models, `Client.Persistence` store models and the shared `AI.Contracts`
+types — everything whose job is to carry named values across a boundary.
+
+A **`record`** is for a type that genuinely wants **value semantics**: it is used as a dictionary or `HashSet` key,
+it is copied with `with`, or it is compared structurally (including by a test's equality assertion). When a record
+is right, declare it **non-positional** — properties in a body, not a parameter list — so the member list, its
+docs and its attributes stay where a reader expects them. **Positional records are avoided** everywhere.
+
+EF entities are classes: an entity has identity, not value equality.
+
+*Migration status:* slice **S5** converts the existing records area by area behind a guard that rejects new
+positional records. The trap it exists to catch: converting a record to a class silently turns a structural
+`AssertEx.Equal` into a reference comparison, so every sub-slice runs the full gate.
+
+### `ConfigureAwait` is contextual
+
+`ConfigureAwait(false)` is written in the **library** projects — `Providers.*`, `AI.Agent`, `AI.Contracts` — which
+may be consumed from a caller that has a synchronization context. It is **not** written in `Client`,
+`Client.Application`, `Client.Persistence` or any test project: ASP.NET Core has no synchronization context, so
+there it is noise on every `await` with no behavioural effect.
+
+*Migration status:* CA2007 and MA0004 are `none` repo-wide today. Slice **S3** removes the calls from the host,
+application, persistence and test projects, completes them in the library projects, and replaces the global `none` with path-scoped
+`.editorconfig` sections that enforce the rule in both directions.
 
 ### Blocking calls and cancellation forwarding are enforced
 
@@ -204,13 +283,53 @@ Concrete implementations are **not** required to sit under `Implementation/`: pr
 root-level DTOs, enums, exceptions and value records (`LlamaBinary`, `GpuVariant`, `LlamaRuntimeException`, …),
 and no rule forces those to move.
 
+### Comments and XML documentation
+
+Docs and comments are part of the code's surface: they are read far more often than they are written, and an
+oversized one is skipped rather than read. The budgets below are limits, not targets — the best comment is the
+one the code made unnecessary.
+
+**`//` comments.** One line preferred, **two consecutive lines maximum**, on its own line above the code it
+explains. Say *why*, not *what the next line already says*. A `/* */` block is for a file header, never for
+explanation. **No commented-out code** — git has it (Sonar S125 already fails the Release build on it).
+
+**XML documentation.**
+
+| Element | Budget |
+|---|---|
+| `<summary>` | one sentence, ≤ 240 characters |
+| `<param>` / `<returns>` / `<value>` | ≤ 160 characters, and **only when it adds information** the name does not |
+| `<remarks>` | only for non-obvious behaviour; ≤ 5 content lines / 600 characters on an ordinary member |
+| whole doc block | more than **15 doc lines** on a normal member is a review trigger, not an automatic violation |
+
+Use `<inheritdoc/>` instead of copying an interface's docs onto its implementation. A doc block that has grown
+into a design article belongs in `docs/wiki/` or an ADR, with the member's doc reduced to a sentence and a
+pointer.
+
+**No history narration.** "Previously we…", "changed in…", a commit SHA — git records that. Design history goes
+to `docs/adr/`; architecture goes to `docs/wiki/`. A historically-worded invariant is **rewritten** as the
+present-tense rule it actually states, not deleted.
+
+**A remaining TODO states what, why, and a reference.** A bare `TODO`/`FIXME`/`HACK` fails the Release build
+(S1135); the fix is to describe the present limitation directly, or to link the ADR/issue that owns it — not to
+reword the marker.
+
+**Suppressing a static-analysis finding is the last step, in this order:** understand what the rule is telling
+you → fix the root cause → verify the finding is gone → only then suppress, at the **smallest** scope
+(`#pragma` around the one span, restored on the next line, or a `[SuppressMessage]` on the one member) **with a
+reason**. A file-wide or project-wide suppression, or one with no reason, is a defect.
+
+*Migration status:* slice **S6** lands a shrink-only ratchet on these budgets and then cleans production code in
+file-disjoint batches; tests get the ratchet only.
+
 ### Tests: TUnit, not xUnit
 
 Backend tests are **TUnit** (`[Test]`) on Microsoft.Testing.Platform, with a project **`AssertEx`** helper
 (`AssertEx.Equal/NotNull`) and **NSubstitute** for mocks — **no** xUnit/Shouldly/FluentAssertions/Moq.
 Reach for a substitute only after the real thing and the repo's fake seam (`FakeOllama`,
 `RecordingHubMessageSender`, MSW) have been ruled out, and never for the gate, cipher or migration the test exists
-to verify — [17-writing-tests.md §1a](17-writing-tests.md#1a-test-principles).
+to verify — [17-writing-tests.md §1a](17-writing-tests.md#1a-test-principles). Every test class carries exactly
+one `[Category]` — [17-writing-tests.md §1b](17-writing-tests.md#1b-test-categories).
 Scope a run with `--treenode-filter` (not `--filter`). See
 [13-testing-and-validation.md](13-testing-and-validation.md).
 
