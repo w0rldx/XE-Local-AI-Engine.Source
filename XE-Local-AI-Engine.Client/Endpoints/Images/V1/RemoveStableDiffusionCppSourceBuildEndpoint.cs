@@ -4,12 +4,11 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
-public sealed class RemoveStableDiffusionCppSourceBuildEndpoint(
-    IStableDiffusionCppSourceBuildService buildService,
-    IStableDiffusionInstalledRuntimeStore installedRuntimeStore,
-    IImageRuntimeActivityGate activityGate) : Endpoint<ImageRuntimeActionRequest, ImageRuntimeStatusResponse>
+public sealed class RemoveStableDiffusionCppSourceBuildEndpoint(ImageRuntimeOrchestrationService imageRuntime)
+    : Endpoint<ImageRuntimeActionRequest, ImageRuntimeStatusResponse>
 {
     public override void Configure()
     {
@@ -24,11 +23,11 @@ public sealed class RemoveStableDiffusionCppSourceBuildEndpoint(
     public override async Task HandleAsync(ImageRuntimeActionRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var result = await buildService.RemoveAsync(ct).ConfigureAwait(false);
+        var result = await imageRuntime.RemoveAsync(ct).ConfigureAwait(false);
         if (result.Outcome == StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy)
         {
             await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy("Wait for active image jobs and image-runtime processes to finish before removing the managed runtime.",
-                          result.Activity ?? activityGate.GetSnapshot()))
+                          result.Activity ?? imageRuntime.GetActivitySnapshot()))
                       .ConfigureAwait(false);
             return;
         }
@@ -39,11 +38,11 @@ public sealed class RemoveStableDiffusionCppSourceBuildEndpoint(
             throw new InvalidOperationException($"Unknown stable-diffusion.cpp source-build remove outcome: {result.Outcome}.");
         }
 
-        var installed = await installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        var installed = await imageRuntime.ReadInstalledRuntimeAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ImageRuntimeStatusResponse
         {
             ManagedRuntime = installed?.ToResponse(),
-            Activity = activityGate.GetSnapshot().ToResponse()
+            Activity = imageRuntime.GetActivitySnapshot().ToResponse()
         }, ct).ConfigureAwait(false);
     }
 }

@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     FastEndpoints handler that enqueues a text-to-image job (POST images/jobs). Thin transport over the
@@ -14,11 +13,11 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     coordinator (which persists the job Queued with the prompt encrypted at rest and runs generation detached), then
 ///     returns the freshly-created Queued view. Operator-gated.
 /// </summary>
-public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator, IImageRuntimeActivityGate activityGate)
+public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator, ImageRuntimeOrchestrationService imageRuntime)
     : Endpoint<CreateImageJobRequest, ImageJobResponse>
 {
     private readonly IImageJobCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
-    private readonly IImageRuntimeActivityGate _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
+    private readonly ImageRuntimeOrchestrationService _imageRuntime = imageRuntime ?? throw new ArgumentNullException(nameof(imageRuntime));
 
     public override void Configure()
     {
@@ -62,7 +61,7 @@ public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator, IIm
         }
         catch (ImageRuntimeBusyException exception)
         {
-            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(exception.Message, _activityGate.GetSnapshot()))
+            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(exception.Message, _imageRuntime.GetActivitySnapshot()))
                       .ConfigureAwait(false);
             return;
         }

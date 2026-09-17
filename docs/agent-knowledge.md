@@ -547,6 +547,32 @@ inside a compilation-start action, so none is exempt from the per-tree skip.
 
 A fixture that restores under an isolated `HOME` rewrites `obj/*.nuget.g.props` with a since-deleted package root; the next Release build fails `CS0006` on every analyzer assembly. It looks exactly like the MSBuild node-reuse trap, but the cure is `dotnet restore` with `NUGET_PACKAGES` pinned to the real store, not a build-server shutdown. Authority: reproduced in the S5 worktree 2026-09-04.
 
+### PROPOSED (awaiting operator approval): an analyzer error in a file the change never touched: re-run after a build-server shutdown before believing it
+
+**Rule:** a Release build that reports an analyzer error in a file your change did not touch is not yet a finding.
+Save the failing build's log, run `dotnet build-server shutdown`, and build the same tree again. Do not edit the
+flagged file on the strength of one red build; two runs agreeing is what makes it real. This matters most in a P7
+shape (b) break-proof round: a build that reports errors runs the **previous** binary, so the red that follows is
+void whether the analyzer error was real or not — the round has to be discarded and re-run either way.
+
+**Observed, once:** one Release build (`--no-incremental`, under the build lock, `MSBUILDDISABLENODEREUSE=1` and
+`NUGET_PACKAGES` exported, issued in the same shell chain as an earlier build with no `dotnet build-server shutdown`
+between them) reported `error S125: Remove this commented out code` at `NodeChatStreamService.cs(113,9)` — a prose
+comment block, in a file the slice never touched — and `1 Error(s)`. The identical tree, unmodified, then built
+`0 Error(s)` twice after a `dotnet build-server shutdown`. **The cause was not isolated.** A stale build server is
+the suspect, because of the two node-reuse entries around this one and because the shutdown is what changed between
+red and green, but nothing was done to confirm it: the red was not reproduced, no second variable was held, and the
+failing build's own log was overwritten by the re-run before it was kept — only its transcribed tail survives. It
+may equally have been analyzer nondeterminism or something unobserved. Treat this entry as a re-run protocol, not
+as a diagnosis.
+
+**Prevents:** "fixing" correct code to satisfy a one-off analyzer red, and reporting a shape (b) break-proof whose
+build never actually produced the binary under test.
+
+**Authority:** static-quality S6i break-proof, 2026-09-17 — one discarded round, then green on the identical tree;
+`Plans/static-quality-enforcement-2026-09-15/progress/S6i-report.md` §8 and §10, partial capture in that slice's
+`progress/S6i-evidence/02a-void-break-build.log`.
+
 ### A Dev-mode sandbox run leaves MSBuild worker nodes holding a dead `NUGET_PACKAGES`
 
 Development Mode gives each sandboxed task its own `NUGET_PACKAGES` under the task's runtime directory. On the process provider those `dotnet` children are host processes, and MSBuild's reusable worker nodes (`MSBuild.dll /nodemode:1`) outlive them with that per-task path still in their environment. A later `dotnet restore` anywhere on the same host can attach to one and write the by-then-deleted path into `obj/*.dgspec.json`, after which the build fails naming a `/tmp/xe-…/nuget` directory nothing asked for: **NU5037** during the graph-workflows S0 merge, **CS0006** in the session after it.

@@ -15,6 +15,7 @@ The node generates images **locally** with [stable-diffusion.cpp](https://github
 | Managed source build (probe / fetch / build / adopt / recover) | `…/StableDiffusionCpp/Implementation/StableDiffusionCppSourceBuildService.cs` |
 | Installed-runtime state + mutation gate | `…/StableDiffusionCpp/Implementation/StableDiffusionInstalledRuntimeStore.cs`, `…/StableDiffusionCpp/Implementation/ImageRuntimeActivityGate.cs` (`Contracts/IImageRuntimeActivityGate.cs`) |
 | Stale-daemon reaper | `…/StableDiffusionCpp/Implementation/StaleImageServerReaper.cs` |
+| Runtime endpoints' door onto the provider (endpoint-dependency rule) | `XE-Local-AI-Engine.Client.Application/Services/Images/ImageRuntimeOrchestrationService.cs` — pass-through over `IStableDiffusionCppSourceBuildService`, `IStableDiffusionCppSourceBuildPrerequisiteProbe`, `IStableDiffusionInstalledRuntimeStore`, `IImageRuntimeActivityGate` and `IImageServerSupervisor`; the eight runtime/source-build/job endpoints inject it, never the provider contracts |
 | Runtime options | `…/StableDiffusionCpp/Options/StableDiffusionRuntimeOptions.cs` |
 | SignalR hubs + publishers | `XE-Local-AI-Engine.Client/Hubs/ImageJobHub.cs`, `…/ImageJobEventPublisher.cs`, `…/StableDiffusionCppSourceBuildHub.cs`, `…/StableDiffusionCppSourceBuildEventPublisher.cs` |
 | Local endpoints | `XE-Local-AI-Engine.Client/Endpoints/Images/V1/` |

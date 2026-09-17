@@ -4,12 +4,11 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
-public sealed class StartStableDiffusionCppSourceBuildEndpoint(
-    IStableDiffusionCppSourceBuildService buildService,
-    IImageRuntimeActivityGate activityGate)
+public sealed class StartStableDiffusionCppSourceBuildEndpoint(ImageRuntimeOrchestrationService imageRuntime)
     : Endpoint<StartStableDiffusionCppSourceBuildRequest, StartStableDiffusionCppSourceBuildResponse>
 {
     public override void Configure()
@@ -26,37 +25,37 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint(
     {
         if (!OperatingSystem.IsLinux())
         {
-            await BlockAsync("not-linux", "In-app source builds are available on Linux only.", activityGate.GetSnapshot()).ConfigureAwait(false);
+            await BlockAsync("not-linux", "In-app source builds are available on Linux only.", imageRuntime.GetActivitySnapshot()).ConfigureAwait(false);
             return;
         }
 
         try
         {
-            var result = await buildService.StartAsync(request.ToContract(), ct).ConfigureAwait(false);
+            var result = await imageRuntime.StartAsync(request.ToContract(), ct).ConfigureAwait(false);
             switch (result.Outcome)
             {
                 case StableDiffusionCppSourceBuildStartOutcome.AlreadyRunning:
                     await BlockAsync("already-building",
                             "A stable-diffusion.cpp source build is already in progress.",
-                            result.Activity ?? activityGate.GetSnapshot())
+                            result.Activity ?? imageRuntime.GetActivitySnapshot())
                         .ConfigureAwait(false);
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.InsufficientDisk:
                     await BlockAsync("prerequisites",
                             "There is not enough free disk space to build the image runtime.",
-                            result.Activity ?? activityGate.GetSnapshot())
+                            result.Activity ?? imageRuntime.GetActivitySnapshot())
                         .ConfigureAwait(false);
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.MissingPrerequisites:
                     await BlockAsync("prerequisites",
                             "One or more build prerequisites are missing; resolve the checklist before building.",
-                            result.Activity ?? activityGate.GetSnapshot())
+                            result.Activity ?? imageRuntime.GetActivitySnapshot())
                         .ConfigureAwait(false);
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
                             "Wait for active image jobs and image-runtime processes to finish before starting the build.",
-                            result.Activity ?? activityGate.GetSnapshot())
+                            result.Activity ?? imageRuntime.GetActivitySnapshot())
                         .ConfigureAwait(false);
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.Started:
@@ -68,12 +67,12 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint(
             await Send.OkAsync(new StartStableDiffusionCppSourceBuildResponse
             {
                 Started = true,
-                Status = buildService.GetStatus().ToResponse()
+                Status = imageRuntime.GetStatus().ToResponse()
             }, ct).ConfigureAwait(false);
         }
         catch (StableDiffusionRuntimeException exception)
         {
-            await BlockAsync("source-build-error", exception.Message, activityGate.GetSnapshot()).ConfigureAwait(false);
+            await BlockAsync("source-build-error", exception.Message, imageRuntime.GetActivitySnapshot()).ConfigureAwait(false);
         }
     }
 

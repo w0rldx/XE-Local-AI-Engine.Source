@@ -27,6 +27,13 @@ internal static class AddNodeImagesExtensions
         builder.Services.AddStableDiffusionCppImageProvider();
         builder.Services.AddStableDiffusionCppImageRuntime();
 
+        // The image runtime/source-build endpoints' application-layer door onto the provider contracts registered just
+        // above: IStableDiffusionCppSourceBuildService, IStableDiffusionCppSourceBuildPrerequisiteProbe,
+        // IStableDiffusionInstalledRuntimeStore and IImageRuntimeActivityGate (AddStableDiffusionCppImageProvider),
+        // plus IImageServerSupervisor (AddStableDiffusionCppImageRuntime). Singleton because all five are
+        // TryAddSingleton and this type is a stateless pass-through over them.
+        builder.Services.AddSingleton<ImageRuntimeOrchestrationService>();
+
         // Curated image-model catalog (embedded seed). Singleton: the document is immutable and loading it means
         // reading + validating an assembly resource, which should happen once rather than per catalog request.
         builder.Services.AddSingleton<IImageModelCatalog, ImageModelCatalog>();

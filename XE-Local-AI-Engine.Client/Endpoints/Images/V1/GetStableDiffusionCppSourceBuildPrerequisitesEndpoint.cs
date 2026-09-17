@@ -4,9 +4,9 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Client.Services.Images;
 
-public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe)
+public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(ImageRuntimeOrchestrationService imageRuntime)
     : Endpoint<GetStableDiffusionCppSourceBuildPrerequisitesRequest, StableDiffusionCppSourceBuildPrerequisitesResponse>
 {
     public override void Configure()
@@ -21,7 +21,7 @@ public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint(IStabl
     public override async Task HandleAsync(GetStableDiffusionCppSourceBuildPrerequisitesRequest request, CancellationToken ct)
     {
         var backend = request.Backend.ToContract();
-        var report = await prerequisiteProbe.ProbeAsync(backend, ct).ConfigureAwait(false);
+        var report = await imageRuntime.ProbeAsync(backend, ct).ConfigureAwait(false);
         await Send.OkAsync(report.ToResponse(backend), ct).ConfigureAwait(false);
     }
 }
