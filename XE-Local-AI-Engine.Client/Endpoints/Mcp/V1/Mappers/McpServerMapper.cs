@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
@@ -73,13 +72,14 @@ internal static class McpServerMapper
     }
 
     // The node's tool-approval policy is reused (not reimplemented) to compute each entry's effective approval, so the
-    // badge an operator sees matches the floor the runtime enforcement applies. Category travels as its enum name.
-    public static ToolCatalogEntryResponse ToResponse(this LocalToolCatalogEntry entry, IToolApprovalPolicy approvalPolicy)
+    // badge an operator sees matches the floor the runtime enforcement applies. The application-layer catalog service is
+    // the door to that policy. Category travels as its enum name.
+    public static ToolCatalogEntryResponse ToResponse(this LocalToolCatalogEntry entry, ToolCatalogService toolCatalog)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        ArgumentNullException.ThrowIfNull(approvalPolicy);
+        ArgumentNullException.ThrowIfNull(toolCatalog);
 
-        var effectiveRequiresApproval = approvalPolicy.RequiresApproval(entry.Name, entry.Category, entry.RequiresApproval);
+        var effectiveRequiresApproval = toolCatalog.RequiresApproval(entry);
 
         // Matched on AskUserTool.ToolName, the same constant ToolApprovalCoordinator.IsUserQuestionRequest matches on,
         // rather than a second list here that could drift from the branch it describes. The question arm comes FIRST:
@@ -99,7 +99,7 @@ internal static class McpServerMapper
             Source = entry.Source,
             Category = entry.Category.ToString(),
             EffectiveRequiresApproval = effectiveRequiresApproval,
-            SessionScopeEligible = SessionApprovalEligibility.IsToolEligible(approvalPolicy, entry.Name, entry.IsFixedCustomTool),
+            SessionScopeEligible = toolCatalog.IsSessionScopeEligible(entry),
             UnattendedBehaviour = unattendedBehaviour
         };
     }

@@ -15,9 +15,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 ///     <para>
 ///         Reflection over the compiled host rather than a source scan or an ArchUnitNET/NetArchTest rule: the rule is
-///         per-constructor-PARAMETER with a named exception list, and neither rule engine can express "type X may
-///         depend on Y except for these named pairs". A bespoke loop over <see cref="ConstructorInfo" /> is the
-///         smallest mechanism that can, and it reads the same IL the host actually runs.
+///         per-constructor-PARAMETER and inspects each parameter's generic arguments recursively, which neither rule
+///         engine expresses. A bespoke loop over <see cref="ConstructorInfo" /> is the smallest mechanism that can, and
+///         it reads the same IL the host actually runs.
 ///     </para>
 ///     <para>
 ///         Generic arguments, array element types and <c>Nullable&lt;T&gt;</c> underlying types are inspected
@@ -26,9 +26,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         silently exempts any forbidden type wrapped in an allowed generic.
 ///     </para>
 ///     <para>
-///         Ratchet (P1): <see cref="AllowedViolations" /> freezes the violations that exist today so no NEW one can
-///         land. Slice S6 migrates those sites behind application-layer services and deletes both the list and
-///         <see cref="EveryAllowlistedPair_StillViolatesToday" />.
+///         The rule holds for every endpoint in the host and has no exemption list. It once carried one, frozen at the
+///         violations that existed when the rule was written; each was migrated behind an application-layer service
+///         until the list was empty, and it was then deleted. None may be reintroduced: a new violation is fixed by
+///         moving the dependency into a <c>Client.Application</c> service the endpoint takes instead.
 ///     </para>
 /// </summary>
 public sealed class EndpointDependencyTests
@@ -79,26 +80,6 @@ public sealed class EndpointDependencyTests
         "System.Net.Http.HttpClient"
     ];
 
-    /// <summary>
-    ///     P1 ratchet list, keyed <c>"{EndpointTypeFullName}|{ParameterTypeFullName}"</c> — fully qualified on both
-    ///     sides, because a short name can collide across endpoint areas, and because a per-endpoint key would let an
-    ///     already-listed endpoint acquire a SECOND forbidden dependency unnoticed. Sorted, one pair per line.
-    ///     <para>
-    ///         One pair across one endpoint type today: an <c>AI.Agent</c> tool policy. No persistence store, concrete
-    ///         provider contract or options type is left on the list. That last pair is a dependency the rule's allow
-    ///         list does not name, caught only because a leaf outside the allow list is a violation in its own right
-    ///         rather than something the forbid list has to have anticipated.
-    ///     </para>
-    ///     <para>
-    ///         Slice S6 deletes entries from this list as it migrates each area behind a
-    ///         <c>Client.Application</c> service, and deletes the list itself with the last pair.
-    ///     </para>
-    /// </summary>
-    private static readonly string[] AllowedViolations =
-    [
-        "XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.GetToolCatalogEndpoint|XE_Local_AI_Engine.AI.Agent.Tools.IToolApprovalPolicy",
-    ];
-
     [Test]
     public void EndpointConstructors_TakeNoForbiddenDependency()
     {
@@ -107,34 +88,12 @@ public sealed class EndpointDependencyTests
         AssertEx.True(endpointCount >= 400,
             $"Expected the host's known endpoint surface; found {endpointCount} endpoint types. The assembly marker or the reflection scan is broken.");
 
-        var unlisted = violations.Where(pair => !AllowedViolations.Contains(pair, StringComparer.Ordinal)).ToList();
-
-        AssertEx.Empty(unlisted,
+        AssertEx.Empty(violations,
             "An endpoint may take constructor parameters only from Client.Application, AI.Contracts, "
-            + "Providers.Abstractions, non-endpoint host types, Microsoft.*, System.* and FastEndpoints.*. Take the "
-            + "dependency below through an application-layer service instead of adding it to the ratchet list:"
-            + Environment.NewLine + string.Join(Environment.NewLine, unlisted));
-    }
-
-    [Test]
-    public void EveryAllowlistedPair_StillViolatesToday()
-    {
-        var (violations, endpointCount) = Scan();
-
-        AssertEx.True(endpointCount >= 400,
-            $"Expected the host's known endpoint surface; found {endpointCount} endpoint types. The assembly marker or the reflection scan is broken.");
-
-        AssertEx.Equal(AllowedViolations.Length, AllowedViolations.Distinct(StringComparer.Ordinal).Count(),
-            "The ratchet list has a duplicate pair, so deleting one line would leave the exemption standing.");
-        AssertEx.True(AllowedViolations.SequenceEqual(AllowedViolations.Order(StringComparer.Ordinal), StringComparer.Ordinal),
-            "The ratchet list is kept sorted, one pair per line, so a diff to it reads as one removed line per migrated site.");
-
-        var stale = AllowedViolations.Where(pair => !violations.Contains(pair, StringComparer.Ordinal)).ToList();
-
-        AssertEx.Empty(stale,
-            "These pairs are on the ratchet list but no longer exist — the dependency was removed and the exemption "
-            + "outlived it. Delete the line(s) below so the list keeps shrinking towards zero:"
-            + Environment.NewLine + string.Join(Environment.NewLine, stale));
+            + "Providers.Abstractions, non-endpoint host types, Microsoft.*, System.* and FastEndpoints.*. There is no "
+            + "exemption list: take the dependency below through an application-layer service the endpoint injects "
+            + "instead:"
+            + Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     private static (IReadOnlyList<string> Violations, int EndpointCount) Scan()

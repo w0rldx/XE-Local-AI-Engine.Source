@@ -57,6 +57,9 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
                 sp.GetRequiredService<IModelTrustResolver>(),
                 knowledgeOptions.AllowCloudModelAccess);
         });
+        // The catalog read composed with the node approval policy, which the provider above deliberately never consults.
+        // Singleton, like both seams it composes.
+        builder.Services.AddSingleton<ToolCatalogService>();
         // The single-named-tool invocation seam, next to the catalog it reads. Registration is UNCONDITIONAL: a
         // feature flag gates behaviour, never registration, and this service is feature-neutral — a later caller must
         // not have to reason about whether some other module's flag was on. Singleton, like every seam it composes.

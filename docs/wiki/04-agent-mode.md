@@ -617,7 +617,9 @@ resolved in `ToolApprovalCoordinator.RequestToolApprovalAsync`:
     `run_in_agent_home`, a `Parameterized` custom tool, or anything at all while
     `SkillSessionScopeDisabled` is on. The catalog answer is a tool-identity UPPER BOUND: the runner
     still applies the per-call narrowings above (imported skill, skill not in the package, unnamed
-    resource), which only ever remove eligibility. The MAF skill tools are per-agent and therefore
+    resource), which only ever remove eligibility. The `tool-catalog` endpoint reaches both this
+    predicate and the effective-approval flag through one `Client.Application` service,
+    `ToolCatalogService`, rather than taking the approval policy itself. The MAF skill tools are per-agent and therefore
     absent from the node catalog, so an entry the card cannot find keeps offering the button.
 
 **Unattended runs fail fast, and the check runs before the memo, not after.** A scheduled `run-agent`

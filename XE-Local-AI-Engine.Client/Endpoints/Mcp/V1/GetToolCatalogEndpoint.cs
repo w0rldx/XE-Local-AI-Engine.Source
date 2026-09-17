@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Mcp.V1;
 
 using FastEndpoints;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -14,11 +13,10 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 ///     group/badge tools by their originating server. Model-capability gating is intentionally not applied here: this is
 ///     the catalog of everything that exists on the node (the offer provider applies gating per active model elsewhere).
 /// </summary>
-public sealed class GetToolCatalogEndpoint(ILocalToolOfferProvider localToolOfferProvider, IToolApprovalPolicy approvalPolicy)
+public sealed class GetToolCatalogEndpoint(ToolCatalogService toolCatalog)
     : EndpointWithoutRequest<ToolCatalogResponse>
 {
-    private readonly ILocalToolOfferProvider _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
-    private readonly IToolApprovalPolicy _approvalPolicy = approvalPolicy ?? throw new ArgumentNullException(nameof(approvalPolicy));
+    private readonly ToolCatalogService _toolCatalog = toolCatalog ?? throw new ArgumentNullException(nameof(toolCatalog));
 
     public override void Configure()
     {
@@ -28,10 +26,10 @@ public sealed class GetToolCatalogEndpoint(ILocalToolOfferProvider localToolOffe
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var catalog = await _localToolOfferProvider.GetKnownToolsAsync(ct).ConfigureAwait(false);
+        var catalog = await _toolCatalog.GetKnownToolsAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ToolCatalogResponse
             {
-                Tools = [.. catalog.Select(entry => entry.ToResponse(_approvalPolicy))]
+                Tools = [.. catalog.Select(entry => entry.ToResponse(_toolCatalog))]
             },
             ct).ConfigureAwait(false);
     }

@@ -42,25 +42,16 @@ Both halves of that shape are now regression guards rather than review habits.
 `EndpointConventionTests` freezes the file and type conventions: one endpoint per `*Endpoint.cs` file named
 after the type it declares, the plural `*Endpoints.cs` groupings named in an allowlist and nothing else plural,
 every endpoint `sealed`, and every route derived from `LocalApiRoutes` rather than written as a string literal.
-`EndpointDependencyTests` enforces the dependency rule above the same way, with a ratchet allowlist keyed by
-fully-qualified endpoint-and-parameter pairs, covering the persistence-store and concrete-provider injections that
-existed when it was written, including the ones wrapped in a generic. That test's own XML doc carries the current
-pair and endpoint counts; read them there rather than from this page. The list only shrinks: an entry whose dependency is gone fails the guard as loudly as a new pair does. Slice S6 empties it
-sub-slice by sub-slice (S6a's Codex migration retired the first five pairs, S6b's LocalModels launch-argument
-migration the next three, S6c's GraphWorkflows definition-read migration three more, S6d's Agents
-definition-and-execution-log read migration six more, S6e's Training runtime migration four more, S6f's Training export artifact reads two more, S6g's Training dataset, sample and tool-mock reads eight more, S6h's
-Transcription runtime and source-build migration eight more, S6i's Images runtime and source-build migration
-thirteen more, S6j's ModelFit llama.cpp runtime, source-build and running-model migration twenty-one more, S6k's
-Development-Workflows authoring and run-feed migration eighteen more, S6l's Benchmarks project, run, task-item,
-cell, fidelity and pairwise read migration twenty-five more), and after
-S6m there are no exemptions
-left — the rule then holds for every endpoint with no list to add to. A new `Client.Application` service introduced
-only to put a store or provider behind an endpoint is a concrete `sealed class` with no interface, registered as
-itself; add an interface only when a specific test must substitute it, and move the displaced behavioural
-assertions to a service-level test when you do. One of those
-pairs reaches `AI.Agent` (`GetToolCatalogEndpoint`'s approval policy) and is an open question. Either the
-allowed set gains that project deliberately, or the site migrates behind an application-layer service with the
-rest.
+`EndpointDependencyTests` enforces the dependency rule above the same way, for every endpoint in the host and with
+no exemption list. Generic arguments are walked recursively, so a forbidden type wrapped in an allowed generic
+counts too. The test once carried a shrink-only allowlist keyed by fully-qualified endpoint-and-parameter pairs,
+frozen at the persistence-store and concrete-provider injections that existed when the rule was written; slices
+S6a–S6m migrated those sites area by area until it was empty and then deleted it. Nothing may be added back: a
+violation is fixed by moving the dependency into a `Client.Application` service the endpoint injects instead. Such
+a service is a concrete `sealed class` with no interface, registered as itself; add an interface only when a
+specific test must substitute it, and move the displaced behavioural assertions to a service-level test when you
+do. The last such site was the tool-catalog endpoint's `AI.Agent` approval policy, which went behind
+`ToolCatalogService`; `AI.Agent` is deliberately not in the rule's allowed set.
 
 ### A service's own model types live in `*ServiceModels.cs`
 
