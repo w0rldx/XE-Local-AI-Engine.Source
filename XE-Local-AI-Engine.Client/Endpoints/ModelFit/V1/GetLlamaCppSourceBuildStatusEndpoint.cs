@@ -4,9 +4,9 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed class GetLlamaCppSourceBuildStatusEndpoint(ILlamaCppSourceBuildService buildService)
+public sealed class GetLlamaCppSourceBuildStatusEndpoint(LlamaCppRuntimeOrchestrationService runtime)
     : EndpointWithoutRequest<LlamaCppSourceBuildStatusResponse>
 {
     public override void Configure()
@@ -18,6 +18,6 @@ public sealed class GetLlamaCppSourceBuildStatusEndpoint(ILlamaCppSourceBuildSer
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(buildService.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(runtime.GetSourceBuildStatus().ToResponse(), ct).ConfigureAwait(false);
     }
 }

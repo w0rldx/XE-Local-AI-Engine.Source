@@ -5,22 +5,22 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
 ///     FastEndpoints handler for the running llama-server processes (GET model-fit/running). There is no dedicated
 ///     list-running seam — the running models are derived from the llama-server process supervisor's
-///     <see cref="ILlamaServerProcessSupervisor.CheckHealthAsync" /> snapshot (one row per running <c>(model, role)</c>
+///     <see cref="LlamaCppRuntimeOrchestrationService.CheckHealthAsync" /> snapshot (one row per running <c>(model, role)</c>
 ///     process). A process-probe or transport failure returns an OK-empty list so the running panel can poll and
 ///     degrade; any other exception is a defect and is left to surface as a 500 rather than be disguised as "nothing is
 ///     running". Each row's diagnostics are already sanitized (no internal paths/secrets).
 /// </summary>
 public sealed class ListRunningModelsEndpoint(
-    ILlamaServerProcessSupervisor supervisor,
+    LlamaCppRuntimeOrchestrationService runtime,
     ILogger<ListRunningModelsEndpoint> logger) : EndpointWithoutRequest<ListRunningModelsResponse>
 {
     private readonly ILogger<ListRunningModelsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
     public override void Configure()
     {
@@ -32,7 +32,7 @@ public sealed class ListRunningModelsEndpoint(
     {
         try
         {
-            var health = await _supervisor.CheckHealthAsync(ct).ConfigureAwait(false);
+            var health = await _runtime.CheckHealthAsync(ct).ConfigureAwait(false);
             await Send.OkAsync(new ListRunningModelsResponse
                 {
                     Items = [.. health.Select(static process => process.ToResponse())]

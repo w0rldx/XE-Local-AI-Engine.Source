@@ -4,7 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
 ///     Read-only in-app CUDA build prerequisite checklist (GET model-fit/llamacpp/cuda-build/prerequisites). Reports, item
@@ -12,10 +12,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     (true only on Linux when every item is satisfied). Installs nothing. Works on any OS — a non-Linux host reports a
 ///     single unsatisfied OS item with <c>canBuild=false</c>.
 /// </summary>
-public sealed class GetCudaBuildPrerequisitesEndpoint(ICudaBuildPrerequisiteProbe prerequisiteProbe)
+public sealed class GetCudaBuildPrerequisitesEndpoint(LlamaCppRuntimeOrchestrationService runtime)
     : EndpointWithoutRequest<CudaBuildPrerequisitesResponse>
 {
-    private readonly ICudaBuildPrerequisiteProbe _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
     public override void Configure()
     {
@@ -25,7 +25,7 @@ public sealed class GetCudaBuildPrerequisitesEndpoint(ICudaBuildPrerequisiteProb
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var report = await _prerequisiteProbe.ProbeAsync(ct).ConfigureAwait(false);
+        var report = await _runtime.ProbeCudaBuildPrerequisitesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(report.ToResponse(), ct).ConfigureAwait(false);
     }
 }

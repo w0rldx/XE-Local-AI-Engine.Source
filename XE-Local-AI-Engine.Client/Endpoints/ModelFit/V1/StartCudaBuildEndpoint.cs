@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -15,14 +16,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     background build and returns the initial status; live progress streams over the CUDA build hub.
 /// </summary>
 public sealed class StartCudaBuildEndpoint(
-    ILlamaCppSourceBuildService sourceBuildService,
-    ICudaBuildService buildService,
+    LlamaCppRuntimeOrchestrationService runtime,
     INodeRuntimeSettings nodeRuntimeSettings) : EndpointWithoutRequest<StartCudaBuildResponse>
 {
-    private readonly ICudaBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
-
-    private readonly ILlamaCppSourceBuildService _sourceBuildService =
-        sourceBuildService ?? throw new ArgumentNullException(nameof(sourceBuildService));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
     public override void Configure()
     {
@@ -52,7 +49,7 @@ public sealed class StartCudaBuildEndpoint(
 
         try
         {
-            var result = await _sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
+            var result = await _runtime.StartSourceBuildAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
                 LlamaCppSourceSelection.Official), ct).ConfigureAwait(false);
             var blocked = LlamaCppSourceBuildStartEndpointSupport.MapBlocked(result.Outcome,
                 LlamaCppSourceBuildStartEndpointSupport.CudaBuildKind);
@@ -75,7 +72,7 @@ public sealed class StartCudaBuildEndpoint(
             await Send.OkAsync(new StartCudaBuildResponse
                 {
                     Started = true,
-                    Status = _buildService.GetStatus().ToResponse()
+                    Status = _runtime.GetCudaBuildStatus().ToResponse()
                 },
                 ct).ConfigureAwait(false);
         }

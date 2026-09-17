@@ -84,10 +84,10 @@ public sealed class EndpointDependencyTests
     ///     sides, because a short name can collide across endpoint areas, and because a per-endpoint key would let an
     ///     already-listed endpoint acquire a SECOND forbidden dependency unnoticed. Sorted, one pair per line.
     ///     <para>
-    ///         65 pairs across 56 endpoint types today: 43 a persistence store, 21 a concrete provider's contract or
-    ///         options type, and one an <c>AI.Agent</c> tool policy — that last one is a dependency the rule's allow
-    ///         list does not name, caught only because a leaf outside the allow list is a violation in its own right
-    ///         rather than something the forbid list has to have anticipated.
+    ///         44 pairs across 44 endpoint types today: 43 a persistence store and one an <c>AI.Agent</c> tool policy.
+    ///         No concrete provider contract or options type is left on the list. The <c>AI.Agent</c> pair is a
+    ///         dependency the rule's allow list does not name, caught only because a leaf outside the allow list is a
+    ///         violation in its own right rather than something the forbid list has to have anticipated.
     ///     </para>
     ///     <para>
     ///         Slice S6 deletes entries from this list as it migrates each area behind a
@@ -140,27 +140,6 @@ public sealed class EndpointDependencyTests
         "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.UpdateDevWorkflowRuleSetEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
         "XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.UpdateDevWorkflowWorkItemEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.IDevWorkflowStore",
         "XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.GetToolCatalogEndpoint|XE_Local_AI_Engine.AI.Agent.Tools.IToolApprovalPolicy",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.CancelCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ICudaBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.CancelLlamaCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.EjectRunningModelEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaServerProcessSupervisor",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.GetCudaBuildPrerequisitesEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ICudaBuildPrerequisiteProbe",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.GetCudaBuildStatusEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ICudaBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.GetLlamaCppSourceBuildPrerequisitesEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildPrerequisiteProbe",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.GetLlamaCppSourceBuildStatusEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.ListRunningModelsEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaServerProcessSupervisor",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.IInstalledRuntimeStore",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppBinaryManager",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildActivity",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppUpdateState",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaServerProcessSupervisor",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveLlamaCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.IInstalledRuntimeStore",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveLlamaCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppBinaryManager",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveLlamaCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildActivity",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveLlamaCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppUpdateState",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.RemoveLlamaCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaServerProcessSupervisor",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.StartCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ICudaBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.StartCudaBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildService",
-        "XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.StartLlamaCppSourceBuildEndpoint|XE_Local_AI_Engine.Providers.LlamaServer.Contracts.ILlamaCppSourceBuildService",
     ];
 
     [Test]

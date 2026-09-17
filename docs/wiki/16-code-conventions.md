@@ -50,7 +50,7 @@ sub-slice by sub-slice (S6a's Codex migration retired the first five pairs, S6b'
 migration the next three, S6c's GraphWorkflows definition-read migration three more, S6d's Agents
 definition-and-execution-log read migration six more, S6e's Training runtime migration four more, S6f's Training export artifact reads two more, S6g's Training dataset, sample and tool-mock reads eight more, S6h's
 Transcription runtime and source-build migration eight more, S6i's Images runtime and source-build migration
-thirteen more), and after
+thirteen more, S6j's ModelFit llama.cpp runtime, source-build and running-model migration twenty-one more), and after
 S6m there are no exemptions
 left — the rule then holds for every endpoint with no list to add to. A new `Client.Application` service introduced
 only to put a store or provider behind an endpoint is a concrete `sealed class` with no interface, registered as

@@ -4,9 +4,9 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint(ILlamaCppSourceBuildPrerequisiteProbe prerequisiteProbe)
+public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint(LlamaCppRuntimeOrchestrationService runtime)
     : Endpoint<GetLlamaCppSourceBuildPrerequisitesRequest, LlamaCppSourceBuildPrerequisitesResponse>
 {
     public override void Configure()
@@ -21,7 +21,7 @@ public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint(ILlamaCppSourceB
     public override async Task HandleAsync(GetLlamaCppSourceBuildPrerequisitesRequest request, CancellationToken ct)
     {
         var backend = request.Backend.ToContract();
-        var report = await prerequisiteProbe.ProbeAsync(backend, ct).ConfigureAwait(false);
+        var report = await runtime.ProbeSourceBuildPrerequisitesAsync(backend, ct).ConfigureAwait(false);
         await Send.OkAsync(report.ToResponse(backend), ct).ConfigureAwait(false);
     }
 }

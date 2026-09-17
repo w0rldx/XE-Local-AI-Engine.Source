@@ -162,6 +162,14 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddLlamaServerLocalModelProvider();
         builder.Services.AddSingleton<ILlamaCppRuntimeAdministrationService, LlamaCppRuntimeAdministrationService>();
 
+        // The llama.cpp runtime / source-build / running-model endpoints' door onto the provider contracts, so no
+        // endpoint takes one itself (the endpoint-dependency rule). Every contract it wraps —
+        // ICudaBuildPrerequisiteProbe, ICudaBuildService, IInstalledRuntimeStore, ILlamaCppBinaryManager,
+        // ILlamaCppSourceBuildActivity, ILlamaCppSourceBuildPrerequisiteProbe, ILlamaCppSourceBuildService,
+        // ILlamaCppUpdateState and ILlamaServerProcessSupervisor — is a TryAddSingleton of
+        // AddLlamaServerLocalModelProvider above, so this wrapper is a Singleton too.
+        builder.Services.AddSingleton<LlamaCppRuntimeOrchestrationService>();
+
         // The process-wide GPU-load admission gate — the REAL, metric-emitting singleton shared by the
         // llama-server and stable-diffusion.cpp supervisors, so no two GPU loads race their --fit / free-VRAM reads. A
         // plain AddSingleton wins over each provider's TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>()

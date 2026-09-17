@@ -4,17 +4,17 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
 ///     Cancels an in-flight in-app CUDA build (POST model-fit/llamacpp/cuda-build/cancel). Idempotent: a no-op when no
 ///     build is running. Returns the current status (the build tears down its process group + cleans partial trees
 ///     asynchronously, transitioning to <c>Cancelled</c>).
 /// </summary>
-public sealed class CancelCudaBuildEndpoint(ICudaBuildService buildService)
+public sealed class CancelCudaBuildEndpoint(LlamaCppRuntimeOrchestrationService runtime)
     : EndpointWithoutRequest<CudaBuildStatusResponse>
 {
-    private readonly ICudaBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
     public override void Configure()
     {
@@ -25,7 +25,7 @@ public sealed class CancelCudaBuildEndpoint(ICudaBuildService buildService)
     public override async Task HandleAsync(CancellationToken ct)
     {
         // Cancel() returns false when nothing is in flight — its own "already cancelling / nothing running" guard. [secLOW-2]
-        _buildService.Cancel();
-        await Send.OkAsync(_buildService.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        _runtime.CancelCudaBuild();
+        await Send.OkAsync(_runtime.GetCudaBuildStatus().ToResponse(), ct).ConfigureAwait(false);
     }
 }

@@ -264,6 +264,8 @@ Upstream ships no prebuilt Linux CUDA `llama-server`. Rather than leave a Linux 
 
 **Two contracts, one implementation.** `ILlamaCppSourceBuildService` is the generalized surface — `StartAsync` / `GetStatus` / `Cancel` / `CancelLegacyPinnedCuda` / `RecoverAsync` / `ShutdownAsync`. The older CUDA-only `ICudaBuildService` still exists but is now satisfied by `LegacyCudaBuildServiceAdapter`, which forwards to the generalized service with a fixed `(Cuda, Official)` request and reports status **only** when the current build matches the legacy shape (`LlamaCppSourceBuildCompatibility.IsLegacyPinnedCuda`) — otherwise it answers `Idle`. Both route families stay live so the older CUDA UI card keeps working.
 
+**The endpoints' door onto the provider (endpoint-dependency rule).** `XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeOrchestrationService.cs` is a pass-through over `ICudaBuildPrerequisiteProbe`, `ICudaBuildService`, `IInstalledRuntimeStore`, `ILlamaCppBinaryManager`, `ILlamaCppSourceBuildActivity`, `ILlamaCppSourceBuildPrerequisiteProbe`, `ILlamaCppSourceBuildService`, `ILlamaCppUpdateState` and `ILlamaServerProcessSupervisor`; the twelve source-build, CUDA-build, eject and running-models endpoints inject it, never the provider contracts. It also owns the shared remove gate the two remove endpoints delegate to (`TryRemoveAsync` — eject-first, with the build-active check repeated under the runtime mutation lease).
+
 **Request model** (`Contracts/ILlamaCppSourceBuildService.cs`, `LlamaCppSourceBuildRequestValidation.cs`):
 
 - `Backend` ∈ `{Cpu, Vulkan, Cuda}` → `GpuVariant`.

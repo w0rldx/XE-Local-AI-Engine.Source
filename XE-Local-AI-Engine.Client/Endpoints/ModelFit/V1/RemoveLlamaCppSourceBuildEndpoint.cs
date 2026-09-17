@@ -5,15 +5,11 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed class RemoveLlamaCppSourceBuildEndpoint(
-    ILlamaCppBinaryManager binaryManager,
-    ILlamaServerProcessSupervisor processSupervisor,
-    ILlamaCppSourceBuildActivity sourceBuildActivity,
-    ILlamaCppUpdateState updateState,
-    IInstalledRuntimeStore installedRuntimeStore,
+    LlamaCppRuntimeOrchestrationService runtime,
     INodeRuntimeSettings nodeRuntimeSettings,
     ILocalChatClientCacheInvalidator localChatClientCacheInvalidator) : EndpointWithoutRequest<LlamaCppRuntimeStatusResponse>
 {
@@ -36,14 +32,12 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
             {
                 Reason = "keep-model-warm-enabled",
                 Message = LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage,
-                RunningProcessCount = processSupervisor.CountRunningProcesses()
+                RunningProcessCount = runtime.CountRunningProcesses()
             })).ConfigureAwait(false);
             return;
         }
 
-        var (removed, runningProcessCount, buildActive) = await LlamaCppPrebuiltRuntimeMutationGuard
-                                                                .TryRemoveAsync(processSupervisor, sourceBuildActivity, binaryManager.RemoveSourceBuildAsync, ct)
-                                                                .ConfigureAwait(false);
+        var (removed, runningProcessCount, buildActive) = await runtime.TryRemoveSourceBuildAsync(ct).ConfigureAwait(false);
         if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
@@ -59,7 +53,7 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
 
         localChatClientCacheInvalidator.ClearClientCache();
         var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
-        var installed = await installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(updateState.Current.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
+        var installed = await runtime.ReadInstalledRuntimeAsync(ct).ConfigureAwait(false);
+        await Send.OkAsync(runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
     }
 }

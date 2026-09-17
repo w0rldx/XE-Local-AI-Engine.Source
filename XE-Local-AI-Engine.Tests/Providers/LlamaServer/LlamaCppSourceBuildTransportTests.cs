@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Validators;
 using XE_Local_AI_Engine.Client.Hubs;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -370,7 +371,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         });
 
         var (removed, _, _) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+            await LlamaCppRuntimeOrchestrationService.TryRemoveAsync(supervisor,
                 activity,
                 binaryManager.RemoveSourceBuildAsync,
                 CancellationToken.None);
@@ -390,7 +391,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
 
         var (removed, runningProcessCount, _) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+            await LlamaCppRuntimeOrchestrationService.TryRemoveAsync(supervisor,
                 activity,
                 binaryManager.RemoveSourceBuildAsync,
                 CancellationToken.None);
@@ -409,7 +410,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         activity.ActiveBuildId.Returns(Guid.NewGuid());
 
         var (removed, _, buildActive) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+            await LlamaCppRuntimeOrchestrationService.TryRemoveAsync(supervisor,
                 activity,
                 binaryManager.RemoveSourceBuildAsync,
                 CancellationToken.None);
@@ -434,7 +435,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         activity.ActiveBuildId.Returns((Guid?)null, Guid.NewGuid());
 
         var (removed, _, buildActive) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+            await LlamaCppRuntimeOrchestrationService.TryRemoveAsync(supervisor,
                 activity,
                 binaryManager.RemoveSourceBuildAsync,
                 CancellationToken.None);
@@ -471,7 +472,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         });
 
         var (removed, _, _) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryRemoveAsync(supervisor,
+            await LlamaCppRuntimeOrchestrationService.TryRemoveAsync(supervisor,
                 activity,
                 binaryManager.RemoveCudaSourceBuildAsync,
                 CancellationToken.None);

@@ -4,12 +4,13 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 public sealed class StartLlamaCppSourceBuildEndpoint(
-    ILlamaCppSourceBuildService buildService,
+    LlamaCppRuntimeOrchestrationService runtime,
     INodeRuntimeSettings nodeRuntimeSettings) : Endpoint<StartLlamaCppSourceBuildRequest, StartLlamaCppSourceBuildResponse>
 {
     public override void Configure()
@@ -42,7 +43,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
         // server-selected fields are already populated, and the strict official-source rules would reject it.
         try
         {
-            var result = await buildService.StartAsync(request.ToContract(), ct).ConfigureAwait(false);
+            var result = await runtime.StartSourceBuildAsync(request.ToContract(), ct).ConfigureAwait(false);
             var blocked = LlamaCppSourceBuildStartEndpointSupport.MapBlocked(result.Outcome,
                 LlamaCppSourceBuildStartEndpointSupport.SourceBuildKind);
             if (blocked is not null)
@@ -64,7 +65,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
             await Send.OkAsync(new StartLlamaCppSourceBuildResponse
             {
                 Started = true,
-                Status = buildService.GetStatus().ToResponse()
+                Status = runtime.GetSourceBuildStatus().ToResponse()
             }, ct).ConfigureAwait(false);
         }
         catch (LlamaRuntimeException exception)

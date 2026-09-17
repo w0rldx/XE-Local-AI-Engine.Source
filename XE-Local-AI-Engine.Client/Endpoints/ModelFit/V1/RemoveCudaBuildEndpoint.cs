@@ -5,8 +5,8 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Removes the adopted managed CUDA source build (POST model-fit/llamacpp/cuda-build/remove). Eject-first gated: the
@@ -15,20 +15,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     signal are cleared, the local chat-client cache is invalidated, and the refreshed runtime status is returned.
 /// </summary>
 public sealed class RemoveCudaBuildEndpoint(
-    ILlamaCppBinaryManager binaryManager,
-    ILlamaServerProcessSupervisor processSupervisor,
-    ILlamaCppSourceBuildActivity sourceBuildActivity,
-    ILlamaCppUpdateState updateState,
-    IInstalledRuntimeStore installedRuntimeStore,
+    LlamaCppRuntimeOrchestrationService runtime,
     INodeRuntimeSettings nodeRuntimeSettings,
     ILocalChatClientCacheInvalidator localChatClientCacheInvalidator) : EndpointWithoutRequest<LlamaCppRuntimeStatusResponse>
 {
-    private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-    private readonly IInstalledRuntimeStore _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
     private readonly ILocalChatClientCacheInvalidator _localChatClientCacheInvalidator = localChatClientCacheInvalidator ?? throw new ArgumentNullException(nameof(localChatClientCacheInvalidator));
     private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
-    private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
-    private readonly ILlamaCppUpdateState _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
+    private readonly LlamaCppRuntimeOrchestrationService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
     public override void Configure()
     {
@@ -49,14 +42,12 @@ public sealed class RemoveCudaBuildEndpoint(
             {
                 Reason = "keep-model-warm-enabled",
                 Message = LlamaCppPrebuiltRuntimeMutationGuard.KeepModelWarmBlockedMessage,
-                RunningProcessCount = _processSupervisor.CountRunningProcesses()
+                RunningProcessCount = _runtime.CountRunningProcesses()
             })).ConfigureAwait(false);
             return;
         }
 
-        var (removed, runningProcessCount, buildActive) = await LlamaCppPrebuiltRuntimeMutationGuard
-                                                                .TryRemoveAsync(_processSupervisor, sourceBuildActivity, _binaryManager.RemoveCudaSourceBuildAsync, ct)
-                                                                .ConfigureAwait(false);
+        var (removed, runningProcessCount, buildActive) = await _runtime.TryRemoveCudaBuildAsync(ct).ConfigureAwait(false);
         if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
@@ -74,7 +65,7 @@ public sealed class RemoveCudaBuildEndpoint(
         _localChatClientCacheInvalidator.ClearClientCache();
 
         var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
-        var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(_updateState.Current.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
+        var installed = await _runtime.ReadInstalledRuntimeAsync(ct).ConfigureAwait(false);
+        await Send.OkAsync(_runtime.CurrentUpdateSnapshot.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
     }
 }
