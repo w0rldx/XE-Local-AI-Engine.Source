@@ -5,16 +5,30 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
-internal sealed class HuggingFaceGgufDownloadTransaction(
-    HfDownloadClient downloadClient,
-    IHuggingFaceGgufDiscovery discovery,
-    GgufModelRegistry registry,
-    HuggingFaceOptions options,
-    TimeProvider timeProvider) : IGgufDownloadTransaction
+internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransaction
 {
     // Names this pipeline in the compensation failure so the inner exception still says which transaction
     // could not clean up after itself.
     private const string CleanupOwnership = "download";
+    private readonly HfDownloadClient _downloadClient;
+    private readonly IHuggingFaceGgufDiscovery _discovery;
+    private readonly GgufModelRegistry _registry;
+    private readonly HuggingFaceOptions _options;
+    private readonly TimeProvider _timeProvider;
+
+    public HuggingFaceGgufDownloadTransaction(
+        HfDownloadClient downloadClient,
+        IHuggingFaceGgufDiscovery discovery,
+        GgufModelRegistry registry,
+        HuggingFaceOptions options,
+        TimeProvider timeProvider)
+    {
+        _downloadClient = downloadClient;
+        _discovery = discovery;
+        _registry = registry;
+        _options = options;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<ResolvedGgufDownload> ResolveAsync(GgufModelRequest request, CancellationToken cancellationToken)
     {
@@ -24,8 +38,8 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             throw new ArgumentException("The repository id is required.", nameof(request));
         }
 
-        var detail = await discovery.ListRepoFilesAsync(request.RepoId, cancellationToken).ConfigureAwait(false);
-        var selected = ResolveFile(detail.Files, request, options.DefaultQuant);
+        var detail = await _discovery.ListRepoFilesAsync(request.RepoId, cancellationToken).ConfigureAwait(false);
+        var selected = ResolveFile(detail.Files, request, _options.DefaultQuant);
         EnsureSafeSource(selected.FileName, selected.SizeBytes, selected.Sha256, selected.Revision);
 
         if (request.Revision is not null && !string.Equals(request.Revision, selected.Revision, StringComparison.Ordinal))
@@ -40,7 +54,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
         ResolvedGgufProjectorDownload? projector = null;
         if (role != GgufRole.Draft)
         {
-            var discoveredProjector = await discovery.FindProjectorAsync(request.RepoId, cancellationToken).ConfigureAwait(false);
+            var discoveredProjector = await _discovery.FindProjectorAsync(request.RepoId, cancellationToken).ConfigureAwait(false);
             if (discoveredProjector is not null)
             {
                 EnsureSafeSource(discoveredProjector.FileName,
@@ -79,11 +93,11 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
         ArgumentNullException.ThrowIfNull(destination);
         ValidateDestination(source, destination);
 
-        var finalWeightPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, destination.RelativeGgufPath);
-        var finalSidecarPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, destination.RelativeSidecarPath);
+        var finalWeightPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, destination.RelativeGgufPath);
+        var finalSidecarPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, destination.RelativeSidecarPath);
         var finalProjectorPath = destination.ProjectorRelativePath is null
             ? null
-            : GgufFilePath.ResolveContainedPath(options.ModelsDirectory, destination.ProjectorRelativePath);
+            : GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, destination.ProjectorRelativePath);
         EnsureNoCollision(finalWeightPath);
         EnsureNoCollision(finalSidecarPath);
         if (finalProjectorPath is not null)
@@ -91,14 +105,14 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             EnsureNoCollision(finalProjectorPath);
         }
 
-        Directory.CreateDirectory(options.ModelsDirectory);
+        Directory.CreateDirectory(_options.ModelsDirectory);
         var operationId = Guid.NewGuid().ToString("N");
         var temporaryWeightPath = finalWeightPath + $".{operationId}.part";
         var temporarySidecarPath = finalSidecarPath + $".{operationId}.part";
         var temporaryProjectorPath = finalProjectorPath is null ? null : finalProjectorPath + $".{operationId}.part";
         try
         {
-            var weightResult = await downloadClient.DownloadAsync(source.RepoId,
+            var weightResult = await _downloadClient.DownloadAsync(source.RepoId,
                 source.SourceDisplayName,
                 source.ResolvedRevision,
                 destination.CanonicalModelName,
@@ -120,7 +134,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             string? projectorHash = null;
             if (source.Projector is not null)
             {
-                _ = await downloadClient.DownloadAsync(source.RepoId,
+                _ = await _downloadClient.DownloadAsync(source.RepoId,
                     source.Projector.SourceDisplayName,
                     source.ResolvedRevision,
                     $"{destination.CanonicalModelName} projector",
@@ -158,7 +172,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             }
 
             var modelFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
-            var acquiredAt = timeProvider.GetUtcNow();
+            var acquiredAt = _timeProvider.GetUtcNow();
             var entry = new GgufModelRegistryEntry
             {
                 ModelName = destination.CanonicalModelName,
@@ -180,7 +194,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
                 MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
                 ModelContentFingerprint = modelFingerprint
             };
-            var registryRevision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory);
+            var registryRevision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory);
             entry = entry with
             {
                 RegistryRevision = registryRevision
@@ -252,11 +266,11 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
     {
         ArgumentNullException.ThrowIfNull(preparedDownload);
         ValidateDestination(preparedDownload.Source, preparedDownload.Destination);
-        var finalWeightPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, preparedDownload.Destination.RelativeGgufPath);
-        var finalSidecarPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, preparedDownload.Destination.RelativeSidecarPath);
+        var finalWeightPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, preparedDownload.Destination.RelativeGgufPath);
+        var finalSidecarPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, preparedDownload.Destination.RelativeSidecarPath);
         var finalProjectorPath = preparedDownload.Destination.ProjectorRelativePath is null
             ? null
-            : GgufFilePath.ResolveContainedPath(options.ModelsDirectory, preparedDownload.Destination.ProjectorRelativePath);
+            : GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, preparedDownload.Destination.ProjectorRelativePath);
         var movedSidecar = false;
         var movedProjector = false;
         var movedWeight = false;
@@ -276,11 +290,11 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             EnsureNoCollision(finalWeightPath);
             File.Move(preparedDownload.TemporaryGgufPath, finalWeightPath, overwrite: false);
             movedWeight = true;
-            await registry.InsertIfAbsentAsync(preparedDownload.RegistryEntry, cancellationToken).ConfigureAwait(false);
+            await _registry.InsertIfAbsentAsync(preparedDownload.RegistryEntry, cancellationToken).ConfigureAwait(false);
 
             var verified = await GgufAcquisitionSidecar.ReadValidAsync(finalSidecarPath,
                 finalWeightPath,
-                options.ModelsDirectory,
+                _options.ModelsDirectory,
                 cancellationToken).ConfigureAwait(false);
             if (verified is null
                 || !string.Equals(verified.RegistryRevision, preparedDownload.RegistryEntry.RegistryRevision, StringComparison.Ordinal)
@@ -325,9 +339,9 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
     public async Task RollbackCommittedAsync(GgufDownloadCommitReceipt commitReceipt, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(commitReceipt);
-        var entries = await registry.ListAllAsync(cancellationToken).ConfigureAwait(false);
+        var entries = await _registry.ListAllAsync(cancellationToken).ConfigureAwait(false);
         var exactOwner = entries.Any(entry => entry == commitReceipt.RegistryEntry);
-        if (exactOwner && !await registry.RemoveExactAsync(commitReceipt.RegistryEntry, cancellationToken).ConfigureAwait(false))
+        if (exactOwner && !await _registry.RemoveExactAsync(commitReceipt.RegistryEntry, cancellationToken).ConfigureAwait(false))
         {
             throw IntegrityFailure("The committed download registry identity changed during rollback.");
         }
@@ -343,11 +357,11 @@ internal sealed class HuggingFaceGgufDownloadTransaction(
             var metadata = commitReceipt.OwnsFinalGguf
                 ? await GgufAcquisitionSidecar.ReadValidAsync(commitReceipt.FinalSidecarPath,
                     commitReceipt.FinalGgufPath,
-                    options.ModelsDirectory,
+                    _options.ModelsDirectory,
                     cancellationToken).ConfigureAwait(false)
                 : await GgufAcquisitionSidecar.ReadShapeValidAsync(commitReceipt.FinalSidecarPath,
                     commitReceipt.FinalGgufPath,
-                    options.ModelsDirectory,
+                    _options.ModelsDirectory,
                     cancellationToken).ConfigureAwait(false);
             if (metadata is null
                 || !string.Equals(metadata.RegistryRevision, commitReceipt.RegistryEntry.RegistryRevision, StringComparison.Ordinal)

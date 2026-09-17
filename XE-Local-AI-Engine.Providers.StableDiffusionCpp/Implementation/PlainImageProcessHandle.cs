@@ -8,10 +8,16 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     terminates the process and its descendants via <see cref="Process.Kill(bool)" /> with <c>entireProcessTree</c>.
 ///     Mirrors <c>PlainProcessHandle</c>.
 /// </summary>
-internal sealed class PlainImageProcessHandle(Process process) : IImageServerProcessHandle
+internal sealed class PlainImageProcessHandle : IImageServerProcessHandle
 {
-    private readonly Process _process = process ?? throw new ArgumentNullException(nameof(process));
+    private readonly Process _process;
     private int _disposed;
+
+    public PlainImageProcessHandle(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        _process = process;
+    }
 
     public int ProcessId => _process.Id;
 

@@ -141,39 +141,62 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
     private static ProcessLaunchAdmissionKey Key(string modelName, ModelRole role) =>
         new(modelName, role);
 
-    private sealed class Entry(ProcessLaunchAdmission? admission)
+    private sealed class Entry
     {
-        public ProcessLaunchAdmission? Admission { get; } = admission;
+        public Entry(ProcessLaunchAdmission? admission)
+        {
+            Admission = admission;
+        }
+
+        public ProcessLaunchAdmission? Admission { get; }
         public int ConsumerReferences { get; set; }
         public bool IsOrphaned { get; set; }
         public bool IsUnbound { get; set; }
         public int LaunchReferences { get; set; }
     }
 
-    private sealed class ConsumerLease(ProcessLaunchAdmissionRegistry owner, ProcessLaunchAdmissionKey key, Entry entry)
-        : IProcessLaunchAdmissionLease
+    private sealed class ConsumerLease : IProcessLaunchAdmissionLease
     {
+        private readonly ProcessLaunchAdmissionRegistry _owner;
+        private readonly ProcessLaunchAdmissionKey _key;
+        private readonly Entry _entry;
         private int _disposed;
+
+        public ConsumerLease(ProcessLaunchAdmissionRegistry owner, ProcessLaunchAdmissionKey key, Entry entry)
+        {
+            _owner = owner;
+            _key = key;
+            _entry = entry;
+        }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
-                owner.ReleaseConsumer(key, entry);
+                _owner.ReleaseConsumer(_key, _entry);
             }
         }
     }
 
-    private sealed class LaunchTicket(ProcessLaunchAdmissionRegistry owner, ProcessLaunchAdmissionKey key, Entry entry)
-        : IProcessLaunchTicket
+    private sealed class LaunchTicket : IProcessLaunchTicket
     {
+        private readonly ProcessLaunchAdmissionRegistry _owner;
+        private readonly ProcessLaunchAdmissionKey _key;
+        private readonly Entry _entry;
         private int _disposed;
+
+        public LaunchTicket(ProcessLaunchAdmissionRegistry owner, ProcessLaunchAdmissionKey key, Entry entry)
+        {
+            _owner = owner;
+            _key = key;
+            _entry = entry;
+        }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
-                owner.ReleaseLaunch(key, entry);
+                _owner.ReleaseLaunch(_key, _entry);
             }
         }
     }

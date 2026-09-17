@@ -130,11 +130,18 @@ public static class ExternalProviderBindingPinScope
         return null;
     }
 
-    private sealed class PinScope(IReadOnlyList<ExternalProviderBindingPin>? previous) : IDisposable
+    private sealed class PinScope : IDisposable
     {
+        private readonly IReadOnlyList<ExternalProviderBindingPin>? _previous;
+
+        public PinScope(IReadOnlyList<ExternalProviderBindingPin>? previous)
+        {
+            _previous = previous;
+        }
+
         public void Dispose()
         {
-            AmbientPins.Value = previous;
+            AmbientPins.Value = _previous;
         }
     }
 }

@@ -475,10 +475,15 @@ internal sealed class GgufHeaderReader
     }
 
     /// <summary>Forward-only little-endian span reader over the fetched header bytes.</summary>
-    private ref struct SpanReader(ReadOnlySpan<byte> span)
+    private ref struct SpanReader
     {
-        private readonly ReadOnlySpan<byte> _span = span;
+        private readonly ReadOnlySpan<byte> _span;
         private int _position;
+
+        public SpanReader(ReadOnlySpan<byte> span)
+        {
+            _span = span;
+        }
 
         private bool TryTake(int count, out ReadOnlySpan<byte> slice)
         {

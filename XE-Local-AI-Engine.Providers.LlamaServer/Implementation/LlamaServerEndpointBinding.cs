@@ -28,15 +28,23 @@ internal sealed class LlamaServerEndpointBinding : ILlamaServerEndpointBinding
 
     private sealed record BindingState(LlamaServerEndpoint Endpoint, BindingState? Prior);
 
-    private sealed class Scope(LlamaServerEndpointBinding owner, BindingState state) : IDisposable
+    private sealed class Scope : IDisposable
     {
+        private readonly LlamaServerEndpointBinding _owner;
+        private readonly BindingState _state;
         private int _disposed;
+
+        public Scope(LlamaServerEndpointBinding owner, BindingState state)
+        {
+            _owner = owner;
+            _state = state;
+        }
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0 && ReferenceEquals(owner._current.Value, state))
+            if (Interlocked.Exchange(ref _disposed, 1) == 0 && ReferenceEquals(_owner._current.Value, _state))
             {
-                owner._current.Value = state.Prior;
+                _owner._current.Value = _state.Prior;
             }
         }
     }

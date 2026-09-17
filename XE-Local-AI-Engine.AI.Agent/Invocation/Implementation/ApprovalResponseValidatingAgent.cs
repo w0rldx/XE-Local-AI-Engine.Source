@@ -14,11 +14,15 @@ using Microsoft.Extensions.AI;
 ///     history is therefore transport, not authority. The decorator is scoped to one invocation agent, so the snapshots
 ///     survive its threadless approval-resume rounds without crossing invocation boundaries.
 /// </remarks>
-internal sealed class ApprovalResponseValidatingAgent(AIAgent innerAgent) : DelegatingAIAgent(innerAgent)
+internal sealed class ApprovalResponseValidatingAgent : DelegatingAIAgent
 {
     private readonly Lock _approvalLock = new();
     private readonly Dictionary<string, ApprovalResponseState> _responseStates = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ToolCallSnapshot> _surfacedRequests = new(StringComparer.Ordinal);
+
+    public ApprovalResponseValidatingAgent(AIAgent innerAgent) : base(innerAgent)
+    {
+    }
 
     protected override async Task<AgentResponse> RunCoreAsync(IEnumerable<ChatMessage> messages,
         AgentSession? session = null,

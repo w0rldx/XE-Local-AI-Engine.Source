@@ -11,13 +11,19 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     <c>kill(-pid, SIGKILL)</c> reaps the server plus any descendants it forked — no orphans.
 /// </summary>
 [SupportedOSPlatform("linux")]
-internal sealed partial class LinuxProcessGroupHandle(Process process) : ILlamaServerProcessHandle
+internal sealed partial class LinuxProcessGroupHandle : ILlamaServerProcessHandle
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
 
-    private readonly Process _process = process ?? throw new ArgumentNullException(nameof(process));
+    private readonly Process _process;
     private int _disposed;
+
+    public LinuxProcessGroupHandle(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        _process = process;
+    }
 
     public int ProcessId => _process.Id;
 

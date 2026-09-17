@@ -891,32 +891,38 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     ///     once. <see cref="WasEjected" /> mirrors the underlying process so an in-flight request that fails right after a
     ///     force-eject classifies the drop as an operator eject rather than a generic provider failure.
     /// </summary>
-    private sealed class InferenceLease(RunningProcess process) : ILlamaServerInferenceLease
+    private sealed class InferenceLease : ILlamaServerInferenceLease
     {
+        private readonly RunningProcess _process;
         private int _disposed;
 
-        public bool WasEjected => process.WasEjected;
+        public InferenceLease(RunningProcess process)
+        {
+            _process = process;
+        }
+
+        public bool WasEjected => _process.WasEjected;
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
-                process.ReleaseLease();
+                _process.ReleaseLease();
             }
         }
     }
 
     /// <summary>A live, registered process and its last-used timestamp (drives idle-TTL + LRU eviction).</summary>
-    internal sealed class RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
+    internal sealed class RunningProcess
     {
         // Process-wide source of eviction claim ids: always positive, negated by the claimant when it is profiling.
         // Only ever compared for equality, so wraparound is not a real concern; 0 means "no teardown owns this".
         private static long s_nextEvictionClaim;
 
-        private long _lastUsedTicks = startedUtc.UtcTicks;
+        private long _lastUsedTicks;
 
         // Seeded to the spawn time so a freshly-ready process is not re-probed until one full interval has passed.
-        private long _lastLivenessProbeTicks = startedUtc.UtcTicks;
+        private long _lastLivenessProbeTicks;
         private int _consecutiveLivenessFailures;
         private int _profilingPinned;
         private int _activeLeases;
@@ -929,11 +935,20 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         private long _evictionOwner;
         private int _ejected;
 
-        public ILlamaServerProcessHandle Handle { get; } = handle;
+        public RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
+        {
+            _lastUsedTicks = startedUtc.UtcTicks;
+            _lastLivenessProbeTicks = startedUtc.UtcTicks;
+            Handle = handle;
+            Endpoint = endpoint;
+            Port = port;
+        }
 
-        public LlamaServerEndpoint Endpoint { get; } = endpoint;
+        public ILlamaServerProcessHandle Handle { get; }
 
-        public int Port { get; } = port;
+        public LlamaServerEndpoint Endpoint { get; }
+
+        public int Port { get; }
 
         /// <summary>
         ///     The effective per-slot context window (<c>/props default_generation_settings.n_ctx</c>) the server

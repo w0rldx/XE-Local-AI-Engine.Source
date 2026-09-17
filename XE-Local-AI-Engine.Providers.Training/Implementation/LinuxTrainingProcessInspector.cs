@@ -14,7 +14,7 @@ internal readonly record struct TrainingProcessStat(int Pgid, long StartTicks);
 ///     <c>SandboxOrphanReaper</c> model: identity is proven from several independent fields before anything is
 ///     signalled, never from an executable-path match alone the way <c>StaleLlamaServerReaper</c> does it.
 /// </summary>
-internal sealed partial class LinuxTrainingProcessInspector(TimeProvider timeProvider) : ITrainingProcessInspector
+internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessInspector
 {
     /// <summary>The variable the run token travels to the child in, and is read back from, in <c>/proc/[pid]/environ</c>.</summary>
     public const string RunTokenVariable = "XE_TRAINING_RUN_TOKEN";
@@ -25,7 +25,13 @@ internal sealed partial class LinuxTrainingProcessInspector(TimeProvider timePro
     private static readonly TimeSpan TerminateGrace = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(50);
 
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly TimeProvider _timeProvider;
+
+    public LinuxTrainingProcessInspector(TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+    }
 
     public TrainingProcessFacts? Inspect(int processId)
     {

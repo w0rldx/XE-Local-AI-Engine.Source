@@ -12,9 +12,14 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     has to be durable before the first byte of output arrives — a host that dies between spawn and receipt leaves an
 ///     unreapable orphan holding the whole GPU.
 /// </summary>
-internal sealed class LinuxTrainingProcessSpawner(string? cacheRoot = null) : ITrainingProcessSpawner
+internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 {
-    private readonly string _cacheRoot = string.IsNullOrWhiteSpace(cacheRoot) ? TrainingRuntimeLayout.DefaultCacheRoot() : cacheRoot;
+    private readonly string _cacheRoot;
+
+    public LinuxTrainingProcessSpawner(string? cacheRoot = null)
+    {
+        _cacheRoot = string.IsNullOrWhiteSpace(cacheRoot) ? TrainingRuntimeLayout.DefaultCacheRoot() : cacheRoot;
+    }
 
     public ITrainingProcessHandle Spawn(TrainingSpawnRequest request)
     {

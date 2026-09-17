@@ -15,7 +15,7 @@ using System.Text;
 ///         String content stays VISIBLE in the output, deliberately. The house policy the scans in this folder share
 ///         (see <c>ContainerBridgeLayeringArchitectureTests</c>) is that a banned name inside a string literal should
 ///         still trip the guard: erring toward scanning less never turns a real reference into a pass. This helper
-///         fixes comment recognition only; it does not make callers string-blind.
+///         fixes comment recognition only; only <see cref="StripCommentsAndLiterals" /> makes a caller string-blind.
 ///     </para>
 ///     <para>
 ///         Recognised forms: regular <c>"..."</c>, char <c>'...'</c>, verbatim <c>@"..."</c>, raw <c>"""..."""</c>
@@ -36,7 +36,24 @@ internal static class SourceCommentStripper
         ArgumentNullException.ThrowIfNull(source);
 
         var output = new StringBuilder(source.Length);
-        new Scanner(source, output).Run();
+        new Scanner(source, output, blankLiterals: false).Run();
+        return output.ToString();
+    }
+
+    /// <summary>
+    ///     Returns <paramref name="source" /> with every comment stripped and every string or char literal blanked to
+    ///     spaces, delimiters and interpolation holes included, keeping line breaks so reported line numbers still hold.
+    /// </summary>
+    /// <remarks>
+    ///     For a scan that reads DECLARATIONS rather than references: a C# snippet quoted as test data is not a
+    ///     declaration, and the house default of leaving literal content visible would report it as one.
+    /// </remarks>
+    internal static string StripCommentsAndLiterals(string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var output = new StringBuilder(source.Length);
+        new Scanner(source, output, blankLiterals: true).Run();
         return output.ToString();
     }
 
@@ -45,7 +62,7 @@ internal static class SourceCommentStripper
     ///     comment, the content of a string or char literal, or the format text of an interpolation hole. Comment
     ///     delimiters are recognised in the code state only.
     /// </summary>
-    private sealed class Scanner(string text, StringBuilder output)
+    private sealed class Scanner(string text, StringBuilder output, bool blankLiterals)
     {
         private int index;
 
@@ -91,12 +108,12 @@ internal static class SourceCommentStripper
                         SkipBlockComment();
                         continue;
                     case '\'':
-                        CopyCharLiteral();
+                        Blanked(CopyCharLiteral);
                         continue;
                     case '"':
-                        CopyString(dollars: 0, verbatim: false);
+                        Blanked(() => CopyString(dollars: 0, verbatim: false));
                         continue;
-                    case '$' or '@' when TryCopyPrefixedString():
+                    case '$' or '@' when Blanked(TryCopyPrefixedString):
                         continue;
                     case '(' or '[' or '{':
                         depth++;
@@ -115,6 +132,41 @@ internal static class SourceCommentStripper
                 output.Append(current);
                 index++;
             }
+        }
+
+        /// <summary>Runs a literal copy, then overwrites what it appended with spaces when blanking is on.</summary>
+        private void Blanked(Action copy)
+        {
+            _ = Blanked(() =>
+            {
+                copy();
+                return true;
+            });
+        }
+
+        /// <summary>
+        ///     Line breaks survive the blanking so a caller's line numbers still match the file; everything else in the
+        ///     literal, delimiters and interpolated code included, becomes a space.
+        /// </summary>
+        private bool Blanked(Func<bool> copy)
+        {
+            var from = output.Length;
+            var copied = copy();
+
+            if (!blankLiterals)
+            {
+                return copied;
+            }
+
+            for (var position = from; position < output.Length; position++)
+            {
+                if (output[position] is not ('\r' or '\n'))
+                {
+                    output[position] = ' ';
+                }
+            }
+
+            return copied;
         }
 
         /// <summary>

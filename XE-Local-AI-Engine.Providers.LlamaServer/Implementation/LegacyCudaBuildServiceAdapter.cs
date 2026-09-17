@@ -2,11 +2,18 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-internal sealed class LegacyCudaBuildServiceAdapter(ILlamaCppSourceBuildService sourceBuildService) : ICudaBuildService
+internal sealed class LegacyCudaBuildServiceAdapter : ICudaBuildService
 {
+    private readonly ILlamaCppSourceBuildService _sourceBuildService;
+
+    public LegacyCudaBuildServiceAdapter(ILlamaCppSourceBuildService sourceBuildService)
+    {
+        _sourceBuildService = sourceBuildService;
+    }
+
     public async Task<CudaBuildStartOutcome> StartAsync(CancellationToken ct)
     {
-        var result = await sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
+        var result = await _sourceBuildService.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cuda,
             LlamaCppSourceSelection.Official), ct).ConfigureAwait(false);
         return result.Outcome switch
         {
@@ -22,7 +29,7 @@ internal sealed class LegacyCudaBuildServiceAdapter(ILlamaCppSourceBuildService 
 
     public CudaBuildStatus GetStatus()
     {
-        var status = sourceBuildService.GetStatus();
+        var status = _sourceBuildService.GetStatus();
         if (!status.CurrentBuild.IsLegacyPinnedCuda())
         {
             return new CudaBuildStatus(CudaBuildPhase.Idle, false, false, [], null, null, null, null);
@@ -40,11 +47,11 @@ internal sealed class LegacyCudaBuildServiceAdapter(ILlamaCppSourceBuildService 
 
     public bool Cancel()
     {
-        return sourceBuildService.CancelLegacyPinnedCuda();
+        return _sourceBuildService.CancelLegacyPinnedCuda();
     }
 
     public async Task RecoverStaleWorkDirectoryAsync(CancellationToken cancellationToken)
     {
-        await sourceBuildService.RecoverAsync(cancellationToken).ConfigureAwait(false);
+        await _sourceBuildService.RecoverAsync(cancellationToken).ConfigureAwait(false);
     }
 }

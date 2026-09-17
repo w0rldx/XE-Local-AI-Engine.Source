@@ -11,10 +11,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 ///     the multi-file orchestration on top of it — per-file staging, reuse of already-complete files, and one
 ///     set-relative progress bar instead of one bar per shard.
 /// </summary>
-internal sealed class HuggingFaceBaseCheckpointStore(
-    HfHubClient hubClient,
-    HfDownloadClient downloadClient,
-    ILogger<HuggingFaceBaseCheckpointStore> logger) : IBaseCheckpointStore
+internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
 {
     private const string DefaultRevision = "main";
 
@@ -38,9 +35,22 @@ internal sealed class HuggingFaceBaseCheckpointStore(
         "chat_template.jinja"
     ];
 
-    private readonly HfDownloadClient _downloadClient = downloadClient ?? throw new ArgumentNullException(nameof(downloadClient));
-    private readonly HfHubClient _hubClient = hubClient ?? throw new ArgumentNullException(nameof(hubClient));
-    private readonly ILogger<HuggingFaceBaseCheckpointStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly HfDownloadClient _downloadClient;
+    private readonly HfHubClient _hubClient;
+    private readonly ILogger<HuggingFaceBaseCheckpointStore> _logger;
+
+    public HuggingFaceBaseCheckpointStore(
+        HfHubClient hubClient,
+        HfDownloadClient downloadClient,
+        ILogger<HuggingFaceBaseCheckpointStore> logger)
+    {
+        ArgumentNullException.ThrowIfNull(hubClient);
+        ArgumentNullException.ThrowIfNull(downloadClient);
+        ArgumentNullException.ThrowIfNull(logger);
+        _hubClient = hubClient;
+        _downloadClient = downloadClient;
+        _logger = logger;
+    }
 
     /// <inheritdoc />
     public async Task<BaseCheckpointManifest> ResolveAsync(string repoId, string? revision, CancellationToken ct)
@@ -241,24 +251,41 @@ internal sealed class HuggingFaceBaseCheckpointStore(
     ///     Re-frames one file's byte counts as progress through the whole checkpoint, so a sharded model shows one
     ///     monotonic bar instead of a bar that fills and snaps back to zero once per shard.
     /// </summary>
-    private sealed class SetProgressAdapter(
-        IProgress<PullProgress> inner,
-        string modelName,
-        long completedInPriorFiles,
-        long? setTotalBytes,
-        int partIndex,
-        int partCount) : IProgress<PullProgress>
+    private sealed class SetProgressAdapter : IProgress<PullProgress>
     {
+        private readonly IProgress<PullProgress> _inner;
+        private readonly string _modelName;
+        private readonly long _completedInPriorFiles;
+        private readonly long? _setTotalBytes;
+        private readonly int _partIndex;
+        private readonly int _partCount;
+
+        public SetProgressAdapter(
+            IProgress<PullProgress> inner,
+            string modelName,
+            long completedInPriorFiles,
+            long? setTotalBytes,
+            int partIndex,
+            int partCount)
+        {
+            _inner = inner;
+            _modelName = modelName;
+            _completedInPriorFiles = completedInPriorFiles;
+            _setTotalBytes = setTotalBytes;
+            _partIndex = partIndex;
+            _partCount = partCount;
+        }
+
         public void Report(PullProgress value)
         {
-            inner.Report(new PullProgress
+            _inner.Report(new PullProgress
             {
-                ModelName = modelName,
+                ModelName = _modelName,
                 Status = value.Status,
-                TotalBytes = setTotalBytes ?? value.TotalBytes,
-                CompletedBytes = completedInPriorFiles + (value.CompletedBytes ?? 0),
-                PartIndex = partIndex,
-                PartCount = partCount
+                TotalBytes = _setTotalBytes ?? value.TotalBytes,
+                CompletedBytes = _completedInPriorFiles + (value.CompletedBytes ?? 0),
+                PartIndex = _partIndex,
+                PartCount = _partCount
             });
         }
     }

@@ -4,25 +4,40 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <inheritdoc />
-internal sealed class TransientLlamaServerEvaluationHarness(
-    ILlamaServerProcessSupervisor supervisor,
-    ILlamaCppBinaryManager binaryManager,
-    IGpuVariantSelector variantSelector,
-    ILlamaServerCapabilityManifestProbe capabilityManifestProbe,
-    ILlamaServerLaunchPolicy launchPolicy,
-    TransientLlamaServerLauncher launcher,
-    IGpuModelLoadAdmission loadAdmission) : ITransientLlamaServerEvaluationHarness
+internal sealed class TransientLlamaServerEvaluationHarness : ITransientLlamaServerEvaluationHarness
 {
-    private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+    private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly ILlamaServerCapabilityManifestProbe _capabilityManifestProbe;
+    private readonly TransientLlamaServerLauncher _launcher;
+    private readonly ILlamaServerLaunchPolicy _launchPolicy;
+    private readonly IGpuModelLoadAdmission _loadAdmission;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly IGpuVariantSelector _variantSelector;
 
-    private readonly ILlamaServerCapabilityManifestProbe _capabilityManifestProbe =
-        capabilityManifestProbe ?? throw new ArgumentNullException(nameof(capabilityManifestProbe));
-
-    private readonly TransientLlamaServerLauncher _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
-    private readonly ILlamaServerLaunchPolicy _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
-    private readonly IGpuModelLoadAdmission _loadAdmission = loadAdmission ?? throw new ArgumentNullException(nameof(loadAdmission));
-    private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-    private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
+    public TransientLlamaServerEvaluationHarness(
+        ILlamaServerProcessSupervisor supervisor,
+        ILlamaCppBinaryManager binaryManager,
+        IGpuVariantSelector variantSelector,
+        ILlamaServerCapabilityManifestProbe capabilityManifestProbe,
+        ILlamaServerLaunchPolicy launchPolicy,
+        TransientLlamaServerLauncher launcher,
+        IGpuModelLoadAdmission loadAdmission)
+    {
+        ArgumentNullException.ThrowIfNull(supervisor);
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        ArgumentNullException.ThrowIfNull(capabilityManifestProbe);
+        ArgumentNullException.ThrowIfNull(launchPolicy);
+        ArgumentNullException.ThrowIfNull(launcher);
+        ArgumentNullException.ThrowIfNull(loadAdmission);
+        _supervisor = supervisor;
+        _binaryManager = binaryManager;
+        _variantSelector = variantSelector;
+        _capabilityManifestProbe = capabilityManifestProbe;
+        _launchPolicy = launchPolicy;
+        _launcher = launcher;
+        _loadAdmission = loadAdmission;
+    }
 
     public async Task<TransientLlamaServerEvaluationResult<T>> RunAsync<T>(TransientLlamaServerEvaluationRequest request,
         Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task> bindProvenance,

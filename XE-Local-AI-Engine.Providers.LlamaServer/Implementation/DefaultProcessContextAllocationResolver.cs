@@ -3,9 +3,15 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
-internal sealed class DefaultProcessContextAllocationResolver(LlamaServerLaunchPolicyOptions options) : IProcessContextAllocationResolver
+internal sealed class DefaultProcessContextAllocationResolver : IProcessContextAllocationResolver
 {
-    private readonly LlamaServerLaunchPolicyOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly LlamaServerLaunchPolicyOptions _options;
+
+    public DefaultProcessContextAllocationResolver(LlamaServerLaunchPolicyOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+    }
 
     public Task<ProcessContextAllocation?> ResolveAsync(string modelName,
         ModelRole role,

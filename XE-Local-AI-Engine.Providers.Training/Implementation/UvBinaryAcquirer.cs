@@ -22,12 +22,18 @@ using System.Security.Cryptography;
 ///         the cache root — so a second digest-pinned downloader would be a duplicate of this one, not a new capability.
 ///     </para>
 /// </remarks>
-public sealed class UvBinaryAcquirer(HttpClient httpClient)
+public sealed class UvBinaryAcquirer
 {
     // uv's Linux tarball is ~20 MB; the ceiling only exists so a hostile or misconfigured host cannot stream forever.
     private const long MaxDownloadBytes = 512L * 1024 * 1024;
 
-    private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+    private readonly HttpClient _httpClient;
+
+    public UvBinaryAcquirer(HttpClient httpClient)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
+    }
 
     /// <summary>
     ///     Ensures the pinned uv executable exists under <paramref name="cacheRoot" /> and returns its absolute path.

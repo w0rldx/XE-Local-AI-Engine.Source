@@ -21,13 +21,23 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 ///         sidecar-backed entry); the resolver's default-provider fallback covers routing for that case.
 ///     </para>
 /// </summary>
-internal sealed class GgufAcquisitionArtifactStartupReaper(
-    HuggingFaceOptions options,
-    TimeProvider timeProvider,
-    ILogger<GgufAcquisitionArtifactStartupReaper> logger) : IHostedService
+internal sealed class GgufAcquisitionArtifactStartupReaper : IHostedService
 {
     /// <summary>Conservative age threshold before a stale acquisition artifact is considered abandoned.</summary>
     internal static readonly TimeSpan StaleArtifactAge = TimeSpan.FromHours(24);
+    private readonly HuggingFaceOptions _options;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<GgufAcquisitionArtifactStartupReaper> _logger;
+
+    public GgufAcquisitionArtifactStartupReaper(
+        HuggingFaceOptions options,
+        TimeProvider timeProvider,
+        ILogger<GgufAcquisitionArtifactStartupReaper> logger)
+    {
+        _options = options;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -38,7 +48,7 @@ internal sealed class GgufAcquisitionArtifactStartupReaper(
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // Best-effort: a cleanup failure must never block node startup.
-            logger.LogWarning(exception, "Could not sweep stale GGUF acquisition artifacts at startup.");
+            _logger.LogWarning(exception, "Could not sweep stale GGUF acquisition artifacts at startup.");
         }
 
         return Task.CompletedTask;
@@ -49,18 +59,18 @@ internal sealed class GgufAcquisitionArtifactStartupReaper(
 
     private void Sweep()
     {
-        if (!Directory.Exists(options.ModelsDirectory))
+        if (!Directory.Exists(_options.ModelsDirectory))
         {
             return;
         }
 
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        foreach (var path in Directory.EnumerateFiles(options.ModelsDirectory, "*.part", SearchOption.TopDirectoryOnly))
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        foreach (var path in Directory.EnumerateFiles(_options.ModelsDirectory, "*.part", SearchOption.TopDirectoryOnly))
         {
             TryDeleteIfStale(path, now, "stale operation-owned .part file");
         }
 
-        foreach (var path in Directory.EnumerateFiles(options.ModelsDirectory, "*" + GgufAcquisitionSidecar.Suffix, SearchOption.TopDirectoryOnly))
+        foreach (var path in Directory.EnumerateFiles(_options.ModelsDirectory, "*" + GgufAcquisitionSidecar.Suffix, SearchOption.TopDirectoryOnly))
         {
             var weightPath = path[..^GgufAcquisitionSidecar.Suffix.Length];
             if (File.Exists(weightPath))
@@ -92,11 +102,11 @@ internal sealed class GgufAcquisitionArtifactStartupReaper(
         try
         {
             File.Delete(path);
-            logger.LogWarning("Reaped {Reason}: {FileName}.", reason, Path.GetFileName(path));
+            _logger.LogWarning("Reaped {Reason}: {FileName}.", reason, Path.GetFileName(path));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(exception, "Could not reap stale GGUF acquisition artifact {FileName}.", Path.GetFileName(path));
+            _logger.LogDebug(exception, "Could not reap stale GGUF acquisition artifact {FileName}.", Path.GetFileName(path));
         }
     }
 }

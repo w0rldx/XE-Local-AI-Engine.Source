@@ -12,25 +12,34 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     cooperatively and a SIGKILL there would turn every operator cancel into a failure.
 /// </summary>
 [SupportedOSPlatform("linux")]
-internal sealed partial class LinuxTrainingProcessHandle(
-    Process process,
-    TrainingLaunchReceipt receipt,
-    Channel<string> output) : ITrainingProcessHandle
+internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandle
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
+    private readonly Process _process;
+    private readonly Channel<string> _output;
 
     private int _disposed;
 
-    public TrainingLaunchReceipt Receipt { get; } = receipt;
+    public LinuxTrainingProcessHandle(
+        Process process,
+        TrainingLaunchReceipt receipt,
+        Channel<string> output)
+    {
+        _process = process;
+        Receipt = receipt;
+        _output = output;
+    }
+
+    public TrainingLaunchReceipt Receipt { get; }
 
     public IAsyncEnumerable<string> ReadOutputAsync(CancellationToken cancellationToken) =>
-        output.Reader.ReadAllAsync(cancellationToken);
+        _output.Reader.ReadAllAsync(cancellationToken);
 
     public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
     {
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        return process.ExitCode;
+        await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        return _process.ExitCode;
     }
 
     public void RequestStop()
@@ -51,7 +60,7 @@ internal sealed partial class LinuxTrainingProcessHandle(
         }
 
         _ = Kill(-Receipt.Pgid, Sigterm);
-        if (!process.WaitForExit(2000))
+        if (!_process.WaitForExit(2000))
         {
             _ = Kill(-Receipt.Pgid, Sigkill);
         }
@@ -70,8 +79,8 @@ internal sealed partial class LinuxTrainingProcessHandle(
         }
         finally
         {
-            _ = output.Writer.TryComplete();
-            process.Dispose();
+            _ = _output.Writer.TryComplete();
+            _process.Dispose();
         }
     }
 
@@ -79,7 +88,7 @@ internal sealed partial class LinuxTrainingProcessHandle(
     {
         try
         {
-            return process.HasExited;
+            return _process.HasExited;
         }
         catch (InvalidOperationException)
         {

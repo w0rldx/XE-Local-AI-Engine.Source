@@ -7,16 +7,31 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Owns the journaled directory-and-state transaction used to adopt a managed image runtime.</summary>
-internal sealed class StableDiffusionCppRuntimeAdoption(
-    string cacheRoot,
-    IStableDiffusionInstalledRuntimeStore runtimeStore,
-    IStableDiffusionManagedSourceBuildSignal managedSignal,
-    TimeProvider timeProvider,
-    ILogger logger)
+internal sealed class StableDiffusionCppRuntimeAdoption
 {
-    private string BuildRoot => Path.Combine(cacheRoot, "stable-diffusion.cpp", "source-build");
+    private readonly string _cacheRoot;
+    private readonly IStableDiffusionInstalledRuntimeStore _runtimeStore;
+    private readonly IStableDiffusionManagedSourceBuildSignal _managedSignal;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger _logger;
+
+    public StableDiffusionCppRuntimeAdoption(
+        string cacheRoot,
+        IStableDiffusionInstalledRuntimeStore runtimeStore,
+        IStableDiffusionManagedSourceBuildSignal managedSignal,
+        TimeProvider timeProvider,
+        ILogger logger)
+    {
+        _cacheRoot = cacheRoot;
+        _runtimeStore = runtimeStore;
+        _managedSignal = managedSignal;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
+
+    private string BuildRoot => Path.Combine(_cacheRoot, "stable-diffusion.cpp", "source-build");
     private string JournalPath => Path.Combine(BuildRoot, "adoption-journal.json");
-    private string RuntimeRoot => Path.Combine(cacheRoot, "stable-diffusion.cpp", "managed");
+    private string RuntimeRoot => Path.Combine(_cacheRoot, "stable-diffusion.cpp", "managed");
 
     public async Task RecoverAsync(CancellationToken ct)
     {
@@ -38,7 +53,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
         }
 
         var paths = GetPaths(journal);
-        var installed = await runtimeStore.ReadAsync(ct).ConfigureAwait(false);
+        var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
         if (installed is not null && RuntimeStatesMatch(installed, journal.NewState) && Directory.Exists(paths.Destination))
         {
             try
@@ -47,7 +62,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                logger.LogWarning(exception, "A committed stable-diffusion.cpp runtime cleanup remains pending and will be retried.");
+                _logger.LogWarning(exception, "A committed stable-diffusion.cpp runtime cleanup remains pending and will be retried.");
             }
 
             return;
@@ -111,8 +126,8 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
                 descriptor.RequestedCommit,
                 Path.GetDirectoryName(finalServer),
                 digest,
-                timeProvider.GetUtcNow());
-            var previousState = await runtimeStore.ReadAsync(ct).ConfigureAwait(false);
+                _timeProvider.GetUtcNow());
+            var previousState = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             var journal = new StableDiffusionCppAdoptionJournal(descriptor.BuildId,
                 descriptor.Backend,
                 descriptor.ResolvedCommit!,
@@ -131,7 +146,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
 
                 Directory.Move(staging, destination);
                 ValidateAdoptedServer(destination, finalServer);
-                await runtimeStore.WriteAsync(state, CancellationToken.None).ConfigureAwait(false);
+                await _runtimeStore.WriteAsync(state, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception adoptionException)
             {
@@ -141,7 +156,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
                 }
                 catch (Exception rollbackException)
                 {
-                    managedSignal.Clear();
+                    _managedSignal.Clear();
                     throw new StableDiffusionRuntimeException("The managed image runtime adoption failed and its previous state could not be restored.",
                         new AggregateException(adoptionException, rollbackException));
                 }
@@ -150,14 +165,14 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
                 throw;
             }
 
-            managedSignal.SetActive(descriptor.Backend);
+            _managedSignal.SetActive(descriptor.Backend);
             try
             {
                 CleanupCommitted(paths);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                logger.LogWarning(exception, "The previous stable-diffusion.cpp runtime cleanup is pending and will be retried.");
+                _logger.LogWarning(exception, "The previous stable-diffusion.cpp runtime cleanup is pending and will be retried.");
             }
         }
         catch
@@ -169,7 +184,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
 
     private async Task RollbackAsync(StableDiffusionCppAdoptionJournal journal, AdoptionPaths paths)
     {
-        managedSignal.Clear();
+        _managedSignal.Clear();
         if (Directory.Exists(paths.Destination))
         {
             DeleteDirectoryStrict(paths.Failed);
@@ -327,25 +342,25 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
     {
         if (previousState is null)
         {
-            await runtimeStore.DeleteAsync(CancellationToken.None).ConfigureAwait(false);
-            managedSignal.Clear();
+            await _runtimeStore.DeleteAsync(CancellationToken.None).ConfigureAwait(false);
+            _managedSignal.Clear();
             return;
         }
 
-        await runtimeStore.WriteAsync(previousState, CancellationToken.None).ConfigureAwait(false);
+        await _runtimeStore.WriteAsync(previousState, CancellationToken.None).ConfigureAwait(false);
         if (previousState.Validity == StableDiffusionInstalledRuntimeValidity.Active)
         {
-            managedSignal.SetActive(previousState.DesiredBackend);
+            _managedSignal.SetActive(previousState.DesiredBackend);
         }
         else
         {
-            managedSignal.Clear();
+            _managedSignal.Clear();
         }
     }
 
     private void ValidateAdoptedServer(string installRoot, string serverPath)
     {
-        var fullCacheRoot = Path.GetFullPath(cacheRoot);
+        var fullCacheRoot = Path.GetFullPath(_cacheRoot);
         var fullInstallRoot = Path.GetFullPath(installRoot);
         var fullServerPath = Path.GetFullPath(serverPath);
         var installPrefix = fullInstallRoot + Path.DirectorySeparatorChar;

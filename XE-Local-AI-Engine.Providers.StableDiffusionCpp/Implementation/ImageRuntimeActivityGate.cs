@@ -131,9 +131,17 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
         Eviction
     }
 
-    private sealed class Lease(ImageRuntimeActivityGate owner, LeaseKind kind) : IImageRuntimeActivityLease
+    private sealed class Lease : IImageRuntimeActivityLease
     {
+        private readonly ImageRuntimeActivityGate _owner;
+        private readonly LeaseKind _kind;
         private int _disposed;
+
+        public Lease(ImageRuntimeActivityGate owner, LeaseKind kind)
+        {
+            _owner = owner;
+            _kind = kind;
+        }
 
         public void Dispose() =>
             ReleaseOnce();
@@ -150,7 +158,7 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
-                owner.Release(kind);
+                _owner.Release(_kind);
             }
         }
     }

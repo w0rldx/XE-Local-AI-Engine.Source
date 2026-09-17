@@ -7,10 +7,16 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     Fallback process handle for platforms without a dedicated containment primitive (macOS and other Unix).
 ///     Tree-kill terminates the process and its descendants via <see cref="Process.Kill(bool)" />.
 /// </summary>
-internal sealed class PlainWhisperProcessHandle(Process process) : IWhisperServerProcessHandle
+internal sealed class PlainWhisperProcessHandle : IWhisperServerProcessHandle
 {
-    private readonly Process _process = process ?? throw new ArgumentNullException(nameof(process));
+    private readonly Process _process;
     private int _disposed;
+
+    public PlainWhisperProcessHandle(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        _process = process;
+    }
 
     public int ProcessId => _process.Id;
 

@@ -202,8 +202,12 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
     private static partial bool CloseHandle(IntPtr hObject);
 
     /// <summary>Owns the Win32 job-object handle; closing it terminates the kill-on-close job's process tree.</summary>
-    private sealed class SafeJobHandle() : SafeHandleZeroOrMinusOneIsInvalid(true)
+    private sealed class SafeJobHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
+        public SafeJobHandle() : base(true)
+        {
+        }
+
         protected override bool ReleaseHandle()
         {
             return CloseHandle(handle);

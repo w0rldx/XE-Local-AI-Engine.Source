@@ -25,11 +25,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 ///         source build or a source-build remove answer <c>409 runtime-busy</c> while audio is being transcribed.
 ///     </para>
 /// </remarks>
-internal sealed class WhisperServerTranscriber(
-    IWhisperServerSupervisor supervisor,
-    HttpClient httpClient,
-    WhisperRuntimeOptions options,
-    ILogger<WhisperServerTranscriber>? logger = null) : IWhisperTranscriber
+internal sealed class WhisperServerTranscriber : IWhisperTranscriber
 {
     private const string InferenceRoute = "inference";
 
@@ -38,10 +34,25 @@ internal sealed class WhisperServerTranscriber(
 
     private static readonly JsonSerializerOptions ResponseSerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-    private readonly ILogger<WhisperServerTranscriber> _logger = logger ?? NullLogger<WhisperServerTranscriber>.Instance;
-    private readonly WhisperRuntimeOptions _options = options ?? throw new ArgumentNullException(nameof(options));
-    private readonly IWhisperServerSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<WhisperServerTranscriber> _logger;
+    private readonly WhisperRuntimeOptions _options;
+    private readonly IWhisperServerSupervisor _supervisor;
+
+    public WhisperServerTranscriber(
+        IWhisperServerSupervisor supervisor,
+        HttpClient httpClient,
+        WhisperRuntimeOptions options,
+        ILogger<WhisperServerTranscriber>? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
+        _logger = logger ?? NullLogger<WhisperServerTranscriber>.Instance;
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+    }
 
     /// <inheritdoc />
     public async Task<WhisperTranscriptionResult> TranscribeAsync(string modelId, WhisperTranscriptionRequest request, CancellationToken ct)
@@ -224,36 +235,43 @@ internal sealed class WhisperServerTranscriber(
     ///     A read-only pass-through that swallows <see cref="Stream.Dispose(bool)" />. The multipart content owns and
     ///     disposes its parts; the caller owns the audio handle. This is the seam between those two ownerships.
     /// </summary>
-    private sealed class NonDisposingStream(Stream inner) : Stream
+    private sealed class NonDisposingStream : Stream
     {
-        public override bool CanRead => inner.CanRead;
+        private readonly Stream _inner;
 
-        public override bool CanSeek => inner.CanSeek;
+        public NonDisposingStream(Stream inner)
+        {
+            _inner = inner;
+        }
+
+        public override bool CanRead => _inner.CanRead;
+
+        public override bool CanSeek => _inner.CanSeek;
 
         public override bool CanWrite => false;
 
-        public override long Length => inner.Length;
+        public override long Length => _inner.Length;
 
         public override long Position
         {
-            get => inner.Position;
-            set => inner.Position = value;
+            get => _inner.Position;
+            set => _inner.Position = value;
         }
 
         public override void Flush() =>
-            inner.Flush();
+            _inner.Flush();
 
         public override int Read(byte[] buffer, int offset, int count) =>
-            inner.Read(buffer, offset, count);
+            _inner.Read(buffer, offset, count);
 
         public override int Read(Span<byte> buffer) =>
-            inner.Read(buffer);
+            _inner.Read(buffer);
 
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-            inner.ReadAsync(buffer, cancellationToken);
+            _inner.ReadAsync(buffer, cancellationToken);
 
         public override long Seek(long offset, SeekOrigin origin) =>
-            inner.Seek(offset, origin);
+            _inner.Seek(offset, origin);
 
         public override void SetLength(long value) =>
             throw new NotSupportedException();

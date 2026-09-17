@@ -19,15 +19,24 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///         resolving after a restart and the node silently falls back to CPU.
 ///     </para>
 /// </remarks>
-internal sealed class WhisperCppSourceBuildLifecycle(
-    IWhisperCppSourceBuildService service,
-    ILogger<WhisperCppSourceBuildLifecycle> logger) : IHostedService
+internal sealed class WhisperCppSourceBuildLifecycle : IHostedService
 {
+    private readonly IWhisperCppSourceBuildService _service;
+    private readonly ILogger<WhisperCppSourceBuildLifecycle> _logger;
+
+    public WhisperCppSourceBuildLifecycle(
+        IWhisperCppSourceBuildService service,
+        ILogger<WhisperCppSourceBuildLifecycle> logger)
+    {
+        _service = service;
+        _logger = logger;
+    }
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await service.RecoverAsync(cancellationToken).ConfigureAwait(false);
+            await _service.RecoverAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -35,7 +44,7 @@ internal sealed class WhisperCppSourceBuildLifecycle(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Failed to recover the managed whisper.cpp source-build state.");
+            _logger.LogError(exception, "Failed to recover the managed whisper.cpp source-build state.");
             throw;
         }
     }
@@ -44,7 +53,7 @@ internal sealed class WhisperCppSourceBuildLifecycle(
     {
         try
         {
-            await service.ShutdownAsync(cancellationToken).ConfigureAwait(false);
+            await _service.ShutdownAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -52,7 +61,7 @@ internal sealed class WhisperCppSourceBuildLifecycle(
             // on this token, so an over-budget shutdown would otherwise surface as an unhandled exception out of
             // Host.StopAsync and kill the process instead of letting it exit cleanly. The abandoned build is
             // reconciled on the next start, which is exactly what the journal is for.
-            logger.LogWarning("The managed whisper.cpp shutdown drain was cut short by the host shutdown budget; any "
+            _logger.LogWarning("The managed whisper.cpp shutdown drain was cut short by the host shutdown budget; any "
                               + "in-flight build is abandoned and will be reconciled on the next start.");
         }
     }

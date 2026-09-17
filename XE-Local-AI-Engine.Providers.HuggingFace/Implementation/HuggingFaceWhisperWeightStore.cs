@@ -10,11 +10,17 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 ///     single file with a size and a digest the caller already knows, so this is the thinnest of the three stores
 ///     built on that client: no repository listing, no multi-file orchestration, no registry.
 /// </summary>
-internal sealed class HuggingFaceWhisperWeightStore(HfDownloadClient downloadClient) : IWhisperWeightFileStore
+internal sealed class HuggingFaceWhisperWeightStore : IWhisperWeightFileStore
 {
     private const string DefaultRevision = "main";
 
-    private readonly HfDownloadClient _downloadClient = downloadClient ?? throw new ArgumentNullException(nameof(downloadClient));
+    private readonly HfDownloadClient _downloadClient;
+
+    public HuggingFaceWhisperWeightStore(HfDownloadClient downloadClient)
+    {
+        ArgumentNullException.ThrowIfNull(downloadClient);
+        _downloadClient = downloadClient;
+    }
 
     /// <inheritdoc />
     public async Task<string> EnsureFileAsync(WhisperWeightFileRequest request, IProgress<PullProgress>? progress, CancellationToken ct)

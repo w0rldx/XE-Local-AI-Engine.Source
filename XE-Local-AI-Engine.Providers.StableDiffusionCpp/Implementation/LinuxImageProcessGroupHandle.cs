@@ -12,13 +12,19 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     <c>LinuxProcessGroupHandle</c>.
 /// </summary>
 [SupportedOSPlatform("linux")]
-internal sealed partial class LinuxImageProcessGroupHandle(Process process) : IImageServerProcessHandle
+internal sealed partial class LinuxImageProcessGroupHandle : IImageServerProcessHandle
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
 
-    private readonly Process _process = process ?? throw new ArgumentNullException(nameof(process));
+    private readonly Process _process;
     private int _disposed;
+
+    public LinuxImageProcessGroupHandle(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        _process = process;
+    }
 
     public int ProcessId => _process.Id;
 

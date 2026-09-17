@@ -14,10 +14,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///     a port is reserved before the process registers and released when it fails or is evicted, so the count already
 ///     includes in-flight spawns. A second lock here would only invite a caller to read the count outside the gate.
 /// </remarks>
-internal sealed class LlamaServerPortAllocator(LlamaServerSupervisorOptions options)
+internal sealed class LlamaServerPortAllocator
 {
     private readonly HashSet<int> _allocatedPorts = [];
-    private readonly LlamaServerSupervisorOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly LlamaServerSupervisorOptions _options;
+
+    public LlamaServerPortAllocator(LlamaServerSupervisorOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+    }
 
     /// <summary>Reserved ports — the count the loaded-model cap is measured against (caller holds the admission gate).</summary>
     public int ReservedCount => _allocatedPorts.Count;

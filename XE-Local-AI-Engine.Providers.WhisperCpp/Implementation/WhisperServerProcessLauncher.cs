@@ -24,9 +24,15 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///         progress bar, so there is nothing a line splitter would rescue and no reason to port one.
 ///     </para>
 /// </remarks>
-internal sealed class WhisperServerProcessLauncher(ILogger<WhisperServerProcessLauncher> logger) : IWhisperServerProcessLauncher
+internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLauncher
 {
-    private readonly ILogger<WhisperServerProcessLauncher> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<WhisperServerProcessLauncher> _logger;
+
+    public WhisperServerProcessLauncher(ILogger<WhisperServerProcessLauncher> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+    }
 
     /// <inheritdoc />
     public IWhisperServerProcessHandle Launch(WhisperServerLaunchSpec spec)

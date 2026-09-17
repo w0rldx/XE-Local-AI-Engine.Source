@@ -145,9 +145,17 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
         Eviction
     }
 
-    private sealed class Lease(WhisperRuntimeActivityGate owner, LeaseKind kind) : IWhisperRuntimeActivityLease
+    private sealed class Lease : IWhisperRuntimeActivityLease
     {
+        private readonly WhisperRuntimeActivityGate _owner;
+        private readonly LeaseKind _kind;
         private int _disposed;
+
+        public Lease(WhisperRuntimeActivityGate owner, LeaseKind kind)
+        {
+            _owner = owner;
+            _kind = kind;
+        }
 
         public void Dispose() =>
             ReleaseOnce();
@@ -165,7 +173,7 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
-                owner.Release(kind);
+                _owner.Release(_kind);
             }
         }
     }

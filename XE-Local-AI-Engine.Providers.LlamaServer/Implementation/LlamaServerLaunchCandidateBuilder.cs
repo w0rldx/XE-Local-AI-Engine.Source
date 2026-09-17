@@ -3,10 +3,19 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Builds the ordered primary and safe-fallback launch candidates for one process spawn.</summary>
-internal sealed class LlamaServerLaunchCandidateBuilder(
-    IProcessContextAllocationResolver allocationResolver,
-    ILlamaServerLaunchPolicy launchPolicy)
+internal sealed class LlamaServerLaunchCandidateBuilder
 {
+    private readonly IProcessContextAllocationResolver _allocationResolver;
+    private readonly ILlamaServerLaunchPolicy _launchPolicy;
+
+    public LlamaServerLaunchCandidateBuilder(
+        IProcessContextAllocationResolver allocationResolver,
+        ILlamaServerLaunchPolicy launchPolicy)
+    {
+        _allocationResolver = allocationResolver;
+        _launchPolicy = launchPolicy;
+    }
+
     public async Task<LlamaServerLaunchPlanSet> BuildAsync(LlamaServerProcessSupervisor.ProcessKey key,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
@@ -18,7 +27,7 @@ internal sealed class LlamaServerLaunchCandidateBuilder(
         if (!applyLaunchPolicy)
         {
             LlamaServerLaunchPlan? cpuReplayPlan = variant == GpuVariant.Cpu && !resolved.ExploreMode
-                ? launchPolicy.ResolveCpuReplayPlan(resolved)
+                ? _launchPolicy.ResolveCpuReplayPlan(resolved)
                 : null;
             return new LlamaServerLaunchPlanSet(null,
                 [new LlamaServerLaunchCandidate(resolved, cpuReplayPlan, LlamaServerLoadAttemptKind.Primary)]);
@@ -27,12 +36,12 @@ internal sealed class LlamaServerLaunchCandidateBuilder(
         ProcessContextAllocation allocation;
         if (admittedAllocation is null)
         {
-            allocation = await allocationResolver.ResolveAsync(key.ModelName, key.Role, variant, resolved, ct).ConfigureAwait(false)
+            allocation = await _allocationResolver.ResolveAsync(key.ModelName, key.Role, variant, resolved, ct).ConfigureAwait(false)
                          ?? throw reject("The requested model's process context could not be allocated.");
         }
         else if (admittedAllocation.Source == ProcessContextAllocationSource.HardwareTier)
         {
-            if (!allocationResolver.TryGetEffectiveCommittedAllocation(admittedAllocation, out allocation)
+            if (!_allocationResolver.TryGetEffectiveCommittedAllocation(admittedAllocation, out allocation)
                 || !string.Equals(allocation.CacheKey, admittedAllocation.CacheKey, StringComparison.Ordinal)
                 || !string.Equals(allocation.ContentIdentity, admittedAllocation.ContentIdentity, StringComparison.Ordinal)
                 || allocation.ProcessContextTokens > admittedAllocation.ProcessContextTokens)
@@ -45,7 +54,7 @@ internal sealed class LlamaServerLaunchCandidateBuilder(
             allocation = admittedAllocation;
         }
 
-        var plan = await launchPolicy.ResolveAsync(key.Role, variant, resolved, allocation, ct).ConfigureAwait(false);
+        var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, allocation, ct).ConfigureAwait(false);
 
         // INVARIANT: the only optimization a safe candidate may drop is KV-cache quantization. --cpu-moe is carried
         // through untouched, because dropping it would launch the over-subscription the capability gate refuses; and a

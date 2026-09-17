@@ -25,7 +25,12 @@ public sealed record GgufAdapterLaunch(string BaseModelFilePath, string AdapterF
 ///     A registered adapter whose base model is missing, renamed, or itself unreadable. Non-retryable: the launch cannot
 ///     proceed and no other base can be substituted.
 /// </summary>
-public sealed class GgufAdapterBaseModelMissingException(string message) : Exception(message);
+public sealed class GgufAdapterBaseModelMissingException : Exception
+{
+    public GgufAdapterBaseModelMissingException(string message) : base(message)
+    {
+    }
+}
 
 public interface IGgufModelStore
 {

@@ -247,16 +247,25 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         }
     }
 
-    private sealed class ResolvedEndpoint(EndpointIdentity identity, IChatClient client, HttpClient httpClient) : IDisposable
+    private sealed class ResolvedEndpoint : IDisposable
     {
-        public EndpointIdentity Identity { get; } = identity;
+        private readonly HttpClient _httpClient;
 
-        public IChatClient Client { get; } = client;
+        public ResolvedEndpoint(EndpointIdentity identity, IChatClient client, HttpClient httpClient)
+        {
+            Identity = identity;
+            Client = client;
+            _httpClient = httpClient;
+        }
+
+        public EndpointIdentity Identity { get; }
+
+        public IChatClient Client { get; }
 
         public void Dispose()
         {
             Client.Dispose();
-            httpClient.Dispose();
+            _httpClient.Dispose();
         }
     }
 }

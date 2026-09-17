@@ -171,8 +171,9 @@ move into `Client.Persistence`, or join the legitimate set.
 ### DI + class house style
 
 **Conventional constructors — no primary constructors on classes or structs.** Each dependency is assigned to a
-`private readonly` field and guarded with `ArgumentNullException.ThrowIfNull(x)`, never
-`?? throw new ArgumentNullException(...)`. This is a project convention, not a judgement about the language
+`private readonly` field, and a dependency that is guarded is guarded with `ArgumentNullException.ThrowIfNull(x)`,
+never `?? throw new ArgumentNullException(...)`; converting a primary constructor adds no guard that was not
+already there, because a guard that did not exist is a behaviour change. This is a project convention, not a judgement about the language
 feature: a uniform shape keeps the guard, the field and the injected name in one readable block, and keeps
 constructor bodies (validation, derived state) available without a later rewrite from primary-ctor form.
 
@@ -185,9 +186,12 @@ Classes are `sealed` by default. Options bind from config via the `*Options` pat
 `Client/ConfigureServices.cs`, no `?? TimeProvider.System` defaults) and call `GetUtcNow()`/`GetLocalNow()` —
 enforced by `BannedSymbols.txt` (RS0030), documented in [Security & Privacy](12-security-and-privacy.md) §8.
 
-*Migration status:* `.editorconfig` sets `csharp_style_prefer_primary_constructors = false`, but IDE0290 does not
-flag a primary constructor that already exists, so the rule needs a source-scan guard. Slice **S4** converts the
-existing classes project by project and lands that guard.
+`.editorconfig` sets `csharp_style_prefer_primary_constructors = false`, but IDE0290 does not flag a primary
+constructor that already exists, so a source scan enforces the rule: `PrimaryConstructorConventionTests` fails on
+any class or struct declaration that carries a parameter list (records are out of scope). It derives its coverage
+from the solution, minus an explicit exemption list that is where to read which projects the rule does not fence
+yet — that list can only shrink, because a project on it that has reached zero fails the guard until its entry is
+removed.
 
 ### DTOs, records and type choice
 

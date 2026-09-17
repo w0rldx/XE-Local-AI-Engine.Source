@@ -178,8 +178,12 @@ internal sealed partial class WindowsWhisperJobObjectProcessHandle : IWhisperSer
     private static partial bool CloseHandle(IntPtr hObject);
 
     /// <summary>Owns the Win32 job-object handle; closing it terminates the kill-on-close job's process tree.</summary>
-    private sealed class SafeJobHandle() : SafeHandleZeroOrMinusOneIsInvalid(ownsHandle: true)
+    private sealed class SafeJobHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
+        public SafeJobHandle() : base(ownsHandle: true)
+        {
+        }
+
         protected override bool ReleaseHandle()
         {
             return CloseHandle(handle);

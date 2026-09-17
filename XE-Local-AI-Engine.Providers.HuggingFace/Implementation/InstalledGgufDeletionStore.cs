@@ -3,8 +3,17 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
-internal sealed class InstalledGgufDeletionStore(GgufModelRegistry registry, HuggingFaceOptions options) : IInstalledGgufDeletionStore
+internal sealed class InstalledGgufDeletionStore : IInstalledGgufDeletionStore
 {
+    private readonly GgufModelRegistry _registry;
+    private readonly HuggingFaceOptions _options;
+
+    public InstalledGgufDeletionStore(GgufModelRegistry registry, HuggingFaceOptions options)
+    {
+        _registry = registry;
+        _options = options;
+    }
+
     public async Task<GgufDeletionStageReceipt> StageAsync(InstalledGgufSnapshot snapshot,
         Guid operationId,
         CancellationToken cancellationToken)
@@ -61,7 +70,7 @@ internal sealed class InstalledGgufDeletionStore(GgufModelRegistry registry, Hug
         }
 
         var entries = expectedAliases.Select(ToRegistryEntry).ToArray();
-        var removed = await registry.RemoveAliasSetIfMatchAsync(entries, cancellationToken).ConfigureAwait(false);
+        var removed = await _registry.RemoveAliasSetIfMatchAsync(entries, cancellationToken).ConfigureAwait(false);
         if (removed is null)
         {
             throw new InvalidOperationException("InstalledModelRegistrySuperseded");
@@ -80,7 +89,7 @@ internal sealed class InstalledGgufDeletionStore(GgufModelRegistry registry, Hug
     {
         ValidateReceipt(stageReceipt);
         var aliases = registryAliasReceipt?.RemovedAliases ?? stageReceipt.RemovalAliases;
-        if (!await registry.RestoreAliasSetIfMatchAsync(aliases.Select(ToRegistryEntry).ToArray(), cancellationToken).ConfigureAwait(false))
+        if (!await _registry.RestoreAliasSetIfMatchAsync(aliases.Select(ToRegistryEntry).ToArray(), cancellationToken).ConfigureAwait(false))
         {
             throw new InvalidOperationException("InstalledModelRegistrySuperseded");
         }
@@ -182,7 +191,7 @@ internal sealed class InstalledGgufDeletionStore(GgufModelRegistry registry, Hug
     }
 
     private string Resolve(string relativePath) =>
-        GgufFilePath.ResolveContainedPath(options.ModelsDirectory, relativePath);
+        GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, relativePath);
 
     private static void ValidateReceipt(GgufDeletionStageReceipt receipt)
     {

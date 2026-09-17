@@ -5,7 +5,7 @@ using System.Globalization;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
-internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImportInspector
+internal sealed class GgufImportInspector : IGgufImportInspector
 {
     private static readonly HashSet<string> CausalArchitectures = new(StringComparer.Ordinal)
     {
@@ -33,6 +33,13 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
         "internlm2"
     };
 
+    private readonly HuggingFaceOptions _options;
+
+    public GgufImportInspector(HuggingFaceOptions options)
+    {
+        _options = options;
+    }
+
     /// <inheritdoc />
     public Task<GgufImportInspection> InspectAsync(GgufImportSource source, CancellationToken cancellationToken) =>
         InspectAsync(source, GgufImportInspectionMode.PublicImport, cancellationToken);
@@ -45,7 +52,7 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
         var displayName = Path.GetFileName(source.AbsolutePath) ?? string.Empty;
         try
         {
-            await using var opened = await ValidatedGgufImportSource.OpenAsync(source.AbsolutePath, options.ModelsDirectory, cancellationToken).ConfigureAwait(false);
+            await using var opened = await ValidatedGgufImportSource.OpenAsync(source.AbsolutePath, _options.ModelsDirectory, cancellationToken).ConfigureAwait(false);
             return await InspectOpenedAsync(opened, mode, cancellationToken).ConfigureAwait(false);
         }
         catch (GgufImportException)

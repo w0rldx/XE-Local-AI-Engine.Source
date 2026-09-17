@@ -11,13 +11,19 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     anything it forked — no orphans.
 /// </summary>
 [SupportedOSPlatform("linux")]
-internal sealed partial class LinuxWhisperProcessGroupHandle(Process process) : IWhisperServerProcessHandle
+internal sealed partial class LinuxWhisperProcessGroupHandle : IWhisperServerProcessHandle
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
 
-    private readonly Process _process = process ?? throw new ArgumentNullException(nameof(process));
+    private readonly Process _process;
     private int _disposed;
+
+    public LinuxWhisperProcessGroupHandle(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        _process = process;
+    }
 
     public int ProcessId => _process.Id;
 

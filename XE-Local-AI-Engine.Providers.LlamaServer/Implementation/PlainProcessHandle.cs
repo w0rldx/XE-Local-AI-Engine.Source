@@ -8,10 +8,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     terminates the process and its descendants via <see cref="Process.Kill(bool)" /> with <c>entireProcessTree</c>.
 ///     The supervised GPU paths are Windows + Linux; this keeps the launcher functional elsewhere on the CPU floor.
 /// </summary>
-internal sealed class PlainProcessHandle(Process process) : ILlamaServerProcessHandle
+internal sealed class PlainProcessHandle : ILlamaServerProcessHandle
 {
-    private readonly Process _process = process ?? throw new ArgumentNullException(nameof(process));
+    private readonly Process _process;
     private int _disposed;
+
+    public PlainProcessHandle(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        _process = process;
+    }
 
     public int ProcessId => _process.Id;
 

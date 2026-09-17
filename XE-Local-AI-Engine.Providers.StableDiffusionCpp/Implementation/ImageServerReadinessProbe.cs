@@ -8,14 +8,20 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     that is not a connection failure means "ready". Connection-refused while the process is still
 ///     loading is normal and retried until the readiness deadline. Mirrors <c>LlamaServerHealthProbe</c>.
 /// </summary>
-internal sealed class ImageServerReadinessProbe(HttpClient httpClient) : IImageServerReadinessProbe
+internal sealed class ImageServerReadinessProbe : IImageServerReadinessProbe
 {
     /// <summary>The readiness route — sd-server exposes no <c>/health</c>; capabilities is the first route to answer once bound.</summary>
     internal const string CapabilitiesRoute = "sdcpp/v1/capabilities";
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
-    private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+    private readonly HttpClient _httpClient;
+
+    public ImageServerReadinessProbe(HttpClient httpClient)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
+    }
 
     /// <inheritdoc />
     public async Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)

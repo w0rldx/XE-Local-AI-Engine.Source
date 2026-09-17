@@ -816,17 +816,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     }
 
     /// <summary>A live, registered daemon and its last-used timestamp (drives idle-TTL eviction).</summary>
-    private sealed class RunningServer(
-        IImageServerProcessHandle handle,
-        ImageServerEndpoint endpoint,
-        int port,
-        DateTimeOffset startedUtc,
-        IImageRuntimeActivityLease residentLease)
+    private sealed class RunningServer
     {
-        private long _lastUsedTicks = startedUtc.UtcTicks;
+        private long _lastUsedTicks;
 
         // Seeded to the spawn time so a freshly-ready daemon is not re-probed until one full interval has passed.
-        private long _lastLivenessProbeTicks = startedUtc.UtcTicks;
+        private long _lastLivenessProbeTicks;
         private int _consecutiveLivenessFailures;
 
         // Lease/eviction state, mutated only by atomic CAS: >= 0 is the count of in-flight generations
@@ -836,16 +831,31 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // "no active jobs" but before it tree-killed the daemon.
         private int _leaseState;
 
-        public IImageServerProcessHandle Handle { get; } = handle;
+        public RunningServer(
+            IImageServerProcessHandle handle,
+            ImageServerEndpoint endpoint,
+            int port,
+            DateTimeOffset startedUtc,
+            IImageRuntimeActivityLease residentLease)
+        {
+            _lastUsedTicks = startedUtc.UtcTicks;
+            _lastLivenessProbeTicks = startedUtc.UtcTicks;
+            Handle = handle;
+            ResidentLease = residentLease;
+            Endpoint = endpoint;
+            Port = port;
+        }
 
-        public IImageRuntimeActivityLease ResidentLease { get; } = residentLease;
+        public IImageServerProcessHandle Handle { get; }
+
+        public IImageRuntimeActivityLease ResidentLease { get; }
 
         /// <summary>Whether a generation currently leases this daemon — best-effort read for the evictor's victim heuristic; the atomic claim is <see cref="TryBeginEvict" />.</summary>
         public bool IsLeased => Volatile.Read(ref _leaseState) > 0;
 
-        public ImageServerEndpoint Endpoint { get; } = endpoint;
+        public ImageServerEndpoint Endpoint { get; }
 
-        public int Port { get; } = port;
+        public int Port { get; }
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 

@@ -14,16 +14,20 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     treated as absent for the same reason a half-written one is: the only safe reading of an unreadable state file is
 ///     "nothing is installed", which makes the next install rebuild rather than trust it.
 /// </remarks>
-internal sealed class InstalledTrainingRuntimeStore(string statePath)
+internal sealed class InstalledTrainingRuntimeStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true
     };
+    private readonly string _statePath;
 
-    private readonly string _statePath = !string.IsNullOrWhiteSpace(statePath)
-        ? statePath
-        : throw new ArgumentException("The state path is required.", nameof(statePath));
+    public InstalledTrainingRuntimeStore(string statePath)
+    {
+        _statePath = !string.IsNullOrWhiteSpace(statePath)
+            ? statePath
+            : throw new ArgumentException("The state path is required.", nameof(statePath));
+    }
 
     public async Task<InstalledTrainingRuntimeState?> ReadAsync(CancellationToken ct)
     {

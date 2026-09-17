@@ -6,15 +6,27 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
-internal sealed class GgufModelImporter(
-    GgufModelRegistry registry,
-    IFreeSpaceProbe freeSpaceProbe,
-    HuggingFaceOptions options,
-    TimeProvider timeProvider) : IGgufModelImporter
+internal sealed class GgufModelImporter : IGgufModelImporter
 {
     // Names this pipeline in the compensation failure so the inner exception still says which transaction
     // could not clean up after itself.
     private const string CleanupOwnership = "import";
+    private readonly GgufModelRegistry _registry;
+    private readonly IFreeSpaceProbe _freeSpaceProbe;
+    private readonly HuggingFaceOptions _options;
+    private readonly TimeProvider _timeProvider;
+
+    public GgufModelImporter(
+        GgufModelRegistry registry,
+        IFreeSpaceProbe freeSpaceProbe,
+        HuggingFaceOptions options,
+        TimeProvider timeProvider)
+    {
+        _registry = registry;
+        _freeSpaceProbe = freeSpaceProbe;
+        _options = options;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<PreparedGgufImport> PrepareAsync(GgufImportSource source,
         GgufImportDestination destination,
@@ -26,28 +38,28 @@ internal sealed class GgufModelImporter(
         ValidateDestination(destination);
 
         var mode = InspectionModeFor(destination);
-        await using var openedSource = await ValidatedGgufImportSource.OpenAsync(source.AbsolutePath, options.ModelsDirectory, cancellationToken).ConfigureAwait(false);
+        await using var openedSource = await ValidatedGgufImportSource.OpenAsync(source.AbsolutePath, _options.ModelsDirectory, cancellationToken).ConfigureAwait(false);
         var inspection = await GgufImportInspector.InspectOpenedAsync(openedSource, mode, cancellationToken).ConfigureAwait(false);
         if (!IsUsableInspection(inspection, destination))
         {
             throw new GgufImportException(RejectionFor(inspection, destination), "The selected file is not a supported causal-chat GGUF.");
         }
 
-        var finalPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, destination.RelativeGgufPath);
-        var finalSidecarPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, destination.RelativeSidecarPath);
+        var finalPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, destination.RelativeGgufPath);
+        var finalSidecarPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, destination.RelativeSidecarPath);
         if (HasCaseInsensitiveCollision(finalPath) || HasCaseInsensitiveCollision(finalSidecarPath))
         {
             throw new GgufImportException(GgufImportRejectionCode.DestinationConflict, "The import destination already exists.");
         }
 
-        var requiredBytes = checked(inspection.SizeBytes + Math.Max(0, options.DiskMarginBytes));
-        var availableBytes = freeSpaceProbe.GetAvailableFreeBytes(options.ModelsDirectory);
+        var requiredBytes = checked(inspection.SizeBytes + Math.Max(0, _options.DiskMarginBytes));
+        var availableBytes = _freeSpaceProbe.GetAvailableFreeBytes(_options.ModelsDirectory);
         if (availableBytes < requiredBytes)
         {
             throw new InsufficientDiskSpaceException(requiredBytes, availableBytes);
         }
 
-        Directory.CreateDirectory(options.ModelsDirectory);
+        Directory.CreateDirectory(_options.ModelsDirectory);
         var operationId = Guid.NewGuid().ToString("N");
         var temporaryPath = finalPath + $".{operationId}.part";
         var temporarySidecarPath = finalSidecarPath + $".{operationId}.part";
@@ -74,7 +86,7 @@ internal sealed class GgufModelImporter(
                     hash,
                     [destination.CanonicalModelName])
             ]);
-            var acquiredAt = timeProvider.GetUtcNow();
+            var acquiredAt = _timeProvider.GetUtcNow();
             var lineage = destination.Lineage;
             // An adapter entry carries no weight file of its own — its own bytes ARE the adapter — so the adapter
             // member fields are the weight fields, exactly as GgufAcquisitionSidecar.IsValidAdapterShape requires.
@@ -105,7 +117,7 @@ internal sealed class GgufModelImporter(
                 AdapterMemberFingerprint = isAdapter ? memberFingerprint : null,
                 BaseModelName = isAdapter ? lineage!.BaseModelName : null
             };
-            var registryRevision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory);
+            var registryRevision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory);
             entry = entry with
             {
                 RegistryRevision = registryRevision
@@ -164,8 +176,8 @@ internal sealed class GgufModelImporter(
     {
         ArgumentNullException.ThrowIfNull(preparedImport);
         ValidateDestination(preparedImport.Destination);
-        var finalPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, preparedImport.Destination.RelativeGgufPath);
-        var finalSidecarPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, preparedImport.Destination.RelativeSidecarPath);
+        var finalPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, preparedImport.Destination.RelativeGgufPath);
+        var finalSidecarPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, preparedImport.Destination.RelativeSidecarPath);
         var movedWeight = false;
         var movedSidecar = false;
         try
@@ -179,9 +191,9 @@ internal sealed class GgufModelImporter(
             EnsureNoCaseInsensitiveCollision(finalPath);
             File.Move(preparedImport.TemporaryGgufPath, finalPath, overwrite: false);
             movedWeight = true;
-            await registry.InsertIfAbsentAsync(preparedImport.RegistryEntry, cancellationToken).ConfigureAwait(false);
+            await _registry.InsertIfAbsentAsync(preparedImport.RegistryEntry, cancellationToken).ConfigureAwait(false);
 
-            var verified = await GgufAcquisitionSidecar.ReadValidAsync(finalSidecarPath, finalPath, options.ModelsDirectory, cancellationToken)
+            var verified = await GgufAcquisitionSidecar.ReadValidAsync(finalSidecarPath, finalPath, _options.ModelsDirectory, cancellationToken)
                                                        .ConfigureAwait(false);
             if (verified is null
                 || !string.Equals(verified.RegistryRevision, preparedImport.RegistryEntry.RegistryRevision, StringComparison.Ordinal)
@@ -226,14 +238,14 @@ internal sealed class GgufModelImporter(
     public async Task RollbackCommittedAsync(GgufImportCommitReceipt commitReceipt, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(commitReceipt);
-        var entries = await registry.ListAllAsync(cancellationToken).ConfigureAwait(false);
+        var entries = await _registry.ListAllAsync(cancellationToken).ConfigureAwait(false);
         var exactOwner = entries.Any(entry => entry == commitReceipt.RegistryEntry
                                               && string.Equals(entry.RegistryRevision,
                                                   commitReceipt.RegistryEntry.RegistryRevision,
                                                   StringComparison.Ordinal));
         if (exactOwner)
         {
-            if (!await registry.RemoveExactAsync(commitReceipt.RegistryEntry, cancellationToken).ConfigureAwait(false))
+            if (!await _registry.RemoveExactAsync(commitReceipt.RegistryEntry, cancellationToken).ConfigureAwait(false))
             {
                 throw new GgufImportException(GgufImportRejectionCode.DestinationConflict,
                     "The committed import registry identity changed during rollback.");
@@ -280,7 +292,7 @@ internal sealed class GgufModelImporter(
         {
             var metadata = await GgufAcquisitionSidecar.ReadShapeValidAsync(commitReceipt.FinalSidecarPath,
                 commitReceipt.FinalGgufPath,
-                options.ModelsDirectory,
+                _options.ModelsDirectory,
                 cancellationToken).ConfigureAwait(false);
             if (metadata is null
                 || !string.Equals(metadata.RegistryRevision, commitReceipt.RegistryEntry.RegistryRevision, StringComparison.Ordinal)

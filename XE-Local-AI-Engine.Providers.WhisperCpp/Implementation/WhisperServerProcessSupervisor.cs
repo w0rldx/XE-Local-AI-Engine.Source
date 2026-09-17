@@ -773,35 +773,46 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     }
 
     /// <summary>The single live, registered daemon, its binary, and the state that drives reuse and eviction.</summary>
-    private sealed class RunningServer(
-        IWhisperServerProcessHandle handle,
-        WhisperServerEndpoint endpoint,
-        WhisperBinary binary,
-        int port,
-        DateTimeOffset startedUtc,
-        IWhisperRuntimeActivityLease residentLease)
+    private sealed class RunningServer
     {
         private readonly Lock _endpointGate = new();
         private int _consecutiveLivenessFailures;
 
         // Seeded to the spawn time, so a freshly ready daemon is not re-probed until a full interval has passed.
-        private long _lastLivenessProbeTicks = startedUtc.UtcTicks;
-        private long _lastUsedTicks = startedUtc.UtcTicks;
+        private long _lastLivenessProbeTicks;
+        private long _lastUsedTicks;
 
         // Lease state, mutated only by atomic compare-and-swap: >= 0 counts in-flight transcriptions; -1 is a terminal
         // latch set by the idle reaper, an eviction or a model switch. A new lease and a teardown decision therefore
         // transition the SAME word and can never both win.
         private int _leaseState;
 
-        private WhisperServerEndpoint _endpoint = endpoint;
+        private WhisperServerEndpoint _endpoint;
 
-        public IWhisperServerProcessHandle Handle { get; } = handle;
+        public RunningServer(
+            IWhisperServerProcessHandle handle,
+            WhisperServerEndpoint endpoint,
+            WhisperBinary binary,
+            int port,
+            DateTimeOffset startedUtc,
+            IWhisperRuntimeActivityLease residentLease)
+        {
+            _lastLivenessProbeTicks = startedUtc.UtcTicks;
+            _lastUsedTicks = startedUtc.UtcTicks;
+            _endpoint = endpoint;
+            Handle = handle;
+            Binary = binary;
+            ResidentLease = residentLease;
+            Port = port;
+        }
 
-        public WhisperBinary Binary { get; } = binary;
+        public IWhisperServerProcessHandle Handle { get; }
 
-        public IWhisperRuntimeActivityLease ResidentLease { get; } = residentLease;
+        public WhisperBinary Binary { get; }
 
-        public int Port { get; } = port;
+        public IWhisperRuntimeActivityLease ResidentLease { get; }
+
+        public int Port { get; }
 
         public WhisperServerEndpoint Endpoint
         {
@@ -908,15 +919,25 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     }
 
     /// <summary>A transcription lease over the resident daemon, holding both its lease word and the activity gate.</summary>
-    private sealed class WhisperTranscriptionLease(
-        RunningServer server,
-        IWhisperRuntimeActivityLease activityLease,
-        TimeProvider timeProvider) : IWhisperTranscriptionLease
+    private sealed class WhisperTranscriptionLease : IWhisperTranscriptionLease
     {
+        private readonly RunningServer _server;
+        private readonly IWhisperRuntimeActivityLease _activityLease;
+        private readonly TimeProvider _timeProvider;
         private int _disposed;
 
+        public WhisperTranscriptionLease(
+            RunningServer server,
+            IWhisperRuntimeActivityLease activityLease,
+            TimeProvider timeProvider)
+        {
+            _server = server;
+            _activityLease = activityLease;
+            _timeProvider = timeProvider;
+        }
+
         public void Touch() =>
-            server.MarkUsed(timeProvider.GetUtcNow());
+            _server.MarkUsed(_timeProvider.GetUtcNow());
 
         public void Dispose()
         {
@@ -925,8 +946,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
                 return;
             }
 
-            server.ReleaseTranscription();
-            activityLease.Dispose();
+            _server.ReleaseTranscription();
+            _activityLease.Dispose();
         }
     }
 }

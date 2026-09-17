@@ -36,13 +36,26 @@ public sealed partial class LlamaCppBinaryManager
     ///         is collapsed to a generic reason rather than surfaced verbatim.
     ///     </para>
     /// </remarks>
-    private sealed class AcquisitionReporter(IRuntimeAcquisitionStatusRegistry? registry, GpuVariant variant, string? tag, int stepCount)
+    private sealed class AcquisitionReporter
     {
         /// <summary>The user-safe stand-in for an exception whose message is not sanitized by contract.</summary>
         private const string GenericFailureReason =
             "The llama.cpp runtime could not be downloaded. Check the network connection and try again.";
 
+        private readonly IRuntimeAcquisitionStatusRegistry? _registry;
+        private readonly GpuVariant _variant;
+        private readonly string? _tag;
+        private readonly int _stepCount;
+
         private bool _reported;
+
+        public AcquisitionReporter(IRuntimeAcquisitionStatusRegistry? registry, GpuVariant variant, string? tag, int stepCount)
+        {
+            _registry = registry;
+            _variant = variant;
+            _tag = tag;
+            _stepCount = stepCount;
+        }
 
         /// <summary>
         ///     Records one non-terminal status. A no-op when no registry was injected (provider-only / test hosts), which
@@ -50,37 +63,37 @@ public sealed partial class LlamaCppBinaryManager
         /// </summary>
         public void Report(RuntimeAcquisitionPhase phase, int stepIndex, long? completedBytes = null, long? totalBytes = null)
         {
-            if (registry is null)
+            if (_registry is null)
             {
                 return;
             }
 
             // Only a real report arms the terminal statuses — see the cache-hit note on the type.
             _reported = true;
-            registry.Report(new RuntimeAcquisitionUpdate(phase,
-                variant.ToString(),
-                tag,
+            _registry.Report(new RuntimeAcquisitionUpdate(phase,
+                _variant.ToString(),
+                _tag,
                 completedBytes,
                 totalBytes,
                 stepIndex,
-                stepCount));
+                _stepCount));
         }
 
         /// <summary>Closes a reported acquisition as succeeded. Silent when nothing was acquired (cache hit).</summary>
         public void Complete()
         {
-            if (registry is null || !_reported)
+            if (_registry is null || !_reported)
             {
                 return;
             }
 
-            registry.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Completed,
-                variant.ToString(),
-                tag,
+            _registry.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Completed,
+                _variant.ToString(),
+                _tag,
                 CompletedBytes: null,
                 TotalBytes: null,
-                StepIndex: stepCount,
-                stepCount));
+                StepIndex: _stepCount,
+                _stepCount));
         }
 
         /// <summary>
@@ -90,19 +103,19 @@ public sealed partial class LlamaCppBinaryManager
         /// </summary>
         public void Fail(Exception exception)
         {
-            if (registry is null || !_reported)
+            if (_registry is null || !_reported)
             {
                 return;
             }
 
             var reason = exception is LlamaRuntimeException ? exception.Message : GenericFailureReason;
-            registry.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Failed,
-                variant.ToString(),
-                tag,
+            _registry.Report(new RuntimeAcquisitionUpdate(RuntimeAcquisitionPhase.Failed,
+                _variant.ToString(),
+                _tag,
                 CompletedBytes: null,
                 TotalBytes: null,
-                StepIndex: stepCount,
-                stepCount,
+                StepIndex: _stepCount,
+                _stepCount,
                 reason));
         }
     }

@@ -8,8 +8,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     Runs a short-lived llama.cpp command beside the resolved executable so its bundled native libraries resolve.
 ///     Both pipes are drained concurrently and the complete child tree is reaped on timeout or cancellation.
 /// </summary>
-internal sealed class LlamaCommandProcessRunner(ILogger logger) : ILlamaCommandProcessRunner
+internal sealed class LlamaCommandProcessRunner : ILlamaCommandProcessRunner
 {
+    private readonly ILogger _logger;
+
+    public LlamaCommandProcessRunner(ILogger logger)
+    {
+        _logger = logger;
+    }
+
     public async Task<LlamaCommandResult?> RunAsync(string executablePath,
         IReadOnlyList<string> arguments,
         TimeSpan timeout,
@@ -51,7 +58,7 @@ internal sealed class LlamaCommandProcessRunner(ILogger logger) : ILlamaCommandP
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            logger.LogWarning("llama-server capability command {Arguments} exceeded {TimeoutSeconds:0}s.",
+            _logger.LogWarning("llama-server capability command {Arguments} exceeded {TimeoutSeconds:0}s.",
                 string.Join(' ', arguments),
                 timeout.TotalSeconds);
             return null;

@@ -23,15 +23,23 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         gate throws: callers see the supervisor's name, not this internal helper's.
 ///     </para>
 /// </remarks>
-internal sealed class LlamaServerRuntimeMutationGate(Type ownerType, CancellationToken shutdownToken) : IDisposable
+internal sealed class LlamaServerRuntimeMutationGate : IDisposable
 {
     private readonly AsyncSharedExclusiveGate _gate = new();
-    private readonly Type _ownerType = ownerType ?? throw new ArgumentNullException(nameof(ownerType));
+    private readonly Type _ownerType;
     private readonly Lock _operationSync = new();
+    private readonly CancellationToken _shutdownToken;
     private int _disposed;
     private int _mutationActivityCount;
     private TaskCompletionSource? _operationsDrained;
     private int _operationCount;
+
+    public LlamaServerRuntimeMutationGate(Type ownerType, CancellationToken shutdownToken)
+    {
+        ArgumentNullException.ThrowIfNull(ownerType);
+        _ownerType = ownerType;
+        _shutdownToken = shutdownToken;
+    }
 
     /// <summary>Whether an operator runtime mutation is currently in flight (keep-warm stays suppressed while it is).</summary>
     public bool IsMutationActive => Volatile.Read(ref _mutationActivityCount) > 0;
@@ -180,7 +188,7 @@ internal sealed class LlamaServerRuntimeMutationGate(Type ownerType, Cancellatio
     private async Task EnterAsync(bool shared, CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, _ownerType);
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct, shutdownToken);
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownToken);
         try
         {
             var entering = shared
@@ -210,16 +218,24 @@ internal sealed class LlamaServerRuntimeMutationGate(Type ownerType, Cancellatio
         throw new ObjectDisposedException(_ownerType.FullName);
     }
 
-    private sealed class RuntimeMutationLease(AsyncSharedExclusiveGate gate, Action onDisposed) : ILlamaServerRuntimeMutationLease
+    private sealed class RuntimeMutationLease : ILlamaServerRuntimeMutationLease
     {
+        private readonly AsyncSharedExclusiveGate _gate;
+        private readonly Action _onDisposed;
         private int _disposed;
+
+        public RuntimeMutationLease(AsyncSharedExclusiveGate gate, Action onDisposed)
+        {
+            _gate = gate;
+            _onDisposed = onDisposed;
+        }
 
         public ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
-                gate.ExitExclusive();
-                onDisposed();
+                _gate.ExitExclusive();
+                _onDisposed();
             }
 
             return ValueTask.CompletedTask;

@@ -25,16 +25,31 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///         adoption — and hardening then sets modes on real entries only, never through a link.
 ///     </para>
 /// </remarks>
-internal sealed class WhisperCppRuntimeAdoption(
-    string cacheRoot,
-    IWhisperInstalledRuntimeStore runtimeStore,
-    IWhisperManagedSourceBuildSignal managedSignal,
-    TimeProvider timeProvider,
-    ILogger logger)
+internal sealed class WhisperCppRuntimeAdoption
 {
-    private string BuildRoot => Path.Combine(cacheRoot, "whisper.cpp", "source-build");
+    private readonly string _cacheRoot;
+    private readonly IWhisperInstalledRuntimeStore _runtimeStore;
+    private readonly IWhisperManagedSourceBuildSignal _managedSignal;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger _logger;
+
+    public WhisperCppRuntimeAdoption(
+        string cacheRoot,
+        IWhisperInstalledRuntimeStore runtimeStore,
+        IWhisperManagedSourceBuildSignal managedSignal,
+        TimeProvider timeProvider,
+        ILogger logger)
+    {
+        _cacheRoot = cacheRoot;
+        _runtimeStore = runtimeStore;
+        _managedSignal = managedSignal;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
+
+    private string BuildRoot => Path.Combine(_cacheRoot, "whisper.cpp", "source-build");
     private string JournalPath => Path.Combine(BuildRoot, "adoption-journal.json");
-    private string RuntimeRoot => Path.Combine(cacheRoot, "whisper.cpp", "managed");
+    private string RuntimeRoot => Path.Combine(_cacheRoot, "whisper.cpp", "managed");
 
     /// <summary>
     ///     Reconciles a journal left behind by an interrupted adoption: completes the cleanup when the new runtime is
@@ -60,7 +75,7 @@ internal sealed class WhisperCppRuntimeAdoption(
         }
 
         var paths = GetPaths(journal);
-        var installed = await runtimeStore.ReadAsync(ct).ConfigureAwait(false);
+        var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
 
         // The adoption had committed: the record and the tree both describe the new runtime, so only the cleanup was
         // left unfinished.
@@ -72,7 +87,7 @@ internal sealed class WhisperCppRuntimeAdoption(
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                logger.LogWarning(exception, "A committed whisper.cpp runtime cleanup remains pending and will be retried.");
+                _logger.LogWarning(exception, "A committed whisper.cpp runtime cleanup remains pending and will be retried.");
             }
 
             return;
@@ -147,8 +162,8 @@ internal sealed class WhisperCppRuntimeAdoption(
                 descriptor.RequestedCommit,
                 Path.GetDirectoryName(finalServer),
                 digest,
-                timeProvider.GetUtcNow());
-            var previousState = await runtimeStore.ReadAsync(ct).ConfigureAwait(false);
+                _timeProvider.GetUtcNow());
+            var previousState = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             var journal = new WhisperCppAdoptionJournal(descriptor.BuildId,
                 descriptor.Backend,
                 descriptor.ResolvedCommit!,
@@ -170,7 +185,7 @@ internal sealed class WhisperCppRuntimeAdoption(
                 // Re-validated at the FINAL path: the move is what the runtime will actually spawn from, and a
                 // permission or link property that held in staging is worth proving where it matters.
                 ValidateAdoptedServer(destination, finalServer);
-                await runtimeStore.WriteAsync(state, CancellationToken.None).ConfigureAwait(false);
+                await _runtimeStore.WriteAsync(state, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception adoptionException)
             {
@@ -180,7 +195,7 @@ internal sealed class WhisperCppRuntimeAdoption(
                 }
                 catch (Exception rollbackException)
                 {
-                    managedSignal.Clear();
+                    _managedSignal.Clear();
                     throw new WhisperRuntimeException("The managed whisper.cpp runtime adoption failed and its previous state could not be restored.",
                         new AggregateException(adoptionException, rollbackException));
                 }
@@ -189,14 +204,14 @@ internal sealed class WhisperCppRuntimeAdoption(
                 throw;
             }
 
-            managedSignal.SetActive(descriptor.Backend);
+            _managedSignal.SetActive(descriptor.Backend);
             try
             {
                 CleanupCommitted(paths);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                logger.LogWarning(exception, "The previous whisper.cpp runtime cleanup is pending and will be retried.");
+                _logger.LogWarning(exception, "The previous whisper.cpp runtime cleanup is pending and will be retried.");
             }
         }
         catch
@@ -293,7 +308,7 @@ internal sealed class WhisperCppRuntimeAdoption(
 
     private async Task RollbackAsync(WhisperCppAdoptionJournal journal, AdoptionPaths paths)
     {
-        managedSignal.Clear();
+        _managedSignal.Clear();
         if (Directory.Exists(paths.Destination))
         {
             DeleteDirectoryStrict(paths.Failed);
@@ -451,25 +466,25 @@ internal sealed class WhisperCppRuntimeAdoption(
     {
         if (previousState is null)
         {
-            await runtimeStore.DeleteAsync(CancellationToken.None).ConfigureAwait(false);
-            managedSignal.Clear();
+            await _runtimeStore.DeleteAsync(CancellationToken.None).ConfigureAwait(false);
+            _managedSignal.Clear();
             return;
         }
 
-        await runtimeStore.WriteAsync(previousState, CancellationToken.None).ConfigureAwait(false);
+        await _runtimeStore.WriteAsync(previousState, CancellationToken.None).ConfigureAwait(false);
         if (previousState.Validity == WhisperInstalledRuntimeValidity.Active)
         {
-            managedSignal.SetActive(previousState.DesiredBackend);
+            _managedSignal.SetActive(previousState.DesiredBackend);
         }
         else
         {
-            managedSignal.Clear();
+            _managedSignal.Clear();
         }
     }
 
     private void ValidateAdoptedServer(string installRoot, string serverPath)
     {
-        var fullCacheRoot = Path.GetFullPath(cacheRoot);
+        var fullCacheRoot = Path.GetFullPath(_cacheRoot);
         var fullInstallRoot = Path.GetFullPath(installRoot);
         var fullServerPath = Path.GetFullPath(serverPath);
         var installPrefix = fullInstallRoot + Path.DirectorySeparatorChar;

@@ -12,15 +12,23 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 ///     model switch — and is also retried, which is the whole reason a health route beats a transcription probe here.
 ///     A 2xx means ready. The child's stdout is never consulted: its "listening" line is fully buffered off a TTY.
 /// </remarks>
-internal sealed class WhisperServerReadinessProbe(HttpClient httpClient, WhisperRuntimeOptions options) : IWhisperServerReadinessProbe
+internal sealed class WhisperServerReadinessProbe : IWhisperServerReadinessProbe
 {
     /// <summary>The readiness route, relative to the server root.</summary>
     internal const string HealthRoute = "health";
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
-    private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-    private readonly WhisperRuntimeOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly HttpClient _httpClient;
+    private readonly WhisperRuntimeOptions _options;
+
+    public WhisperServerReadinessProbe(HttpClient httpClient, WhisperRuntimeOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(options);
+        _httpClient = httpClient;
+        _options = options;
+    }
 
     /// <inheritdoc />
     public async Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)

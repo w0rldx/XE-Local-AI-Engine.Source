@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     <c>200</c> means ready; connection-refused while the process is still warming is normal and retried until the
 ///     readiness deadline.
 /// </summary>
-internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServerHealthProbe
+internal sealed class LlamaServerHealthProbe : ILlamaServerHealthProbe
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
@@ -17,7 +17,13 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
     // registration), the supervisor's poll cadence — not a hung/retried request — controls readiness-detection timing.
     private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(1);
 
-    private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+    private readonly HttpClient _httpClient;
+
+    public LlamaServerHealthProbe(HttpClient httpClient)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _httpClient = httpClient;
+    }
 
     /// <inheritdoc />
     public async Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)

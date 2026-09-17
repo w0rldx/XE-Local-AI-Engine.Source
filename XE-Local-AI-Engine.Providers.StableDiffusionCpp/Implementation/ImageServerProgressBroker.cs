@@ -74,15 +74,25 @@ internal sealed class ImageServerProgressBroker : IImageServerProgressBroker
     }
 
     /// <summary>The generation epoch handle. Idempotent: a double dispose (finally plus an outer using) unsubscribes once.</summary>
-    private sealed class Subscription(ImageServerProgressBroker broker, string modelName, Guid token) : IDisposable
+    private sealed class Subscription : IDisposable
     {
+        private readonly ImageServerProgressBroker _broker;
+        private readonly string _modelName;
+        private readonly Guid _token;
         private int _disposed;
+
+        public Subscription(ImageServerProgressBroker broker, string modelName, Guid token)
+        {
+            _broker = broker;
+            _modelName = modelName;
+            _token = token;
+        }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
-                broker.Unsubscribe(modelName, token);
+                _broker.Unsubscribe(_modelName, _token);
             }
         }
     }

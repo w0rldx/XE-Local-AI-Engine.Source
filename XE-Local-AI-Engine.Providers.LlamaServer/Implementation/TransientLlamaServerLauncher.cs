@@ -8,21 +8,35 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <inheritdoc />
-internal sealed class TransientLlamaServerLauncher(
-    ILlamaCppBinaryManager binaryManager,
-    IGpuVariantSelector variantSelector,
-    ILlamaServerProcessLauncher launcher,
-    ILlamaServerHealthProbe healthProbe,
-    ILogger<TransientLlamaServerLauncher> logger) : ITransientLlamaServerLauncher
+internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLauncher
 {
     /// <summary>How often the readiness race re-checks whether the child died instead of becoming ready.</summary>
     private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(250);
 
-    private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-    private readonly ILlamaServerHealthProbe _healthProbe = healthProbe ?? throw new ArgumentNullException(nameof(healthProbe));
-    private readonly ILlamaServerProcessLauncher _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
-    private readonly ILogger<TransientLlamaServerLauncher> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
+    private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly ILlamaServerHealthProbe _healthProbe;
+    private readonly ILlamaServerProcessLauncher _launcher;
+    private readonly ILogger<TransientLlamaServerLauncher> _logger;
+    private readonly IGpuVariantSelector _variantSelector;
+
+    public TransientLlamaServerLauncher(
+        ILlamaCppBinaryManager binaryManager,
+        IGpuVariantSelector variantSelector,
+        ILlamaServerProcessLauncher launcher,
+        ILlamaServerHealthProbe healthProbe,
+        ILogger<TransientLlamaServerLauncher> logger)
+    {
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        ArgumentNullException.ThrowIfNull(launcher);
+        ArgumentNullException.ThrowIfNull(healthProbe);
+        ArgumentNullException.ThrowIfNull(logger);
+        _binaryManager = binaryManager;
+        _variantSelector = variantSelector;
+        _launcher = launcher;
+        _healthProbe = healthProbe;
+        _logger = logger;
+    }
 
     public async Task<T> RunAsync<T>(TransientLlamaServerRequest request,
         Func<TransientLlamaServerSession, CancellationToken, Task<T>> body,

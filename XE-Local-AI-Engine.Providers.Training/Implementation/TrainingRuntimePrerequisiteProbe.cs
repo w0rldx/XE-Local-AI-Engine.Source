@@ -13,8 +13,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     only evidence of a working driver is the shim at <c>/usr/lib/wsl/lib/nvidia-smi</c>. A device-node check would
 ///     report "no GPU" on a machine with a working RTX 5090.
 /// </remarks>
-internal sealed class TrainingRuntimePrerequisiteProbe(ITrainingProcessRunner processRunner, string cacheRoot, string scriptsDirectory)
-    : ITrainingRuntimePrerequisiteProbe
+internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequisiteProbe
 {
     // Peak disk during an install is roughly two copies of the venv: the staged one being built plus the previous one
     // parked in backup until the swap succeeds. A measured venv is ~7.5 GB, so 20 GB leaves honest headroom.
@@ -24,16 +23,21 @@ internal sealed class TrainingRuntimePrerequisiteProbe(ITrainingProcessRunner pr
     internal const long RequiredSystemMemoryBytes = 16L * 1024 * 1024 * 1024;
 
     private static readonly TimeSpan NvidiaSmiTimeout = TimeSpan.FromSeconds(20);
+    private readonly string _cacheRoot;
+    private readonly ITrainingProcessRunner _processRunner;
+    private readonly string _scriptsDirectory;
 
-    private readonly string _cacheRoot = !string.IsNullOrWhiteSpace(cacheRoot)
-        ? cacheRoot
-        : throw new ArgumentException("The cache root is required.", nameof(cacheRoot));
-
-    private readonly ITrainingProcessRunner _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
-
-    private readonly string _scriptsDirectory = !string.IsNullOrWhiteSpace(scriptsDirectory)
-        ? scriptsDirectory
-        : throw new ArgumentException("The scripts directory is required.", nameof(scriptsDirectory));
+    public TrainingRuntimePrerequisiteProbe(ITrainingProcessRunner processRunner, string cacheRoot, string scriptsDirectory)
+    {
+        _cacheRoot = !string.IsNullOrWhiteSpace(cacheRoot)
+            ? cacheRoot
+            : throw new ArgumentException("The cache root is required.", nameof(cacheRoot));
+        ArgumentNullException.ThrowIfNull(processRunner);
+        _processRunner = processRunner;
+        _scriptsDirectory = !string.IsNullOrWhiteSpace(scriptsDirectory)
+            ? scriptsDirectory
+            : throw new ArgumentException("The scripts directory is required.", nameof(scriptsDirectory));
+    }
 
     public async Task<TrainingRuntimePrerequisiteReport> ProbeAsync(CancellationToken ct)
     {

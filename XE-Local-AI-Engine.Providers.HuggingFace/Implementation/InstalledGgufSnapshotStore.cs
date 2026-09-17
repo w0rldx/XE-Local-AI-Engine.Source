@@ -3,8 +3,17 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
-internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, HuggingFaceOptions options) : IInstalledGgufSnapshotStore
+internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
 {
+    private readonly GgufModelRegistry _registry;
+    private readonly HuggingFaceOptions _options;
+
+    public InstalledGgufSnapshotStore(GgufModelRegistry registry, HuggingFaceOptions options)
+    {
+        _registry = registry;
+        _options = options;
+    }
+
     /// <summary>
     ///     Digests of members already verified in this process. The store is a singleton, so one memo per node; see
     ///     <see cref="GgufMemberHashMemo" /> for the key and its ceiling.
@@ -16,7 +25,7 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         try
         {
-            var entries = await registry.ListAllAsync(cancellationToken).ConfigureAwait(false);
+            var entries = await _registry.ListAllAsync(cancellationToken).ConfigureAwait(false);
             var requested = entries.FirstOrDefault(entry => string.Equals(entry.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
             if (requested is null)
             {
@@ -136,7 +145,7 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
         var members = new List<InstalledModelPhysicalMember>(observations.Count);
         foreach (var observation in observations.Values.OrderBy(static observation => observation.RelativePath, StringComparer.Ordinal))
         {
-            var absolutePath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, observation.RelativePath);
+            var absolutePath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, observation.RelativePath);
             var info = new FileInfo(absolutePath);
             if (!info.Exists || info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint))
             {
@@ -175,9 +184,9 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
                 throw new InstalledGgufSnapshotException("InstalledModelSidecarMissing", "The acquired model recovery metadata is unavailable.");
             }
 
-            var weightPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, alias.WeightRelativePath);
-            var sidecarPath = GgufFilePath.ResolveContainedPath(options.ModelsDirectory, alias.SidecarRelativePath);
-            if (await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, weightPath, options.ModelsDirectory, cancellationToken).ConfigureAwait(false) is null)
+            var weightPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, alias.WeightRelativePath);
+            var sidecarPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, alias.SidecarRelativePath);
+            if (await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, weightPath, _options.ModelsDirectory, cancellationToken).ConfigureAwait(false) is null)
             {
                 throw new InstalledGgufSnapshotException("InstalledModelSidecarInvalid", "The acquired model recovery metadata is invalid.");
             }
@@ -189,15 +198,15 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
 
     private InstalledModelRegistryAliasSnapshot ToAliasSnapshot(GgufModelRegistryEntry entry)
     {
-        var weight = GgufFilePath.GetRelativeContainedPath(options.ModelsDirectory, entry.LocalPath);
+        var weight = GgufFilePath.GetRelativeContainedPath(_options.ModelsDirectory, entry.LocalPath);
         var projector = entry.ProjectorLocalPath is null
             ? null
-            : GgufFilePath.GetRelativeContainedPath(options.ModelsDirectory, entry.ProjectorLocalPath);
+            : GgufFilePath.GetRelativeContainedPath(_options.ModelsDirectory, entry.ProjectorLocalPath);
         var sidecarAbsolute = entry.LocalPath + GgufAcquisitionSidecar.Suffix;
         var sidecar = File.Exists(sidecarAbsolute)
-            ? GgufFilePath.GetRelativeContainedPath(options.ModelsDirectory, sidecarAbsolute)
+            ? GgufFilePath.GetRelativeContainedPath(_options.ModelsDirectory, sidecarAbsolute)
             : null;
-        var revision = GgufRegistryRevision.ComputeV1(entry, options.ModelsDirectory);
+        var revision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory);
         if (!string.Equals(entry.RegistryRevision, revision, StringComparison.Ordinal))
         {
             throw new InstalledGgufSnapshotException("RegistryRevisionMismatch", "An installed model registry revision is invalid.");

@@ -193,10 +193,15 @@ internal static class GgufStrictHeaderParser
         }
     }
 
-    private ref struct Reader(ReadOnlySpan<byte> bytes)
+    private ref struct Reader
     {
-        private readonly ReadOnlySpan<byte> _bytes = bytes;
+        private readonly ReadOnlySpan<byte> _bytes;
         private int _position;
+
+        public Reader(ReadOnlySpan<byte> bytes)
+        {
+            _bytes = bytes;
+        }
 
         public bool TrySkip(int count) =>
             TryTake(count, out _);

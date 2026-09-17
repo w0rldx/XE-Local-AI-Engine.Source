@@ -8,15 +8,24 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// Recovers the managed source-build state before the host becomes ready. Recovery failures are fatal because
 /// continuing with an ambiguous adoption journal could expose an unverified runtime.
 /// </summary>
-internal sealed class StableDiffusionCppSourceBuildLifecycle(
-    IStableDiffusionCppSourceBuildService service,
-    ILogger<StableDiffusionCppSourceBuildLifecycle> logger) : IHostedService
+internal sealed class StableDiffusionCppSourceBuildLifecycle : IHostedService
 {
+    private readonly IStableDiffusionCppSourceBuildService _service;
+    private readonly ILogger<StableDiffusionCppSourceBuildLifecycle> _logger;
+
+    public StableDiffusionCppSourceBuildLifecycle(
+        IStableDiffusionCppSourceBuildService service,
+        ILogger<StableDiffusionCppSourceBuildLifecycle> logger)
+    {
+        _service = service;
+        _logger = logger;
+    }
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await service.RecoverAsync(cancellationToken).ConfigureAwait(false);
+            await _service.RecoverAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -24,7 +33,7 @@ internal sealed class StableDiffusionCppSourceBuildLifecycle(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Failed to recover the managed stable-diffusion.cpp source-build state.");
+            _logger.LogError(exception, "Failed to recover the managed stable-diffusion.cpp source-build state.");
             throw;
         }
     }
@@ -33,7 +42,7 @@ internal sealed class StableDiffusionCppSourceBuildLifecycle(
     {
         try
         {
-            await service.ShutdownAsync(cancellationToken).ConfigureAwait(false);
+            await _service.ShutdownAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -41,7 +50,7 @@ internal sealed class StableDiffusionCppSourceBuildLifecycle(
             // graceful", not "throw". ShutdownAsync awaits the start gate on this token, so an over-budget
             // shutdown throws here and Host.StopAsync rethrows the aggregate, killing the process with an
             // unhandled exception instead of exiting cleanly.
-            logger.LogWarning("The managed stable-diffusion.cpp shutdown drain was cut short by the host shutdown "
+            _logger.LogWarning("The managed stable-diffusion.cpp shutdown drain was cut short by the host shutdown "
                               + "budget; any in-flight build is abandoned and will be reconciled on the next start.");
         }
     }
