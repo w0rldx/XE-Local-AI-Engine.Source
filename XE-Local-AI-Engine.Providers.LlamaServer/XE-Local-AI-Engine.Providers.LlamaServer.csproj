@@ -11,6 +11,9 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
     <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
+    <!-- The reranker's named client strips the Aspire-installed standard pipeline off its non-idempotent
+         /v1/rerank POST (RemoveAllResilienceHandlers), as the whisper.cpp and sd.cpp runtimes already do. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
   </ItemGroup>
 

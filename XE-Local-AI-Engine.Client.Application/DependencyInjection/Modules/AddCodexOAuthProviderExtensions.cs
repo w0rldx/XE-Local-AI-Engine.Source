@@ -17,8 +17,18 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 /// </summary>
 internal static class AddCodexOAuthProviderExtensions
 {
-    /// <summary>Named <see cref="HttpClient" /> for the Codex OAuth token endpoint (code exchange / refresh).</summary>
-    private const string CodexAuthHttpClientName = "CodexOAuthTokenEndpoint";
+    /// <summary>
+    ///     Named <see cref="HttpClient" /> for the Codex OAuth token endpoint (code exchange / refresh). Internal rather
+    ///     than private so <c>CodexOAuthTokenEndpointResilienceTests</c> names the same client the registration does.
+    /// </summary>
+    internal const string CodexAuthHttpClientName = "CodexOAuthTokenEndpoint";
+
+    /// <summary>
+    ///     Backstop deadline on the token client, restoring one that Aspire's standard pipeline takes away (see the
+    ///     registration below). Must stay above <c>CodexOptions.TokenRequestTimeout</c>, the per-request budget that
+    ///     should be what actually ends a slow code exchange or refresh.
+    /// </summary>
+    private static readonly TimeSpan TokenEndpointBackstopTimeout = TimeSpan.FromMinutes(2);
 
     internal static IHostApplicationBuilder AddCodexOAuthProvider(this IHostApplicationBuilder builder,
         IConfiguration configuration)
@@ -38,7 +48,26 @@ internal static class AddCodexOAuthProviderExtensions
         // This client must NOT carry the CodexAuthHandler — that handler decorates the chat transport, not auth.
         // A NAMED client (resolved via IHttpClientFactory at first use) is used rather than the typed-client
         // overload so the HttpClient is created only when the auth service actually runs (see the Lazy below).
-        builder.Services.AddHttpClient(CodexAuthHttpClientName);
+        //
+        // NO resilience pipeline on it. Under Aspire, AddServiceDefaults installs a standard handler on every client
+        // through ConfigureHttpClientDefaults, and that pipeline retries every method by default. Both requests this
+        // client sends are single-use OAuth grants: the authorization code is consumed by the first exchange, and the
+        // refresh token ROTATES — so a transport-level retry after a slow-but-successful refresh replays a token the
+        // server has already spent, the endpoint answers invalid_grant, and the operator is forced back through a full
+        // re-login. RemoveAllResilienceHandlers strips it, and is a no-op outside Aspire.
+        //
+        // The explicit timeout is NOT redundant and must not be dropped. AddStandardResilienceHandler sets
+        // HttpClient.Timeout to Timeout.InfiniteTimeSpan — its pipeline owns the deadline instead — and
+        // RemoveAllResilienceHandlers removes the HANDLER, never that mutation. A client that only strips therefore
+        // ends up under Aspire with no pipeline AND no client deadline, and a sign-in would hang with nothing left to
+        // end it. This stays FINITE deliberately, above CodexAuthService's own TokenRequestTimeout — the linked-token
+        // budget that brackets each token request and is what should fire first.
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately to drop the
+        // Aspire-installed standard pipeline, whose blanket retries replay a consumed,
+        // rotated refresh token.
+        builder.Services.AddHttpClient(CodexAuthHttpClientName, static client => client.Timeout = TokenEndpointBackstopTimeout)
+               .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
         builder.Services.AddSingleton<ICodexAuthService>(serviceProvider =>
         {
             var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(CodexAuthHttpClientName);

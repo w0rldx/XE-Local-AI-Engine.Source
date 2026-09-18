@@ -77,7 +77,13 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
             // adapter and the next call re-ensures the process through the supervisor and re-resolves its endpoint.
             // No caller can reach that state today — all four scope this generator to a single document/search — so
             // this is latent-only; it exists so a future long-lived caller degrades instead of failing permanently.
-            if (DeferredLlamaServerChatClient.IsServerGone(exception))
+            //
+            // The cancellation guard is the same one, in the same operand order, that both DeferredLlamaServerChatClient
+            // call sites use: a request the CALLER aborted tears its connection down in shapes IsServerGone matches
+            // ("the response ended prematurely", a reset socket), so without it a cancelled embedding is read as a dead
+            // server and throws away a perfectly live adapter. The exception itself is untouched — it still rethrows (or
+            // is translated) exactly as before.
+            if (!cancellationToken.IsCancellationRequested && DeferredLlamaServerChatClient.IsServerGone(exception))
             {
                 InvalidateInner();
             }

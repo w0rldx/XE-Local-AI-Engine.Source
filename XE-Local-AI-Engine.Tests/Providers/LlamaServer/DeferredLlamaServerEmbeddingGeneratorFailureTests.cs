@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -148,6 +149,78 @@ public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
         // a success here would mean the 500 had wrongly invalidated it.
         supervisor.EnsureEndpoint = healthy.BaseAddress;
         await AssertEx.ThrowsAsync<HttpRequestException>(() => generator.GenerateAsync(["chunk"]));
+    }
+
+    [Test]
+    public async Task GenerateAsync_WhenTheCallerCancelled_KeepsTheCachedAdapter_EvenOnAServerGoneShape()
+    {
+        // A request the CALLER aborted tears its connection down in shapes IsServerGone matches (a reset socket, "the
+        // response ended prematurely"). Without the cancellation guard the chat client already carries, a cancelled
+        // embedding is read as a dead server and throws away a perfectly live adapter — then the next call pays a
+        // needless re-ensure round-trip through the supervisor.
+        //
+        // The failure is raised from the INPUT enumerable rather than over a socket: the cancellation and the
+        // server-gone-shaped throw then happen on one thread in a fixed order, with no timer and no race between the
+        // token registration (which would turn this into an OperationCanceledException) and the transport failure.
+        using var original = StubServer.Returning(HttpStatusCode.OK, EmbeddingResponseWith("[0.25,-0.5,0.75]"));
+        using var replacement = StubServer.Returning(HttpStatusCode.OK, EmbeddingResponseWith("[0.5,-0.25]"));
+        using var lease = new RecordingInferenceLease();
+        var supervisor = new FakeProcessSupervisor
+        {
+            EnsureEndpoint = original.BaseAddress,
+
+            // A warm, registered process — without a lease the generator treats a cached adapter as unresolved and
+            // re-ensures on its own, which would mask what this test is looking at.
+            LeaseAcquisition = LlamaServerLeaseAcquisition.Granted(lease)
+        };
+
+        using var generator = new DeferredLlamaServerEmbeddingGenerator(supervisor, "nomic-embed-text-v1.5", TimeSpan.FromSeconds(30));
+
+        // Warm the cache: the adapter is now bound to `original`.
+        AssertEx.Equal(expected: 3, (await generator.GenerateAsync(["chunk"]))[0].Vector.Length);
+
+        using var cts = new CancellationTokenSource();
+        var failure = await AssertEx.ThrowsAsync<IOException>(() =>
+            generator.GenerateAsync(new CancellingServerGoneInput(cts), options: null, cts.Token));
+
+        // The exception must propagate exactly as before — neither swallowed nor translated.
+        AssertEx.True(failure.InnerException is SocketException, $"The original failure must reach the caller, got: {failure.InnerException}");
+
+        // Move the endpoint the supervisor hands out. A call that still lands on the ORIGINAL server proves the
+        // cancelled failure kept the adapter; landing on the replacement would mean it had been invalidated.
+        supervisor.EnsureEndpoint = replacement.BaseAddress;
+        AssertEx.Equal(expected: 3, (await generator.GenerateAsync(["chunk"]))[0].Vector.Length,
+            "A caller cancellation must not be read as a dead server and drop the cached adapter.");
+        AssertEx.Equal(expected: 1, supervisor.EnsureCalls,
+            "Dropping the adapter would have forced a second ensure through the supervisor.");
+    }
+
+    /// <summary>
+    ///     Embedding input that cancels the caller's token and then fails in a shape
+    ///     <c>DeferredLlamaServerChatClient.IsServerGone</c> matches — the two events the guard has to tell apart,
+    ///     ordered deterministically on one thread. Enumerated by the SDK while it builds the request body, so the
+    ///     throw comes out of the inner generator exactly where a transport failure would.
+    /// </summary>
+    private sealed class CancellingServerGoneInput : IEnumerable<string>
+    {
+        private readonly CancellationTokenSource _cts;
+
+        public CancellingServerGoneInput(CancellationTokenSource cts)
+        {
+            _cts = cts;
+        }
+
+        public IEnumerator<string> GetEnumerator()
+        {
+            _cts.Cancel();
+            throw new IOException("The connection was reset while the caller was cancelling.",
+                new SocketException((int)SocketError.ConnectionReset));
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
     }
 
     private static string EmbeddingResponseWith(string vector)

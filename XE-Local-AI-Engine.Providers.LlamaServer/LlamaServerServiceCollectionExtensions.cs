@@ -19,6 +19,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 public static class LlamaServerServiceCollectionExtensions
 {
     /// <summary>
+    ///     Backstop deadline on the rerank client, restoring one that Aspire's standard pipeline takes away (see the
+    ///     reranker registration). Must stay ABOVE <c>LlamaServerRerankerClient.ResolveRequestTimeout</c>'s ceiling or
+    ///     it fires first and the reranker's own degrade-to-fusion-order path never runs.
+    /// </summary>
+    private static readonly TimeSpan RerankBackstopTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>
     ///     Registers the model-runtime-core services: the GPU vendor probe, the OS-aware
     ///     variant selector, and the llama.cpp binary manager, plus the supervisor
     ///     (<see cref="ILlamaServerProcessSupervisor" />) and the provider (<c>ILocalModelProvider</c> for
@@ -62,6 +69,11 @@ public static class LlamaServerServiceCollectionExtensions
 
         // Dynamic-runtime resolution seams: the live GitHub Releases catalog (tier 1) and the on-disk installed-runtime
         // state (tier 2). The binary manager consults both, falling back to the pinned floor (tier 3) when both miss.
+        //
+        // These two, and only these two, stay on the host's shared DEFAULT factory client — a deliberate KEEP, not an
+        // oversight. Everything they issue is an idempotent catalog/download GET against GitHub, which is exactly the
+        // shape the Aspire-installed standard pipeline helps: a retried GET costs a second read, never a second side
+        // effect. The reranker's non-idempotent POST used to share this client and is registered on its own below.
         services.TryAddSingleton<ILlamaCppReleaseCatalog>(static sp =>
             new GitHubLlamaCppReleaseCatalog(sp.GetRequiredService<HttpClient>(), sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IInstalledRuntimeStore>(static _ => new InstalledRuntimeStore());
@@ -244,12 +256,38 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<ILogger<CudaBuildStartupService>>()));
 
         // Local cross-encoder reranker: spawns/reuses a rerank-role llama-server (--rerank + --pooling rank) for the
-        // resolved reranker model and POSTs /v1/rerank. Uses the caller-supplied HttpClient (AddHttpClient) — the same
-        // plain-client seam the health probe uses — since /v1/rerank has no OpenAI-SDK method. Singleton (stateless); the
-        // supervisor owns the underlying process. Any failure degrades to null so knowledge search keeps its fusion order.
+        // resolved reranker model and POSTs /v1/rerank. Singleton (stateless); the supervisor owns the underlying
+        // process. Any failure degrades to null so knowledge search keeps its fusion order.
+        //
+        // Its OWN named client with NO resilience pipeline. It used to share the host's default factory client with the
+        // release catalog and the binary manager above, which under Aspire means AddServiceDefaults' standard handler —
+        // installed on every client through ConfigureHttpClientDefaults — applies here too. That is wrong twice over:
+        // /v1/rerank is a non-idempotent POST, so a retry makes a cross-encoder score the whole pool a second time on
+        // the operator's own GPU; and a pool that legitimately outruns the pipeline's per-attempt timeout is severed by
+        // it rather than by the client's own budget. RemoveAllResilienceHandlers strips both, and is a no-op outside
+        // Aspire.
+        //
+        // The explicit timeout is NOT redundant and must not be dropped. AddStandardResilienceHandler sets
+        // HttpClient.Timeout to Timeout.InfiniteTimeSpan — its pipeline owns the deadline instead — and
+        // RemoveAllResilienceHandlers removes the HANDLER, never that mutation. A client that only strips therefore
+        // ends up under Aspire with no pipeline AND no client deadline; putting one back is what keeps a rerank bounded.
+        //
+        // Finite rather than infinite, unlike the proxy and the whisper runtime client: the per-call timeout override
+        // the reranker's constructor accepts is unbounded, so "the caller's own deadline always applies" is not a
+        // property this registration can guarantee. It sits above the client's own ceiling (ResolveRequestTimeout caps
+        // the linked-token budget), so in production that budget is still what fires first and the degrade-to-fusion-
+        // order path stays reachable — LlamaServerRerankerResilienceTests pins that ordering.
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately to drop the
+        // Aspire-installed standard pipeline, whose blanket retries duplicate GPU
+        // compute on a non-idempotent rerank POST.
+        services.AddHttpClient(LlamaServerRerankerClient.HttpClientName,
+                    static client => client.Timeout = RerankBackstopTimeout)
+                .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+
         services.TryAddSingleton<IRerankerClient>(static sp =>
             new LlamaServerRerankerClient(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
-                sp.GetRequiredService<HttpClient>(),
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient(LlamaServerRerankerClient.HttpClientName),
                 sp.GetRequiredService<ILogger<LlamaServerRerankerClient>>()));
 
         // SEAM: the llamacpp ILocalModelProvider. Registered over the supervisor + the caller-supplied

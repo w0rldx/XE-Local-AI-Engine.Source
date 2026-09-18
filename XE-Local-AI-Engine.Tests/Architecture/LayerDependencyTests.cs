@@ -286,6 +286,10 @@ public sealed class LayerDependencyTests
                 "Microsoft.Extensions.AI.Abstractions",
                 "Microsoft.Extensions.AI.OpenAI",
                 "Microsoft.Extensions.DependencyInjection.Abstractions",
+
+                // The reranker's named client strips the Aspire-installed standard pipeline off its non-idempotent
+                // /v1/rerank POST — the same position Providers.WhisperCpp and Providers.StableDiffusionCpp hold.
+                "Microsoft.Extensions.Http.Resilience",
                 "Microsoft.Extensions.Logging.Abstractions"
             ],
             ["XE-Local-AI-Engine.Providers.Ollama"] =

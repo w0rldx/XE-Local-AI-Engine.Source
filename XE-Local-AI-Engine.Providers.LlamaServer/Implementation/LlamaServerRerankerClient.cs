@@ -22,6 +22,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class LlamaServerRerankerClient : IRerankerClient
 {
     /// <summary>
+    ///     Named <see cref="HttpClient" /> for the non-idempotent <c>/v1/rerank</c> POST. Its own client rather than the
+    ///     shared default one so the Aspire-installed resilience pipeline can be stripped from it alone — see the
+    ///     registration in <c>LlamaServerServiceCollectionExtensions</c>.
+    /// </summary>
+    public const string HttpClientName = "llamaserver-reranker";
+
+    /// <summary>
     ///     How many times a rerank re-ensures around a profiling spawn before degrading to fusion order. Profiling
     ///     holds the per-key single-flight gate through its own teardown, so one re-ensure normally suffices.
     /// </summary>
