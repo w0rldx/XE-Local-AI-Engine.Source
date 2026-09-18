@@ -24,9 +24,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         startup reconciliation drive.
 ///     </para>
 /// </summary>
-public sealed class BenchmarkRecordService(IBenchmarkStore store)
+public sealed class BenchmarkRecordService
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IBenchmarkStore _store;
+
+    public BenchmarkRecordService(IBenchmarkStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     /// <summary>One project by id, or null when it is gone — the 404 check in front of almost every Benchmarks read.</summary>
     public Task<BenchmarkProjectRecord?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)

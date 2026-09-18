@@ -14,13 +14,28 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 ///     <see cref="IModelCapabilityResolver" />, so both paths gate on the same provider-routing decision the
 ///     orchestration path uses.
 /// </summary>
-public sealed class ChatTurnResolver(
-    IAgentDefinitionResolver agentDefinitionResolver,
-    IAgentDefinitionStore agentDefinitionStore,
-    IOrchestrationResolver orchestrationResolver,
-    IModelCapabilityResolver modelCapabilityResolver,
-    ILogger<ChatTurnResolver> logger)
+public sealed class ChatTurnResolver
 {
+    private readonly IAgentDefinitionResolver _agentDefinitionResolver;
+    private readonly IAgentDefinitionStore _agentDefinitionStore;
+    private readonly IOrchestrationResolver _orchestrationResolver;
+    private readonly IModelCapabilityResolver _modelCapabilityResolver;
+    private readonly ILogger<ChatTurnResolver> _logger;
+
+    public ChatTurnResolver(
+        IAgentDefinitionResolver agentDefinitionResolver,
+        IAgentDefinitionStore agentDefinitionStore,
+        IOrchestrationResolver orchestrationResolver,
+        IModelCapabilityResolver modelCapabilityResolver,
+        ILogger<ChatTurnResolver> logger)
+    {
+        _agentDefinitionResolver = agentDefinitionResolver;
+        _agentDefinitionStore = agentDefinitionStore;
+        _orchestrationResolver = orchestrationResolver;
+        _modelCapabilityResolver = modelCapabilityResolver;
+        _logger = logger;
+    }
+
     /// <summary>
     ///     Resolves the effective per-turn agent (definition + orchestration) plus advertised capabilities from a
     ///     caller-derived head (the active model, whether that model was an explicit user pick, the effective agent id,
@@ -57,7 +72,7 @@ public sealed class ChatTurnResolver(
         var capabilityModel = activeModel;
         if (activeModel is null && !userPickedConcreteModel && effectiveAgentId is { } pinnedDefinitionId)
         {
-            var pinnedDefinition = await agentDefinitionStore.GetByIdAsync(pinnedDefinitionId, cancellationToken);
+            var pinnedDefinition = await _agentDefinitionStore.GetByIdAsync(pinnedDefinitionId, cancellationToken);
             if (!string.IsNullOrWhiteSpace(pinnedDefinition?.ModelProfile))
             {
                 capabilityModel = pinnedDefinition.ModelProfile;
@@ -68,7 +83,7 @@ public sealed class ChatTurnResolver(
         ModelCapabilitySnapshot capabilities;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_capabilities"))
         {
-            capabilities = await modelCapabilityResolver.ResolveAsync(capabilityModel, cancellationToken);
+            capabilities = await _modelCapabilityResolver.ResolveAsync(capabilityModel, cancellationToken);
         }
 
         var supportsThinking = capabilities.SupportsThinking;
@@ -87,7 +102,7 @@ public sealed class ChatTurnResolver(
         ResolvedAgentRuntime? resolved;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_agent"))
         {
-            resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud,
+            resolved = await _agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud,
                                                         cancellationToken);
         }
 
@@ -133,13 +148,13 @@ public sealed class ChatTurnResolver(
         var reasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable;
         if (!string.Equals(effectiveModel, capabilityModel, StringComparison.Ordinal))
         {
-            var effectiveCapabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
+            var effectiveCapabilities = await _modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
             reasoningBudgetEnforceable = effectiveCapabilities.ReasoningBudgetEnforceable;
         }
 
-        if (logger.IsEnabled(LogLevel.Debug))
+        if (_logger.IsEnabled(LogLevel.Debug))
         {
-            logger.LogDebug(
+            _logger.LogDebug(
                 "Chat-turn resolution completed in {ElapsedMs:F2} ms (capabilities={CapabilitiesMs:F2} ms, agent={AgentMs:F2} ms, orchestration={OrchestrationMs:F2} ms; boundAgent={HasBoundAgent}, orchestration={HasOrchestration}).",
                 Stopwatch.GetElapsedTime(resolveStartTimestamp).TotalMilliseconds,
                 capabilitiesMs,
@@ -195,7 +210,7 @@ public sealed class ChatTurnResolver(
             return OrchestrationResolution.NotOrchestrated;
         }
 
-        var definition = await agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken);
+        var definition = await _agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken);
         if (definition is null || definition.Kind != AgentDefinitionKind.Orchestrator)
         {
             return OrchestrationResolution.NotOrchestrated;
@@ -203,6 +218,6 @@ public sealed class ChatTurnResolver(
 
         // Orchestration resolves each participant's knowledge-tool locality from its own effective model internally, so
         // no turn-level cloud flag is threaded here.
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken);
+        return await _orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken);
     }
 }

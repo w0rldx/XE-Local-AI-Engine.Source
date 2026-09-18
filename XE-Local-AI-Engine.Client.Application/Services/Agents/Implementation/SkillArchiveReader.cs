@@ -361,16 +361,22 @@ internal static class SkillArchiveReader
     }
 
     /// <summary>Running total of inflated bytes across the whole archive, so the caps compose instead of being per-entry only.</summary>
-    private sealed class InflationBudget(int maxTotalBytes)
+    private sealed class InflationBudget
     {
+        private readonly int _maxTotalBytes;
         private long _total;
+
+        public InflationBudget(int maxTotalBytes)
+        {
+            _maxTotalBytes = maxTotalBytes;
+        }
 
         public void Add(int bytes)
         {
             _total += bytes;
-            if (_total > maxTotalBytes)
+            if (_total > _maxTotalBytes)
             {
-                throw new SkillImportException($"The archive inflates to more than the {maxTotalBytes / (1024 * 1024)} MiB import limit.");
+                throw new SkillImportException($"The archive inflates to more than the {_maxTotalBytes / (1024 * 1024)} MiB import limit.");
             }
         }
     }

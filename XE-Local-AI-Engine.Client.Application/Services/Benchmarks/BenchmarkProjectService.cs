@@ -43,26 +43,39 @@ public interface IBenchmarkProjectService
     Task<BenchmarkJudgePolicyChange> RejudgeProjectAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default);
 }
 
-public sealed class BenchmarkProjectService(
-    IBenchmarkStore benchmarkStore,
-    IAgentDefinitionStore agentDefinitionStore,
-    IBenchmarkInstalledModelLeaseProvider installedModels,
-    IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
-    IBenchmarkCatalogService catalog,
-    IBenchmarkQueueSignal? queueSignal = null,
-    IBenchmarkPairwisePlanner? pairwisePlanner = null) : IBenchmarkProjectService
+public sealed class BenchmarkProjectService : IBenchmarkProjectService
 {
-    private readonly IBenchmarkCatalogService _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    private readonly IBenchmarkCatalogService _catalog;
 
-    private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
+    private readonly IBenchmarkStore _benchmarkStore;
+    private readonly IAgentDefinitionStore _agentDefinitionStore;
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly IBenchmarkJudgeRuntimeResolver _judgeRuntimeResolver;
+    private readonly IBenchmarkQueueSignal? _queueSignal;
+    private readonly IBenchmarkPairwisePlanner? _pairwisePlanner;
 
-    private readonly IBenchmarkJudgeRuntimeResolver _judgeRuntimeResolver =
-        judgeRuntimeResolver ?? throw new ArgumentNullException(nameof(judgeRuntimeResolver));
-
-    private readonly IBenchmarkQueueSignal? _queueSignal = queueSignal;
-    private readonly IBenchmarkPairwisePlanner? _pairwisePlanner = pairwisePlanner;
+    public BenchmarkProjectService(
+        IBenchmarkStore benchmarkStore,
+        IAgentDefinitionStore agentDefinitionStore,
+        IBenchmarkInstalledModelLeaseProvider installedModels,
+        IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
+        IBenchmarkCatalogService catalog,
+        IBenchmarkQueueSignal? queueSignal = null,
+        IBenchmarkPairwisePlanner? pairwisePlanner = null)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(benchmarkStore);
+        ArgumentNullException.ThrowIfNull(agentDefinitionStore);
+        ArgumentNullException.ThrowIfNull(installedModels);
+        ArgumentNullException.ThrowIfNull(judgeRuntimeResolver);
+        _catalog = catalog;
+        _benchmarkStore = benchmarkStore;
+        _agentDefinitionStore = agentDefinitionStore;
+        _installedModels = installedModels;
+        _judgeRuntimeResolver = judgeRuntimeResolver;
+        _queueSignal = queueSignal;
+        _pairwisePlanner = pairwisePlanner;
+    }
 
     public async Task<BenchmarkProjectRecord> CreateAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken = default)
     {

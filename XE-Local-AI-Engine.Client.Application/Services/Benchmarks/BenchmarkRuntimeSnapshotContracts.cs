@@ -211,7 +211,7 @@ public sealed record BenchmarkFreezeDependencySetV1(
     string PrimaryRuntimeConfigurationHash,
     string? JudgeRuntimeConfigurationHash);
 
-public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy eligibilityPolicy) : IBenchmarkRuntimeSnapshotFactory
+public sealed class BenchmarkRuntimeSnapshotFactory : IBenchmarkRuntimeSnapshotFactory
 {
     private static readonly SearchValues<char> LowerHexCharacters = SearchValues.Create("0123456789abcdef");
 
@@ -221,7 +221,13 @@ public sealed class BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy 
         PropertyNameCaseInsensitive = false
     };
 
-    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy = eligibilityPolicy ?? throw new ArgumentNullException(nameof(eligibilityPolicy));
+    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
+
+    public BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy eligibilityPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(eligibilityPolicy);
+        _eligibilityPolicy = eligibilityPolicy;
+    }
 
     public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input)
     {

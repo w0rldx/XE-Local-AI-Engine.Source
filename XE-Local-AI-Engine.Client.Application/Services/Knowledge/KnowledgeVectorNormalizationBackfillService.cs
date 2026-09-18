@@ -24,10 +24,7 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 ///     cosine path, which is correct regardless of whether a given row is normalized yet. Safe on an empty database (no
 ///     rows → marker set immediately). Runs once per startup.
 /// </remarks>
-public sealed class KnowledgeVectorNormalizationBackfillService(
-    IServiceScopeFactory scopeFactory,
-    IKnowledgeVectorNormalizationState normalizationState,
-    ILogger<KnowledgeVectorNormalizationBackfillService> logger) : BackgroundService
+public sealed class KnowledgeVectorNormalizationBackfillService : BackgroundService
 {
     internal const int DefaultBatchSize = 500;
 
@@ -50,6 +47,19 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
                                           """;
 
     private const string UpdateEmbeddingSql = "UPDATE knowledge_chunk_vectors SET embedding = $embedding WHERE rowid = $rowid;";
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IKnowledgeVectorNormalizationState _normalizationState;
+    private readonly ILogger<KnowledgeVectorNormalizationBackfillService> _logger;
+
+    public KnowledgeVectorNormalizationBackfillService(
+        IServiceScopeFactory scopeFactory,
+        IKnowledgeVectorNormalizationState normalizationState,
+        ILogger<KnowledgeVectorNormalizationBackfillService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _normalizationState = normalizationState;
+        _logger = logger;
+    }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -68,22 +78,22 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
         {
             if (await IsMarkerSetAsync(cancellationToken))
             {
-                normalizationState.MarkComplete();
+                _normalizationState.MarkComplete();
                 return;
             }
 
-            await using var scope = scopeFactory.CreateAsyncScope();
+            await using var scope = _scopeFactory.CreateAsyncScope();
             var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
             await OpenIfNeededAsync(connection, cancellationToken);
 
             var normalized = await NormalizeVectorsAsync(connection, DefaultBatchSize, cancellationToken);
 
             await SetMarkerAsync(cancellationToken);
-            normalizationState.MarkComplete();
+            _normalizationState.MarkComplete();
 
             if (normalized > 0)
             {
-                logger.LogInformation("KnowledgeVectorNormalizationBackfillService: normalized {Count} stored chunk vector(s).", normalized);
+                _logger.LogInformation("KnowledgeVectorNormalizationBackfillService: normalized {Count} stored chunk vector(s).", normalized);
             }
         }
         catch (OperationCanceledException)
@@ -92,7 +102,7 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "KnowledgeVectorNormalizationBackfillService: unexpected error during vector normalization backfill.");
+            _logger.LogError(ex, "KnowledgeVectorNormalizationBackfillService: unexpected error during vector normalization backfill.");
         }
     }
 
@@ -170,7 +180,7 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
 
     private async Task<bool> IsMarkerSetAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
+        await using var scope = _scopeFactory.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
 
@@ -183,7 +193,7 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
 
     private async Task SetMarkerAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
+        await using var scope = _scopeFactory.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
 

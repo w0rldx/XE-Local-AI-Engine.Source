@@ -188,15 +188,25 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
 
     // Idempotent: the hub disposes in a finally that a faulted enumerator can reach more than once, and a double
     // release would drop the count below the number of live consumers.
-    private sealed class AttachmentHandle(InvocationAttachmentTracker tracker, Guid invocationId, Entry entry) : IDisposable
+    private sealed class AttachmentHandle : IDisposable
     {
+        private readonly InvocationAttachmentTracker _tracker;
+        private readonly Guid _invocationId;
+        private readonly Entry _entry;
         private int _released;
+
+        public AttachmentHandle(InvocationAttachmentTracker tracker, Guid invocationId, Entry entry)
+        {
+            _tracker = tracker;
+            _invocationId = invocationId;
+            _entry = entry;
+        }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _released, value: 1) == 0)
             {
-                tracker.Release(invocationId, entry);
+                _tracker.Release(_invocationId, _entry);
             }
         }
     }

@@ -327,9 +327,15 @@ public sealed class CapacityService : ICapacityService
 
     private readonly record struct RunningSnapshot(IReadOnlySet<RunningKey> Keys, bool IsKnown);
 
-    private sealed class AdmissionReservation(IDisposable footprintReservation) : IDisposable
+    private sealed class AdmissionReservation : IDisposable
     {
-        private IDisposable? _reservation = footprintReservation ?? throw new ArgumentNullException(nameof(footprintReservation));
+        private IDisposable? _reservation;
+
+        public AdmissionReservation(IDisposable footprintReservation)
+        {
+            ArgumentNullException.ThrowIfNull(footprintReservation);
+            _reservation = footprintReservation;
+        }
 
         public bool TryAttach(IProcessLaunchAdmissionRegistry registry, ProcessLaunchAdmission admission)
         {
@@ -368,9 +374,17 @@ public sealed class CapacityService : ICapacityService
         }
     }
 
-    private sealed class CompositeReservation(IDisposable launchLease, IDisposable footprintReservation) : IDisposable
+    private sealed class CompositeReservation : IDisposable
     {
+        private readonly IDisposable _launchLease;
+        private readonly IDisposable _footprintReservation;
         private int _disposed;
+
+        public CompositeReservation(IDisposable launchLease, IDisposable footprintReservation)
+        {
+            _launchLease = launchLease;
+            _footprintReservation = footprintReservation;
+        }
 
         public void Dispose()
         {
@@ -381,11 +395,11 @@ public sealed class CapacityService : ICapacityService
 
             try
             {
-                launchLease.Dispose();
+                _launchLease.Dispose();
             }
             finally
             {
-                footprintReservation.Dispose();
+                _footprintReservation.Dispose();
             }
         }
     }

@@ -6,16 +6,28 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <inheritdoc />
-internal sealed class ModelUnloadCoordinator(
-    IOllamaModelService modelService,
-    ILlamaServerProcessSupervisor supervisor,
-    IConfiguration configuration,
-    ILogger<ModelUnloadCoordinator> logger) : IModelUnloadCoordinator
+internal sealed class ModelUnloadCoordinator : IModelUnloadCoordinator
 {
-    private readonly IConfiguration _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-    private readonly ILogger<ModelUnloadCoordinator> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
-    private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<ModelUnloadCoordinator> _logger;
+    private readonly IOllamaModelService _modelService;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
+
+    public ModelUnloadCoordinator(
+        IOllamaModelService modelService,
+        ILlamaServerProcessSupervisor supervisor,
+        IConfiguration configuration,
+        ILogger<ModelUnloadCoordinator> logger)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(modelService);
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _configuration = configuration;
+        _logger = logger;
+        _modelService = modelService;
+        _supervisor = supervisor;
+    }
 
     public async Task<bool> UnloadAsync(string modelName, CancellationToken cancellationToken = default)
     {

@@ -7,16 +7,26 @@ using XE_Local_AI_Engine.Client.Models;
 ///     door: it ensures the conversation, persists the synthesized user turn + assistant placeholder with
 ///     Origin=Remote, and hands back a session that drives the shared <see cref="INodeChatInvocationPump" />.
 /// </summary>
-public sealed class NodeChatRemotePersistenceCoordinator(
-    INodeChatPersistenceService persistence,
-    INodeChatInvocationPump invocationPump,
-    TimeProvider timeProvider) : INodeChatRemotePersistenceCoordinator
+public sealed class NodeChatRemotePersistenceCoordinator : INodeChatRemotePersistenceCoordinator
 {
     private const int RemoteTitleMaxLength = 120;
-    private readonly INodeChatInvocationPump _invocationPump = invocationPump ?? throw new ArgumentNullException(nameof(invocationPump));
+    private readonly INodeChatInvocationPump _invocationPump;
 
-    private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _persistence;
+    private readonly TimeProvider _timeProvider;
+
+    public NodeChatRemotePersistenceCoordinator(
+        INodeChatPersistenceService persistence,
+        INodeChatInvocationPump invocationPump,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(invocationPump);
+        ArgumentNullException.ThrowIfNull(persistence);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _invocationPump = invocationPump;
+        _persistence = persistence;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<NodeChatRemotePersistenceSession?> BeginAsync(RuntimePackage package,
         CancellationToken cancellationToken = default)

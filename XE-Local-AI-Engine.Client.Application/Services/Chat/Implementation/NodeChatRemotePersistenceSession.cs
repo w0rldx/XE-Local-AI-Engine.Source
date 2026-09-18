@@ -7,15 +7,26 @@ using XE_Local_AI_Engine.Client.Services.Events;
 ///     run produces; deltas are flushed and the terminal/interrupted state is persisted. No SSE events are emitted —
 ///     the platform path needs persistence only.
 /// </summary>
-public sealed class NodeChatRemotePersistenceSession(
-    INodeChatInvocationPump invocationPump,
-    NodeChatMessageCorrelation correlation,
-    string? requestedModel)
+public sealed class NodeChatRemotePersistenceSession
 {
-    private readonly NodeChatMessageCorrelation _correlation = correlation ?? throw new ArgumentNullException(nameof(correlation));
-    private readonly INodeChatInvocationPump _invocationPump = invocationPump ?? throw new ArgumentNullException(nameof(invocationPump));
-    private NodeChatPumpCursor _cursor = NodeChatPumpCursor.Empty;
+    private readonly NodeChatMessageCorrelation _correlation;
+    private readonly INodeChatInvocationPump _invocationPump;
+    private readonly string? _requestedModel;
+    private NodeChatPumpCursor _cursor;
     private bool _terminalPersisted;
+
+    public NodeChatRemotePersistenceSession(
+        INodeChatInvocationPump invocationPump,
+        NodeChatMessageCorrelation correlation,
+        string? requestedModel)
+    {
+        _requestedModel = requestedModel;
+        ArgumentNullException.ThrowIfNull(correlation);
+        _correlation = correlation;
+        ArgumentNullException.ThrowIfNull(invocationPump);
+        _invocationPump = invocationPump;
+        _cursor = NodeChatPumpCursor.Empty;
+    }
 
     /// <summary>
     ///     Persists a streamed delta and, when the state is terminal, terminalizes the assistant message. Returns
@@ -35,7 +46,7 @@ public sealed class NodeChatRemotePersistenceSession(
 
         if (NodeChatInvocationPump.IsTerminal(state.Status))
         {
-            await _invocationPump.TerminalizeAsync(_correlation, state, requestedModel);
+            await _invocationPump.TerminalizeAsync(_correlation, state, _requestedModel);
             _terminalPersisted = true;
         }
 

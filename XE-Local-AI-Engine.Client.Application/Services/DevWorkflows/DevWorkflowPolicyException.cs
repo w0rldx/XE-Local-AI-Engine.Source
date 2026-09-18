@@ -6,4 +6,9 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 ///     the two to different failure classes — <c>Configuration</c> names something an author must fix, and a policy
 ///     refusal named that way would send an operator looking for a mistake in a definition that has none.
 /// </summary>
-public sealed class DevWorkflowPolicyException(string message) : InvalidOperationException(message);
+public sealed class DevWorkflowPolicyException : InvalidOperationException
+{
+    public DevWorkflowPolicyException(string message) : base(message)
+    {
+    }
+}

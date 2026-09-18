@@ -14,24 +14,33 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     writes, and the supervisor's per-model ensure / restart / evict verbs stay off this surface deliberately: no
 ///     endpoint asks for them.
 /// </summary>
-public sealed class ImageRuntimeOrchestrationService(
-    IStableDiffusionCppSourceBuildService buildService,
-    IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe,
-    IStableDiffusionInstalledRuntimeStore installedRuntimeStore,
-    IImageRuntimeActivityGate activityGate,
-    IImageServerSupervisor supervisor)
+public sealed class ImageRuntimeOrchestrationService
 {
-    private readonly IImageRuntimeActivityGate _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
+    private readonly IImageRuntimeActivityGate _activityGate;
 
-    private readonly IStableDiffusionCppSourceBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+    private readonly IStableDiffusionCppSourceBuildService _buildService;
+    private readonly IStableDiffusionInstalledRuntimeStore _installedRuntimeStore;
+    private readonly IStableDiffusionCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
+    private readonly IImageServerSupervisor _supervisor;
 
-    private readonly IStableDiffusionInstalledRuntimeStore _installedRuntimeStore =
-        installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
-
-    private readonly IStableDiffusionCppSourceBuildPrerequisiteProbe _prerequisiteProbe =
-        prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
-
-    private readonly IImageServerSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+    public ImageRuntimeOrchestrationService(
+        IStableDiffusionCppSourceBuildService buildService,
+        IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe,
+        IStableDiffusionInstalledRuntimeStore installedRuntimeStore,
+        IImageRuntimeActivityGate activityGate,
+        IImageServerSupervisor supervisor)
+    {
+        ArgumentNullException.ThrowIfNull(activityGate);
+        ArgumentNullException.ThrowIfNull(buildService);
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        ArgumentNullException.ThrowIfNull(prerequisiteProbe);
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _activityGate = activityGate;
+        _buildService = buildService;
+        _installedRuntimeStore = installedRuntimeStore;
+        _prerequisiteProbe = prerequisiteProbe;
+        _supervisor = supervisor;
+    }
 
     /// <summary>The managed-runtime record, or <see langword="null" /> when no managed runtime is installed.</summary>
     public Task<StableDiffusionInstalledRuntimeState?> ReadInstalledRuntimeAsync(CancellationToken ct)

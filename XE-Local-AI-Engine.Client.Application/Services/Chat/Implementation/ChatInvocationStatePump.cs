@@ -26,17 +26,26 @@ using XE_Local_AI_Engine.Client.Services.Events;
 ///         depends on. The sink drops instead, and repairs the whole stream rather than the frame.
 ///     </para>
 /// </summary>
-public sealed class ChatInvocationStatePump(
-    INodeChatInvocationPump invocationPump,
-    TimeProvider timeProvider,
-    IOptions<ChatStreamBudgetOptions>? options = null)
+public sealed class ChatInvocationStatePump
 {
     // Error text stamped on the row when the persistence pump itself faults — distinct from a
     // generation-side failure so a persistence fault is traceable on the terminalized row.
     private const string PumpFaultError = "local-chat-persistence-failed";
 
     // Optional so the many direct constructions in tests keep the shipped defaults without threading options through.
-    private readonly ChatStreamBudgetOptions _options = options?.Value ?? new ChatStreamBudgetOptions();
+    private readonly ChatStreamBudgetOptions _options;
+    private readonly INodeChatInvocationPump _invocationPump;
+    private readonly TimeProvider _timeProvider;
+
+    public ChatInvocationStatePump(
+        INodeChatInvocationPump invocationPump,
+        TimeProvider timeProvider,
+        IOptions<ChatStreamBudgetOptions>? options = null)
+    {
+        _invocationPump = invocationPump;
+        _timeProvider = timeProvider;
+        _options = options?.Value ?? new ChatStreamBudgetOptions();
+    }
 
     public async Task PumpAsync(ChannelReader<InvocationState> stateReader,
         IChatStreamEventSink eventSink,
@@ -88,7 +97,7 @@ public sealed class ChatInvocationStatePump(
             }
 
             emitCursor = new NodeChatPumpCursor(content, reasoning);
-            lastEmitTimestamp = timeProvider.GetTimestamp();
+            lastEmitTimestamp = _timeProvider.GetTimestamp();
             hasEmitted = true;
 
             var deltaSequence = sequence.Next();
@@ -115,7 +124,7 @@ public sealed class ChatInvocationStatePump(
         // EmitDeltaAsync on its own cadence, and a persisted row is no longer needed to build a delta frame.
         async Task PersistPartialAsync(InvocationState snapshotToFlush)
         {
-            var flush = await invocationPump.FlushDeltaAsync(correlation, snapshotToFlush, persistCursor, cancellationToken);
+            var flush = await _invocationPump.FlushDeltaAsync(correlation, snapshotToFlush, persistCursor, cancellationToken);
             persistCursor = flush.Cursor;
 
             if (flush.Persisted is null)
@@ -123,7 +132,7 @@ public sealed class ChatInvocationStatePump(
                 return;
             }
 
-            lastPartialFlushTimestamp = timeProvider.GetTimestamp();
+            lastPartialFlushTimestamp = _timeProvider.GetTimestamp();
             hasFlushedPartial = true;
         }
 
@@ -161,7 +170,7 @@ public sealed class ChatInvocationStatePump(
                 // full text as a backstop, but the common path must never need it to correct anything).
                 if (isTerminal
                     || !hasEmitted
-                    || timeProvider.GetElapsedTime(lastEmitTimestamp) >= emitDebounceInterval)
+                    || _timeProvider.GetElapsedTime(lastEmitTimestamp) >= emitDebounceInterval)
                 {
                     pendingEmitState = null;
                     await EmitDeltaAsync(latest);
@@ -179,7 +188,7 @@ public sealed class ChatInvocationStatePump(
                     || !hasFlushedPartial
                     || PartialFlushPolicy.ShouldFlush(persistCursor.Content.Length + persistCursor.Reasoning.Length,
                         latest.StreamedContent.Length - persistCursor.Content.Length + (latest.StreamedThinkingContent.Length - persistCursor.Reasoning.Length),
-                        timeProvider.GetElapsedTime(lastPartialFlushTimestamp),
+                        _timeProvider.GetElapsedTime(lastPartialFlushTimestamp),
                         _options))
                 {
                     pendingPartialState = null;
@@ -195,7 +204,7 @@ public sealed class ChatInvocationStatePump(
                     // An empty snapshot (a plain-text turn with no reasoning/tools) is passed as null so the persisted
                     // parts are left untouched rather than overwritten with an empty interleave.
                     var snapshot = parts.HasParts ? parts.Snapshot() : null;
-                    var terminal = await invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot, sources);
+                    var terminal = await _invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot, sources);
                     terminalPersisted = true;
 
                     // Post-run adaptive memory: hand the just-persisted terminal to the (background, fire-and-forget)
@@ -301,7 +310,7 @@ public sealed class ChatInvocationStatePump(
             };
 
             var snapshot = parts.HasParts ? parts.Snapshot() : null;
-            var terminal = await invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot, sources);
+            var terminal = await _invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot, sources);
 
             await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
         }
@@ -318,13 +327,13 @@ public sealed class ChatInvocationStatePump(
         NodeChatPumpCursor cursor,
         bool wasCancelled)
     {
-        var terminal = await invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled);
+        var terminal = await _invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled);
 
         await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
     }
 
     private long NowUnixMilliseconds()
     {
-        return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        return _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
 }

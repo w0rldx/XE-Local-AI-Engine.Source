@@ -20,14 +20,23 @@ public interface IDevelopmentRepositoryBindingService
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class DevelopmentRepositoryBindingService(
-    ISelectedFolderResolver selectedFolders,
-    IDevelopmentStore store,
-    IOptions<DevelopmentOptions> options) : IDevelopmentRepositoryBindingService
+internal sealed class DevelopmentRepositoryBindingService : IDevelopmentRepositoryBindingService
 {
-    private readonly DevelopmentOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly ISelectedFolderResolver _selectedFolders = selectedFolders ?? throw new ArgumentNullException(nameof(selectedFolders));
-    private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly DevelopmentOptions _options;
+    private readonly ISelectedFolderResolver _selectedFolders;
+    private readonly IDevelopmentStore _store;
+
+    public DevelopmentRepositoryBindingService(
+        ISelectedFolderResolver selectedFolders,
+        IDevelopmentStore store,
+        IOptions<DevelopmentOptions> options)
+    {
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(selectedFolders);
+        _selectedFolders = selectedFolders;
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     public async Task<DevelopmentRepositoryReference> RegisterAsync(string displayAlias,
         string hostPath,

@@ -11,16 +11,26 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 ///     to <see cref="ModelKind.Unknown" />); detection failures are swallowed so a list never fails because the
 ///     daemon is offline.
 /// </summary>
-internal sealed class ModelClassificationService(
-    IModelClassificationStore store,
-    IOllamaModelService ollamaModelService,
-    ILogger<ModelClassificationService> logger) : IModelClassificationService
+internal sealed class ModelClassificationService : IModelClassificationService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly ILogger<ModelClassificationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IOllamaModelService _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
+    private readonly ILogger<ModelClassificationService> _logger;
+    private readonly IOllamaModelService _ollamaModelService;
 
-    private readonly IModelClassificationStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IModelClassificationStore _store;
+
+    public ModelClassificationService(
+        IModelClassificationStore store,
+        IOllamaModelService ollamaModelService,
+        ILogger<ModelClassificationService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(ollamaModelService);
+        ArgumentNullException.ThrowIfNull(store);
+        _logger = logger;
+        _ollamaModelService = ollamaModelService;
+        _store = store;
+    }
 
     public async Task<IReadOnlyDictionary<string, ModelClassificationResult>> ClassifyAsync(IEnumerable<ModelIdentity> models,
         CancellationToken cancellationToken = default)

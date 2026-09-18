@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 ///     hex-encoded so it drops straight into the string-seed framing API. A client that knows only the conversation id
 ///     cannot reproduce the seed without the node key, so it cannot forge the fence's closing marker.
 /// </summary>
-public sealed class UntrustedContentFenceSeedProvider(INodeSqliteKeyHolder keyHolder) : IUntrustedContentFenceSeedProvider
+public sealed class UntrustedContentFenceSeedProvider : IUntrustedContentFenceSeedProvider
 {
     private const int SeedByteLength = 32;
 
@@ -21,7 +21,13 @@ public sealed class UntrustedContentFenceSeedProvider(INodeSqliteKeyHolder keyHo
     // another subkey derived from the same node key (e.g. the SQLite key, JWT signing key, or envelope wrap key).
     private static readonly byte[] PurposeInfo = Encoding.UTF8.GetBytes("xe:untrusted-attachment-fence-nonce|v1");
 
-    private readonly INodeSqliteKeyHolder _keyHolder = keyHolder ?? throw new ArgumentNullException(nameof(keyHolder));
+    private readonly INodeSqliteKeyHolder _keyHolder;
+
+    public UntrustedContentFenceSeedProvider(INodeSqliteKeyHolder keyHolder)
+    {
+        ArgumentNullException.ThrowIfNull(keyHolder);
+        _keyHolder = keyHolder;
+    }
 
     public string DeriveSeed(Guid conversationId)
     {

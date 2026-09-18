@@ -35,15 +35,23 @@ public interface ISampleValidationPipeline
 ///     → execution → optional critic. EVERY layer's outcome is persisted with the sample (invariant #7), including the
 ///     ones that passed, so a dataset is auditable without re-running generation.
 /// </summary>
-public sealed class SampleValidationPipeline(IHeadlessToolExecutor executor, IStructuredAgentRunner runner) : ISampleValidationPipeline
+public sealed class SampleValidationPipeline : ISampleValidationPipeline
 {
     private const string CriticPrompt =
         "You judge one training example. Reply with a JSON object {\"verdict\":\"good\"} or {\"verdict\":\"bad\"} and nothing else.";
 
     private static readonly JsonElement CriticSchema = JsonDocument.Parse("""{"type":"object","properties":{"verdict":{"type":"string"}},"required":["verdict"]}""").RootElement.Clone();
 
-    private readonly IHeadlessToolExecutor _executor = executor ?? throw new ArgumentNullException(nameof(executor));
-    private readonly IStructuredAgentRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+    private readonly IHeadlessToolExecutor _executor;
+    private readonly IStructuredAgentRunner _runner;
+
+    public SampleValidationPipeline(IHeadlessToolExecutor executor, IStructuredAgentRunner runner)
+    {
+        ArgumentNullException.ThrowIfNull(executor);
+        ArgumentNullException.ThrowIfNull(runner);
+        _executor = executor;
+        _runner = runner;
+    }
 
     public async Task<SampleValidationOutcome> ValidateAsync(string rawCompletion,
         SampleValidationContext context,

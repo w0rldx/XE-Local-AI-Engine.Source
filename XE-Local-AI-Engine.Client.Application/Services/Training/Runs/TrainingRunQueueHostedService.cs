@@ -39,23 +39,40 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         a claim that turned out to need locks the consumer is not holding could not be handed back.
 ///     </para>
 /// </remarks>
-public sealed class TrainingRunQueueHostedService(
-    IServiceScopeFactory scopeFactory,
-    ITrainingRunQueueSignal signal,
-    ITrainingRunEventBuffer events,
-    IGpuWorkGate gpuWorkGate,
-    ILlamaServerProcessSupervisor supervisor,
-    IOptions<TrainingRunQueueOptions> options,
-    ILogger<TrainingRunQueueHostedService> logger) : BackgroundService
+public sealed class TrainingRunQueueHostedService : BackgroundService
 {
-    private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly IGpuWorkGate _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
-    private readonly ILogger<TrainingRunQueueHostedService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly TimeSpan _pollInterval = (options ?? throw new ArgumentNullException(nameof(options))).Value.PollInterval;
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    private readonly ITrainingRunQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
-    private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+    private readonly ITrainingRunEventBuffer _events;
+    private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly ILogger<TrainingRunQueueHostedService> _logger;
+    private readonly TimeSpan _pollInterval;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ITrainingRunQueueSignal _signal;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
     private bool _waitingForLease;
+
+    public TrainingRunQueueHostedService(
+        IServiceScopeFactory scopeFactory,
+        ITrainingRunQueueSignal signal,
+        ITrainingRunEventBuffer events,
+        IGpuWorkGate gpuWorkGate,
+        ILlamaServerProcessSupervisor supervisor,
+        IOptions<TrainingRunQueueOptions> options,
+        ILogger<TrainingRunQueueHostedService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        _events = events;
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        _gpuWorkGate = gpuWorkGate;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _pollInterval = (options ?? throw new ArgumentNullException(nameof(options))).Value.PollInterval;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(signal);
+        _signal = signal;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

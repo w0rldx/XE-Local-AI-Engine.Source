@@ -19,9 +19,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         and every artifact WRITE.
 ///     </para>
 /// </summary>
-public sealed class DevWorkflowRunQueryService(IDevWorkflowStore store)
+public sealed class DevWorkflowRunQueryService
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IDevWorkflowStore _store;
+
+    public DevWorkflowRunQueryService(IDevWorkflowStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     /// <summary>The run list, newest first, with each run's definition name and node counters. Both filters optional.</summary>
     public Task<IReadOnlyList<DevWorkflowRunSummary>> ListRunSummariesAsync(Guid? workItemId = null,

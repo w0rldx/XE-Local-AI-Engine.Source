@@ -21,12 +21,18 @@ public interface IDatasetExportService
 ///         MB; stream it if that cap is ever raised.
 ///     </para>
 /// </summary>
-public sealed class DatasetExportService(ITrainingDatasetStore store) : IDatasetExportService
+public sealed class DatasetExportService : IDatasetExportService
 {
     private const string ToolCallOpen = "<tool_call>";
     private const string ToolCallClose = "</tool_call>";
 
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ITrainingDatasetStore _store;
+
+    public DatasetExportService(ITrainingDatasetStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     public async Task<string> ExportAsync(Guid datasetId, DatasetExportFormat format, CancellationToken cancellationToken = default)
     {

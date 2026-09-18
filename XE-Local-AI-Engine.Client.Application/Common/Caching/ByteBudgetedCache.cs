@@ -297,12 +297,20 @@ public sealed class ByteBudgetedCache<TKey, TValue>
         }
     }
 
-    private sealed class Entry(TValue value, long costInBytes, DateTimeOffset? expiresAt)
+    private sealed class Entry
     {
         public long LastAccessStamp;
-        public TValue Value { get; } = value;
-        public long CostInBytes { get; } = costInBytes;
-        public DateTimeOffset? ExpiresAt { get; } = expiresAt;
+
+        public Entry(TValue value, long costInBytes, DateTimeOffset? expiresAt)
+        {
+            Value = value;
+            CostInBytes = costInBytes;
+            ExpiresAt = expiresAt;
+        }
+
+        public TValue Value { get; }
+        public long CostInBytes { get; }
+        public DateTimeOffset? ExpiresAt { get; }
     }
 
     private readonly record struct Resolution(bool Resolved, TValue Value);

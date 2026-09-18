@@ -21,9 +21,15 @@ public sealed record DatasetGenerationPayload(
 
 public sealed record DatasetGenerationEvent(Guid DatasetId, long Sequence, DatasetGenerationEventKind Kind, DatasetGenerationPayload Payload);
 
-public sealed class DatasetGenerationEventArgs(DatasetGenerationEvent generationEvent) : EventArgs
+public sealed class DatasetGenerationEventArgs : EventArgs
 {
-    public DatasetGenerationEvent Event { get; } = generationEvent ?? throw new ArgumentNullException(nameof(generationEvent));
+    public DatasetGenerationEventArgs(DatasetGenerationEvent generationEvent)
+    {
+        ArgumentNullException.ThrowIfNull(generationEvent);
+        Event = generationEvent;
+    }
+
+    public DatasetGenerationEvent Event { get; }
 }
 
 public sealed record DatasetGenerationReplay(IReadOnlyList<DatasetGenerationEvent> Events, bool ResetRequired, long LatestSequence);

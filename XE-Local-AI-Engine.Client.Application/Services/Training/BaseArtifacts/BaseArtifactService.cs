@@ -10,13 +10,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 ///     Default <see cref="IBaseArtifactService" />. Resolves the operator-selected checkpoint repository, preflights
 ///     disk, records the artifact, and hands the transfer to <see cref="BaseArtifactDownloadCoordinator" />.
 /// </summary>
-internal sealed class BaseArtifactService(
-    ITrainingBaseArtifactStore store,
-    IBaseCheckpointStore checkpointStore,
-    BaseArtifactDownloadCoordinator coordinator,
-    IFreeSpaceProbe freeSpaceProbe,
-    INodeDataDirectory dataDirectory,
-    TimeProvider timeProvider) : IBaseArtifactService
+internal sealed class BaseArtifactService : IBaseArtifactService
 {
     /// <summary>
     ///     Headroom demanded on top of the manifest's own reported size. A checkpoint that exactly fills the volume
@@ -25,12 +19,34 @@ internal sealed class BaseArtifactService(
     /// </summary>
     internal const long DiskHeadroomBytes = 10L * 1024 * 1024 * 1024;
 
-    private readonly IBaseCheckpointStore _checkpointStore = checkpointStore ?? throw new ArgumentNullException(nameof(checkpointStore));
-    private readonly BaseArtifactDownloadCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
-    private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-    private readonly IFreeSpaceProbe _freeSpaceProbe = freeSpaceProbe ?? throw new ArgumentNullException(nameof(freeSpaceProbe));
-    private readonly ITrainingBaseArtifactStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IBaseCheckpointStore _checkpointStore;
+    private readonly BaseArtifactDownloadCoordinator _coordinator;
+    private readonly INodeDataDirectory _dataDirectory;
+    private readonly IFreeSpaceProbe _freeSpaceProbe;
+    private readonly ITrainingBaseArtifactStore _store;
+    private readonly TimeProvider _timeProvider;
+
+    public BaseArtifactService(
+        ITrainingBaseArtifactStore store,
+        IBaseCheckpointStore checkpointStore,
+        BaseArtifactDownloadCoordinator coordinator,
+        IFreeSpaceProbe freeSpaceProbe,
+        INodeDataDirectory dataDirectory,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(checkpointStore);
+        ArgumentNullException.ThrowIfNull(coordinator);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(freeSpaceProbe);
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _checkpointStore = checkpointStore;
+        _coordinator = coordinator;
+        _dataDirectory = dataDirectory;
+        _freeSpaceProbe = freeSpaceProbe;
+        _store = store;
+        _timeProvider = timeProvider;
+    }
 
     /// <inheritdoc />
     public async Task<BaseArtifactView> StartDownloadAsync(string repoId, string? revision, CancellationToken ct)

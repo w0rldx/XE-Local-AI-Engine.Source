@@ -11,15 +11,20 @@ using Quartz;
 ///     <see cref="ISchedulerDispatchExecutor" />.
 /// </summary>
 [DisallowConcurrentExecution]
-internal sealed class NonOverlappingSchedulerDispatchJob(
-    ISchedulerDispatchExecutor dispatchExecutor,
-    ILogger<NonOverlappingSchedulerDispatchJob> logger) : IJob
+internal sealed class NonOverlappingSchedulerDispatchJob : IJob
 {
-    private readonly ISchedulerDispatchExecutor _dispatchExecutor =
-        dispatchExecutor ?? throw new ArgumentNullException(nameof(dispatchExecutor));
+    private readonly ISchedulerDispatchExecutor _dispatchExecutor;
+    private readonly ILogger<NonOverlappingSchedulerDispatchJob> _logger;
 
-    private readonly ILogger<NonOverlappingSchedulerDispatchJob> _logger =
-        logger ?? throw new ArgumentNullException(nameof(logger));
+    public NonOverlappingSchedulerDispatchJob(
+        ISchedulerDispatchExecutor dispatchExecutor,
+        ILogger<NonOverlappingSchedulerDispatchJob> logger)
+    {
+        ArgumentNullException.ThrowIfNull(dispatchExecutor);
+        ArgumentNullException.ThrowIfNull(logger);
+        _dispatchExecutor = dispatchExecutor;
+        _logger = logger;
+    }
 
     public Task Execute(IJobExecutionContext context)
     {

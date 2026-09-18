@@ -7,9 +7,15 @@ using static NodeChatPersistenceSql;
 ///     Node-local message-feedback storage behind <see cref="NodeChatPersistenceService" />: the thumbs + optional
 ///     comment upsert and its read. One row per message; shares the single <see cref="NodeChatPersistenceWriter" />.
 /// </summary>
-internal sealed class NodeChatFeedbackStore(NodeChatPersistenceWriter writer)
+internal sealed class NodeChatFeedbackStore
 {
-    private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+    private readonly NodeChatPersistenceWriter _writer;
+
+    public NodeChatFeedbackStore(NodeChatPersistenceWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        _writer = writer;
+    }
 
     public async Task<NodeChatMessageFeedbackDto> SetMessageFeedbackAsync(NodeChatSetMessageFeedbackRequest request, CancellationToken cancellationToken = default)
     {

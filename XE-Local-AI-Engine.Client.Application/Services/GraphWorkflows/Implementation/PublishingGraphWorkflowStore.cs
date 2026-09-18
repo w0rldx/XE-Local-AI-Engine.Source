@@ -21,14 +21,24 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     reachable in v1, so a tick can write several in a row; if the client's refetch rate ever measures, a per-run
 ///     debounce goes here.
 /// </remarks>
-internal sealed class PublishingGraphWorkflowStore(
-    IGraphWorkflowStore inner,
-    IGraphWorkflowEventPublisher publisher,
-    ILogger<PublishingGraphWorkflowStore> logger) : IGraphWorkflowStore
+internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
 {
-    private readonly IGraphWorkflowStore _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-    private readonly ILogger<PublishingGraphWorkflowStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IGraphWorkflowEventPublisher _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+    private readonly IGraphWorkflowStore _inner;
+    private readonly ILogger<PublishingGraphWorkflowStore> _logger;
+    private readonly IGraphWorkflowEventPublisher _publisher;
+
+    public PublishingGraphWorkflowStore(
+        IGraphWorkflowStore inner,
+        IGraphWorkflowEventPublisher publisher,
+        ILogger<PublishingGraphWorkflowStore> logger)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(publisher);
+        _inner = inner;
+        _logger = logger;
+        _publisher = publisher;
+    }
 
     public Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
         _inner.CreateDefinitionAsync(command, cancellationToken);

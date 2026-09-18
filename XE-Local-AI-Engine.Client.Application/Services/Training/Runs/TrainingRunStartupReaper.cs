@@ -31,20 +31,34 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///         older than the stale window belonged to a run that is long gone, and holds decrypted training data.
 ///     </para>
 /// </remarks>
-public sealed class TrainingRunStartupReaper(
-    IServiceScopeFactory scopeFactory,
-    ITrainingProcessInspector inspector,
-    TrainingRunWorkspace workspace,
-    TimeProvider timeProvider,
-    ILogger<TrainingRunStartupReaper> logger) : IHostedService
+public sealed class TrainingRunStartupReaper : IHostedService
 {
     internal static readonly TimeSpan StaleWorkAge = TimeSpan.FromHours(6);
 
-    private readonly ITrainingProcessInspector _inspector = inspector ?? throw new ArgumentNullException(nameof(inspector));
-    private readonly ILogger<TrainingRunStartupReaper> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly TrainingRunWorkspace _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+    private readonly ITrainingProcessInspector _inspector;
+    private readonly ILogger<TrainingRunStartupReaper> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TimeProvider _timeProvider;
+    private readonly TrainingRunWorkspace _workspace;
+
+    public TrainingRunStartupReaper(
+        IServiceScopeFactory scopeFactory,
+        ITrainingProcessInspector inspector,
+        TrainingRunWorkspace workspace,
+        TimeProvider timeProvider,
+        ILogger<TrainingRunStartupReaper> logger)
+    {
+        ArgumentNullException.ThrowIfNull(inspector);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(workspace);
+        _inspector = inspector;
+        _logger = logger;
+        _scopeFactory = scopeFactory;
+        _timeProvider = timeProvider;
+        _workspace = workspace;
+    }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {

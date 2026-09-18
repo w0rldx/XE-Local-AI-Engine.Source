@@ -33,45 +33,60 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         evict, profiling and benchmark surface.
 ///     </para>
 /// </summary>
-public sealed class LlamaCppRuntimeOrchestrationService(
-    ICudaBuildPrerequisiteProbe cudaPrerequisiteProbe,
-    ICudaBuildService cudaBuildService,
-    IGpuVariantSelector variantSelector,
-    IInstalledRuntimeStore installedRuntimeStore,
-    ILlamaCppBinaryManager binaryManager,
-    ILlamaCppSourceBuildActivity buildActivity,
-    ILlamaCppSourceBuildPrerequisiteProbe sourceBuildPrerequisiteProbe,
-    ILlamaCppSourceBuildService sourceBuildService,
-    ILlamaCppUpdateState updateState,
-    ILlamaServerProcessSupervisor supervisor,
-    IRuntimeAcquisitionStatusRegistry acquisitionStatus)
+public sealed class LlamaCppRuntimeOrchestrationService
 {
-    private readonly IRuntimeAcquisitionStatusRegistry _acquisitionStatus =
-        acquisitionStatus ?? throw new ArgumentNullException(nameof(acquisitionStatus));
+    private readonly IRuntimeAcquisitionStatusRegistry _acquisitionStatus;
+    private readonly ILlamaCppBinaryManager _binaryManager;
 
-    private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+    private readonly ILlamaCppSourceBuildActivity _buildActivity;
 
-    private readonly ILlamaCppSourceBuildActivity _buildActivity = buildActivity ?? throw new ArgumentNullException(nameof(buildActivity));
+    private readonly ICudaBuildService _cudaBuildService;
+    private readonly ICudaBuildPrerequisiteProbe _cudaPrerequisiteProbe;
+    private readonly IInstalledRuntimeStore _installedRuntimeStore;
+    private readonly ILlamaCppSourceBuildPrerequisiteProbe _sourceBuildPrerequisiteProbe;
+    private readonly ILlamaCppSourceBuildService _sourceBuildService;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
 
-    private readonly ICudaBuildService _cudaBuildService = cudaBuildService ?? throw new ArgumentNullException(nameof(cudaBuildService));
+    private readonly ILlamaCppUpdateState _updateState;
 
-    private readonly ICudaBuildPrerequisiteProbe _cudaPrerequisiteProbe =
-        cudaPrerequisiteProbe ?? throw new ArgumentNullException(nameof(cudaPrerequisiteProbe));
+    private readonly IGpuVariantSelector _variantSelector;
 
-    private readonly IInstalledRuntimeStore _installedRuntimeStore =
-        installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
-
-    private readonly ILlamaCppSourceBuildPrerequisiteProbe _sourceBuildPrerequisiteProbe =
-        sourceBuildPrerequisiteProbe ?? throw new ArgumentNullException(nameof(sourceBuildPrerequisiteProbe));
-
-    private readonly ILlamaCppSourceBuildService _sourceBuildService =
-        sourceBuildService ?? throw new ArgumentNullException(nameof(sourceBuildService));
-
-    private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-
-    private readonly ILlamaCppUpdateState _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
-
-    private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
+    public LlamaCppRuntimeOrchestrationService(
+        ICudaBuildPrerequisiteProbe cudaPrerequisiteProbe,
+        ICudaBuildService cudaBuildService,
+        IGpuVariantSelector variantSelector,
+        IInstalledRuntimeStore installedRuntimeStore,
+        ILlamaCppBinaryManager binaryManager,
+        ILlamaCppSourceBuildActivity buildActivity,
+        ILlamaCppSourceBuildPrerequisiteProbe sourceBuildPrerequisiteProbe,
+        ILlamaCppSourceBuildService sourceBuildService,
+        ILlamaCppUpdateState updateState,
+        ILlamaServerProcessSupervisor supervisor,
+        IRuntimeAcquisitionStatusRegistry acquisitionStatus)
+    {
+        ArgumentNullException.ThrowIfNull(acquisitionStatus);
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        ArgumentNullException.ThrowIfNull(buildActivity);
+        ArgumentNullException.ThrowIfNull(cudaBuildService);
+        ArgumentNullException.ThrowIfNull(cudaPrerequisiteProbe);
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        ArgumentNullException.ThrowIfNull(sourceBuildPrerequisiteProbe);
+        ArgumentNullException.ThrowIfNull(sourceBuildService);
+        ArgumentNullException.ThrowIfNull(supervisor);
+        ArgumentNullException.ThrowIfNull(updateState);
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        _acquisitionStatus = acquisitionStatus;
+        _binaryManager = binaryManager;
+        _buildActivity = buildActivity;
+        _cudaBuildService = cudaBuildService;
+        _cudaPrerequisiteProbe = cudaPrerequisiteProbe;
+        _installedRuntimeStore = installedRuntimeStore;
+        _sourceBuildPrerequisiteProbe = sourceBuildPrerequisiteProbe;
+        _sourceBuildService = sourceBuildService;
+        _supervisor = supervisor;
+        _updateState = updateState;
+        _variantSelector = variantSelector;
+    }
 
     /// <summary>The last observed llama.cpp update/runtime snapshot, which a runtime-status response is rendered from.</summary>
     public LlamaCppUpdateSnapshot CurrentUpdateSnapshot => _updateState.Current;

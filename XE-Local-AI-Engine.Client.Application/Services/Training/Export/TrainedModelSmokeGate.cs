@@ -29,12 +29,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         caller asked for, and it is recorded on the artifact so the operator sees the reason next to the file.
 ///     </para>
 /// </remarks>
-public sealed class TrainedModelSmokeGate(
-    ITransientLlamaServerLauncher launcher,
-    IInferenceChatClientFactory chatClientFactory,
-    IHttpClientFactory httpClientFactory,
-    IGpuModelLoadAdmission loadAdmission,
-    ILogger<TrainedModelSmokeGate> logger) : ITrainedModelSmokeGate
+public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
 {
     /// <summary>Small on purpose: the check proves the model serves, and a large window would only slow the load.</summary>
     private const int SmokeContextTokens = 2048;
@@ -45,11 +40,30 @@ public sealed class TrainedModelSmokeGate(
     private static readonly TimeSpan ReadinessTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan TurnTimeout = TimeSpan.FromMinutes(3);
 
-    private readonly IInferenceChatClientFactory _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
-    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-    private readonly ITransientLlamaServerLauncher _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
-    private readonly IGpuModelLoadAdmission _loadAdmission = loadAdmission ?? throw new ArgumentNullException(nameof(loadAdmission));
-    private readonly ILogger<TrainedModelSmokeGate> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IInferenceChatClientFactory _chatClientFactory;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ITransientLlamaServerLauncher _launcher;
+    private readonly IGpuModelLoadAdmission _loadAdmission;
+    private readonly ILogger<TrainedModelSmokeGate> _logger;
+
+    public TrainedModelSmokeGate(
+        ITransientLlamaServerLauncher launcher,
+        IInferenceChatClientFactory chatClientFactory,
+        IHttpClientFactory httpClientFactory,
+        IGpuModelLoadAdmission loadAdmission,
+        ILogger<TrainedModelSmokeGate> logger)
+    {
+        ArgumentNullException.ThrowIfNull(chatClientFactory);
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        ArgumentNullException.ThrowIfNull(launcher);
+        ArgumentNullException.ThrowIfNull(loadAdmission);
+        ArgumentNullException.ThrowIfNull(logger);
+        _chatClientFactory = chatClientFactory;
+        _httpClientFactory = httpClientFactory;
+        _launcher = launcher;
+        _loadAdmission = loadAdmission;
+        _logger = logger;
+    }
 
     public async Task<TrainedModelSmokeResult> RunAsync(TrainingArtifactRecordView artifact, CancellationToken cancellationToken)
     {

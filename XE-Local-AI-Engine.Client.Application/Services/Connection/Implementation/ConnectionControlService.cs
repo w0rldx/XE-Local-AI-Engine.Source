@@ -2,14 +2,24 @@ namespace XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class ConnectionControlService(
-    ConnectionState connectionState,
-    IWorkerHubConnection workerHubConnection,
-    ITokenStore tokenStore) : IConnectionControlService
+public sealed class ConnectionControlService : IConnectionControlService
 {
-    private readonly ConnectionState _connectionState = connectionState ?? throw new ArgumentNullException(nameof(connectionState));
-    private readonly ITokenStore _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-    private readonly IWorkerHubConnection _workerHubConnection = workerHubConnection ?? throw new ArgumentNullException(nameof(workerHubConnection));
+    private readonly ConnectionState _connectionState;
+    private readonly ITokenStore _tokenStore;
+    private readonly IWorkerHubConnection _workerHubConnection;
+
+    public ConnectionControlService(
+        ConnectionState connectionState,
+        IWorkerHubConnection workerHubConnection,
+        ITokenStore tokenStore)
+    {
+        ArgumentNullException.ThrowIfNull(connectionState);
+        ArgumentNullException.ThrowIfNull(tokenStore);
+        ArgumentNullException.ThrowIfNull(workerHubConnection);
+        _connectionState = connectionState;
+        _tokenStore = tokenStore;
+        _workerHubConnection = workerHubConnection;
+    }
 
     public Task<ConnectionControlStatus> GetStatusAsync(CancellationToken cancellationToken = default)
     {

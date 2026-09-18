@@ -5,18 +5,31 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>Removes expired encrypted payloads while retaining keyed request-identity tombstones.</summary>
-internal sealed class McpAgentRunCompactionService(
-    IServiceScopeFactory scopeFactory,
-    McpAgentRunMetrics metrics,
-    IOptions<McpAgentRunOptions> options,
-    TimeProvider timeProvider,
-    ILogger<McpAgentRunCompactionService> logger) : BackgroundService
+internal sealed class McpAgentRunCompactionService : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    private readonly McpAgentRunMetrics _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
-    private readonly McpAgentRunOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly ILogger<McpAgentRunCompactionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly McpAgentRunMetrics _metrics;
+    private readonly McpAgentRunOptions _options;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<McpAgentRunCompactionService> _logger;
+
+    public McpAgentRunCompactionService(
+        IServiceScopeFactory scopeFactory,
+        McpAgentRunMetrics metrics,
+        IOptions<McpAgentRunOptions> options,
+        TimeProvider timeProvider,
+        ILogger<McpAgentRunCompactionService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(metrics);
+        _metrics = metrics;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

@@ -4,16 +4,28 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>Fail-fast startup gate that repairs accounting and terminalizes every non-replayable prior claim.</summary>
-internal sealed class McpAgentRunRecoveryService(
-    IServiceScopeFactory scopeFactory,
-    McpAgentRunMetrics metrics,
-    TimeProvider timeProvider,
-    ILogger<McpAgentRunRecoveryService> logger) : IHostedService
+internal sealed class McpAgentRunRecoveryService : IHostedService
 {
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    private readonly McpAgentRunMetrics _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly ILogger<McpAgentRunRecoveryService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly McpAgentRunMetrics _metrics;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<McpAgentRunRecoveryService> _logger;
+
+    public McpAgentRunRecoveryService(
+        IServiceScopeFactory scopeFactory,
+        McpAgentRunMetrics metrics,
+        TimeProvider timeProvider,
+        ILogger<McpAgentRunRecoveryService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        ArgumentNullException.ThrowIfNull(metrics);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+        _scopeFactory = scopeFactory;
+        _metrics = metrics;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {

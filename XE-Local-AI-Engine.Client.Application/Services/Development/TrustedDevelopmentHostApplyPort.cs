@@ -9,12 +9,19 @@ using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
-internal sealed class TrustedDevelopmentHostApplyPort(
-    IDevelopmentArtifactBlobStore blobStore,
-    IOptions<DevelopmentOptions> options) : IDevelopmentHostApplyPort
+internal sealed class TrustedDevelopmentHostApplyPort : IDevelopmentHostApplyPort
 {
-    private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-    private readonly DevelopmentOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly IDevelopmentArtifactBlobStore _blobStore;
+    private readonly DevelopmentOptions _options;
+
+    public TrustedDevelopmentHostApplyPort(
+        IDevelopmentArtifactBlobStore blobStore,
+        IOptions<DevelopmentOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    }
 
     public async Task<DevelopmentHostApplyState> InspectAsync(DevelopmentApprovedApplySubject subject,
         string repositoryRoot,

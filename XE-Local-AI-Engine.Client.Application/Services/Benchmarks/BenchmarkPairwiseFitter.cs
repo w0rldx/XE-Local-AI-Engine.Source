@@ -25,10 +25,18 @@ public interface IBenchmarkPairwiseFitter
 ///     blending two judge runtimes, or fitted over the subset that happens to match, would publish a number over a set
 ///     the operator never chose.
 /// </remarks>
-public sealed class BenchmarkPairwiseFitter(IBenchmarkStore store, ILogger<BenchmarkPairwiseFitter> logger) : IBenchmarkPairwiseFitter
+public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly ILogger<BenchmarkPairwiseFitter> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IBenchmarkStore _store;
+    private readonly ILogger<BenchmarkPairwiseFitter> _logger;
+
+    public BenchmarkPairwiseFitter(IBenchmarkStore store, ILogger<BenchmarkPairwiseFitter> logger)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(logger);
+        _store = store;
+        _logger = logger;
+    }
 
     public async Task<bool> TryPublishAsync(Guid projectId, CancellationToken cancellationToken)
     {

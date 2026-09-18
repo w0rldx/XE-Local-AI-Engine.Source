@@ -191,9 +191,14 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
     private static McpWorkspaceExecutionSessionOpenResult SuccessWithTransferredLease(IAgentHomeExecutionLease lease) =>
         McpWorkspaceExecutionSessionOpenResult.Success(new Session(lease));
 
-    private sealed class Session(IAgentHomeExecutionLease lease) : IMcpWorkspaceExecutionSession
+    private sealed class Session : IMcpWorkspaceExecutionSession
     {
-        private IAgentHomeExecutionLease? _lease = lease;
+        private IAgentHomeExecutionLease? _lease;
+
+        public Session(IAgentHomeExecutionLease lease)
+        {
+            _lease = lease;
+        }
 
         public IDisposable EnterAmbientScope()
         {

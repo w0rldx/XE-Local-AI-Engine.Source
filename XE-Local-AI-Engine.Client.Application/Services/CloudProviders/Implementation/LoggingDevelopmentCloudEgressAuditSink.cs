@@ -1,9 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
-public sealed partial class LoggingDevelopmentCloudEgressAuditSink(ILogger<LoggingDevelopmentCloudEgressAuditSink> logger)
-    : IDevelopmentCloudEgressAuditSink
+public sealed partial class LoggingDevelopmentCloudEgressAuditSink : IDevelopmentCloudEgressAuditSink
 {
-    private readonly ILogger<LoggingDevelopmentCloudEgressAuditSink> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<LoggingDevelopmentCloudEgressAuditSink> _logger;
+
+    public LoggingDevelopmentCloudEgressAuditSink(ILogger<LoggingDevelopmentCloudEgressAuditSink> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+    }
 
     public void Record(DevelopmentCloudEgressAudit audit)
     {

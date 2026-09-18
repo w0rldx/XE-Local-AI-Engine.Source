@@ -19,19 +19,31 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         only production enqueue path — so reconciliation always completes before a new job could race it.
 ///     </para>
 /// </summary>
-public sealed class ImageJobStartupReconciler(
-    IServiceScopeFactory scopeFactory,
-    IImageJobEventPublisher eventPublisher,
-    TimeProvider timeProvider,
-    ILogger<ImageJobStartupReconciler> logger) : IHostedService
+public sealed class ImageJobStartupReconciler : IHostedService
 {
     /// <summary>Display-safe reason stamped on interrupted jobs. Content-free by design — never the prompt or a path.</summary>
     public const string InterruptedReason = "Interrupted by an application shutdown; submit the job again to retry.";
 
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    private readonly IImageJobEventPublisher _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly ILogger<ImageJobStartupReconciler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IImageJobEventPublisher _eventPublisher;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<ImageJobStartupReconciler> _logger;
+
+    public ImageJobStartupReconciler(
+        IServiceScopeFactory scopeFactory,
+        IImageJobEventPublisher eventPublisher,
+        TimeProvider timeProvider,
+        ILogger<ImageJobStartupReconciler> logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        ArgumentNullException.ThrowIfNull(eventPublisher);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+        _scopeFactory = scopeFactory;
+        _eventPublisher = eventPublisher;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {

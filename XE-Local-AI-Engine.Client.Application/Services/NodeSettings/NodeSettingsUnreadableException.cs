@@ -13,9 +13,13 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     Derives from <see cref="InvalidOperationException" /> because the store's state, not the caller's argument, is
 ///     what makes the operation impossible.
 /// </summary>
-public sealed class NodeSettingsUnreadableException(string settingsPath)
-    : InvalidOperationException($"The node settings file at '{settingsPath}' could not be read, so nothing was written. Repair or delete node-settings.json and try again.")
+public sealed class NodeSettingsUnreadableException : InvalidOperationException
 {
+    public NodeSettingsUnreadableException(string settingsPath) : base($"The node settings file at '{settingsPath}' could not be read, so nothing was written. Repair or delete node-settings.json and try again.")
+    {
+        SettingsPath = settingsPath;
+    }
+
     /// <summary>The absolute path of the unreadable <c>node-settings.json</c>.</summary>
-    public string SettingsPath { get; } = settingsPath;
+    public string SettingsPath { get; }
 }

@@ -87,4 +87,9 @@ public static class BenchmarkKvCacheType
 ///     The requested KV-cache type cannot be launched on the frozen runtime — a quantized type on a CPU build, or a
 ///     type the selected binary's capability manifest does not advertise. Mapped to 422 <c>UnsupportedKvCacheType</c>.
 /// </summary>
-public sealed class BenchmarkUnsupportedKvCacheTypeException(string message) : InvalidOperationException(message);
+public sealed class BenchmarkUnsupportedKvCacheTypeException : InvalidOperationException
+{
+    public BenchmarkUnsupportedKvCacheTypeException(string message) : base(message)
+    {
+    }
+}

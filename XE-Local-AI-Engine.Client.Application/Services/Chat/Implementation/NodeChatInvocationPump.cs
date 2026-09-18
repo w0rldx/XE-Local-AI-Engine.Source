@@ -20,14 +20,24 @@ using XE_Local_AI_Engine.Client.Services.Events;
 ///     <c>InvocationStateChanged</c> stream). It is the write counterpart to the read-only
 ///     <see cref="InvocationResumeRegistry" />, which translates the same states into resume events.
 /// </summary>
-public sealed class NodeChatInvocationPump(
-    INodeChatPersistenceService persistence,
-    IUsageProviderResolver usageProviderResolver,
-    TimeProvider timeProvider) : INodeChatInvocationPump
+public sealed class NodeChatInvocationPump : INodeChatInvocationPump
 {
-    private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-    private readonly IUsageProviderResolver _usageProviderResolver = usageProviderResolver ?? throw new ArgumentNullException(nameof(usageProviderResolver));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeChatPersistenceService _persistence;
+    private readonly IUsageProviderResolver _usageProviderResolver;
+    private readonly TimeProvider _timeProvider;
+
+    public NodeChatInvocationPump(
+        INodeChatPersistenceService persistence,
+        IUsageProviderResolver usageProviderResolver,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(persistence);
+        ArgumentNullException.ThrowIfNull(usageProviderResolver);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _persistence = persistence;
+        _usageProviderResolver = usageProviderResolver;
+        _timeProvider = timeProvider;
+    }
 
     /// <summary>
     ///     Persists a streamed content/reasoning delta if the incoming state has advanced past

@@ -32,16 +32,28 @@ public interface IDevelopmentProfileBackfillService
 ///         boot must not need an application restart to become usable once it is back.
 ///     </para>
 /// </summary>
-internal sealed class DevelopmentProfileBackfillService(
-    IDevelopmentStore store,
-    IDevelopmentRepositoryBindingService repositoryBindings,
-    IDevelopmentCommandProfileDetector profileDetector,
-    ILogger<DevelopmentProfileBackfillService> logger) : IDevelopmentProfileBackfillService
+internal sealed class DevelopmentProfileBackfillService : IDevelopmentProfileBackfillService
 {
-    private readonly ILogger<DevelopmentProfileBackfillService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IDevelopmentCommandProfileDetector _profileDetector = profileDetector ?? throw new ArgumentNullException(nameof(profileDetector));
-    private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
-    private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ILogger<DevelopmentProfileBackfillService> _logger;
+    private readonly IDevelopmentCommandProfileDetector _profileDetector;
+    private readonly IDevelopmentRepositoryBindingService _repositoryBindings;
+    private readonly IDevelopmentStore _store;
+
+    public DevelopmentProfileBackfillService(
+        IDevelopmentStore store,
+        IDevelopmentRepositoryBindingService repositoryBindings,
+        IDevelopmentCommandProfileDetector profileDetector,
+        ILogger<DevelopmentProfileBackfillService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(profileDetector);
+        ArgumentNullException.ThrowIfNull(repositoryBindings);
+        ArgumentNullException.ThrowIfNull(store);
+        _logger = logger;
+        _profileDetector = profileDetector;
+        _repositoryBindings = repositoryBindings;
+        _store = store;
+    }
 
     public async Task<DevelopmentProjectSnapshot> EnsureAsync(DevelopmentProjectSnapshot project,
         CancellationToken cancellationToken = default)

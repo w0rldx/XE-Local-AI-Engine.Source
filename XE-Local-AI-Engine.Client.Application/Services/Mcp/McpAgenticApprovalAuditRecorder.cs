@@ -5,9 +5,15 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>Persists agentic auto-approval before execution; unlike the human recorder, failures propagate.</summary>
-internal sealed class McpAgenticApprovalAuditRecorder(IAgentExecutionLogStore store) : IMcpAgenticApprovalAuditRecorder
+internal sealed class McpAgenticApprovalAuditRecorder : IMcpAgenticApprovalAuditRecorder
 {
-    private readonly IAgentExecutionLogStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IAgentExecutionLogStore _store;
+
+    public McpAgenticApprovalAuditRecorder(IAgentExecutionLogStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     public async Task RecordAsync(Guid requestId,
         string toolName,

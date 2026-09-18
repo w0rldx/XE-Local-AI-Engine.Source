@@ -58,32 +58,20 @@ public interface IBenchmarkRunFreezeService
         CancellationToken cancellationToken = default);
 }
 
-public sealed class BenchmarkRunFreezeService(
-    IBenchmarkStore benchmarkStore,
-    IAgentDefinitionStore agentDefinitions,
-    IAgentDefinitionResolver agentResolver,
-    IGgufModelCapabilityResolver modelCapabilities,
-    IBenchmarkInstalledModelLeaseProvider installedModels,
-    IBenchmarkEligibilityPolicy eligibilityPolicy,
-    IBenchmarkFreezeDependencyService dependencies,
-    IBenchmarkRuntimeSnapshotFactory snapshots,
-    IBenchmarkPhaseLaunchResolver launchResolver,
-    TimeProvider timeProvider,
-    ILogger<BenchmarkRunFreezeService> logger,
-    IBenchmarkQueueSignal? queueSignal = null) : IBenchmarkRunFreezeService
+public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
 {
-    private readonly ILogger<BenchmarkRunFreezeService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
-    private readonly IAgentDefinitionStore _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
-    private readonly IAgentDefinitionResolver _agentResolver = agentResolver ?? throw new ArgumentNullException(nameof(agentResolver));
-    private readonly IGgufModelCapabilityResolver _modelCapabilities = modelCapabilities ?? throw new ArgumentNullException(nameof(modelCapabilities));
-    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
-    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy = eligibilityPolicy ?? throw new ArgumentNullException(nameof(eligibilityPolicy));
-    private readonly IBenchmarkFreezeDependencyService _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
-    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots = snapshots ?? throw new ArgumentNullException(nameof(snapshots));
-    private readonly IBenchmarkPhaseLaunchResolver _launchResolver = launchResolver ?? throw new ArgumentNullException(nameof(launchResolver));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly IBenchmarkQueueSignal? _queueSignal = queueSignal;
+    private readonly ILogger<BenchmarkRunFreezeService> _logger;
+    private readonly IBenchmarkStore _benchmarkStore;
+    private readonly IAgentDefinitionStore _agentDefinitions;
+    private readonly IAgentDefinitionResolver _agentResolver;
+    private readonly IGgufModelCapabilityResolver _modelCapabilities;
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
+    private readonly IBenchmarkFreezeDependencyService _dependencies;
+    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
+    private readonly IBenchmarkPhaseLaunchResolver _launchResolver;
+    private readonly TimeProvider _timeProvider;
+    private readonly IBenchmarkQueueSignal? _queueSignal;
 
     /// <inheritdoc cref="BenchmarkPhaseLaunchResolver.AutoReasonCpuVariant" />
     public const string AutoReasonCpuVariant = BenchmarkPhaseLaunchResolver.AutoReasonCpuVariant;
@@ -116,6 +104,45 @@ public sealed class BenchmarkRunFreezeService(
 
     /// <summary>The ceiling the chat sampling UI already enforces.</summary>
     public const double MaxAnswerVarianceTemperature = 2d;
+
+    public BenchmarkRunFreezeService(
+        IBenchmarkStore benchmarkStore,
+        IAgentDefinitionStore agentDefinitions,
+        IAgentDefinitionResolver agentResolver,
+        IGgufModelCapabilityResolver modelCapabilities,
+        IBenchmarkInstalledModelLeaseProvider installedModels,
+        IBenchmarkEligibilityPolicy eligibilityPolicy,
+        IBenchmarkFreezeDependencyService dependencies,
+        IBenchmarkRuntimeSnapshotFactory snapshots,
+        IBenchmarkPhaseLaunchResolver launchResolver,
+        TimeProvider timeProvider,
+        ILogger<BenchmarkRunFreezeService> logger,
+        IBenchmarkQueueSignal? queueSignal = null)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(benchmarkStore);
+        ArgumentNullException.ThrowIfNull(agentDefinitions);
+        ArgumentNullException.ThrowIfNull(agentResolver);
+        ArgumentNullException.ThrowIfNull(modelCapabilities);
+        ArgumentNullException.ThrowIfNull(installedModels);
+        ArgumentNullException.ThrowIfNull(eligibilityPolicy);
+        ArgumentNullException.ThrowIfNull(dependencies);
+        ArgumentNullException.ThrowIfNull(snapshots);
+        ArgumentNullException.ThrowIfNull(launchResolver);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _logger = logger;
+        _benchmarkStore = benchmarkStore;
+        _agentDefinitions = agentDefinitions;
+        _agentResolver = agentResolver;
+        _modelCapabilities = modelCapabilities;
+        _installedModels = installedModels;
+        _eligibilityPolicy = eligibilityPolicy;
+        _dependencies = dependencies;
+        _snapshots = snapshots;
+        _launchResolver = launchResolver;
+        _timeProvider = timeProvider;
+        _queueSignal = queueSignal;
+    }
 
     public async Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkRunStartRequest request,
         BenchmarkFreezeScope? scope = null,
@@ -494,20 +521,37 @@ public sealed class BenchmarkRunFreezeService(
         FreezeCommitGuard Guard,
         BenchmarkFreezeDependencySetV1 Dependencies);
 
-    private sealed class FreezeCommitGuard(
-        IBenchmarkFreezeDependencyService dependencies,
-        BenchmarkFreezeDependencySetV1 expected,
-        Guid agentDefinitionId,
-        ResolvedAgentRuntime runtime,
-        string primaryModelName,
-        string? judgeModelName) : IBenchmarkFreezeCommitGuard
+    private sealed class FreezeCommitGuard : IBenchmarkFreezeCommitGuard
     {
+        private readonly IBenchmarkFreezeDependencyService _dependencies;
+        private readonly BenchmarkFreezeDependencySetV1 _expected;
+        private readonly Guid _agentDefinitionId;
+        private readonly ResolvedAgentRuntime _runtime;
+        private readonly string _primaryModelName;
+        private readonly string? _judgeModelName;
+
+        public FreezeCommitGuard(
+            IBenchmarkFreezeDependencyService dependencies,
+            BenchmarkFreezeDependencySetV1 expected,
+            Guid agentDefinitionId,
+            ResolvedAgentRuntime runtime,
+            string primaryModelName,
+            string? judgeModelName)
+        {
+            _dependencies = dependencies;
+            _expected = expected;
+            _agentDefinitionId = agentDefinitionId;
+            _runtime = runtime;
+            _primaryModelName = primaryModelName;
+            _judgeModelName = judgeModelName;
+        }
+
         public async Task<bool> IsCurrentAsync(CancellationToken cancellationToken)
         {
             try
             {
-                var current = await dependencies.CaptureAsync(agentDefinitionId, runtime, primaryModelName, judgeModelName, cancellationToken);
-                return current == expected;
+                var current = await _dependencies.CaptureAsync(_agentDefinitionId, _runtime, _primaryModelName, _judgeModelName, cancellationToken);
+                return current == _expected;
             }
             catch (BenchmarkEligibilityException)
             {

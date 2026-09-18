@@ -921,19 +921,25 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         Settled
     }
 
-    private sealed class SessionRun(CancellationTokenSource cancellation, WorkSessionRuntimeOverride? runtime)
+    private sealed class SessionRun
     {
         private NodeChatMessageCorrelation? _correlation;
         private int _stopReason = -1;
 
-        public CancellationTokenSource Cancellation { get; } = cancellation;
+        public SessionRun(CancellationTokenSource cancellation, WorkSessionRuntimeOverride? runtime)
+        {
+            Cancellation = cancellation;
+            Runtime = runtime is { IsEmpty: false } ? runtime : null;
+        }
+
+        public CancellationTokenSource Cancellation { get; }
 
         /// <summary>
         ///     What this run was told to run on instead of the bound agent's own pins, or null for the agent's. Held for
         ///     the life of the run rather than stored on the session: the caller re-supplies it every time it starts or
         ///     resumes the session, which is what makes a restart cost nothing.
         /// </summary>
-        public WorkSessionRuntimeOverride? Runtime { get; } = runtime is { IsEmpty: false } ? runtime : null;
+        public WorkSessionRuntimeOverride? Runtime { get; }
 
         public Task? Completion { get; set; }
 

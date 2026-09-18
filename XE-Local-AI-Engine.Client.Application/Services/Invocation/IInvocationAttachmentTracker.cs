@@ -46,9 +46,15 @@ public interface IInvocationAttachmentTracker
 public sealed record DetachedInvocation(Guid InvocationId, DateTimeOffset DetachedAtUtc);
 
 /// <summary>Carries which invocation changed and whether it is now attached.</summary>
-public sealed class InvocationAttachmentChangedEventArgs(Guid invocationId, bool attached) : EventArgs
+public sealed class InvocationAttachmentChangedEventArgs : EventArgs
 {
-    public Guid InvocationId { get; } = invocationId;
+    public InvocationAttachmentChangedEventArgs(Guid invocationId, bool attached)
+    {
+        InvocationId = invocationId;
+        Attached = attached;
+    }
 
-    public bool Attached { get; } = attached;
+    public Guid InvocationId { get; }
+
+    public bool Attached { get; }
 }

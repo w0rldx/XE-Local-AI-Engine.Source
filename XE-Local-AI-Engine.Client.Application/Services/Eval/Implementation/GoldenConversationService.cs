@@ -12,9 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 ///     create path pins Source=Harvested + stages the case inert. Reuses <see cref="PlaybookActionValidationException" />
 ///     so callers map a validation failure the same way for both playbook surfaces.
 /// </summary>
-internal sealed class GoldenConversationService(
-    IGoldenConversationStore store,
-    IAgentDefinitionStore agentDefinitionStore) : IGoldenConversationService
+internal sealed class GoldenConversationService : IGoldenConversationService
 {
     // Boundary length caps (mirror the PlaybookAction free-text 20_000 cap). The Title is a short operator label, the
     // serialized turns can be larger (multi-turn conversations), and the assertion/rubric hold scoring text.
@@ -22,9 +20,19 @@ internal sealed class GoldenConversationService(
     private const int MaxInputTurnsLength = 50_000;
     private const int MaxRubricLength = 20_000;
     private const int MaxAssertionLength = 20_000;
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+    private readonly IAgentDefinitionStore _agentDefinitionStore;
 
-    private readonly IGoldenConversationStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IGoldenConversationStore _store;
+
+    public GoldenConversationService(
+        IGoldenConversationStore store,
+        IAgentDefinitionStore agentDefinitionStore)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitionStore);
+        ArgumentNullException.ThrowIfNull(store);
+        _agentDefinitionStore = agentDefinitionStore;
+        _store = store;
+    }
 
     public async Task<GoldenConversationRecord> CreateAsync(GoldenConversationCreateInput input, CancellationToken cancellationToken = default)
     {

@@ -11,15 +11,24 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 ///     endpoint polls per selected model and would flood the console), while a failed model-list read is unexpected
 ///     enough to warrant a Warning.
 /// </summary>
-public sealed class CloudModelResolver(
-    ICloudCredentialStore cloudCredentialStore,
-    IModelTrustResolver modelTrustResolver,
-    ILogger<CloudModelResolver> logger)
-    : ICloudModelResolver
+public sealed class CloudModelResolver : ICloudModelResolver
 {
-    private readonly ICloudCredentialStore _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
-    private readonly ILogger<CloudModelResolver> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+    private readonly ICloudCredentialStore _cloudCredentialStore;
+    private readonly ILogger<CloudModelResolver> _logger;
+    private readonly IModelTrustResolver _modelTrustResolver;
+
+    public CloudModelResolver(
+        ICloudCredentialStore cloudCredentialStore,
+        IModelTrustResolver modelTrustResolver,
+        ILogger<CloudModelResolver> logger)
+    {
+        ArgumentNullException.ThrowIfNull(cloudCredentialStore);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _cloudCredentialStore = cloudCredentialStore;
+        _logger = logger;
+        _modelTrustResolver = modelTrustResolver;
+    }
 
     public async Task<bool> IsCloudModelAsync(string? modelName, CancellationToken cancellationToken = default)
     {

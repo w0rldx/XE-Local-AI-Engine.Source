@@ -15,13 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 ///     turns are the lead-up conversation serialized as camelCase {role,text} to match the eval runner's parse. No turn
 ///     or answer text is ever logged — only counts and ids.
 /// </summary>
-internal sealed class GoldenHarvestService(
-    IGoldenHarvestSourceStore sourceStore,
-    IGoldenConversationStore goldenStore,
-    IGoldenConversationService conversationService,
-    IAgentDefinitionStore agentDefinitionStore,
-    IOptions<GoldenHarvestOptions> options,
-    ILogger<GoldenHarvestService> logger) : IGoldenHarvestService
+internal sealed class GoldenHarvestService : IGoldenHarvestService
 {
     // Title prefix marking a harvested candidate + the rubric seed template (judge path: the approved answer is the scoring
     // signal). The title cap mirrors GoldenConversationService.MaxTitleLength; the rubric cap mirrors MaxRubricLength.
@@ -33,13 +27,34 @@ internal sealed class GoldenHarvestService(
     // Cache the serializer options statically (CA1869). Web defaults serialize the payload as camelCase {role,text},
     // matching PlaybookEvalService's InputTurn parse.
     private static readonly JsonSerializerOptions InputTurnsSerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-    private readonly IGoldenConversationService _conversationService = conversationService ?? throw new ArgumentNullException(nameof(conversationService));
-    private readonly IGoldenConversationStore _goldenStore = goldenStore ?? throw new ArgumentNullException(nameof(goldenStore));
-    private readonly ILogger<GoldenHarvestService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly GoldenHarvestOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly IAgentDefinitionStore _agentDefinitionStore;
+    private readonly IGoldenConversationService _conversationService;
+    private readonly IGoldenConversationStore _goldenStore;
+    private readonly ILogger<GoldenHarvestService> _logger;
+    private readonly GoldenHarvestOptions _options;
 
-    private readonly IGoldenHarvestSourceStore _sourceStore = sourceStore ?? throw new ArgumentNullException(nameof(sourceStore));
+    private readonly IGoldenHarvestSourceStore _sourceStore;
+
+    public GoldenHarvestService(
+        IGoldenHarvestSourceStore sourceStore,
+        IGoldenConversationStore goldenStore,
+        IGoldenConversationService conversationService,
+        IAgentDefinitionStore agentDefinitionStore,
+        IOptions<GoldenHarvestOptions> options,
+        ILogger<GoldenHarvestService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitionStore);
+        _agentDefinitionStore = agentDefinitionStore;
+        ArgumentNullException.ThrowIfNull(conversationService);
+        _conversationService = conversationService;
+        ArgumentNullException.ThrowIfNull(goldenStore);
+        _goldenStore = goldenStore;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(sourceStore);
+        _sourceStore = sourceStore;
+    }
 
     public async Task<GoldenHarvestOutcome> HarvestAsync(Guid agentId, CancellationToken cancellationToken = default)
     {

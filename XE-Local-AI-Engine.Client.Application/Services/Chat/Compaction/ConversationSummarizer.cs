@@ -22,18 +22,13 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     substitute a fake <see cref="IConversationSummarizer" /> (mirroring the memory-extraction agent seam, so CI needs
 ///     no runtime).
 /// </summary>
-internal sealed class ConversationSummarizer(
-    ILocalModelProviderResolver providerResolver,
-    IOptions<ConversationCompactionOptions> options,
-    ILogger<ConversationSummarizer> logger) : IConversationSummarizer
+internal sealed class ConversationSummarizer : IConversationSummarizer
 {
-    private readonly ConversationCompactionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly ConversationCompactionOptions _options;
 
     // The string SENT as the system message and the string budget validation CHARGES must come from one rendering;
-    // a drift between them silently invalidates every budget decision. The null guard is repeated rather than read
-    // off _options because a field initializer cannot reference another instance field (CS0236) — repeating it is
-    // what removes the dependency on _options being declared first.
-    private readonly string _systemPrompt = RenderSystemPrompt((options ?? throw new ArgumentNullException(nameof(options))).Value.MaxSummaryChars);
+    // a drift between them silently invalidates every budget decision.
+    private readonly string _systemPrompt;
 
     // The synopsis ceiling is rendered at HALF the configured cap, never hard-coded. A ceiling close to the cap is
     // what the first live round proved wrong: the running summary reached the cap within a few folds and the rune-safe
@@ -79,8 +74,22 @@ internal sealed class ConversationSummarizer(
     private static readonly int FrameOverhead = JsonSerializer.Serialize(ToPromptModel(string.Empty,
         [new ConversationSummarizerMessage("user", "😀")]), SerializerOptions).Length;
 
-    private readonly ILogger<ConversationSummarizer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+    private readonly ILogger<ConversationSummarizer> _logger;
+    private readonly ILocalModelProviderResolver _providerResolver;
+
+    public ConversationSummarizer(
+        ILocalModelProviderResolver providerResolver,
+        IOptions<ConversationCompactionOptions> options,
+        ILogger<ConversationSummarizer> logger)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        _systemPrompt = RenderSystemPrompt(options.Value.MaxSummaryChars);
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+    }
 
     public async Task<string?> SummarizeAsync(ConversationSummarizerInput input, CancellationToken cancellationToken = default)
     {

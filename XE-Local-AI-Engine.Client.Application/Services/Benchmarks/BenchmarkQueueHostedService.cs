@@ -10,17 +10,32 @@ using XE_Local_AI_Engine.Client.Services.Training;
 ///     claim and released only when the work is done, so an exclusive holder (a training run, an evaluation, an export)
 ///     can never admit beside a benchmark that is already executing.
 /// </summary>
-public sealed class BenchmarkQueueHostedService(
-    IServiceScopeFactory scopeFactory,
-    IBenchmarkQueueSignal signal,
-    IBenchmarkEventBuffer events,
-    IGpuWorkGate gpuWorkGate,
-    IOptions<BenchmarkQueueOptions> options,
-    ILogger<BenchmarkQueueHostedService> logger) : BackgroundService
+public sealed class BenchmarkQueueHostedService : BackgroundService
 {
-    private readonly TimeSpan _pollInterval = options?.Value.PollInterval > TimeSpan.Zero
-        ? options.Value.PollInterval
-        : throw new InvalidOperationException("Benchmark queue poll interval must be positive.");
+    private readonly TimeSpan _pollInterval;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IBenchmarkQueueSignal _signal;
+    private readonly IBenchmarkEventBuffer _events;
+    private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly ILogger<BenchmarkQueueHostedService> _logger;
+
+    public BenchmarkQueueHostedService(
+        IServiceScopeFactory scopeFactory,
+        IBenchmarkQueueSignal signal,
+        IBenchmarkEventBuffer events,
+        IGpuWorkGate gpuWorkGate,
+        IOptions<BenchmarkQueueOptions> options,
+        ILogger<BenchmarkQueueHostedService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _signal = signal;
+        _events = events;
+        _gpuWorkGate = gpuWorkGate;
+        _logger = logger;
+        _pollInterval = options?.Value.PollInterval > TimeSpan.Zero
+            ? options.Value.PollInterval
+            : throw new InvalidOperationException("Benchmark queue poll interval must be positive.");
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -37,7 +52,7 @@ public sealed class BenchmarkQueueHostedService(
                 recovered = await RecoverAsync(stoppingToken);
                 if (!recovered)
                 {
-                    await signal.WaitAsync(_pollInterval, stoppingToken);
+                    await _signal.WaitAsync(_pollInterval, stoppingToken);
                     continue;
                 }
             }
@@ -55,19 +70,19 @@ public sealed class BenchmarkQueueHostedService(
             // The gate is taken BEFORE the claim and held through execution. Refusing at the CLAIM rather than at the
             // executor keeps queued benchmark work queued: it resumes on the next poll once the exclusive holder
             // releases, instead of being terminalized as failed with no retry to fall back on — attempt pins to 1.
-            var admission = gpuWorkGate.TryBeginShared(GpuWorkKind.Benchmark);
+            var admission = _gpuWorkGate.TryBeginShared(GpuWorkKind.Benchmark);
             try
             {
                 if (admission is not null)
                 {
-                    await using var claimScope = scopeFactory.CreateAsyncScope();
+                    await using var claimScope = _scopeFactory.CreateAsyncScope();
                     var store = claimScope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
                     work = await store.ClaimNextAsync(stoppingToken);
                 }
 
                 if (work is not null)
                 {
-                    await using var executionScope = scopeFactory.CreateAsyncScope();
+                    await using var executionScope = _scopeFactory.CreateAsyncScope();
                     switch (work.Kind)
                     {
                         case BenchmarkWorkKind.Primary:
@@ -103,13 +118,13 @@ public sealed class BenchmarkQueueHostedService(
                     // The CLAIM failed. An exception escaping here would end ExecuteAsync and, under the default
                     // BackgroundServiceExceptionBehavior.StopHost, take the whole node down over a transient database
                     // failure. work stays null, so the poll wait below is already the backoff.
-                    logger.LogError(exception, "Benchmark queue failed while claiming work; retrying after the poll interval.");
+                    _logger.LogError(exception, "Benchmark queue failed while claiming work; retrying after the poll interval.");
                 }
                 else
                 {
                     // Executors own durable terminalization. Reaching this guard means their failure handling itself
                     // failed; keep the single consumer alive so later durable work is not starved.
-                    logger.LogError(exception, "Benchmark queue failed while executing {Kind} work for run {RunId}.", work.Kind, work.RunId);
+                    _logger.LogError(exception, "Benchmark queue failed while executing {Kind} work for run {RunId}.", work.Kind, work.RunId);
                 }
             }
             finally
@@ -119,7 +134,7 @@ public sealed class BenchmarkQueueHostedService(
 
             if (work is null)
             {
-                await signal.WaitAsync(_pollInterval, stoppingToken);
+                await _signal.WaitAsync(_pollInterval, stoppingToken);
             }
         }
     }
@@ -136,7 +151,7 @@ public sealed class BenchmarkQueueHostedService(
     private async Task TerminalizeUnsupportedAsync(IServiceProvider services, BenchmarkClaimedWork work, CancellationToken cancellationToken)
     {
         var reason = $"Benchmark work of kind {work.Kind} is not supported by this build.";
-        logger.LogError("Benchmark queue claimed unsupported {Kind} work for run {RunId}; failing it closed.", work.Kind, work.RunId);
+        _logger.LogError("Benchmark queue claimed unsupported {Kind} work for run {RunId}; failing it closed.", work.Kind, work.RunId);
         var store = services.GetRequiredService<IBenchmarkStore>();
         if (work.Kind == BenchmarkWorkKind.Comparison)
         {
@@ -160,20 +175,20 @@ public sealed class BenchmarkQueueHostedService(
     {
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
+            await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
             var recovered = await store.RecoverRunsOnStartupAsync(cancellationToken);
             foreach (var run in recovered)
             {
-                events.EvictPlaintext(run.Id);
+                _events.EvictPlaintext(run.Id);
             }
 
-            logger.LogInformation("Recovered {RunCount} interrupted benchmark runs.", recovered.Count);
+            _logger.LogInformation("Recovered {RunCount} interrupted benchmark runs.", recovered.Count);
             return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError(exception, "Benchmark startup recovery failed; retrying after the poll interval before any work is claimed.");
+            _logger.LogError(exception, "Benchmark startup recovery failed; retrying after the poll interval before any work is claimed.");
             return false;
         }
     }
@@ -196,21 +211,21 @@ public sealed class BenchmarkQueueHostedService(
     {
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
+            await using var scope = _scopeFactory.CreateAsyncScope();
             var planner = scope.ServiceProvider.GetService<IBenchmarkPairwisePlanner>();
             if (planner is null)
             {
-                logger.LogWarning("No pairwise planner is registered; skipping pairwise reconciliation on startup.");
+                _logger.LogWarning("No pairwise planner is registered; skipping pairwise reconciliation on startup.");
                 return true;
             }
 
             await planner.ReconcilePairwiseAsync(cancellationToken);
-            logger.LogInformation("Reconciled missing pairwise benchmark comparisons.");
+            _logger.LogInformation("Reconciled missing pairwise benchmark comparisons.");
             return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError(exception, "Pairwise benchmark reconciliation failed; retrying after the poll interval. Other benchmark work is unaffected.");
+            _logger.LogError(exception, "Pairwise benchmark reconciliation failed; retrying after the poll interval. Other benchmark work is unaffected.");
             return false;
         }
     }

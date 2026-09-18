@@ -18,33 +18,58 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 ///     picker built on a node with no Ollama, no cloud session and an unreadable GGUF registry still answers with
 ///     whatever the remaining sources have.
 /// </summary>
-public sealed class LocalModelCatalogService(
-    IOllamaModelService modelService,
-    IModelClassificationService classificationService,
-    IGgufModelStore ggufModelStore,
-    INodeRuntimeSettings runtimeSettings,
-    IOptions<LocalChatAgentOptions> localChatOptions,
-    ICodexTokenStore codexTokenStore,
-    IOptions<CodexOptions> codexOptions,
-    ICloudModelResolver cloudModelResolver,
-    IExternalProviderRegistry externalProviderRegistry,
-    TimeProvider timeProvider,
-    ILogger<LocalModelCatalogService> logger) : ILocalModelCatalogService
+public sealed class LocalModelCatalogService : ILocalModelCatalogService
 {
     private static readonly IReadOnlyDictionary<string, ModelClassificationResult> NoClassifications =
         new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase);
 
-    private readonly IModelClassificationService _classificationService = classificationService ?? throw new ArgumentNullException(nameof(classificationService));
-    private readonly ICloudModelResolver _cloudModelResolver = cloudModelResolver ?? throw new ArgumentNullException(nameof(cloudModelResolver));
-    private readonly CodexOptions _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
-    private readonly ICodexTokenStore _codexTokenStore = codexTokenStore ?? throw new ArgumentNullException(nameof(codexTokenStore));
-    private readonly IExternalProviderRegistry _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
-    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-    private readonly IOptions<LocalChatAgentOptions> _localChatOptions = localChatOptions ?? throw new ArgumentNullException(nameof(localChatOptions));
-    private readonly ILogger<LocalModelCatalogService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
-    private readonly INodeRuntimeSettings _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IModelClassificationService _classificationService;
+    private readonly ICloudModelResolver _cloudModelResolver;
+    private readonly CodexOptions _codexOptions;
+    private readonly ICodexTokenStore _codexTokenStore;
+    private readonly IExternalProviderRegistry _externalProviderRegistry;
+    private readonly IGgufModelStore _ggufModelStore;
+    private readonly IOptions<LocalChatAgentOptions> _localChatOptions;
+    private readonly ILogger<LocalModelCatalogService> _logger;
+    private readonly IOllamaModelService _modelService;
+    private readonly INodeRuntimeSettings _runtimeSettings;
+    private readonly TimeProvider _timeProvider;
+
+    public LocalModelCatalogService(
+        IOllamaModelService modelService,
+        IModelClassificationService classificationService,
+        IGgufModelStore ggufModelStore,
+        INodeRuntimeSettings runtimeSettings,
+        IOptions<LocalChatAgentOptions> localChatOptions,
+        ICodexTokenStore codexTokenStore,
+        IOptions<CodexOptions> codexOptions,
+        ICloudModelResolver cloudModelResolver,
+        IExternalProviderRegistry externalProviderRegistry,
+        TimeProvider timeProvider,
+        ILogger<LocalModelCatalogService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(classificationService);
+        _classificationService = classificationService;
+        ArgumentNullException.ThrowIfNull(cloudModelResolver);
+        _cloudModelResolver = cloudModelResolver;
+        _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
+        ArgumentNullException.ThrowIfNull(codexTokenStore);
+        _codexTokenStore = codexTokenStore;
+        ArgumentNullException.ThrowIfNull(externalProviderRegistry);
+        _externalProviderRegistry = externalProviderRegistry;
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+        ArgumentNullException.ThrowIfNull(localChatOptions);
+        _localChatOptions = localChatOptions;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(modelService);
+        _modelService = modelService;
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+    }
 
     public async Task<LocalModelCatalog> GetCatalogAsync(CancellationToken cancellationToken = default)
     {

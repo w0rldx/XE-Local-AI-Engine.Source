@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed class FeedbackInsightsService(IFeedbackInsightsStore store, TimeProvider timeProvider) : IFeedbackInsightsService
+internal sealed class FeedbackInsightsService : IFeedbackInsightsService
 {
     /// <summary>Minimum occurrences before a signal is treated as a pattern rather than a one-off (n=1).</summary>
     internal const int MinOccurrenceThreshold = 3;
@@ -13,8 +13,16 @@ internal sealed class FeedbackInsightsService(IFeedbackInsightsStore store, Time
     /// <summary>Maximum exemplar comment length before truncation (privacy cap).</summary>
     internal const int MaxExemplarCommentLength = 280;
 
-    private readonly IFeedbackInsightsStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IFeedbackInsightsStore _store;
+    private readonly TimeProvider _timeProvider;
+
+    public FeedbackInsightsService(IFeedbackInsightsStore store, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _store = store;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<FeedbackInsightsResult?> GetAgentFeedbackInsightsAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {

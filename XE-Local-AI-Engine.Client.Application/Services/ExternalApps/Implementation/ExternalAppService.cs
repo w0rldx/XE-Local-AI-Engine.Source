@@ -635,13 +635,20 @@ internal sealed partial class ExternalAppService
     ///     What a pipeline believes the row currently is. Threaded through every compare-and-swap so the next write
     ///     states the version and the status it expects, instead of re-reading and hoping nothing moved in between.
     /// </summary>
-    private sealed class InstanceCursor(Guid instanceId, long version, ExternalAppInstanceStatus status)
+    private sealed class InstanceCursor
     {
-        public Guid InstanceId { get; } = instanceId;
+        public InstanceCursor(Guid instanceId, long version, ExternalAppInstanceStatus status)
+        {
+            InstanceId = instanceId;
+            Version = version;
+            Status = status;
+        }
 
-        public long Version { get; set; } = version;
+        public Guid InstanceId { get; }
 
-        public ExternalAppInstanceStatus Status { get; set; } = status;
+        public long Version { get; set; }
+
+        public ExternalAppInstanceStatus Status { get; set; }
 
         /// <summary>The last sequence the store minted for this instance. Uninstall's final ping is the only reader.</summary>
         public long Sequence { get; set; }

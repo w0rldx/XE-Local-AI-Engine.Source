@@ -4,16 +4,28 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>Verifies the persisted quota ledger and repairs it from authoritative run rows before dispatch begins.</summary>
-internal sealed class McpAgentRunAccountingService(
-    IMcpAgentRunStore store,
-    McpAgentRunMetrics metrics,
-    TimeProvider timeProvider,
-    ILogger<McpAgentRunAccountingService> logger)
+internal sealed class McpAgentRunAccountingService
 {
-    private readonly IMcpAgentRunStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly McpAgentRunMetrics _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly ILogger<McpAgentRunAccountingService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IMcpAgentRunStore _store;
+    private readonly McpAgentRunMetrics _metrics;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<McpAgentRunAccountingService> _logger;
+
+    public McpAgentRunAccountingService(
+        IMcpAgentRunStore store,
+        McpAgentRunMetrics metrics,
+        TimeProvider timeProvider,
+        ILogger<McpAgentRunAccountingService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(metrics);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+        _store = store;
+        _metrics = metrics;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
 
     public async Task VerifyAndRepairAsync(CancellationToken cancellationToken)
     {

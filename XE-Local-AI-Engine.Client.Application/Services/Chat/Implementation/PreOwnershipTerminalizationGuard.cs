@@ -10,17 +10,29 @@ using System.Diagnostics;
 ///     Pending/Queued until the restart reaper. Shared by BOTH local front doors (send and regenerate) so the
 ///     pre-ownership teardown behaves identically on each.
 /// </summary>
-internal sealed class PreOwnershipTerminalizationGuard(
-    INodeChatPersistenceService persistence,
-    NodeChatMessageCorrelation correlation,
-    TimeProvider timeProvider,
-    ILogger logger) : IAsyncDisposable
+internal sealed class PreOwnershipTerminalizationGuard : IAsyncDisposable
 {
     // Terminal error stamped when a turn is torn down (client disconnect/cancel) before run ownership was established.
     // Mirrors the Interrupted terminal the restart recovery service assigns to rows orphaned by a crash.
     private const string PreOwnershipInterruptedError = "Interrupted before the response started.";
+    private readonly INodeChatPersistenceService _persistence;
+    private readonly NodeChatMessageCorrelation _correlation;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger _logger;
 
     private bool _ownershipEstablished;
+
+    public PreOwnershipTerminalizationGuard(
+        INodeChatPersistenceService persistence,
+        NodeChatMessageCorrelation correlation,
+        TimeProvider timeProvider,
+        ILogger logger)
+    {
+        _persistence = persistence;
+        _correlation = correlation;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
 
     public void OwnershipEstablished()
     {
@@ -53,16 +65,16 @@ internal sealed class PreOwnershipTerminalizationGuard(
             // the one live path that writes a terminal without an atomic envelope, self-healing only at the next
             // restart's reconcile. There is no InvocationState here, so invocation id / tokens / duration / model are
             // unknown and omitted; the terminal status (derived from the winning row) carries the interrupted outcome.
-            await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+            await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(_correlation,
                     NodeChatMessageStatusValues.Interrupted,
-                    timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                    _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                     Error: PreOwnershipInterruptedError,
                     Envelope: new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId())),
                 CancellationToken.None);
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "Failed to terminalize a chat turn interrupted before run ownership. RequestId={RequestId}", correlation.RequestId);
+            _logger.LogWarning(exception, "Failed to terminalize a chat turn interrupted before run ownership. RequestId={RequestId}", _correlation.RequestId);
         }
     }
 

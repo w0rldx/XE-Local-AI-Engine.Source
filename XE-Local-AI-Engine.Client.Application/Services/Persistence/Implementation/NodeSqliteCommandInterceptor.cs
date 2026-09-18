@@ -9,9 +9,15 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 ///     them on <see cref="NodeMetrics.SqliteBusyTotal" /> via <see cref="NodeSqliteContention" />. The raw-ADO chat-write
 ///     path is instrumented separately at its own boundary (it does not flow through EF's command pipeline).
 /// </summary>
-public sealed class NodeSqliteCommandInterceptor(ILogger<NodeSqliteCommandInterceptor> logger) : DbCommandInterceptor
+public sealed class NodeSqliteCommandInterceptor : DbCommandInterceptor
 {
-    private readonly ILogger<NodeSqliteCommandInterceptor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<NodeSqliteCommandInterceptor> _logger;
+
+    public NodeSqliteCommandInterceptor(ILogger<NodeSqliteCommandInterceptor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+    }
 
     public override void CommandFailed(DbCommand command, CommandErrorEventData eventData)
     {

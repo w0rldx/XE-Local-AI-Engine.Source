@@ -26,10 +26,18 @@ public interface ILicenseGateService
     TrainingLicenseConfirmationV1 BuildConfirmation(TrainingLicenseGateView view);
 }
 
-public sealed class LicenseGateService(ITrainingBaseArtifactStore store, TimeProvider timeProvider) : ILicenseGateService
+public sealed class LicenseGateService : ILicenseGateService
 {
-    private readonly ITrainingBaseArtifactStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly ITrainingBaseArtifactStore _store;
+    private readonly TimeProvider _timeProvider;
+
+    public LicenseGateService(ITrainingBaseArtifactStore store, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _store = store;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<TrainingLicenseGateView?> GetAsync(Guid baseArtifactId, CancellationToken cancellationToken = default)
     {

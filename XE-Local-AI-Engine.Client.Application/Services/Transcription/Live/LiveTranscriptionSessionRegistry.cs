@@ -714,33 +714,50 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     private sealed record TimerState(LiveTranscriptionSessionRegistry Registry, LiveSession Session, LiveEndReason Reason);
 
     /// <summary>Detaches one producer, and only if it is still the attached one.</summary>
-    private sealed class ProducerDetach(LiveSession session, ILiveAudioProducer producer) : IDisposable
+    private sealed class ProducerDetach : IDisposable
     {
+        private readonly LiveSession _session;
+        private readonly ILiveAudioProducer _producer;
+
+        public ProducerDetach(LiveSession session, ILiveAudioProducer producer)
+        {
+            _session = session;
+            _producer = producer;
+        }
+
         public void Dispose()
         {
-            lock (session.Gate)
+            lock (_session.Gate)
             {
-                if (ReferenceEquals(session.Producer, producer))
+                if (ReferenceEquals(_session.Producer, _producer))
                 {
-                    session.Producer = null;
+                    _session.Producer = null;
                 }
             }
         }
     }
 
     /// <summary>One channel of one session: its segmenter, its frame queue and its last provisional text.</summary>
-    private sealed class Lane(TranscriptChannel channel, LiveTranscriptionSegmenter segmenter, CancellationTokenSource abort)
+    private sealed class Lane
     {
-        public TranscriptChannel Channel { get; } = channel;
+        public Lane(TranscriptChannel channel, LiveTranscriptionSegmenter segmenter, CancellationTokenSource abort)
+        {
+            Channel = channel;
+            Segmenter = segmenter;
+            Abort = abort;
+            Chain = Task.CompletedTask;
+        }
 
-        public LiveTranscriptionSegmenter Segmenter { get; } = segmenter;
+        public TranscriptChannel Channel { get; }
+
+        public LiveTranscriptionSegmenter Segmenter { get; }
 
         /// <summary>
         ///     This lane's cancellation, linked to the session's. Cancelling the session cancels every lane; a lane
         ///     that misses its drain deadline is cancelled alone, so a sibling that drained cleanly can still flush
         ///     the speech it was holding.
         /// </summary>
-        public CancellationTokenSource Abort { get; } = abort;
+        public CancellationTokenSource Abort { get; }
 
         /// <summary>
         ///     Every queued frame, linked. A chain rather than a semaphore because ordering is load-bearing here: the
@@ -748,7 +765,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         ///     <see cref="SemaphoreSlim" /> does not promise the order its waiters are released in.
         ///     <para>Read and written only under the owning session's <c>Gate</c>, together with the admission check.</para>
         /// </summary>
-        public Task Chain { get; set; } = Task.CompletedTask;
+        public Task Chain { get; set; }
 
         /// <summary>Read and written only from this lane's own chain.</summary>
         public string LastPartial { get; set; } = string.Empty;

@@ -3,10 +3,18 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed class AgentTemplateImportService(IAgentTemplateCatalog catalog, IAgentDefinitionStore store) : IAgentTemplateImportService
+internal sealed class AgentTemplateImportService : IAgentTemplateImportService
 {
-    private readonly IAgentTemplateCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-    private readonly IAgentDefinitionStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IAgentTemplateCatalog _catalog;
+    private readonly IAgentDefinitionStore _store;
+
+    public AgentTemplateImportService(IAgentTemplateCatalog catalog, IAgentDefinitionStore store)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(store);
+        _catalog = catalog;
+        _store = store;
+    }
 
     public async Task<AgentTemplateImportResult> ImportAsync(IReadOnlyList<string> slugs, CancellationToken cancellationToken = default)
     {

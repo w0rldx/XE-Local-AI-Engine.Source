@@ -21,18 +21,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// <summary>Node-administration tools visible only to trusted agentic MCP credentials.</summary>
 [McpServerToolType]
 [Authorize(Policy = NodeAuthorizationPolicies.McpAgentic)]
-public sealed partial class NodeAdminMcpTools(
-    ILlamaCppRuntimeAdministrationService runtimeAdministrationService,
-    IGgufDownloadCoordinator ggufDownloadCoordinator,
-    ILocalModelAdministrationService localModelAdministrationService,
-    INodeSettingsAdministrationService nodeSettingsAdministrationService,
-    IAgentDefinitionService agentDefinitionService,
-    IDevWorkflowRunService devWorkflowRunService,
-    IDevWorkflowStore devWorkflowStore,
-    IOptions<DevWorkflowOptions> devWorkflowOptions,
-    TimeProvider timeProvider,
-    IHttpContextAccessor httpContextAccessor,
-    ILogger<NodeAdminMcpTools> logger)
+public sealed partial class NodeAdminMcpTools
 {
     private static readonly EventId McpAdminToolInvokedEvent = new(4801, "McpAdminToolInvoked");
 
@@ -42,20 +31,53 @@ public sealed partial class NodeAdminMcpTools(
     /// </summary>
     private const string DevWorkflowsDisabledMessage = "Development workflows are disabled on this node.";
 
-    private readonly IAgentDefinitionService _agentDefinitionService = agentDefinitionService ?? throw new ArgumentNullException(nameof(agentDefinitionService));
-    private readonly IDevWorkflowRunService _devWorkflowRunService = devWorkflowRunService ?? throw new ArgumentNullException(nameof(devWorkflowRunService));
-    private readonly IDevWorkflowStore _devWorkflowStore = devWorkflowStore ?? throw new ArgumentNullException(nameof(devWorkflowStore));
-    private readonly DevWorkflowOptions _devWorkflowOptions = (devWorkflowOptions ?? throw new ArgumentNullException(nameof(devWorkflowOptions))).Value;
-    private readonly IGgufDownloadCoordinator _ggufDownloadCoordinator = ggufDownloadCoordinator ?? throw new ArgumentNullException(nameof(ggufDownloadCoordinator));
-    private readonly ILocalModelAdministrationService _localModelAdministrationService = localModelAdministrationService ?? throw new ArgumentNullException(nameof(localModelAdministrationService));
+    private readonly IAgentDefinitionService _agentDefinitionService;
+    private readonly IDevWorkflowRunService _devWorkflowRunService;
+    private readonly IDevWorkflowStore _devWorkflowStore;
+    private readonly DevWorkflowOptions _devWorkflowOptions;
+    private readonly IGgufDownloadCoordinator _ggufDownloadCoordinator;
+    private readonly ILocalModelAdministrationService _localModelAdministrationService;
+    private readonly INodeSettingsAdministrationService _nodeSettingsAdministrationService;
+    private readonly ILlamaCppRuntimeAdministrationService _runtimeAdministrationService;
+    private readonly TimeProvider _timeProvider;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ILogger<NodeAdminMcpTools> _logger;
 
-    private readonly INodeSettingsAdministrationService _nodeSettingsAdministrationService =
-        nodeSettingsAdministrationService ?? throw new ArgumentNullException(nameof(nodeSettingsAdministrationService));
-
-    private readonly ILlamaCppRuntimeAdministrationService _runtimeAdministrationService = runtimeAdministrationService ?? throw new ArgumentNullException(nameof(runtimeAdministrationService));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
-    private readonly ILogger<NodeAdminMcpTools> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    public NodeAdminMcpTools(
+        ILlamaCppRuntimeAdministrationService runtimeAdministrationService,
+        IGgufDownloadCoordinator ggufDownloadCoordinator,
+        ILocalModelAdministrationService localModelAdministrationService,
+        INodeSettingsAdministrationService nodeSettingsAdministrationService,
+        IAgentDefinitionService agentDefinitionService,
+        IDevWorkflowRunService devWorkflowRunService,
+        IDevWorkflowStore devWorkflowStore,
+        IOptions<DevWorkflowOptions> devWorkflowOptions,
+        TimeProvider timeProvider,
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<NodeAdminMcpTools> logger)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitionService);
+        _agentDefinitionService = agentDefinitionService;
+        ArgumentNullException.ThrowIfNull(devWorkflowRunService);
+        _devWorkflowRunService = devWorkflowRunService;
+        ArgumentNullException.ThrowIfNull(devWorkflowStore);
+        _devWorkflowStore = devWorkflowStore;
+        _devWorkflowOptions = (devWorkflowOptions ?? throw new ArgumentNullException(nameof(devWorkflowOptions))).Value;
+        ArgumentNullException.ThrowIfNull(ggufDownloadCoordinator);
+        _ggufDownloadCoordinator = ggufDownloadCoordinator;
+        ArgumentNullException.ThrowIfNull(localModelAdministrationService);
+        _localModelAdministrationService = localModelAdministrationService;
+        ArgumentNullException.ThrowIfNull(nodeSettingsAdministrationService);
+        _nodeSettingsAdministrationService = nodeSettingsAdministrationService;
+        ArgumentNullException.ThrowIfNull(runtimeAdministrationService);
+        _runtimeAdministrationService = runtimeAdministrationService;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(httpContextAccessor);
+        _httpContextAccessor = httpContextAccessor;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+    }
 
     private async Task<T> InvokeAuditedAsync<T>(string toolName,
         IReadOnlyList<KeyValuePair<string, object?>> arguments,

@@ -26,16 +26,26 @@ public interface IDatasetDefinitionService
 ///     caller does (the <c>OrchestrationResolver.ProjectAllowedToolsAsync</c> pattern), so this service performs its own.
 ///     An edit bumps <c>DefinitionVersion</c>, which is what a generated dataset pins.
 /// </summary>
-public sealed class DatasetDefinitionService(
-    ITrainingDatasetStore store,
-    ILocalToolOfferProvider offerProvider,
-    IToolApprovalPolicy approvalPolicy) : IDatasetDefinitionService
+public sealed class DatasetDefinitionService : IDatasetDefinitionService
 {
     private const int MaxTargetSampleCount = 2000;
 
-    private readonly IToolApprovalPolicy _approvalPolicy = approvalPolicy ?? throw new ArgumentNullException(nameof(approvalPolicy));
-    private readonly ILocalToolOfferProvider _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IToolApprovalPolicy _approvalPolicy;
+    private readonly ILocalToolOfferProvider _offerProvider;
+    private readonly ITrainingDatasetStore _store;
+
+    public DatasetDefinitionService(
+        ITrainingDatasetStore store,
+        ILocalToolOfferProvider offerProvider,
+        IToolApprovalPolicy approvalPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(approvalPolicy);
+        ArgumentNullException.ThrowIfNull(offerProvider);
+        ArgumentNullException.ThrowIfNull(store);
+        _approvalPolicy = approvalPolicy;
+        _offerProvider = offerProvider;
+        _store = store;
+    }
 
     public async Task<TrainingDefinitionRecord> CreateAsync(DatasetDefinitionDraft draft, CancellationToken cancellationToken = default)
     {

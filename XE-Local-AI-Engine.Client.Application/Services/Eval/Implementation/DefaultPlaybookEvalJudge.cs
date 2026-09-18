@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     positional-record DTO, system + user messages, <c>Temperature = 0</c>). Golden text never leaves the node — the
 ///     service resolves and owns the node-local client and passes it in.
 /// </summary>
-internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge> logger) : IPlaybookEvalJudge
+internal sealed class DefaultPlaybookEvalJudge : IPlaybookEvalJudge
 {
     internal const string AssertionScoredBy = "assertion";
     internal const string JudgeScoredBy = "judge";
@@ -35,7 +35,13 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly ILogger<DefaultPlaybookEvalJudge> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<DefaultPlaybookEvalJudge> _logger;
+
+    public DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+    }
 
     public async Task<EvalScore> ScoreAsync(GoldenConversationRecord goldenCase,
         string candidateText,

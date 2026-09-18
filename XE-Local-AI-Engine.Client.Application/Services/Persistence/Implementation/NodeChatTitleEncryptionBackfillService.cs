@@ -12,15 +12,24 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 ///     node key, and writes it back. Runs once per startup; safe to re-run (conversations without a user message are
 ///     left NULL and processed again on the next restart until a message arrives).
 /// </summary>
-public sealed class NodeChatTitleEncryptionBackfillService(
-    IServiceScopeFactory scopeFactory,
-    ILogger<NodeChatTitleEncryptionBackfillService> logger) : BackgroundService
+public sealed class NodeChatTitleEncryptionBackfillService : BackgroundService
 {
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<NodeChatTitleEncryptionBackfillService> _logger;
+
+    public NodeChatTitleEncryptionBackfillService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<NodeChatTitleEncryptionBackfillService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
+            await using var scope = _scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
             // Find all non-purged conversations with a NULL title. These are rows that existed before the
@@ -35,7 +44,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 return;
             }
 
-            logger.LogInformation("NodeChatTitleEncryptionBackfillService: backfilling encrypted titles for {Count} conversation(s).",
+            _logger.LogInformation("NodeChatTitleEncryptionBackfillService: backfilling encrypted titles for {Count} conversation(s).",
                 conversationIds.Count);
 
             var backfilled = 0;
@@ -67,7 +76,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 {
                     // Read-both means a plaintext row can no longer land here; a throw now indicates a genuinely
                     // undecryptable envelope (e.g. ciphertext written under a previous node key). Skip that row only.
-                    logger.LogWarning(
+                    _logger.LogWarning(
                         "NodeChatTitleEncryptionBackfillService: could not decrypt message content for conversation {ConversationId}; skipping (row likely encrypted under a previous node key). [{ErrorType}]",
                         conversationId,
                         ex.GetType().Name);
@@ -85,7 +94,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 backfilled++;
             }
 
-            logger.LogInformation("NodeChatTitleEncryptionBackfillService: backfill complete — {Backfilled} title(s) encrypted, {Skipped} skipped (no user message yet).",
+            _logger.LogInformation("NodeChatTitleEncryptionBackfillService: backfill complete — {Backfilled} title(s) encrypted, {Skipped} skipped (no user message yet).",
                 backfilled,
                 conversationIds.Count - backfilled);
         }
@@ -95,7 +104,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "NodeChatTitleEncryptionBackfillService: unexpected error during title backfill.");
+            _logger.LogError(ex, "NodeChatTitleEncryptionBackfillService: unexpected error during title backfill.");
         }
     }
 

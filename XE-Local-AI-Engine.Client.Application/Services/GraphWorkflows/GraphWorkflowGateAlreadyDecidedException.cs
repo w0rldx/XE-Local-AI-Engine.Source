@@ -13,7 +13,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///         populates.
 ///     </para>
 /// </summary>
-public sealed class GraphWorkflowGateAlreadyDecidedException(string message, GraphWorkflowDecisionKind standingDecision) : InvalidOperationException(message)
+public sealed class GraphWorkflowGateAlreadyDecidedException : InvalidOperationException
 {
-    public GraphWorkflowDecisionKind StandingDecision { get; } = standingDecision;
+    public GraphWorkflowGateAlreadyDecidedException(string message, GraphWorkflowDecisionKind standingDecision) : base(message)
+    {
+        StandingDecision = standingDecision;
+    }
+
+    public GraphWorkflowDecisionKind StandingDecision { get; }
 }

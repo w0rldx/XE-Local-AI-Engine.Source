@@ -8,15 +8,20 @@ using Quartz;
 ///     <see cref="NonOverlappingSchedulerDispatchJob" /> variant is used when overlap must be prevented. Kept thin:
 ///     all guard rails and handler invocation live in <see cref="ISchedulerDispatchExecutor" />.
 /// </summary>
-internal sealed class SchedulerDispatchJob(
-    ISchedulerDispatchExecutor dispatchExecutor,
-    ILogger<SchedulerDispatchJob> logger) : IJob
+internal sealed class SchedulerDispatchJob : IJob
 {
-    private readonly ISchedulerDispatchExecutor _dispatchExecutor =
-        dispatchExecutor ?? throw new ArgumentNullException(nameof(dispatchExecutor));
+    private readonly ISchedulerDispatchExecutor _dispatchExecutor;
+    private readonly ILogger<SchedulerDispatchJob> _logger;
 
-    private readonly ILogger<SchedulerDispatchJob> _logger =
-        logger ?? throw new ArgumentNullException(nameof(logger));
+    public SchedulerDispatchJob(
+        ISchedulerDispatchExecutor dispatchExecutor,
+        ILogger<SchedulerDispatchJob> logger)
+    {
+        ArgumentNullException.ThrowIfNull(dispatchExecutor);
+        ArgumentNullException.ThrowIfNull(logger);
+        _dispatchExecutor = dispatchExecutor;
+        _logger = logger;
+    }
 
     public Task Execute(IJobExecutionContext context)
     {

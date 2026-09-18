@@ -10,15 +10,19 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 ///     <c>run_agent</c> tool and this detached path are bounded by the node "Maximum message request timeout" exactly
 ///     once, on the same terms.
 /// </summary>
-internal sealed class McpAgentRunExecutor(
-    IMcpAgentExecutionService executionService,
-    IOptions<SpawnOptions> spawnOptions) : IMcpAgentRunExecutor
+internal sealed class McpAgentRunExecutor : IMcpAgentRunExecutor
 {
-    private readonly IMcpAgentExecutionService _executionService =
-        executionService ?? throw new ArgumentNullException(nameof(executionService));
+    private readonly IMcpAgentExecutionService _executionService;
+    private readonly SpawnOptions _spawnOptions;
 
-    private readonly SpawnOptions _spawnOptions =
-        (spawnOptions ?? throw new ArgumentNullException(nameof(spawnOptions))).Value;
+    public McpAgentRunExecutor(
+        IMcpAgentExecutionService executionService,
+        IOptions<SpawnOptions> spawnOptions)
+    {
+        ArgumentNullException.ThrowIfNull(executionService);
+        _executionService = executionService;
+        _spawnOptions = (spawnOptions ?? throw new ArgumentNullException(nameof(spawnOptions))).Value;
+    }
 
     public async Task<SpawnOutcome> ExecuteAsync(McpAgentRunRecord run, CancellationToken cancellationToken)
     {

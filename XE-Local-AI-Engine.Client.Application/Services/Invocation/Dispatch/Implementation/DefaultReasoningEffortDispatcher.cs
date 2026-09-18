@@ -31,14 +31,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         logger.
 ///     </para>
 /// </summary>
-public sealed class DefaultReasoningEffortDispatcher(
-    IModelTrustResolver modelTrustResolver,
-    INodeRuntimeSettings nodeRuntimeSettings,
-    ILocalModelProviderResolver localModelProviderResolver,
-    ICapacityService capacityService,
-    IModelCapabilityResolver modelCapabilityResolver,
-    ILlamaServerProcessSupervisor processSupervisor,
-    IGgufModelStore ggufModelStore) : IReasoningEffortDispatcher
+public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatcher
 {
     // NO TIER CAPS THE OUTPUT. A FAST cap was designed to bound the ANSWER, but
     // DeferredLlamaServerChatClient.ClampToGenerationRoom narrows a reasoning budget to half of
@@ -58,13 +51,38 @@ public sealed class DefaultReasoningEffortDispatcher(
     /// <summary>Binary-model reasoning ON (the think field is omitted so the chat template's own reasoning runs).</summary>
     private const string OnEffort = "on";
 
-    private readonly ICapacityService _capacityService = capacityService ?? throw new ArgumentNullException(nameof(capacityService));
-    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-    private readonly ILocalModelProviderResolver _localModelProviderResolver = localModelProviderResolver ?? throw new ArgumentNullException(nameof(localModelProviderResolver));
-    private readonly IModelCapabilityResolver _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-    private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
-    private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
+    private readonly ICapacityService _capacityService;
+    private readonly IGgufModelStore _ggufModelStore;
+    private readonly ILocalModelProviderResolver _localModelProviderResolver;
+    private readonly IModelCapabilityResolver _modelCapabilityResolver;
+    private readonly IModelTrustResolver _modelTrustResolver;
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings;
+    private readonly ILlamaServerProcessSupervisor _processSupervisor;
+
+    public DefaultReasoningEffortDispatcher(
+        IModelTrustResolver modelTrustResolver,
+        INodeRuntimeSettings nodeRuntimeSettings,
+        ILocalModelProviderResolver localModelProviderResolver,
+        ICapacityService capacityService,
+        IModelCapabilityResolver modelCapabilityResolver,
+        ILlamaServerProcessSupervisor processSupervisor,
+        IGgufModelStore ggufModelStore)
+    {
+        ArgumentNullException.ThrowIfNull(capacityService);
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        ArgumentNullException.ThrowIfNull(localModelProviderResolver);
+        ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        ArgumentNullException.ThrowIfNull(nodeRuntimeSettings);
+        ArgumentNullException.ThrowIfNull(processSupervisor);
+        _capacityService = capacityService;
+        _ggufModelStore = ggufModelStore;
+        _localModelProviderResolver = localModelProviderResolver;
+        _modelCapabilityResolver = modelCapabilityResolver;
+        _modelTrustResolver = modelTrustResolver;
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+        _processSupervisor = processSupervisor;
+    }
 
     public async Task<ReasoningDispatchDecision> DispatchAsync(ReasoningDispatchRequest request, CancellationToken cancellationToken)
     {

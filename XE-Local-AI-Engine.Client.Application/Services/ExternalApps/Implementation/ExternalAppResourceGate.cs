@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     either: two installs started in the same second can both pass, which is a deliberate simplification for a
 ///     single-user desktop node rather than an oversight.
 /// </remarks>
-internal sealed class ExternalAppResourceGate(IRuntimeDeviceAudit audit, INodeDataDirectory dataDirectory, IFreeSpaceProbe freeSpace)
+internal sealed class ExternalAppResourceGate
 {
     /// <summary>Headroom above the manifest's own minimum, so an install does not leave the box with nothing to spare.</summary>
     internal const long MemoryHeadroomBytes = 512L * 1024 * 1024;
@@ -23,9 +23,19 @@ internal sealed class ExternalAppResourceGate(IRuntimeDeviceAudit audit, INodeDa
     /// <summary>Free disk an install requires, independent of image size: the pull figure is not knowable in advance.</summary>
     internal const long RequiredDiskBytes = 2L * 1024 * 1024 * 1024;
 
-    private readonly IRuntimeDeviceAudit _audit = audit ?? throw new ArgumentNullException(nameof(audit));
-    private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-    private readonly IFreeSpaceProbe _freeSpace = freeSpace ?? throw new ArgumentNullException(nameof(freeSpace));
+    private readonly IRuntimeDeviceAudit _audit;
+    private readonly INodeDataDirectory _dataDirectory;
+    private readonly IFreeSpaceProbe _freeSpace;
+
+    public ExternalAppResourceGate(IRuntimeDeviceAudit audit, INodeDataDirectory dataDirectory, IFreeSpaceProbe freeSpace)
+    {
+        ArgumentNullException.ThrowIfNull(audit);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(freeSpace);
+        _audit = audit;
+        _dataDirectory = dataDirectory;
+        _freeSpace = freeSpace;
+    }
 
     public async Task<ExternalAppResourceVerdict> EvaluateAsync(ApplicationManifest manifest, string? instanceRoot, CancellationToken ct = default)
     {

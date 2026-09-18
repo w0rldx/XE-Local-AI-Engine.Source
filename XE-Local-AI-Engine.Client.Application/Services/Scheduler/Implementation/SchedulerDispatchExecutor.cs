@@ -30,14 +30,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         failures are logged and swallowed so a broken notification never corrupts run handling or masks a cancellation.
 ///     </para>
 /// </summary>
-internal sealed class SchedulerDispatchExecutor(
-    IScheduledJobDefinitionStore definitionStore,
-    IScheduledJobTemplateRegistry templateRegistry,
-    IScheduledJobRunStore runStore,
-    IScheduledJobRunEventStore runEventStore,
-    ISchedulerEventPublisher eventPublisher,
-    TimeProvider timeProvider,
-    ILogger<SchedulerDispatchExecutor> logger) : ISchedulerDispatchExecutor
+internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 {
     /// <summary>
     ///     The whitelisted parameter keys a per-fire override may replace. Compared case-insensitively against the stored
@@ -50,27 +43,38 @@ internal sealed class SchedulerDispatchExecutor(
     private const string OverridableQuantProperty = "quantOverride";
 
     private const string OverridableCtxTargetProperty = "ctxTarget";
+    private readonly IScheduledJobDefinitionStore _definitionStore;
+    private readonly ISchedulerEventPublisher _eventPublisher;
+    private readonly ILogger<SchedulerDispatchExecutor> _logger;
+    private readonly IScheduledJobRunEventStore _runEventStore;
+    private readonly IScheduledJobRunStore _runStore;
+    private readonly IScheduledJobTemplateRegistry _templateRegistry;
+    private readonly TimeProvider _timeProvider;
 
-    private readonly IScheduledJobDefinitionStore _definitionStore =
-        definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
-
-    private readonly ISchedulerEventPublisher _eventPublisher =
-        eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
-
-    private readonly ILogger<SchedulerDispatchExecutor> _logger =
-        logger ?? throw new ArgumentNullException(nameof(logger));
-
-    private readonly IScheduledJobRunEventStore _runEventStore =
-        runEventStore ?? throw new ArgumentNullException(nameof(runEventStore));
-
-    private readonly IScheduledJobRunStore _runStore =
-        runStore ?? throw new ArgumentNullException(nameof(runStore));
-
-    private readonly IScheduledJobTemplateRegistry _templateRegistry =
-        templateRegistry ?? throw new ArgumentNullException(nameof(templateRegistry));
-
-    private readonly TimeProvider _timeProvider =
-        timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    public SchedulerDispatchExecutor(
+        IScheduledJobDefinitionStore definitionStore,
+        IScheduledJobTemplateRegistry templateRegistry,
+        IScheduledJobRunStore runStore,
+        IScheduledJobRunEventStore runEventStore,
+        ISchedulerEventPublisher eventPublisher,
+        TimeProvider timeProvider,
+        ILogger<SchedulerDispatchExecutor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(definitionStore);
+        ArgumentNullException.ThrowIfNull(eventPublisher);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(runEventStore);
+        ArgumentNullException.ThrowIfNull(runStore);
+        ArgumentNullException.ThrowIfNull(templateRegistry);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _definitionStore = definitionStore;
+        _eventPublisher = eventPublisher;
+        _logger = logger;
+        _runEventStore = runEventStore;
+        _runStore = runStore;
+        _templateRegistry = templateRegistry;
+        _timeProvider = timeProvider;
+    }
 
     public async Task DispatchAsync(Guid scheduledJobId,
         string fireInstanceId,

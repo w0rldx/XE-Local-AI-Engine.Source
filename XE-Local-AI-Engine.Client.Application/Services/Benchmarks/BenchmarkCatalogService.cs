@@ -13,22 +13,40 @@ public interface IBenchmarkCatalogService
     Task<IReadOnlyList<BenchmarkEligibleModel>> ListEligibleModelsAsync(int? contextTokens, CancellationToken cancellationToken = default);
 }
 
-internal sealed class BenchmarkCatalogService(
-    IAgentDefinitionStore agentDefinitions,
-    IAgentDefinitionResolver agentResolver,
-    IModelCapabilityResolver modelCapabilities,
-    IBenchmarkEligibilityPolicy eligibilityPolicy,
-    IGgufModelStore ggufModels,
-    IBenchmarkInstalledModelLeaseProvider installedModels,
-    ILogger<BenchmarkCatalogService> logger) : IBenchmarkCatalogService
+internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
 {
-    private readonly IAgentDefinitionStore _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
-    private readonly IAgentDefinitionResolver _agentResolver = agentResolver ?? throw new ArgumentNullException(nameof(agentResolver));
-    private readonly IModelCapabilityResolver _modelCapabilities = modelCapabilities ?? throw new ArgumentNullException(nameof(modelCapabilities));
-    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy = eligibilityPolicy ?? throw new ArgumentNullException(nameof(eligibilityPolicy));
-    private readonly IGgufModelStore _ggufModels = ggufModels ?? throw new ArgumentNullException(nameof(ggufModels));
-    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
-    private readonly ILogger<BenchmarkCatalogService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IAgentDefinitionStore _agentDefinitions;
+    private readonly IAgentDefinitionResolver _agentResolver;
+    private readonly IModelCapabilityResolver _modelCapabilities;
+    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
+    private readonly IGgufModelStore _ggufModels;
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly ILogger<BenchmarkCatalogService> _logger;
+
+    public BenchmarkCatalogService(
+        IAgentDefinitionStore agentDefinitions,
+        IAgentDefinitionResolver agentResolver,
+        IModelCapabilityResolver modelCapabilities,
+        IBenchmarkEligibilityPolicy eligibilityPolicy,
+        IGgufModelStore ggufModels,
+        IBenchmarkInstalledModelLeaseProvider installedModels,
+        ILogger<BenchmarkCatalogService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitions);
+        ArgumentNullException.ThrowIfNull(agentResolver);
+        ArgumentNullException.ThrowIfNull(modelCapabilities);
+        ArgumentNullException.ThrowIfNull(eligibilityPolicy);
+        ArgumentNullException.ThrowIfNull(ggufModels);
+        ArgumentNullException.ThrowIfNull(installedModels);
+        ArgumentNullException.ThrowIfNull(logger);
+        _agentDefinitions = agentDefinitions;
+        _agentResolver = agentResolver;
+        _modelCapabilities = modelCapabilities;
+        _eligibilityPolicy = eligibilityPolicy;
+        _ggufModels = ggufModels;
+        _installedModels = installedModels;
+        _logger = logger;
+    }
 
     public async Task<IReadOnlyList<BenchmarkEligibleAgent>> ListEligibleAgentsAsync(string modelName,
         CancellationToken cancellationToken = default)

@@ -26,10 +26,18 @@ public interface ITrainingCapacityGate
     Task<TrainingCapacityReservation> ReserveAsync(TrainingFootprintEstimate estimate, CancellationToken cancellationToken = default);
 }
 
-public sealed class TrainingCapacityGate(IPendingFootprintLedger ledger, IRuntimeDeviceAudit deviceAudit) : ITrainingCapacityGate
+public sealed class TrainingCapacityGate : ITrainingCapacityGate
 {
-    private readonly IRuntimeDeviceAudit _deviceAudit = deviceAudit ?? throw new ArgumentNullException(nameof(deviceAudit));
-    private readonly IPendingFootprintLedger _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
+    private readonly IRuntimeDeviceAudit _deviceAudit;
+    private readonly IPendingFootprintLedger _ledger;
+
+    public TrainingCapacityGate(IPendingFootprintLedger ledger, IRuntimeDeviceAudit deviceAudit)
+    {
+        ArgumentNullException.ThrowIfNull(deviceAudit);
+        ArgumentNullException.ThrowIfNull(ledger);
+        _deviceAudit = deviceAudit;
+        _ledger = ledger;
+    }
 
     public async Task<TrainingCapacityReservation> ReserveAsync(TrainingFootprintEstimate estimate,
         CancellationToken cancellationToken = default)

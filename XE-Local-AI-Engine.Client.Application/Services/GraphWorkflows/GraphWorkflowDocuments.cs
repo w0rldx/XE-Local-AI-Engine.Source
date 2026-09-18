@@ -12,10 +12,14 @@ internal sealed record GraphWorkflowUpstreamDocument(string NodeKey, string Outp
 ///     thing with it — fail the node run <c>OutputTooLarge</c> — and a result nobody branches on is a branch at every
 ///     call site for nothing.
 /// </summary>
-internal sealed class GraphWorkflowOutputTooLargeException(string nodeKey, int bytes, int maxBytes)
-    : InvalidOperationException($"Node '{nodeKey}' produced a {bytes}-byte output document, more than the {maxBytes} bytes one node run may store.")
+internal sealed class GraphWorkflowOutputTooLargeException : InvalidOperationException
 {
-    public string NodeKey { get; } = nodeKey;
+    public GraphWorkflowOutputTooLargeException(string nodeKey, int bytes, int maxBytes) : base($"Node '{nodeKey}' produced a {bytes}-byte output document, more than the {maxBytes} bytes one node run may store.")
+    {
+        NodeKey = nodeKey;
+    }
+
+    public string NodeKey { get; }
 }
 
 /// <summary>

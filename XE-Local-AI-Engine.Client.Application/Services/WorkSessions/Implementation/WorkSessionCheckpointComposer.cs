@@ -18,16 +18,26 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 ///         all, and a session must still be able to checkpoint its structured state and be resumed from it.
 ///     </para>
 /// </summary>
-internal sealed class WorkSessionCheckpointComposer(
-    IAgentWorkSessionStore store,
-    IConversationCompactionService compaction,
-    ILogger<WorkSessionCheckpointComposer> logger)
+internal sealed class WorkSessionCheckpointComposer
 {
     private const int MaxKeyFindings = 25;
 
-    private readonly IConversationCompactionService _compaction = compaction ?? throw new ArgumentNullException(nameof(compaction));
-    private readonly ILogger<WorkSessionCheckpointComposer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IAgentWorkSessionStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IConversationCompactionService _compaction;
+    private readonly ILogger<WorkSessionCheckpointComposer> _logger;
+    private readonly IAgentWorkSessionStore _store;
+
+    public WorkSessionCheckpointComposer(
+        IAgentWorkSessionStore store,
+        IConversationCompactionService compaction,
+        ILogger<WorkSessionCheckpointComposer> logger)
+    {
+        ArgumentNullException.ThrowIfNull(compaction);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(store);
+        _compaction = compaction;
+        _logger = logger;
+        _store = store;
+    }
 
     public async Task<WorkSessionMutationResult> ComposeAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {

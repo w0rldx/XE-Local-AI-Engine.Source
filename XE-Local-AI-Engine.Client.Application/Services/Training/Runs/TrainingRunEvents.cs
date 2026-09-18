@@ -52,9 +52,15 @@ public sealed record TrainingRunPayload(
 
 public sealed record TrainingRunEvent(Guid RunId, long Sequence, TrainingRunEventKind Kind, TrainingRunPayload Payload);
 
-public sealed class TrainingRunEventArgs(TrainingRunEvent runEvent) : EventArgs
+public sealed class TrainingRunEventArgs : EventArgs
 {
-    public TrainingRunEvent Event { get; } = runEvent ?? throw new ArgumentNullException(nameof(runEvent));
+    public TrainingRunEventArgs(TrainingRunEvent runEvent)
+    {
+        ArgumentNullException.ThrowIfNull(runEvent);
+        Event = runEvent;
+    }
+
+    public TrainingRunEvent Event { get; }
 }
 
 public sealed record TrainingRunReplay(IReadOnlyList<TrainingRunEvent> Events, bool ResetRequired, long LatestSequence);

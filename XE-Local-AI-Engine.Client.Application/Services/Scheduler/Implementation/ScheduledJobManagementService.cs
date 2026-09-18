@@ -14,15 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 ///     (delete-and-recreate is the simplest correct path for an update). All logging is sanitized — definition ids,
 ///     template ids, schedule kinds, and enabled state are safe to log; raw parameters and run details are never logged.
 /// </summary>
-public sealed class ScheduledJobManagementService(
-    IScheduledJobDefinitionStore definitionStore,
-    IScheduledJobRunStore runStore,
-    IScheduledJobTemplateRegistry templateRegistry,
-    ISchedulerFactory schedulerFactory,
-    ISchedulerEventPublisher eventPublisher,
-    INodeSettingsStore nodeSettingsStore,
-    ILogger<ScheduledJobManagementService> logger,
-    TimeProvider timeProvider) : IScheduledJobManagementService
+public sealed class ScheduledJobManagementService : IScheduledJobManagementService
 {
     /// <summary>
     ///     How many whole-turn budgets the derived run-agent ceiling covers. Quartz counts max-runtime from the job's
@@ -45,30 +37,42 @@ public sealed class ScheduledJobManagementService(
     ///     <see cref="ResolveMaxRuntimeSecondsAsync" /> treats it as unset — see the rationale there.
     /// </summary>
     private const int LegacyRunAgentTemplateDefaultMaxRuntimeSeconds = 600;
+    private readonly IScheduledJobDefinitionStore _definitionStore;
+    private readonly ISchedulerEventPublisher _eventPublisher;
+    private readonly ILogger<ScheduledJobManagementService> _logger;
+    private readonly INodeSettingsStore _nodeSettingsStore;
+    private readonly IScheduledJobRunStore _runStore;
+    private readonly ISchedulerFactory _schedulerFactory;
+    private readonly IScheduledJobTemplateRegistry _templateRegistry;
+    private readonly TimeProvider _timeProvider;
 
-    private readonly IScheduledJobDefinitionStore _definitionStore =
-        definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
-
-    private readonly ISchedulerEventPublisher _eventPublisher =
-        eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
-
-    private readonly ILogger<ScheduledJobManagementService> _logger =
-        logger ?? throw new ArgumentNullException(nameof(logger));
-
-    private readonly INodeSettingsStore _nodeSettingsStore =
-        nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-
-    private readonly IScheduledJobRunStore _runStore =
-        runStore ?? throw new ArgumentNullException(nameof(runStore));
-
-    private readonly ISchedulerFactory _schedulerFactory =
-        schedulerFactory ?? throw new ArgumentNullException(nameof(schedulerFactory));
-
-    private readonly IScheduledJobTemplateRegistry _templateRegistry =
-        templateRegistry ?? throw new ArgumentNullException(nameof(templateRegistry));
-
-    private readonly TimeProvider _timeProvider =
-        timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    public ScheduledJobManagementService(
+        IScheduledJobDefinitionStore definitionStore,
+        IScheduledJobRunStore runStore,
+        IScheduledJobTemplateRegistry templateRegistry,
+        ISchedulerFactory schedulerFactory,
+        ISchedulerEventPublisher eventPublisher,
+        INodeSettingsStore nodeSettingsStore,
+        ILogger<ScheduledJobManagementService> logger,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(definitionStore);
+        ArgumentNullException.ThrowIfNull(eventPublisher);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        ArgumentNullException.ThrowIfNull(runStore);
+        ArgumentNullException.ThrowIfNull(schedulerFactory);
+        ArgumentNullException.ThrowIfNull(templateRegistry);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _definitionStore = definitionStore;
+        _eventPublisher = eventPublisher;
+        _logger = logger;
+        _nodeSettingsStore = nodeSettingsStore;
+        _runStore = runStore;
+        _schedulerFactory = schedulerFactory;
+        _templateRegistry = templateRegistry;
+        _timeProvider = timeProvider;
+    }
 
     public IReadOnlyList<ScheduledJobTemplateDescriptor> ListTemplatesAsync()
     {

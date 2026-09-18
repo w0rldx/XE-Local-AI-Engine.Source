@@ -18,23 +18,34 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
 ///         makes the degraded state safe.
 ///     </para>
 /// </remarks>
-public sealed class ExternalProviderStartupReconciler(
-    IServiceScopeFactory scopeFactory,
-    IExternalProviderRegistryCache registryCache,
-    ILogger<ExternalProviderStartupReconciler> logger) : IHostedService
+public sealed class ExternalProviderStartupReconciler : IHostedService
 {
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IExternalProviderRegistryCache _registryCache;
+    private readonly ILogger<ExternalProviderStartupReconciler> _logger;
+
+    public ExternalProviderStartupReconciler(
+        IServiceScopeFactory scopeFactory,
+        IExternalProviderRegistryCache registryCache,
+        ILogger<ExternalProviderStartupReconciler> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _registryCache = registryCache;
+        _logger = logger;
+    }
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
+            await using var scope = _scopeFactory.CreateAsyncScope();
             _ = await scope.ServiceProvider.GetRequiredService<IExternalProviderReconciler>()
                            .ReconcileAsync(cancellationToken);
-            await registryCache.PrimeAsync(cancellationToken);
+            await _registryCache.PrimeAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError(exception,
+            _logger.LogError(exception,
                 "External provider reconciliation failed at startup; external models may not route until the next save. Trust classification stays fail-closed in the meantime.");
         }
     }

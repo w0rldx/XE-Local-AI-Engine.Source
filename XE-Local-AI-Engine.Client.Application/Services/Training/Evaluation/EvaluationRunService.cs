@@ -39,20 +39,36 @@ public interface IEvaluationRunService
     Task DeleteAsync(Guid evaluationId, long expectedVersion, CancellationToken cancellationToken = default);
 }
 
-public sealed class EvaluationRunService(
-    ITrainingEvaluationStore evaluations,
-    ITrainingRunStore runs,
-    ITrainingDatasetStore datasets,
-    IGgufModelStore models,
-    TrainingRunCancellationRegistry cancellations,
-    ITrainingRunQueueSignal signal) : IEvaluationRunService
+public sealed class EvaluationRunService : IEvaluationRunService
 {
-    private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-    private readonly ITrainingDatasetStore _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
-    private readonly ITrainingEvaluationStore _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
-    private readonly IGgufModelStore _models = models ?? throw new ArgumentNullException(nameof(models));
-    private readonly ITrainingRunStore _runs = runs ?? throw new ArgumentNullException(nameof(runs));
-    private readonly ITrainingRunQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
+    private readonly TrainingRunCancellationRegistry _cancellations;
+    private readonly ITrainingDatasetStore _datasets;
+    private readonly ITrainingEvaluationStore _evaluations;
+    private readonly IGgufModelStore _models;
+    private readonly ITrainingRunStore _runs;
+    private readonly ITrainingRunQueueSignal _signal;
+
+    public EvaluationRunService(
+        ITrainingEvaluationStore evaluations,
+        ITrainingRunStore runs,
+        ITrainingDatasetStore datasets,
+        IGgufModelStore models,
+        TrainingRunCancellationRegistry cancellations,
+        ITrainingRunQueueSignal signal)
+    {
+        ArgumentNullException.ThrowIfNull(cancellations);
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(evaluations);
+        ArgumentNullException.ThrowIfNull(models);
+        ArgumentNullException.ThrowIfNull(runs);
+        ArgumentNullException.ThrowIfNull(signal);
+        _cancellations = cancellations;
+        _datasets = datasets;
+        _evaluations = evaluations;
+        _models = models;
+        _runs = runs;
+        _signal = signal;
+    }
 
     public async Task<TrainingEvaluationRecord> CreateAsync(CreateEvaluationCommand command, CancellationToken cancellationToken = default)
     {

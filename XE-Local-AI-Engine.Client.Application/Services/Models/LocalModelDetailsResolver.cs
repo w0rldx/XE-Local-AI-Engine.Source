@@ -8,13 +8,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <inheritdoc />
-internal sealed class LocalModelDetailsResolver(
-    IOllamaModelService modelService,
-    ILocalModelProviderResolver providerResolver,
-    IGgufModelStore ggufModelStore,
-    ICloudModelResolver cloudModelResolver,
-    IModelTrustResolver modelTrustResolver,
-    ILogger<LocalModelDetailsResolver> logger) : ILocalModelDetailsResolver
+internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
 {
     /// <summary>
     ///     The provider key a llama.cpp-served GGUF resolves to. Mirrors <c>LocalModelProviders.LlamaCpp</c>, which is
@@ -23,12 +17,34 @@ internal sealed class LocalModelDetailsResolver(
     /// </summary>
     private const string LlamaCppProviderName = "llamacpp";
 
-    private readonly ICloudModelResolver _cloudModelResolver = cloudModelResolver ?? throw new ArgumentNullException(nameof(cloudModelResolver));
-    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-    private readonly ILogger<LocalModelDetailsResolver> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+    private readonly ICloudModelResolver _cloudModelResolver;
+    private readonly IGgufModelStore _ggufModelStore;
+    private readonly ILogger<LocalModelDetailsResolver> _logger;
+    private readonly IModelTrustResolver _modelTrustResolver;
+    private readonly IOllamaModelService _modelService;
+    private readonly ILocalModelProviderResolver _providerResolver;
+
+    public LocalModelDetailsResolver(
+        IOllamaModelService modelService,
+        ILocalModelProviderResolver providerResolver,
+        IGgufModelStore ggufModelStore,
+        ICloudModelResolver cloudModelResolver,
+        IModelTrustResolver modelTrustResolver,
+        ILogger<LocalModelDetailsResolver> logger)
+    {
+        ArgumentNullException.ThrowIfNull(cloudModelResolver);
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        ArgumentNullException.ThrowIfNull(modelService);
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _cloudModelResolver = cloudModelResolver;
+        _ggufModelStore = ggufModelStore;
+        _logger = logger;
+        _modelTrustResolver = modelTrustResolver;
+        _modelService = modelService;
+        _providerResolver = providerResolver;
+    }
 
     public async Task<LocalModelDetailsResolution> ResolveAsync(string modelName, CancellationToken cancellationToken = default)
     {

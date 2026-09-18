@@ -7,12 +7,20 @@ public interface IBenchmarkRunBatchService
     Task<BenchmarkRunBatchResult> StartAsync(BenchmarkRunBatchRequest request, CancellationToken cancellationToken = default);
 }
 
-public sealed class BenchmarkRunBatchService(IBenchmarkRunFreezeService runs, TimeProvider timeProvider) : IBenchmarkRunBatchService
+public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
 {
     private static readonly TimeSpan RequestTimeBudget = TimeSpan.FromSeconds(45);
 
-    private readonly IBenchmarkRunFreezeService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IBenchmarkRunFreezeService _runs;
+    private readonly TimeProvider _timeProvider;
+
+    public BenchmarkRunBatchService(IBenchmarkRunFreezeService runs, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _runs = runs;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<BenchmarkRunBatchResult> StartAsync(BenchmarkRunBatchRequest request, CancellationToken cancellationToken = default)
     {

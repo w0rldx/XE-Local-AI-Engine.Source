@@ -8,4 +8,9 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///         from that one, and an internal null-guard bug must never reach the operator as a 400.
 ///     </para>
 /// </summary>
-public sealed class WorkSessionValidationException(string message) : Exception(message);
+public sealed class WorkSessionValidationException : Exception
+{
+    public WorkSessionValidationException(string message) : base(message)
+    {
+    }
+}

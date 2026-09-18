@@ -20,9 +20,7 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 ///     The candidate query filters on the two-byte envelope header, so a re-run over an already-migrated table selects
 ///     nothing (idempotent). Runs once per startup, mirroring <see cref="NodeChatTitleEncryptionBackfillService" />.
 /// </remarks>
-public sealed class NodeChatContentEncryptionBackfillService(
-    IServiceScopeFactory scopeFactory,
-    ILogger<NodeChatContentEncryptionBackfillService> logger) : BackgroundService
+public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
 {
     internal const int DefaultBatchSize = 200;
 
@@ -60,6 +58,17 @@ public sealed class NodeChatContentEncryptionBackfillService(
                                             );
                                             """;
 
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<NodeChatContentEncryptionBackfillService> _logger;
+
+    public NodeChatContentEncryptionBackfillService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<NodeChatContentEncryptionBackfillService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         return RunOnceAsync(stoppingToken);
@@ -90,7 +99,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
             var total = await MigrateAllAsync(DefaultBatchSize, cancellationToken);
             if (total > 0)
             {
-                logger.LogInformation("NodeChatContentEncryptionBackfillService: encrypted {Count} legacy plaintext message row(s).", total);
+                _logger.LogInformation("NodeChatContentEncryptionBackfillService: encrypted {Count} legacy plaintext message row(s).", total);
             }
 
             // Reclaim residue whenever this run migrated rows OR a previous run's reclamation never completed (marker
@@ -109,7 +118,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "NodeChatContentEncryptionBackfillService: unexpected error during content-encryption backfill.");
+            _logger.LogError(ex, "NodeChatContentEncryptionBackfillService: unexpected error during content-encryption backfill.");
         }
     }
 
@@ -141,7 +150,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
     /// </summary>
     internal async Task<int> MigrateBatchAsync(int batchSize, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
+        await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
         var rows = await dbContext.Database
@@ -185,7 +194,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
     {
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
+            await using var scope = _scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
             var connection = dbContext.Database.GetDbConnection();
             await OpenIfNeededAsync(connection, cancellationToken);
@@ -219,7 +228,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex,
+            _logger.LogWarning(ex,
                 "NodeChatContentEncryptionBackfillService: post-backfill checkpoint/vacuum failed; encrypted rows are durable, the reclamation-pending marker remains set, and reclamation will be retried on the next startup.");
             return false;
         }
@@ -249,7 +258,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
 
     private void LogIncompleteCheckpoint(string phase)
     {
-        logger.LogWarning(
+        _logger.LogWarning(
             "NodeChatContentEncryptionBackfillService: WAL checkpoint {Phase} did not fully truncate (busy or frames remaining); the reclamation-pending marker remains set and reclamation will be retried on the next startup.",
             phase);
     }
@@ -278,7 +287,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
         Justification = "Every call site passes a fixed internal maintenance query constant — never user input.")]
     private async Task<bool> ExistsAsync(string sql, bool addMarkerName, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
+        await using var scope = _scopeFactory.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
@@ -296,7 +305,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
         Justification = "Every call site passes a fixed internal maintenance statement constant — never user input.")]
     private async Task ExecuteMarkerNonQueryAsync(string sql, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
+        await using var scope = _scopeFactory.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();

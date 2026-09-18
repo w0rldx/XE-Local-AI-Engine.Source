@@ -26,14 +26,24 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     "now"), so a fingerprint recorded at eval time still matches at promote time when no swap happened. Never throws:
 ///     any lookup failure falls through to the next source and ultimately to the unverified sentinel.
 /// </summary>
-internal sealed class EvalModelIdentityResolver(
-    IGgufModelRegistry ggufRegistry,
-    IModelClassificationStore classificationStore,
-    ILogger<EvalModelIdentityResolver> logger) : IEvalModelIdentityResolver
+internal sealed class EvalModelIdentityResolver : IEvalModelIdentityResolver
 {
-    private readonly IModelClassificationStore _classificationStore = classificationStore ?? throw new ArgumentNullException(nameof(classificationStore));
-    private readonly IGgufModelRegistry _ggufRegistry = ggufRegistry ?? throw new ArgumentNullException(nameof(ggufRegistry));
-    private readonly ILogger<EvalModelIdentityResolver> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IModelClassificationStore _classificationStore;
+    private readonly IGgufModelRegistry _ggufRegistry;
+    private readonly ILogger<EvalModelIdentityResolver> _logger;
+
+    public EvalModelIdentityResolver(
+        IGgufModelRegistry ggufRegistry,
+        IModelClassificationStore classificationStore,
+        ILogger<EvalModelIdentityResolver> logger)
+    {
+        ArgumentNullException.ThrowIfNull(classificationStore);
+        ArgumentNullException.ThrowIfNull(ggufRegistry);
+        ArgumentNullException.ThrowIfNull(logger);
+        _classificationStore = classificationStore;
+        _ggufRegistry = ggufRegistry;
+        _logger = logger;
+    }
 
     public async Task<EvalModelIdentity> ResolveAsync(string modelName, CancellationToken cancellationToken = default)
     {

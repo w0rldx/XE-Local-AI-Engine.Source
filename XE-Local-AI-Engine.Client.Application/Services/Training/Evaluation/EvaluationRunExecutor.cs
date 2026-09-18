@@ -45,35 +45,53 @@ public interface IEvaluationRunExecutor
 ///         question an evaluation asks — "which call would this model make".
 ///     </para>
 /// </remarks>
-public sealed class EvaluationRunExecutor(
-    ITrainingEvaluationStore store,
-    ITrainingRunStore runs,
-    ITrainingDatasetStore datasets,
-    TrainingRunWorkspace workspace,
-    ITransientLlamaServerEvaluationHarness evaluationHarness,
-    IInferenceChatClientFactory chatClientFactory,
-    ITrainingEvaluationInstalledModelLeaseProvider installedModels,
-    ITrainingRunEventBuffer events,
-    TrainingRunCancellationRegistry cancellations,
-    ILogger<EvaluationRunExecutor> logger) : IEvaluationRunExecutor
+public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
 {
-    private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-    private readonly ITrainingDatasetStore _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
-    private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly ILogger<EvaluationRunExecutor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly TrainingRunCancellationRegistry _cancellations;
+    private readonly ITrainingDatasetStore _datasets;
+    private readonly ITrainingRunEventBuffer _events;
+    private readonly ILogger<EvaluationRunExecutor> _logger;
     private const int EvaluationContextTokens = 4096;
+    private readonly ITransientLlamaServerEvaluationHarness _evaluationHarness;
+    private readonly IInferenceChatClientFactory _chatClientFactory;
+    private readonly ITrainingEvaluationInstalledModelLeaseProvider _installedModels;
+    private readonly ITrainingRunStore _runs;
+    private readonly ITrainingEvaluationStore _store;
+    private readonly TrainingRunWorkspace _workspace;
 
-    private readonly ITransientLlamaServerEvaluationHarness _evaluationHarness =
-        evaluationHarness ?? throw new ArgumentNullException(nameof(evaluationHarness));
-
-    private readonly IInferenceChatClientFactory _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
-
-    private readonly ITrainingEvaluationInstalledModelLeaseProvider _installedModels =
-        installedModels ?? throw new ArgumentNullException(nameof(installedModels));
-
-    private readonly ITrainingRunStore _runs = runs ?? throw new ArgumentNullException(nameof(runs));
-    private readonly ITrainingEvaluationStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly TrainingRunWorkspace _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+    public EvaluationRunExecutor(
+        ITrainingEvaluationStore store,
+        ITrainingRunStore runs,
+        ITrainingDatasetStore datasets,
+        TrainingRunWorkspace workspace,
+        ITransientLlamaServerEvaluationHarness evaluationHarness,
+        IInferenceChatClientFactory chatClientFactory,
+        ITrainingEvaluationInstalledModelLeaseProvider installedModels,
+        ITrainingRunEventBuffer events,
+        TrainingRunCancellationRegistry cancellations,
+        ILogger<EvaluationRunExecutor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(cancellations);
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(evaluationHarness);
+        ArgumentNullException.ThrowIfNull(chatClientFactory);
+        ArgumentNullException.ThrowIfNull(installedModels);
+        ArgumentNullException.ThrowIfNull(runs);
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(workspace);
+        _cancellations = cancellations;
+        _datasets = datasets;
+        _events = events;
+        _logger = logger;
+        _evaluationHarness = evaluationHarness;
+        _chatClientFactory = chatClientFactory;
+        _installedModels = installedModels;
+        _runs = runs;
+        _store = store;
+        _workspace = workspace;
+    }
 
     public async Task ExecuteAsync(TrainingWorkClaim claim, CancellationToken stoppingToken)
     {

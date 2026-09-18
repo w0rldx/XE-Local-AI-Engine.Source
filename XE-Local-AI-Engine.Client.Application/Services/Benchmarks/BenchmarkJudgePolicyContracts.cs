@@ -193,9 +193,14 @@ public static class BenchmarkJudgePolicyValidationCodes
     public const string PairwiseVersionUnsupported = "judge-policy-pairwise-version-unsupported";
 }
 
-public sealed class BenchmarkJudgePolicyValidationException(string code, string message) : InvalidOperationException(message)
+public sealed class BenchmarkJudgePolicyValidationException : InvalidOperationException
 {
-    public string Code { get; } = code;
+    public BenchmarkJudgePolicyValidationException(string code, string message) : base(message)
+    {
+        Code = code;
+    }
+
+    public string Code { get; }
 }
 
 public static class BenchmarkJudgePolicyValidator

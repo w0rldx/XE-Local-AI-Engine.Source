@@ -32,7 +32,7 @@ public interface IBenchmarkTaskItemService
     Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderAsync(Guid projectId, IReadOnlyList<Guid> orderedItemIds, CancellationToken cancellationToken = default);
 }
 
-public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : IBenchmarkTaskItemService
+public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
 {
     /// <summary>
     ///     The cap on LEAF items — the ones a freeze actually fans out over, so a generator's cases each count. Past
@@ -41,7 +41,13 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
     /// </summary>
     public const int MaxTaskItems = 20;
 
-    private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
+    private readonly IBenchmarkStore _benchmarkStore;
+
+    public BenchmarkTaskItemService(IBenchmarkStore benchmarkStore)
+    {
+        ArgumentNullException.ThrowIfNull(benchmarkStore);
+        _benchmarkStore = benchmarkStore;
+    }
 
     public Task<IReadOnlyList<BenchmarkTaskItemRecord>> ListAsync(Guid projectId, CancellationToken cancellationToken = default) =>
         _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken);

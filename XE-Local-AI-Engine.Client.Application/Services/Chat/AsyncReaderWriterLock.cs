@@ -200,11 +200,16 @@ internal sealed class AsyncReaderWriterLock
         }
     }
 
-    private sealed class Waiter(bool isReader)
+    private sealed class Waiter
     {
         private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public bool IsReader { get; } = isReader;
+        public Waiter(bool isReader)
+        {
+            IsReader = isReader;
+        }
+
+        public bool IsReader { get; }
 
         // Both Claimed and Node are only ever read/written under the owning lock's _sync.
         public bool Claimed { get; set; }

@@ -66,15 +66,25 @@ public interface IInstalledModelSnapshotCoordinator
     Task<InstalledModelFacts?> ReadFactsAsync(string modelName, CancellationToken cancellationToken = default);
 }
 
-public sealed class InstalledModelSnapshotCoordinator(
-    KeyedCompositeLockDomain lockDomain,
-    IInstalledGgufSnapshotStore snapshotStore,
-    ICoordinatedModelProviderMapStore providerMapStore) : IInstalledModelSnapshotCoordinator
+public sealed class InstalledModelSnapshotCoordinator : IInstalledModelSnapshotCoordinator
 {
     private const int MaxAttempts = 3;
-    private readonly KeyedCompositeLockDomain _lockDomain = lockDomain ?? throw new ArgumentNullException(nameof(lockDomain));
-    private readonly IInstalledGgufSnapshotStore _snapshotStore = snapshotStore ?? throw new ArgumentNullException(nameof(snapshotStore));
-    private readonly ICoordinatedModelProviderMapStore _providerMapStore = providerMapStore ?? throw new ArgumentNullException(nameof(providerMapStore));
+    private readonly KeyedCompositeLockDomain _lockDomain;
+    private readonly IInstalledGgufSnapshotStore _snapshotStore;
+    private readonly ICoordinatedModelProviderMapStore _providerMapStore;
+
+    public InstalledModelSnapshotCoordinator(
+        KeyedCompositeLockDomain lockDomain,
+        IInstalledGgufSnapshotStore snapshotStore,
+        ICoordinatedModelProviderMapStore providerMapStore)
+    {
+        ArgumentNullException.ThrowIfNull(lockDomain);
+        ArgumentNullException.ThrowIfNull(snapshotStore);
+        ArgumentNullException.ThrowIfNull(providerMapStore);
+        _lockDomain = lockDomain;
+        _snapshotStore = snapshotStore;
+        _providerMapStore = providerMapStore;
+    }
 
     public async Task<InstalledModelReadLease> AcquireReadSnapshotAsync(string modelName, CancellationToken cancellationToken = default)
     {
@@ -293,18 +303,26 @@ public sealed class InstalledModelSnapshotCoordinator(
     private static bool IsOptimisticConflict(InstalledGgufSnapshotException exception) =>
         exception.Code is "InstalledModelSnapshotUnstable" or "InstalledModelNotFound";
 
-    private sealed class InstalledModelMapLeaseView(ModelCoordinationLockLease inner, bool isMutation) : IModelProviderMapMutationLease
+    private sealed class InstalledModelMapLeaseView : IModelProviderMapMutationLease
     {
-        private readonly ModelCoordinationLockLease _inner = inner;
+        private readonly ModelCoordinationLockLease _inner;
 
-        public IReadOnlyList<string> MapKeys { get; } = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal)).ToArray();
+        public InstalledModelMapLeaseView(ModelCoordinationLockLease inner, bool isMutation)
+        {
+            _inner = inner;
+            MapKeys = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal)).ToArray();
+            ModelKeys = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal))
+                        .Select(static key => key["2:provider-map:".Length..])
+                        .ToArray();
+            IsMutation = isMutation;
+        }
 
-        public IReadOnlyList<string> ModelKeys { get; } = inner.Keys.Where(static key => key.StartsWith("2:provider-map:", StringComparison.Ordinal))
-                                                               .Select(static key => key["2:provider-map:".Length..])
-                                                               .ToArray();
+        public IReadOnlyList<string> MapKeys { get; }
+
+        public IReadOnlyList<string> ModelKeys { get; }
 
         public bool IsDisposed => _inner.IsDisposed;
-        public bool IsMutation { get; } = isMutation;
+        public bool IsMutation { get; }
 
         public bool ContainsModel(string modelName) =>
             MapKeys.Contains(ModelCoordinationKeys.ProviderMap(modelName), StringComparer.Ordinal);

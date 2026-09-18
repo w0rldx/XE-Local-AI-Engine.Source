@@ -8,35 +8,67 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
-internal sealed class LlamaCppRuntimeAdministrationService(
-    ILlamaCppBinaryManager binaryManager,
-    ILlamaCppReleaseCatalog releaseCatalog,
-    IGpuVariantSelector variantSelector,
-    IInstalledRuntimeStore installedRuntimeStore,
-    ILlamaCppSourceBuildActivity sourceBuildActivity,
-    ILlamaCppUpdateState updateState,
-    IRuntimeAcquisitionStatusRegistry acquisitionStatus,
-    INodeRuntimeSettings nodeRuntimeSettings,
-    ILlamaServerProcessSupervisor processSupervisor,
-    ILocalChatClientCacheInvalidator localChatClientCacheInvalidator,
-    LlamaServerRuntimeOverrideOptions overrideOptions,
-    IHostApplicationLifetime applicationLifetime,
-    ILogger<LlamaCppRuntimeAdministrationService> logger,
-    TimeProvider timeProvider) : ILlamaCppRuntimeAdministrationService
+internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdministrationService
 {
     private const string KeepModelWarmBlockedMessage =
         "Disable Keep Model Warm before changing the llama.cpp runtime, then eject any running models and retry.";
 
     private static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(60);
     private readonly Lock _taskGate = new();
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly TimeProvider _timeProvider;
+    private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly ILlamaCppReleaseCatalog _releaseCatalog;
+    private readonly IGpuVariantSelector _variantSelector;
+    private readonly IInstalledRuntimeStore _installedRuntimeStore;
+    private readonly ILlamaCppSourceBuildActivity _sourceBuildActivity;
+    private readonly ILlamaCppUpdateState _updateState;
+    private readonly IRuntimeAcquisitionStatusRegistry _acquisitionStatus;
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings;
+    private readonly ILlamaServerProcessSupervisor _processSupervisor;
+    private readonly ILocalChatClientCacheInvalidator _localChatClientCacheInvalidator;
+    private readonly LlamaServerRuntimeOverrideOptions _overrideOptions;
+    private readonly IHostApplicationLifetime _applicationLifetime;
+    private readonly ILogger<LlamaCppRuntimeAdministrationService> _logger;
     private Task? _ownedAcquisitionTask;
+
+    public LlamaCppRuntimeAdministrationService(
+        ILlamaCppBinaryManager binaryManager,
+        ILlamaCppReleaseCatalog releaseCatalog,
+        IGpuVariantSelector variantSelector,
+        IInstalledRuntimeStore installedRuntimeStore,
+        ILlamaCppSourceBuildActivity sourceBuildActivity,
+        ILlamaCppUpdateState updateState,
+        IRuntimeAcquisitionStatusRegistry acquisitionStatus,
+        INodeRuntimeSettings nodeRuntimeSettings,
+        ILlamaServerProcessSupervisor processSupervisor,
+        ILocalChatClientCacheInvalidator localChatClientCacheInvalidator,
+        LlamaServerRuntimeOverrideOptions overrideOptions,
+        IHostApplicationLifetime applicationLifetime,
+        ILogger<LlamaCppRuntimeAdministrationService> logger,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _binaryManager = binaryManager;
+        _releaseCatalog = releaseCatalog;
+        _variantSelector = variantSelector;
+        _installedRuntimeStore = installedRuntimeStore;
+        _sourceBuildActivity = sourceBuildActivity;
+        _updateState = updateState;
+        _acquisitionStatus = acquisitionStatus;
+        _nodeRuntimeSettings = nodeRuntimeSettings;
+        _processSupervisor = processSupervisor;
+        _localChatClientCacheInvalidator = localChatClientCacheInvalidator;
+        _overrideOptions = overrideOptions;
+        _applicationLifetime = applicationLifetime;
+        _logger = logger;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<LlamaCppRuntimeStatus> GetStatusAsync(bool refresh = false, CancellationToken cancellationToken = default)
     {
-        var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
-        var installed = await installedRuntimeStore.ReadAsync(cancellationToken);
-        var current = updateState.Current;
+        var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
+        var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
+        var current = _updateState.Current;
         var snapshot = refresh && IsStale(current.CheckedAtUtc, _timeProvider.GetUtcNow())
             ? await ComputeFreshSnapshotAsync(recommendedTag, installed?.Tag, cancellationToken)
             : current;
@@ -46,13 +78,13 @@ internal sealed class LlamaCppRuntimeAdministrationService(
             snapshot.UpstreamLatestTag,
             snapshot.UpdateAvailable,
             snapshot.IsOffline,
-            processSupervisor.CountRunningProcesses(),
+            _processSupervisor.CountRunningProcesses(),
             snapshot.CheckedAtUtc);
     }
 
     public LlamaCppRuntimeAcquisitionStatus GetAcquisitionStatus()
     {
-        var current = acquisitionStatus.Current;
+        var current = _acquisitionStatus.Current;
         return new LlamaCppRuntimeAcquisitionStatus(current.Sequence,
             current.Phase,
             current.Variant,
@@ -78,8 +110,8 @@ internal sealed class LlamaCppRuntimeAdministrationService(
 
         try
         {
-            var binary = await binaryManager.EnsureBinaryAsync(variant, lease, cancellationToken);
-            var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
+            var binary = await _binaryManager.EnsureBinaryAsync(variant, lease, cancellationToken);
+            var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
             return LlamaCppRuntimeMutationResult.Success(ToView(binary), recommendedTag);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -88,7 +120,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         }
         catch (LlamaRuntimeException exception)
         {
-            logger.LogWarning(exception, "Ensuring the llama.cpp binary for variant {Variant} failed.", variant);
+            _logger.LogWarning(exception, "Ensuring the llama.cpp binary for variant {Variant} failed.", variant);
             return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.RuntimeFailure, exception.Message);
         }
     }
@@ -97,7 +129,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         GpuVariant? variant = null,
         CancellationToken cancellationToken = default)
     {
-        if (overrideOptions.IsActive)
+        if (_overrideOptions.IsActive)
         {
             return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
                 "Runtime updates are disabled while a bring-your-own llama-server override is active; the operator manages the binary.");
@@ -110,17 +142,17 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         }
 
         var canonicalTag = tag.Trim();
-        if (await nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
+        if (await _nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
         {
             return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
                 KeepModelWarmBlockedMessage,
-                processSupervisor.CountRunningProcesses());
+                _processSupervisor.CountRunningProcesses());
         }
 
-        var selectedVariant = variant ?? await variantSelector.SelectVariantAsync(cancellationToken);
+        var selectedVariant = variant ?? await _variantSelector.SelectVariantAsync(cancellationToken);
         try
         {
-            var asset = await releaseCatalog.ResolveAssetAsync(canonicalTag,
+            var asset = await _releaseCatalog.ResolveAssetAsync(canonicalTag,
                 CurrentOsPlatform(),
                 RuntimeInformation.OSArchitecture,
                 selectedVariant,
@@ -140,16 +172,16 @@ internal sealed class LlamaCppRuntimeAdministrationService(
                     admission.RunningProcessCount);
             }
 
-            var binary = await binaryManager.InstallTagAsync(canonicalTag,
+            var binary = await _binaryManager.InstallTagAsync(canonicalTag,
                 asset.Asset.Name,
                 asset.Asset.Digest,
                 asset.Asset.Size,
                 selectedVariant,
                 lease,
                 cancellationToken);
-            localChatClientCacheInvalidator.ClearClientCache();
+            _localChatClientCacheInvalidator.ClearClientCache();
             await RefreshSnapshotAsync(canonicalTag, cancellationToken);
-            var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
+            var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
             return LlamaCppRuntimeMutationResult.Success(ToView(binary), recommendedTag);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -158,7 +190,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         }
         catch (LlamaRuntimeException exception)
         {
-            logger.LogWarning(exception, "Installing the llama.cpp runtime for tag {Tag} failed.", canonicalTag);
+            _logger.LogWarning(exception, "Installing the llama.cpp runtime for tag {Tag} failed.", canonicalTag);
             return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.RuntimeFailure, exception.Message);
         }
     }
@@ -166,7 +198,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
     public async Task<LlamaCppRuntimeAcquisitionStartResult> StartAcquisitionAsync(GpuVariant? variant = null,
         CancellationToken cancellationToken = default)
     {
-        var selectedVariant = variant ?? await variantSelector.SelectVariantAsync(cancellationToken);
+        var selectedVariant = variant ?? await _variantSelector.SelectVariantAsync(cancellationToken);
         var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken);
         if (admission.Lease is null || admission.BlockedMessage is not null)
         {
@@ -185,7 +217,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         Task ownedTask;
         lock (_taskGate)
         {
-            ownedTask = RunOwnedAcquisitionAsync(selectedVariant, admission.Lease, applicationLifetime.ApplicationStopping);
+            ownedTask = RunOwnedAcquisitionAsync(selectedVariant, admission.Lease, _applicationLifetime.ApplicationStopping);
             _ownedAcquisitionTask = ownedTask;
         }
 
@@ -198,38 +230,38 @@ internal sealed class LlamaCppRuntimeAdministrationService(
 
     private async Task<PrebuiltMutationAdmission> TryAcquirePrebuiltMutationAsync(CancellationToken cancellationToken)
     {
-        if (await nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
+        if (await _nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
         {
-            return new PrebuiltMutationAdmission(null, processSupervisor.CountRunningProcesses(), KeepModelWarmBlockedMessage);
+            return new PrebuiltMutationAdmission(null, _processSupervisor.CountRunningProcesses(), KeepModelWarmBlockedMessage);
         }
 
-        var lease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
+        var lease = await _processSupervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
         if (lease is null)
         {
             return new PrebuiltMutationAdmission(null,
-                processSupervisor.CountRunningProcesses(),
+                _processSupervisor.CountRunningProcesses(),
                 "The llama.cpp runtime is busy with another build or runtime change. Try again after it completes.");
         }
 
         var transferred = false;
         try
         {
-            var installed = await installedRuntimeStore.ReadAsync(cancellationToken);
+            var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
             if (installed?.SourceBuildPath is { Length: > 0 })
             {
                 return new PrebuiltMutationAdmission(null,
-                    processSupervisor.CountRunningProcesses(),
+                    _processSupervisor.CountRunningProcesses(),
                     "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.");
             }
 
-            if (sourceBuildActivity.ActiveBuildId is not null)
+            if (_sourceBuildActivity.ActiveBuildId is not null)
             {
                 return new PrebuiltMutationAdmission(null,
-                    processSupervisor.CountRunningProcesses(),
+                    _processSupervisor.CountRunningProcesses(),
                     "Wait for the active llama.cpp source build to finish or cancel it before installing a prebuilt runtime.");
             }
 
-            var runningProcessCount = processSupervisor.CountRunningProcesses();
+            var runningProcessCount = _processSupervisor.CountRunningProcesses();
             if (runningProcessCount > 0)
             {
                 return new PrebuiltMutationAdmission(null,
@@ -255,7 +287,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
     {
         await using (lease)
         {
-            await binaryManager.EnsureBinaryAsync(variant, lease, applicationStopping);
+            await _binaryManager.EnsureBinaryAsync(variant, lease, applicationStopping);
         }
     }
 
@@ -265,13 +297,13 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         {
             await task;
         }
-        catch (OperationCanceledException) when (applicationLifetime.ApplicationStopping.IsCancellationRequested)
+        catch (OperationCanceledException) when (_applicationLifetime.ApplicationStopping.IsCancellationRequested)
         {
-            logger.LogInformation("llama.cpp runtime acquisition for {Variant} stopped with the host.", variant);
+            _logger.LogInformation("llama.cpp runtime acquisition for {Variant} stopped with the host.", variant);
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "Detached llama.cpp runtime acquisition for {Variant} failed.", variant);
+            _logger.LogWarning(exception, "Detached llama.cpp runtime acquisition for {Variant} failed.", variant);
         }
         finally
         {
@@ -289,8 +321,8 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         string? installedTag,
         CancellationToken cancellationToken)
     {
-        var recommendedResult = await releaseCatalog.ResolveRecommendedAsync(recommendedTag, cancellationToken);
-        var upstreamResult = await releaseCatalog.ResolveUpstreamLatestAsync(cancellationToken);
+        var recommendedResult = await _releaseCatalog.ResolveRecommendedAsync(recommendedTag, cancellationToken);
+        var upstreamResult = await _releaseCatalog.ResolveUpstreamLatestAsync(cancellationToken);
         var resolvedRecommended = recommendedResult.Tag;
         var snapshot = new LlamaCppUpdateSnapshot(installedTag,
             resolvedRecommended ?? recommendedTag,
@@ -298,17 +330,17 @@ internal sealed class LlamaCppRuntimeAdministrationService(
             LlamaCppRuntimeTag.IsUpdateAvailable(installedTag, resolvedRecommended),
             recommendedResult.IsOffline || recommendedResult.IsRateLimited,
             _timeProvider.GetUtcNow());
-        updateState.Store(snapshot);
+        _updateState.Store(snapshot);
         return snapshot;
     }
 
     private async Task RefreshSnapshotAsync(string installedTag, CancellationToken cancellationToken)
     {
-        var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
-        var installed = await installedRuntimeStore.ReadAsync(cancellationToken);
+        var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
+        var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
         var effectiveInstalledTag = installed?.Tag ?? installedTag;
-        var previous = updateState.Current;
-        updateState.Store(new LlamaCppUpdateSnapshot(effectiveInstalledTag,
+        var previous = _updateState.Current;
+        _updateState.Store(new LlamaCppUpdateSnapshot(effectiveInstalledTag,
             recommendedTag,
             previous.UpstreamLatestTag,
             LlamaCppRuntimeTag.IsUpdateAvailable(effectiveInstalledTag, recommendedTag),

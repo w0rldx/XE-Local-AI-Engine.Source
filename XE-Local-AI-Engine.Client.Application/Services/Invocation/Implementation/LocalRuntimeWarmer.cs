@@ -18,18 +18,32 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 ///     Owned by <see cref="InvocationRunner" />, which calls it once per turn and (on the orchestration path) once per
 ///     participant model; it holds no per-turn state of its own, so a single instance serves every invocation.
 /// </summary>
-public sealed class LocalRuntimeWarmer(
-    ILocalModelProviderResolver providerResolver,
-    IActiveCloudChatClientFactory activeCloudFactory,
-    IModelTrustResolver modelTrustResolver,
-    ILogger<LocalRuntimeWarmer> logger,
-    TimeProvider timeProvider)
+public sealed class LocalRuntimeWarmer
 {
-    private readonly IActiveCloudChatClientFactory _activeCloudFactory = activeCloudFactory ?? throw new ArgumentNullException(nameof(activeCloudFactory));
-    private readonly ILogger<LocalRuntimeWarmer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IActiveCloudChatClientFactory _activeCloudFactory;
+    private readonly ILogger<LocalRuntimeWarmer> _logger;
+    private readonly IModelTrustResolver _modelTrustResolver;
+    private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly TimeProvider _timeProvider;
+
+    public LocalRuntimeWarmer(
+        ILocalModelProviderResolver providerResolver,
+        IActiveCloudChatClientFactory activeCloudFactory,
+        IModelTrustResolver modelTrustResolver,
+        ILogger<LocalRuntimeWarmer> logger,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(activeCloudFactory);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _activeCloudFactory = activeCloudFactory;
+        _logger = logger;
+        _modelTrustResolver = modelTrustResolver;
+        _providerResolver = providerResolver;
+        _timeProvider = timeProvider;
+    }
 
     /// <summary>
     ///     Model-readiness phase: warms a LOCAL (llama.cpp) model to readiness BEFORE the stream-idle watchdog

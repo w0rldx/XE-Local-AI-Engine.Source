@@ -141,4 +141,9 @@ internal sealed class WorkSessionWriteDeclarationGuard
 ///         failure class.
 ///     </para>
 /// </summary>
-internal sealed class WorkSessionUndeclaredWriteException(string message) : InvalidOperationException(message);
+internal sealed class WorkSessionUndeclaredWriteException : InvalidOperationException
+{
+    public WorkSessionUndeclaredWriteException(string message) : base(message)
+    {
+    }
+}

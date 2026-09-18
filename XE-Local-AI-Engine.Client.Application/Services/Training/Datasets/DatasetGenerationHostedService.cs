@@ -14,20 +14,35 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         the exclusive holder releases, instead of being terminalized as failed.
 ///     </para>
 /// </summary>
-public sealed class DatasetGenerationHostedService(
-    IServiceScopeFactory scopeFactory,
-    IDatasetGenerationQueueSignal signal,
-    IDatasetGenerationEventBuffer events,
-    IGpuWorkGate gpuWorkGate,
-    IOptions<DatasetGenerationQueueOptions> options,
-    ILogger<DatasetGenerationHostedService> logger) : BackgroundService
+public sealed class DatasetGenerationHostedService : BackgroundService
 {
-    private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly IGpuWorkGate _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
-    private readonly ILogger<DatasetGenerationHostedService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly TimeSpan _pollInterval = (options ?? throw new ArgumentNullException(nameof(options))).Value.PollInterval;
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    private readonly IDatasetGenerationQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
+    private readonly IDatasetGenerationEventBuffer _events;
+    private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly ILogger<DatasetGenerationHostedService> _logger;
+    private readonly TimeSpan _pollInterval;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IDatasetGenerationQueueSignal _signal;
+
+    public DatasetGenerationHostedService(
+        IServiceScopeFactory scopeFactory,
+        IDatasetGenerationQueueSignal signal,
+        IDatasetGenerationEventBuffer events,
+        IGpuWorkGate gpuWorkGate,
+        IOptions<DatasetGenerationQueueOptions> options,
+        ILogger<DatasetGenerationHostedService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        _events = events;
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        _gpuWorkGate = gpuWorkGate;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _pollInterval = (options ?? throw new ArgumentNullException(nameof(options))).Value.PollInterval;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        ArgumentNullException.ThrowIfNull(signal);
+        _signal = signal;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

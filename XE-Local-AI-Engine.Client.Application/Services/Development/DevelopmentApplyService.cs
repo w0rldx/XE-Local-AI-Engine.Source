@@ -22,22 +22,38 @@ internal interface IDevelopmentApplyService
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class DevelopmentApplyService(
-    IDevelopmentStore store,
-    IDevelopmentCoordinator coordinator,
-    IDevelopmentWorkspaceProvider workspaceProvider,
-    IDevelopmentEvidenceService evidence,
-    IDevelopmentRepositoryBindingService repositoryBindings,
-    TimeProvider timeProvider) : IDevelopmentApplyService
+internal sealed class DevelopmentApplyService : IDevelopmentApplyService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly IDevelopmentCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
-    private readonly IDevelopmentEvidenceService _evidence = evidence ?? throw new ArgumentNullException(nameof(evidence));
-    private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
-    private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly IDevelopmentWorkspaceProvider _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
+    private readonly IDevelopmentCoordinator _coordinator;
+    private readonly IDevelopmentEvidenceService _evidence;
+    private readonly IDevelopmentRepositoryBindingService _repositoryBindings;
+    private readonly IDevelopmentStore _store;
+    private readonly TimeProvider _timeProvider;
+    private readonly IDevelopmentWorkspaceProvider _workspaceProvider;
+
+    public DevelopmentApplyService(
+        IDevelopmentStore store,
+        IDevelopmentCoordinator coordinator,
+        IDevelopmentWorkspaceProvider workspaceProvider,
+        IDevelopmentEvidenceService evidence,
+        IDevelopmentRepositoryBindingService repositoryBindings,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        ArgumentNullException.ThrowIfNull(evidence);
+        ArgumentNullException.ThrowIfNull(repositoryBindings);
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(workspaceProvider);
+        _coordinator = coordinator;
+        _evidence = evidence;
+        _repositoryBindings = repositoryBindings;
+        _store = store;
+        _timeProvider = timeProvider;
+        _workspaceProvider = workspaceProvider;
+    }
 
     public async Task<DevelopmentPatchPreview> PreviewAsync(Guid taskId,
         DevelopmentRepositoryBinding repository,

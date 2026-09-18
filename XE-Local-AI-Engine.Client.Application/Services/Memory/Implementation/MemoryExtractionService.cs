@@ -13,18 +13,31 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 ///     actions for human review. Candidates are inert by construction (the resolver injects only <c>Enabled</c> actions);
 ///     promotion stays an eval-gated, human step.
 /// </summary>
-internal sealed class MemoryExtractionService(
-    IMemoryExtractionAgent extractionAgent,
-    IPlaybookActionStore playbookActionStore,
-    IMemorySemanticDeduplicator semanticDeduplicator,
-    IOptions<MemoryExtractionOptions> options,
-    ILogger<MemoryExtractionService> logger) : IMemoryExtractionService
+internal sealed class MemoryExtractionService : IMemoryExtractionService
 {
-    private readonly IMemoryExtractionAgent _extractionAgent = extractionAgent ?? throw new ArgumentNullException(nameof(extractionAgent));
-    private readonly ILogger<MemoryExtractionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly MemoryExtractionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
-    private readonly IMemorySemanticDeduplicator _semanticDeduplicator = semanticDeduplicator ?? throw new ArgumentNullException(nameof(semanticDeduplicator));
+    private readonly IMemoryExtractionAgent _extractionAgent;
+    private readonly ILogger<MemoryExtractionService> _logger;
+    private readonly MemoryExtractionOptions _options;
+    private readonly IPlaybookActionStore _playbookActionStore;
+    private readonly IMemorySemanticDeduplicator _semanticDeduplicator;
+
+    public MemoryExtractionService(
+        IMemoryExtractionAgent extractionAgent,
+        IPlaybookActionStore playbookActionStore,
+        IMemorySemanticDeduplicator semanticDeduplicator,
+        IOptions<MemoryExtractionOptions> options,
+        ILogger<MemoryExtractionService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(extractionAgent);
+        _extractionAgent = extractionAgent;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(playbookActionStore);
+        _playbookActionStore = playbookActionStore;
+        ArgumentNullException.ThrowIfNull(semanticDeduplicator);
+        _semanticDeduplicator = semanticDeduplicator;
+    }
 
     public async Task<MemoryExtractionOutcome> ExtractAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default)
     {

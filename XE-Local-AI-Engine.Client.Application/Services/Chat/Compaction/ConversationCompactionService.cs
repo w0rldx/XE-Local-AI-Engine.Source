@@ -9,29 +9,43 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     persists the (extended) synopsis via <see cref="INodeChatPersistenceService.SetCompactionSummaryAsync" />. The
 ///     original messages are untouched.
 /// </summary>
-internal sealed class ConversationCompactionService(
-    INodeChatPersistenceService persistence,
-    IConversationSummarizer summarizer,
-    ILocalDefaultChatModelResolver localDefaultChatModelResolver,
-    IModelCapabilityResolver modelCapabilityResolver,
-    INodeSettingsStore nodeSettingsStore,
-    IOptions<ConversationCompactionOptions> options,
-    TimeProvider timeProvider,
-    ILogger<ConversationCompactionService> logger) : IConversationCompactionService
+internal sealed class ConversationCompactionService : IConversationCompactionService
 {
-    private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-    private readonly IConversationSummarizer _summarizer = summarizer ?? throw new ArgumentNullException(nameof(summarizer));
+    private readonly INodeChatPersistenceService _persistence;
+    private readonly IConversationSummarizer _summarizer;
+    private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver;
+    private readonly IModelCapabilityResolver _modelCapabilityResolver;
+    private readonly INodeSettingsStore _nodeSettingsStore;
+    private readonly ConversationCompactionOptions _options;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<ConversationCompactionService> _logger;
 
-    private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver =
-        localDefaultChatModelResolver ?? throw new ArgumentNullException(nameof(localDefaultChatModelResolver));
-
-    private readonly IModelCapabilityResolver _modelCapabilityResolver =
-        modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
-
-    private readonly INodeSettingsStore _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
-    private readonly ConversationCompactionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly ILogger<ConversationCompactionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    public ConversationCompactionService(
+        INodeChatPersistenceService persistence,
+        IConversationSummarizer summarizer,
+        ILocalDefaultChatModelResolver localDefaultChatModelResolver,
+        IModelCapabilityResolver modelCapabilityResolver,
+        INodeSettingsStore nodeSettingsStore,
+        IOptions<ConversationCompactionOptions> options,
+        TimeProvider timeProvider,
+        ILogger<ConversationCompactionService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
+        ArgumentNullException.ThrowIfNull(summarizer);
+        _summarizer = summarizer;
+        ArgumentNullException.ThrowIfNull(localDefaultChatModelResolver);
+        _localDefaultChatModelResolver = localDefaultChatModelResolver;
+        ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
+        _modelCapabilityResolver = modelCapabilityResolver;
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        _nodeSettingsStore = nodeSettingsStore;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+    }
 
     public Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
         CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, cancellationToken);

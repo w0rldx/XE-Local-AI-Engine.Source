@@ -14,10 +14,18 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 ///         the endpoint from having to take the <c>AI.Agent</c> policy contract itself.
 ///     </para>
 /// </summary>
-public sealed class ToolCatalogService(ILocalToolOfferProvider localToolOfferProvider, IToolApprovalPolicy approvalPolicy)
+public sealed class ToolCatalogService
 {
-    private readonly ILocalToolOfferProvider _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
-    private readonly IToolApprovalPolicy _approvalPolicy = approvalPolicy ?? throw new ArgumentNullException(nameof(approvalPolicy));
+    private readonly ILocalToolOfferProvider _localToolOfferProvider;
+    private readonly IToolApprovalPolicy _approvalPolicy;
+
+    public ToolCatalogService(ILocalToolOfferProvider localToolOfferProvider, IToolApprovalPolicy approvalPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(localToolOfferProvider);
+        ArgumentNullException.ThrowIfNull(approvalPolicy);
+        _localToolOfferProvider = localToolOfferProvider;
+        _approvalPolicy = approvalPolicy;
+    }
 
     /// <summary>
     ///     The full tool catalog as rich entries, ungated by model capability:

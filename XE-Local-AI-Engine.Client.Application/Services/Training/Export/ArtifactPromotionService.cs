@@ -24,20 +24,36 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///         produce one at all.
 ///     </para>
 /// </remarks>
-public sealed class ArtifactPromotionService(
-    ITrainingRunStore runStore,
-    ITrainingBaseArtifactStore baseArtifacts,
-    IGgufModelStore models,
-    IGgufAcquisitionPreflight preflight,
-    IGgufModelImporter importer,
-    ILogger<ArtifactPromotionService> logger) : IArtifactPromotionService
+public sealed class ArtifactPromotionService : IArtifactPromotionService
 {
-    private readonly ITrainingBaseArtifactStore _baseArtifacts = baseArtifacts ?? throw new ArgumentNullException(nameof(baseArtifacts));
-    private readonly IGgufModelImporter _importer = importer ?? throw new ArgumentNullException(nameof(importer));
-    private readonly ILogger<ArtifactPromotionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IGgufModelStore _models = models ?? throw new ArgumentNullException(nameof(models));
-    private readonly IGgufAcquisitionPreflight _preflight = preflight ?? throw new ArgumentNullException(nameof(preflight));
-    private readonly ITrainingRunStore _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
+    private readonly ITrainingBaseArtifactStore _baseArtifacts;
+    private readonly IGgufModelImporter _importer;
+    private readonly ILogger<ArtifactPromotionService> _logger;
+    private readonly IGgufModelStore _models;
+    private readonly IGgufAcquisitionPreflight _preflight;
+    private readonly ITrainingRunStore _runStore;
+
+    public ArtifactPromotionService(
+        ITrainingRunStore runStore,
+        ITrainingBaseArtifactStore baseArtifacts,
+        IGgufModelStore models,
+        IGgufAcquisitionPreflight preflight,
+        IGgufModelImporter importer,
+        ILogger<ArtifactPromotionService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(baseArtifacts);
+        ArgumentNullException.ThrowIfNull(importer);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(models);
+        ArgumentNullException.ThrowIfNull(preflight);
+        ArgumentNullException.ThrowIfNull(runStore);
+        _baseArtifacts = baseArtifacts;
+        _importer = importer;
+        _logger = logger;
+        _models = models;
+        _preflight = preflight;
+        _runStore = runStore;
+    }
 
     public async Task<string> PromoteAsync(Guid artifactId, string modelName, CancellationToken cancellationToken = default)
     {

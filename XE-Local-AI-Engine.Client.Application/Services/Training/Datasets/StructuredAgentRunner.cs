@@ -28,12 +28,22 @@ public interface IStructuredAgentRunner
 ///         <see cref="TeacherOutputMode.ValidateAfter" /> sets none and leaves post-hoc validation to the pipeline.
 ///     </para>
 /// </summary>
-public sealed class StructuredAgentRunner(
-    IModelCapabilityResolver capabilityResolver,
-    ILoggerFactory loggerFactory,
-    IServiceProvider serviceProvider) : IStructuredAgentRunner
+public sealed class StructuredAgentRunner : IStructuredAgentRunner
 {
     private readonly TimeSpan _turnTimeout = TurnTimeout;
+
+    public StructuredAgentRunner(
+        IModelCapabilityResolver capabilityResolver,
+        ILoggerFactory loggerFactory,
+        IServiceProvider serviceProvider)
+    {
+        ArgumentNullException.ThrowIfNull(capabilityResolver);
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        _capabilityResolver = capabilityResolver;
+        _loggerFactory = loggerFactory;
+        _serviceProvider = serviceProvider;
+    }
 
     /// <summary>Test seam: the same runner with a caller-chosen per-turn deadline.</summary>
     internal StructuredAgentRunner(IModelCapabilityResolver capabilityResolver,
@@ -55,9 +65,9 @@ public sealed class StructuredAgentRunner(
     /// </summary>
     internal static readonly TimeSpan TurnTimeout = TrainingAiClientPolicy.TurnTimeout;
 
-    private readonly IModelCapabilityResolver _capabilityResolver = capabilityResolver ?? throw new ArgumentNullException(nameof(capabilityResolver));
-    private readonly ILoggerFactory _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-    private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+    private readonly IModelCapabilityResolver _capabilityResolver;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly IServiceProvider _serviceProvider;
 
     public async Task<StructuredAgentResult> RunAsync(IChatClient chatClient,
         StructuredAgentRequest request,

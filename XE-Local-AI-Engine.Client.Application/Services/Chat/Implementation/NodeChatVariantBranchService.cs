@@ -11,12 +11,20 @@ using static NodeChatPersistenceSql;
 ///     branch source via <see cref="NodeChatReadModel" /> on its own write key before writing under the new
 ///     conversation's key (two serialized scopes avoid a cross-conversation lock-ordering hazard).
 /// </summary>
-internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter writer, NodeChatReadModel readModel)
+internal sealed class NodeChatVariantBranchService
 {
     private const string AssistantRole = "assistant";
 
-    private readonly NodeChatReadModel _readModel = readModel ?? throw new ArgumentNullException(nameof(readModel));
-    private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+    private readonly NodeChatReadModel _readModel;
+    private readonly NodeChatPersistenceWriter _writer;
+
+    public NodeChatVariantBranchService(NodeChatPersistenceWriter writer, NodeChatReadModel readModel)
+    {
+        ArgumentNullException.ThrowIfNull(readModel);
+        ArgumentNullException.ThrowIfNull(writer);
+        _readModel = readModel;
+        _writer = writer;
+    }
 
     public async Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default)
     {

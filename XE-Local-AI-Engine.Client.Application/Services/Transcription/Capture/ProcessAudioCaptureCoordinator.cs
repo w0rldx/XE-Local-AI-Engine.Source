@@ -170,7 +170,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
     ///     One session's capture: the handle the registry actually holds. Separate from the coordinator because
     ///     <see cref="ILiveAudioProducer.StopAsync" /> has no session parameter.
     /// </summary>
-    private sealed class SessionCapture(ProcessAudioCaptureCoordinator owner, Guid sessionId, int processId) : ILiveAudioProducer
+    private sealed class SessionCapture : ILiveAudioProducer
     {
         // One lock, because publishing the registration and tearing it down are the same critical section. Without
         // it a stop could win while _cancellation was still null, skip the cancel, and then dispose — from its
@@ -179,11 +179,21 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
         // InvalidOperationException, so Start caught it and reported SessionNotLive for a capture that had in fact
         // started. In the variant where the loop was already running, it ran on a token nothing could cancel.
         private readonly Lock _gate = new();
+        private readonly ProcessAudioCaptureCoordinator _owner;
+        private readonly Guid _sessionId;
+        private readonly int _processId;
 
         private CancellationTokenSource? _cancellation;
         private IDisposable? _detach;
         private bool _stopRequested;
         private bool _cleaned;
+
+        public SessionCapture(ProcessAudioCaptureCoordinator owner, Guid sessionId, int processId)
+        {
+            _owner = owner;
+            _sessionId = sessionId;
+            _processId = processId;
+        }
 
         /// <summary>The detached capture task. Never faults: every failure is caught and logged by the loop.</summary>
         internal Task Capture { get; private set; } = Task.CompletedTask;
@@ -197,7 +207,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
         {
             // Outside the lock: AttachProducer takes the registry's own gate, and a stop cannot reach this handle
             // in a way that matters until the registration below is published.
-            var registration = owner._registry.AttachProducer(sessionId, this);
+            var registration = _owner._registry.AttachProducer(_sessionId, this);
 
             lock (_gate)
             {
@@ -269,7 +279,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             {
                 // Nothing is published yet. Drop the entry so nothing else finds this handle, and leave the
                 // teardown to Attach, which will see _stopRequested under this same lock.
-                _ = owner._captures.TryRemove(new KeyValuePair<Guid, SessionCapture>(sessionId, this));
+                _ = _owner._captures.TryRemove(new KeyValuePair<Guid, SessionCapture>(_sessionId, this));
                 return;
             }
 
@@ -287,11 +297,11 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             catch (Exception exception)
 #pragma warning restore CA1031
             {
-                owner._logger.LogWarning(exception, "Stopping per-application capture for transcription session {SessionId} was not clean.", sessionId);
+                _owner._logger.LogWarning(exception, "Stopping per-application capture for transcription session {SessionId} was not clean.", _sessionId);
             }
             finally
             {
-                _ = owner._captures.TryRemove(new KeyValuePair<Guid, SessionCapture>(sessionId, this));
+                _ = _owner._captures.TryRemove(new KeyValuePair<Guid, SessionCapture>(_sessionId, this));
                 _cancellation.Dispose();
             }
         }
@@ -303,7 +313,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
                 // A stop that won the interlock before Attach finished has already cancelled this token. Bail
                 // before building a recorder only to tear it straight down again.
                 cancellationToken.ThrowIfCancellationRequested();
-                await owner._source.CaptureAsync(sessionId, processId, cancellationToken);
+                await _owner._source.CaptureAsync(_sessionId, _processId, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -315,7 +325,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             {
                 // The target process exited, or CoreAudio failed. Either way capture is over; the session lives on
                 // until something ends it through the registry.
-                owner._logger.LogError(exception, "Per-application capture for transcription session {SessionId} ended unexpectedly.", sessionId);
+                _owner._logger.LogError(exception, "Per-application capture for transcription session {SessionId} ended unexpectedly.", _sessionId);
             }
             finally
             {

@@ -6,14 +6,31 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 
-internal sealed class LocalModelAdministrationService(
-    ILocalModelDeletionCoordinator deletionCoordinator,
-    ILocalModelProviderResolver providerResolver,
-    INodeSettingsStore nodeSettingsStore,
-    DefaultModelSelectionPolicy defaultModelSelectionPolicy,
-    ModelNameValidator modelNameValidator,
-    ILogger<LocalModelAdministrationService> logger) : ILocalModelAdministrationService
+internal sealed class LocalModelAdministrationService : ILocalModelAdministrationService
 {
+    private readonly ILocalModelDeletionCoordinator _deletionCoordinator;
+    private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly INodeSettingsStore _nodeSettingsStore;
+    private readonly DefaultModelSelectionPolicy _defaultModelSelectionPolicy;
+    private readonly ModelNameValidator _modelNameValidator;
+    private readonly ILogger<LocalModelAdministrationService> _logger;
+
+    public LocalModelAdministrationService(
+        ILocalModelDeletionCoordinator deletionCoordinator,
+        ILocalModelProviderResolver providerResolver,
+        INodeSettingsStore nodeSettingsStore,
+        DefaultModelSelectionPolicy defaultModelSelectionPolicy,
+        ModelNameValidator modelNameValidator,
+        ILogger<LocalModelAdministrationService> logger)
+    {
+        _deletionCoordinator = deletionCoordinator;
+        _providerResolver = providerResolver;
+        _nodeSettingsStore = nodeSettingsStore;
+        _defaultModelSelectionPolicy = defaultModelSelectionPolicy;
+        _modelNameValidator = modelNameValidator;
+        _logger = logger;
+    }
+
     public async Task<LocalModelDeletionResult> DeleteAsync(string? modelName, CancellationToken cancellationToken = default)
     {
         var validationFailure = Validate(modelName);
@@ -24,13 +41,13 @@ internal sealed class LocalModelAdministrationService(
         }
 
         var canonicalName = modelName!.Trim();
-        var providerName = await providerResolver.ResolveProviderNameForModelAsync(canonicalName, cancellationToken);
+        var providerName = await _providerResolver.ResolveProviderNameForModelAsync(canonicalName, cancellationToken);
         if (string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
         {
             CommittedModelDeletion committed;
             try
             {
-                committed = await deletionCoordinator.CommitDeleteAsync(canonicalName, cancellationToken);
+                committed = await _deletionCoordinator.CommitDeleteAsync(canonicalName, cancellationToken);
             }
             catch (KeyNotFoundException)
             {
@@ -39,11 +56,11 @@ internal sealed class LocalModelAdministrationService(
 
             try
             {
-                await deletionCoordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None);
+                await _deletionCoordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None);
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception,
+                _logger.LogWarning(exception,
                     "The committed deletion for local model {ModelName} could not be purged; startup reconciliation will retry it.",
                     canonicalName);
             }
@@ -53,7 +70,7 @@ internal sealed class LocalModelAdministrationService(
 
         try
         {
-            await providerResolver.ResolveProvider(providerName).DeleteModelAsync(canonicalName, cancellationToken);
+            await _providerResolver.ResolveProvider(providerName).DeleteModelAsync(canonicalName, cancellationToken);
         }
         catch (ExternalProviderOperationNotSupportedException exception)
         {
@@ -63,7 +80,7 @@ internal sealed class LocalModelAdministrationService(
             throw new ModelOperationNotSupportedByProviderException(exception.Message, exception);
         }
 
-        providerResolver.InvalidateModelProviderMap();
+        _providerResolver.InvalidateModelProviderMap();
         return new LocalModelDeletionResult(true, canonicalName, true);
     }
 
@@ -71,7 +88,7 @@ internal sealed class LocalModelAdministrationService(
         LocalModelSelectionPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        var validationFailure = await defaultModelSelectionPolicy.ValidateAsync(modelName, policy, cancellationToken);
+        var validationFailure = await _defaultModelSelectionPolicy.ValidateAsync(modelName, policy, cancellationToken);
         if (validationFailure is not null)
         {
             return new LocalModelSelectionResult(false, null, null,
@@ -85,7 +102,7 @@ internal sealed class LocalModelAdministrationService(
         // external-provider reconciliation pass) changed in that window. The previous name is read inside the mutation
         // for the same reason: the transition the cache is invalidated for is the one that actually happened on disk.
         string? previousModelName = null;
-        await nodeSettingsStore.UpdateAsync(latest =>
+        await _nodeSettingsStore.UpdateAsync(latest =>
         {
             previousModelName = latest.DefaultModelName;
             return latest with
@@ -94,7 +111,7 @@ internal sealed class LocalModelAdministrationService(
             };
         }, cancellationToken);
 
-        await defaultModelSelectionPolicy
+        await _defaultModelSelectionPolicy
               .InvalidateCacheForTransitionAsync(previousModelName, selectedModelName, cancellationToken);
 
         return new LocalModelSelectionResult(true, selectedModelName, previousModelName);
@@ -107,6 +124,6 @@ internal sealed class LocalModelAdministrationService(
             return "Model name is required.";
         }
 
-        return modelNameValidator.GetValidationError(modelName);
+        return _modelNameValidator.GetValidationError(modelName);
     }
 }

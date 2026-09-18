@@ -6,20 +6,34 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
-internal sealed class PlaybookActionService(
-    IPlaybookActionStore store,
-    IAgentDefinitionStore agentDefinitionStore,
-    IGoldenConversationStore goldenConversationStore,
-    IEvalModelIdentityResolver modelIdentityResolver,
-    IOptions<PlaybookActionOptions> actionOptions,
-    IOptions<PlaybookEvalOptions> evalOptions) : IPlaybookActionService
+internal sealed class PlaybookActionService : IPlaybookActionService
 {
-    private readonly PlaybookActionOptions _actionOptions = (actionOptions ?? throw new ArgumentNullException(nameof(actionOptions))).Value;
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-    private readonly PlaybookEvalOptions _evalOptions = (evalOptions ?? throw new ArgumentNullException(nameof(evalOptions))).Value;
-    private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
-    private readonly IEvalModelIdentityResolver _modelIdentityResolver = modelIdentityResolver ?? throw new ArgumentNullException(nameof(modelIdentityResolver));
-    private readonly IPlaybookActionStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly PlaybookActionOptions _actionOptions;
+    private readonly IAgentDefinitionStore _agentDefinitionStore;
+    private readonly PlaybookEvalOptions _evalOptions;
+    private readonly IGoldenConversationStore _goldenConversationStore;
+    private readonly IEvalModelIdentityResolver _modelIdentityResolver;
+    private readonly IPlaybookActionStore _store;
+
+    public PlaybookActionService(
+        IPlaybookActionStore store,
+        IAgentDefinitionStore agentDefinitionStore,
+        IGoldenConversationStore goldenConversationStore,
+        IEvalModelIdentityResolver modelIdentityResolver,
+        IOptions<PlaybookActionOptions> actionOptions,
+        IOptions<PlaybookEvalOptions> evalOptions)
+    {
+        _actionOptions = (actionOptions ?? throw new ArgumentNullException(nameof(actionOptions))).Value;
+        ArgumentNullException.ThrowIfNull(agentDefinitionStore);
+        _agentDefinitionStore = agentDefinitionStore;
+        _evalOptions = (evalOptions ?? throw new ArgumentNullException(nameof(evalOptions))).Value;
+        ArgumentNullException.ThrowIfNull(goldenConversationStore);
+        _goldenConversationStore = goldenConversationStore;
+        ArgumentNullException.ThrowIfNull(modelIdentityResolver);
+        _modelIdentityResolver = modelIdentityResolver;
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     public async Task<PlaybookActionRecord> CreateAsync(PlaybookActionInput input, CancellationToken cancellationToken = default)
     {

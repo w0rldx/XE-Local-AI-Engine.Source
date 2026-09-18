@@ -19,29 +19,7 @@ using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
-public sealed class NodeChatStreamService(
-    INodeChatPersistenceService persistence,
-    ChatInvocationStatePump invocationStatePump,
-    ChatTurnResolver turnResolver,
-    INodeChatMutationGuard mutationGuard,
-    ILocalChatRuntimePackageBuilder runtimePackageBuilder,
-    IInvocationRunner invocationRunner,
-    IWorkerEventDispatcher eventDispatcher,
-    IOptions<LocalChatAgentOptions> localChatOptions,
-    INodeRuntimeSettings runtimeSettings,
-    INodeChatStreamCancellationRegistry cancellationRegistry,
-    ILocalToolOfferProvider localToolOfferProvider,
-    IDefaultAgentProvider defaultAgentProvider,
-    INodeSettingsStore nodeSettingsStore,
-    ILocalDefaultChatModelResolver localDefaultChatModelResolver,
-    IMemoryExtractionDispatcher memoryExtractionDispatcher,
-    IChatTurnContextBuilder turnContextBuilder,
-    IConversationSandboxStager conversationSandboxStager,
-    IOptions<KnowledgeBaseOptions> knowledgeOptions,
-    IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
-    TimeProvider timeProvider,
-    IToolApprovalPolicy toolApprovalPolicy,
-    ILogger<NodeChatStreamService> logger) : INodeChatStreamService
+public sealed class NodeChatStreamService : INodeChatStreamService
 {
     private const int AgentDefinitionVersion = 1;
 
@@ -60,6 +38,77 @@ public sealed class NodeChatStreamService(
         CoderToolDefinition.SearchTextToolName,
         AgentHomeToolDefinition.ToolName
     };
+
+    private readonly INodeChatPersistenceService _persistence;
+    private readonly ChatInvocationStatePump _invocationStatePump;
+    private readonly ChatTurnResolver _turnResolver;
+    private readonly INodeChatMutationGuard _mutationGuard;
+    private readonly ILocalChatRuntimePackageBuilder _runtimePackageBuilder;
+    private readonly IInvocationRunner _invocationRunner;
+    private readonly IWorkerEventDispatcher _eventDispatcher;
+    private readonly IOptions<LocalChatAgentOptions> _localChatOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
+    private readonly INodeChatStreamCancellationRegistry _cancellationRegistry;
+    private readonly ILocalToolOfferProvider _localToolOfferProvider;
+    private readonly IDefaultAgentProvider _defaultAgentProvider;
+    private readonly INodeSettingsStore _nodeSettingsStore;
+    private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver;
+    private readonly IMemoryExtractionDispatcher _memoryExtractionDispatcher;
+    private readonly IChatTurnContextBuilder _turnContextBuilder;
+    private readonly IConversationSandboxStager _conversationSandboxStager;
+    private readonly IOptions<KnowledgeBaseOptions> _knowledgeOptions;
+    private readonly IOptions<ChatStreamBudgetOptions> _streamBudgetOptions;
+    private readonly TimeProvider _timeProvider;
+    private readonly IToolApprovalPolicy _toolApprovalPolicy;
+    private readonly ILogger<NodeChatStreamService> _logger;
+
+    public NodeChatStreamService(
+        INodeChatPersistenceService persistence,
+        ChatInvocationStatePump invocationStatePump,
+        ChatTurnResolver turnResolver,
+        INodeChatMutationGuard mutationGuard,
+        ILocalChatRuntimePackageBuilder runtimePackageBuilder,
+        IInvocationRunner invocationRunner,
+        IWorkerEventDispatcher eventDispatcher,
+        IOptions<LocalChatAgentOptions> localChatOptions,
+        INodeRuntimeSettings runtimeSettings,
+        INodeChatStreamCancellationRegistry cancellationRegistry,
+        ILocalToolOfferProvider localToolOfferProvider,
+        IDefaultAgentProvider defaultAgentProvider,
+        INodeSettingsStore nodeSettingsStore,
+        ILocalDefaultChatModelResolver localDefaultChatModelResolver,
+        IMemoryExtractionDispatcher memoryExtractionDispatcher,
+        IChatTurnContextBuilder turnContextBuilder,
+        IConversationSandboxStager conversationSandboxStager,
+        IOptions<KnowledgeBaseOptions> knowledgeOptions,
+        IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
+        TimeProvider timeProvider,
+        IToolApprovalPolicy toolApprovalPolicy,
+        ILogger<NodeChatStreamService> logger)
+    {
+        _persistence = persistence;
+        _invocationStatePump = invocationStatePump;
+        _turnResolver = turnResolver;
+        _mutationGuard = mutationGuard;
+        _runtimePackageBuilder = runtimePackageBuilder;
+        _invocationRunner = invocationRunner;
+        _eventDispatcher = eventDispatcher;
+        _localChatOptions = localChatOptions;
+        _runtimeSettings = runtimeSettings;
+        _cancellationRegistry = cancellationRegistry;
+        _localToolOfferProvider = localToolOfferProvider;
+        _defaultAgentProvider = defaultAgentProvider;
+        _nodeSettingsStore = nodeSettingsStore;
+        _localDefaultChatModelResolver = localDefaultChatModelResolver;
+        _memoryExtractionDispatcher = memoryExtractionDispatcher;
+        _turnContextBuilder = turnContextBuilder;
+        _conversationSandboxStager = conversationSandboxStager;
+        _knowledgeOptions = knowledgeOptions;
+        _streamBudgetOptions = streamBudgetOptions;
+        _timeProvider = timeProvider;
+        _toolApprovalPolicy = toolApprovalPolicy;
+        _logger = logger;
+    }
 
     public IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
         CancellationToken cancellationToken = default)
@@ -98,7 +147,7 @@ public sealed class NodeChatStreamService(
         var sequence = new NodeChatStreamSequence();
         var startedAtUtc = NowUnixMilliseconds();
 
-        var userMessage = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(request.ConversationId, userMessageId, trimmedContent, startedAtUtc),
+        var userMessage = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(request.ConversationId, userMessageId, trimmedContent, startedAtUtc),
             cancellationToken);
         yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence.Next());
 
@@ -140,7 +189,7 @@ public sealed class NodeChatStreamService(
         // GetEnableToolsAsync / attachment staging before the tasks are created — the iterator is disposed and the row
         // would otherwise sit Pending/Queued until the restart reaper. This guard terminalizes it to Interrupted on any
         // pre-ownership teardown; once ownership is established it becomes a no-op and the pump owns the terminal.
-        await using var preOwnershipGuard = new PreOwnershipTerminalizationGuard(persistence, correlation, timeProvider, logger);
+        await using var preOwnershipGuard = new PreOwnershipTerminalizationGuard(_persistence, correlation, _timeProvider, _logger);
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, assistantPlaceholder, sequence.Next());
 
         // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local chat
@@ -152,12 +201,12 @@ public sealed class NodeChatStreamService(
         // Loaded HERE rather than next to the package build below because the same ceiling is stamped on the queued and
         // streaming events: the browser's stream watchdog must know it before the collision-queue wait, which is the
         // first stretch of the turn where nothing at all arrives on the wire.
-        var runtimeNodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken);
+        var runtimeNodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
 
         // The turn is Queued until the collision-queue lease is acquired in RunInvocationAsync; it transitions to
         // Streaming only when the invocation actually starts. This keeps a turn waiting behind another invocation
         // visibly "queued" rather than prematurely "streaming".
-        var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken);
+        var queuedMessage = await _persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken);
         if (!string.Equals(queuedMessage.Status, NodeChatMessageStatusValues.Queued, StringComparison.Ordinal))
         {
             // The queued mark was rejected because the row already reached a terminal status — a cancel raced ahead of run
@@ -179,9 +228,9 @@ public sealed class NodeChatStreamService(
         // the stop button routed through the cancellation registry via CancelNodeChatMessageEndpoint, which also
         // cancels the runner's own loop so the pump persists the true Cancelled terminal.
         using var runCancellation = new CancellationTokenSource();
-        using var registration = cancellationRegistry.Register(correlation, () =>
+        using var registration = _cancellationRegistry.Register(correlation, () =>
         {
-            invocationRunner.Cancel(requestId);
+            _invocationRunner.Cancel(requestId);
 #pragma warning disable MA0045 // INodeChatStreamCancellationRegistry.Register takes a synchronous Action; a cancel callback has no async form to convert to.
             runCancellation.Cancel();
 #pragma warning restore MA0045
@@ -198,7 +247,7 @@ public sealed class NodeChatStreamService(
         // OnApprovalRequestedChanged, and the pending-question emits in OnUserQuestionRequestedChanged. It is BOUNDED
         // and never makes a producer wait — on a client disconnect the SSE loop below exits while all six keep
         // writing, which is exactly the case Detach() in this method's finally exists to stop retaining.
-        var eventSink = new ChatStreamEventSink(correlation, sequence, streamBudgetOptions.Value, timeProvider);
+        var eventSink = new ChatStreamEventSink(correlation, sequence, _streamBudgetOptions.Value, _timeProvider);
 
         // Accumulates the ordered reasoning/tool interleave so the terminal persist can write parts[] (the reload
         // render source). Fed by BOTH producers: the forwarder's tool/notice handlers and the reasoning deltas in the
@@ -208,7 +257,7 @@ public sealed class NodeChatStreamService(
         // Subscribe before pre-run notice production (cloud attachment/knowledge withholding) so those notices reach
         // the stream. The scope also covers every pre-ownership exit, preventing handler leaks when staging or package
         // construction fails before the pump/runner teardown exists.
-        using var eventSubscription = new ChatStreamEventForwarder(eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, timeProvider);
+        using var eventSubscription = new ChatStreamEventForwarder(_eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, _timeProvider);
 
         // The armed turn's offer, already settled above and reused verbatim so the rule judged the same list the package
         // carries; every other turn resolves it right here, exactly where it always did.
@@ -265,7 +314,7 @@ public sealed class NodeChatStreamService(
         Task pumpTask;
         Task runTask;
         using var invocationScope = staging?.Preparation?.EnterInvocationScope();
-        pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
+        pumpTask = _invocationStatePump.PumpAsync(stateChannel.Reader,
             eventSink,
             correlation,
             // Stamp the FINAL persisted assistant-message model from the effective model (the pump terminalizes from
@@ -359,12 +408,12 @@ public sealed class NodeChatStreamService(
         try
         {
             var queueStartedTimestamp = Stopwatch.GetTimestamp();
-            lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
+            lease = await _eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
             var queueDurationMs = Stopwatch.GetElapsedTime(queueStartedTimestamp).TotalMilliseconds;
 
             // The lease is held => the invocation is actually starting. Transition Queued -> Streaming and emit
             // the streaming event so the client leaves the queued state.
-            var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken);
+            var streamingMessage = await _persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken);
             if (!string.Equals(streamingMessage.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))
             {
                 // The row was finalized (cancelled) before streaming could start. Do not stream into a terminal message or
@@ -389,11 +438,11 @@ public sealed class NodeChatStreamService(
                 harnessStartedTimestamp,
                 preRunDurationMs,
                 queueDurationMs);
-            await invocationRunner.RunAsync(context, cancellationToken);
+            await _invocationRunner.RunAsync(context, cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            await eventDispatcher.ReportInvocationFailedAsync(requestId,
+            await _eventDispatcher.ReportInvocationFailedAsync(requestId,
                 PreRunCancelledMessage,
                 FailureCategory.Cancelled);
         }
@@ -401,15 +450,15 @@ public sealed class NodeChatStreamService(
         {
             // Classified separately from the generic catch so the terminal SSE carries ModelNotInstalled (not
             // Unexpected/ProviderUnreachable) and the message is the actionable, path-free constant.
-            logger.LogWarning(exception, "Local node chat stream had no installed GGUF chat model for the local default. RequestId={RequestId}", requestId);
-            await eventDispatcher.ReportInvocationFailedAsync(requestId,
+            _logger.LogWarning(exception, "Local node chat stream had no installed GGUF chat model for the local default. RequestId={RequestId}", requestId);
+            await _eventDispatcher.ReportInvocationFailedAsync(requestId,
                 exception.Message,
                 FailureCategory.ModelNotInstalled);
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Local node chat stream failed. RequestId={RequestId}", requestId);
-            await eventDispatcher.ReportInvocationFailedAsync(requestId,
+            _logger.LogError(exception, "Local node chat stream failed. RequestId={RequestId}", requestId);
+            await _eventDispatcher.ReportInvocationFailedAsync(requestId,
                 "local-chat-stream-failed",
                 FailureCategory.Unexpected);
         }
@@ -456,13 +505,13 @@ public sealed class NodeChatStreamService(
         Guid requestId,
         CancellationToken cancellationToken)
     {
-        var hasAttachments = await turnContextBuilder.HasAttachmentContentAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken);
+        var hasAttachments = await _turnContextBuilder.HasAttachmentContentAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken);
         if (!hasAttachments)
         {
             return;
         }
 
-        await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+        await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
                              {
                                  InvocationId = requestId,
                                  Kind = TurnNoticeKind.AttachmentsWithheld,
@@ -478,7 +527,7 @@ public sealed class NodeChatStreamService(
     private async Task ReportKnowledgeWithheldAsync(string? effectiveModel, Guid requestId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+        await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
                              {
                                  InvocationId = requestId,
                                  Kind = TurnNoticeKind.KnowledgeWithheld,
@@ -501,17 +550,17 @@ public sealed class NodeChatStreamService(
     {
         // Reject sends to a remote-origin (view-only) conversation before any persistence happens. The guard is
         // authoritative; throwing here propagates to the hub caller.
-        await mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
 
         var persistedSelectedPath = request.SelectedPath is not null
-            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken)
+            ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken)
             : null;
 
         // Turn-scoped read: same message structure, minus the content/metadata blobs of the non-user messages this
         // conversation's compaction synopsis has already replaced — ConversationContextBuilder.Build drops them by sequence and
         // CollectUserTurns keeps only user roles, so decrypting them was always dead work. Never use this variant for a
         // conversation that will be rendered or re-persisted.
-        var conversation = await persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken)
+        var conversation = await _persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken)
                            ?? throw new NodeChatConversationNotFoundException(request.ConversationId);
 
         return new ChatTurnLoad(conversation, persistedSelectedPath ?? conversation.SelectedPath);
@@ -528,7 +577,7 @@ public sealed class NodeChatStreamService(
         Guid requestId,
         CancellationToken cancellationToken)
     {
-        return persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
+        return _persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
                 assistantMessageId,
                 requestId,
                 NowUnixMilliseconds(),
@@ -566,7 +615,7 @@ public sealed class NodeChatStreamService(
     /// </summary>
     private async Task<ChatToolOffer> ResolveToolOfferAsync(NodeChatStreamRequest request, ChatTurnResolution resolution, CancellationToken cancellationToken)
     {
-        var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken);
+        var enableTools = await _runtimeSettings.GetEnableToolsAsync(cancellationToken);
         var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
         if (!offerTools)
         {
@@ -578,12 +627,12 @@ public sealed class NodeChatStreamService(
             return new ChatToolOffer(OfferTools: true, resolvedAllowedTools);
         }
 
-        var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(resolution.ActiveModel, resolution.EffectiveModelIsCloud, cancellationToken);
+        var fallbackOffer = await _localToolOfferProvider.GetOfferedToolsAsync(resolution.ActiveModel, resolution.EffectiveModelIsCloud, cancellationToken);
         return new ChatToolOffer(OfferTools: true,
         [
             .. fallbackOffer.Select(tool => tool with
             {
-                RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
             })
         ]);
     }
@@ -601,7 +650,7 @@ public sealed class NodeChatStreamService(
     {
         var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
         var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
-        return !turnReachesCloud || knowledgeOptions.Value.AllowCloudModelAccess;
+        return !turnReachesCloud || _knowledgeOptions.Value.AllowCloudModelAccess;
     }
 
     // The notices produced before the invocation starts, in wire order: the orchestration-degraded notice, then the
@@ -619,7 +668,7 @@ public sealed class NodeChatStreamService(
         // the overwhelmingly common path stays silent.
         if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
         {
-            await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+            await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
                                  {
                                      InvocationId = requestId,
                                      Kind = TurnNoticeKind.OrchestrationDegraded,
@@ -660,7 +709,7 @@ public sealed class NodeChatStreamService(
         string? error = null;
         try
         {
-            preparation = await conversationSandboxStager.PrepareConversationAttachmentsAsync(conversationId, cancellationToken);
+            preparation = await _conversationSandboxStager.PrepareConversationAttachmentsAsync(conversationId, cancellationToken);
             if (preparation is null)
             {
                 error = "The AgentHome workspace could not be prepared for this response.";
@@ -676,7 +725,7 @@ public sealed class NodeChatStreamService(
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "AgentHome attachment staging failed for conversation {ConversationId}.", conversationId);
+            _logger.LogWarning(exception, "AgentHome attachment staging failed for conversation {ConversationId}.", conversationId);
             error = "The AgentHome workspace could not be prepared for this response.";
         }
 
@@ -688,7 +737,7 @@ public sealed class NodeChatStreamService(
     // caller's token has already fired.
     private Task<NodeChatPersistedMessageDto> TerminalizeAssistantFailureAsync(NodeChatMessageCorrelation correlation, string error)
     {
-        return persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+        return _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                 NodeChatMessageStatusValues.Failed,
                 NowUnixMilliseconds(),
                 Error: error,
@@ -721,17 +770,17 @@ public sealed class NodeChatStreamService(
         IReadOnlyList<NodeChatMessageSource>? knowledgeSources = null;
         if (offerTools)
         {
-            attachmentContext = turnContextBuilder.BuildAgentAttachmentHint(request.ConversationId, stagedAttachmentPaths);
+            attachmentContext = _turnContextBuilder.BuildAgentAttachmentHint(request.ConversationId, stagedAttachmentPaths);
         }
         else if (attachmentsAllowed)
         {
-            attachmentContext = await turnContextBuilder.BuildAttachmentContextAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken);
+            attachmentContext = await _turnContextBuilder.BuildAttachmentContextAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken);
 
             // Plain-chat knowledge grounding runs only for a node-local effective model (attachmentsAllowed already
             // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
             if (request.UseKnowledgeBase)
             {
-                var knowledge = await turnContextBuilder.BuildKnowledgeContextAsync(knowledgeQuery, isRegeneratedTurn: false, runCancellation.Token);
+                var knowledge = await _turnContextBuilder.BuildKnowledgeContextAsync(knowledgeQuery, isRegeneratedTurn: false, runCancellation.Token);
                 if (knowledge is not null)
                 {
                     knowledgeContext = knowledge.Message;
@@ -751,7 +800,7 @@ public sealed class NodeChatStreamService(
         ConversationMessageDto? imageContext = null;
         if (attachmentsAllowed && resolution.SupportsVision)
         {
-            imageContext = await turnContextBuilder.BuildImageContextAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken);
+            imageContext = await _turnContextBuilder.BuildImageContextAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken);
         }
 
         return new ChatTurnContext(attachmentContext, imageContext, knowledgeContext, knowledgeSources);
@@ -771,9 +820,9 @@ public sealed class NodeChatStreamService(
         Guid requestId)
     {
         var resolved = resolution.Resolved;
-        return runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
+        return _runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
-            resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(localChatOptions.Value),
+            resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(_localChatOptions.Value),
             conversationContext,
             resolution.EffectiveModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
@@ -820,7 +869,7 @@ public sealed class NodeChatStreamService(
         RuntimePackage package)
     {
         return resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
-            ? ChatMemoryExtractionHook.Build(memoryExtractionDispatcher,
+            ? ChatMemoryExtractionHook.Build(_memoryExtractionDispatcher,
                 memoryAgent,
                 conversation.ConversationId,
                 conversation.MemoryExcluded,
@@ -868,7 +917,7 @@ public sealed class NodeChatStreamService(
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Local node chat stream pump faulted; cancelling the run. RequestId={RequestId}", requestId);
+                _logger.LogError(exception, "Local node chat stream pump faulted; cancelling the run. RequestId={RequestId}", requestId);
                 await runCancellation.CancelAsync();
             }
 
@@ -882,7 +931,7 @@ public sealed class NodeChatStreamService(
             }
             catch (Exception exception)
             {
-                logger.LogDebug(exception, "Local node chat stream run completed with an exception after teardown. RequestId={RequestId}", requestId);
+                _logger.LogDebug(exception, "Local node chat stream run completed with an exception after teardown. RequestId={RequestId}", requestId);
             }
         }
         finally
@@ -975,8 +1024,8 @@ public sealed class NodeChatStreamService(
             // operator's persisted node default is honored only when it is itself an installed GGUF chat model. When no
             // GGUF chat model is installed the resolver returns null; flag the turn so RunInvocationAsync surfaces a
             // clear ModelNotInstalled terminal instead of routing the stale config/node-settings id to a dead provider.
-            var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken);
-            activeModel = await localDefaultChatModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
+            var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
+            activeModel = await _localDefaultChatModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
             requiresInstalledChatModel = activeModel is null;
         }
 
@@ -985,13 +1034,13 @@ public sealed class NodeChatStreamService(
         // the mode-off hot path avoids a DB round-trip per send.
         var effectiveAgentId = request.AgentDefinitionId
                                ?? conversation.AgentDefinitionId
-                               ?? await defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
+                               ?? await _defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
 
         // The just-sent user turn is the relevance-retrieval query (inert below the threshold / unbound, so the prompt
         // stays byte-identical). The shared resolver gates thinking/tools by the model's advertised capabilities and
         // resolves the definition + any orchestration spec, returning the effective model both the package and the
         // persisted attribution stamp from.
-        return await turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, trimmedContent, userPickedConcreteModel, cancellationToken);
+        return await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, trimmedContent, userPickedConcreteModel, cancellationToken);
     }
 
     private ChatStreamEvent ToMessageEvent(string type,
@@ -1010,7 +1059,7 @@ public sealed class NodeChatStreamService(
 
     private long NowUnixMilliseconds()
     {
-        return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        return _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
 
     // The conversation this send turn is built from, plus the variant selection that shapes its history.

@@ -460,7 +460,12 @@ public sealed record NodeChatBranchResultDto(
 ///         translates for the client — this one is about the correlation, not about a message a person named.
 ///     </para>
 /// </summary>
-public sealed class NodeChatMessageCorrelationNotFoundException(string message) : InvalidOperationException(message);
+public sealed class NodeChatMessageCorrelationNotFoundException : InvalidOperationException
+{
+    public NodeChatMessageCorrelationNotFoundException(string message) : base(message)
+    {
+    }
+}
 
 /// <summary>
 ///     Thrown when a branch request carries a selected-revision entry that fails integrity validation — the
@@ -468,16 +473,22 @@ public sealed class NodeChatMessageCorrelationNotFoundException(string message) 
 ///     to. The branch endpoint maps this to HTTP 400. Fail-closed: the branch is rejected rather than silently
 ///     falling back to a default revision.
 /// </summary>
-public sealed class NodeChatInvalidBranchSelectionException(Guid conversationId, Guid variantGroupId, Guid messageId)
-    : InvalidOperationException($"Branch selection for conversation {conversationId} referenced message {messageId} which is not a valid member of variant group {variantGroupId}.")
+public sealed class NodeChatInvalidBranchSelectionException : InvalidOperationException
 {
     public const string Code = "invalid-branch-selection";
 
-    public Guid ConversationId { get; } = conversationId;
+    public NodeChatInvalidBranchSelectionException(Guid conversationId, Guid variantGroupId, Guid messageId) : base($"Branch selection for conversation {conversationId} referenced message {messageId} which is not a valid member of variant group {variantGroupId}.")
+    {
+        ConversationId = conversationId;
+        VariantGroupId = variantGroupId;
+        MessageId = messageId;
+    }
 
-    public Guid VariantGroupId { get; } = variantGroupId;
+    public Guid ConversationId { get; }
 
-    public Guid MessageId { get; } = messageId;
+    public Guid VariantGroupId { get; }
+
+    public Guid MessageId { get; }
 }
 
 /// <summary>

@@ -11,12 +11,16 @@ internal sealed record RecordFindingRequest(string? Kind, string? Text, string? 
 ///     into a later step's state block, which is why the composer fences it as untrusted data — <c>sourceRef</c> in
 ///     particular invites pasting verbatim tool output.
 /// </summary>
-internal sealed class RecordFindingToolHandler(
-    IServiceScopeFactory scopeFactory,
-    IOptions<WorkSessionOptions> options,
-    IWorkSessionEventPublisher publisher,
-    ILogger<RecordFindingToolHandler> logger) : WorkSessionToolHandler<RecordFindingRequest>(scopeFactory, options, publisher, logger)
+internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFindingRequest>
 {
+    public RecordFindingToolHandler(
+        IServiceScopeFactory scopeFactory,
+        IOptions<WorkSessionOptions> options,
+        IWorkSessionEventPublisher publisher,
+        ILogger<RecordFindingToolHandler> logger) : base(scopeFactory, options, publisher, logger)
+    {
+    }
+
     public override string ToolName => WorkSessionToolDefinitions.RecordFinding.ToolName;
 
     public override string Description => WorkSessionToolDefinitions.RecordFinding.Description;

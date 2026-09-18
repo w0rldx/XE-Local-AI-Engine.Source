@@ -65,9 +65,14 @@ internal sealed class ExternalAppInstanceGate
         _ = _gates.TryRemove(key, out _);
     }
 
-    private sealed class Lease(SemaphoreSlim gate) : IDisposable
+    private sealed class Lease : IDisposable
     {
-        private SemaphoreSlim? _gate = gate;
+        private SemaphoreSlim? _gate;
+
+        public Lease(SemaphoreSlim gate)
+        {
+            _gate = gate;
+        }
 
         public void Dispose()
         {

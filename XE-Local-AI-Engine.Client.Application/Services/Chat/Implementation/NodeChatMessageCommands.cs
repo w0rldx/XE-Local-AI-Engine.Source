@@ -15,7 +15,7 @@ using static NodeChatPersistenceSql;
 ///     cancel). Shares the single <see cref="NodeChatPersistenceWriter" /> so per-message write-key serialization is
 ///     preserved.
 /// </summary>
-internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
+internal sealed class NodeChatMessageCommands
 {
     private const string UserRole = "user";
     private const string AssistantRole = "assistant";
@@ -24,6 +24,12 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     // NodeChatMessageTransitions (the terminalize set: pending / queued / streaming / cancelled). Smaller sets bind the
     // spare slots by repeating a real member, so the IN clause stays a fixed constant statement.
     private const int MaxSourceStatusSlots = 4;
+
+    public NodeChatMessageCommands(NodeChatPersistenceWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        _writer = writer;
+    }
 
     // How a run-envelope write reconciles with an envelope the message may already have. InsertIfAbsent keeps the first
     // write (a pre-run cancel's thin envelope, a startup reconcile backfill) — never clobbering a real one. Upsert lets
@@ -123,7 +129,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                                                   created_at_utc = excluded.created_at_utc;
                                               """;
 
-    private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+    private readonly NodeChatPersistenceWriter _writer;
 
     public Task<NodeChatPersistedMessageDto> PersistUserMessageAsync(NodeChatPersistUserMessageRequest request, CancellationToken cancellationToken = default)
     {

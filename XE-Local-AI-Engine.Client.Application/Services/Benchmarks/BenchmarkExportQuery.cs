@@ -42,12 +42,20 @@ public sealed record BenchmarkExportRunFacts(
     public static BenchmarkExportRunFacts Empty { get; } = new(null, null, null, null, null);
 }
 
-internal sealed class BenchmarkExportQuery(
-    IBenchmarkStore store,
-    IBenchmarkExportFactsResolver factsResolver) : IBenchmarkExportQuery
+internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
 {
-    private readonly IBenchmarkExportFactsResolver _factsResolver = factsResolver ?? throw new ArgumentNullException(nameof(factsResolver));
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IBenchmarkExportFactsResolver _factsResolver;
+    private readonly IBenchmarkStore _store;
+
+    public BenchmarkExportQuery(
+        IBenchmarkStore store,
+        IBenchmarkExportFactsResolver factsResolver)
+    {
+        ArgumentNullException.ThrowIfNull(factsResolver);
+        ArgumentNullException.ThrowIfNull(store);
+        _factsResolver = factsResolver;
+        _store = store;
+    }
 
     public async Task<BenchmarkJsonExportQueryResult?> GetJsonAsync(Guid projectId, CancellationToken ct)
     {

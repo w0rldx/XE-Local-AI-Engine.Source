@@ -4,11 +4,17 @@ using System.Buffers;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 
-internal sealed class McpAgentRunRequestFingerprint(McpAgentRunPayloadProtector protector)
+internal sealed class McpAgentRunRequestFingerprint
 {
     private const int AgenticCanonicalVersion = 2;
     private const int DelegateCanonicalVersion = 1;
-    private readonly McpAgentRunPayloadProtector _protector = protector ?? throw new ArgumentNullException(nameof(protector));
+    private readonly McpAgentRunPayloadProtector _protector;
+
+    public McpAgentRunRequestFingerprint(McpAgentRunPayloadProtector protector)
+    {
+        ArgumentNullException.ThrowIfNull(protector);
+        _protector = protector;
+    }
 
     public byte[] Compute(McpAgentRunStartRequest request)
     {

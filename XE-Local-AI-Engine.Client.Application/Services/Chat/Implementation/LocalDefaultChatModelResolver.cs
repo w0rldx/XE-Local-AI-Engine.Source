@@ -22,15 +22,20 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///         local-default send; using the store directly avoids that entirely.
 ///     </para>
 /// </summary>
-public sealed class LocalDefaultChatModelResolver(
-    IGgufModelStore ggufModelStore,
-    IModelClassificationStore modelClassificationStore) : ILocalDefaultChatModelResolver
+public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolver
 {
-    private readonly IGgufModelStore _ggufModelStore =
-        ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+    private readonly IGgufModelStore _ggufModelStore;
+    private readonly IModelClassificationStore _modelClassificationStore;
 
-    private readonly IModelClassificationStore _modelClassificationStore =
-        modelClassificationStore ?? throw new ArgumentNullException(nameof(modelClassificationStore));
+    public LocalDefaultChatModelResolver(
+        IGgufModelStore ggufModelStore,
+        IModelClassificationStore modelClassificationStore)
+    {
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        ArgumentNullException.ThrowIfNull(modelClassificationStore);
+        _ggufModelStore = ggufModelStore;
+        _modelClassificationStore = modelClassificationStore;
+    }
 
     public async Task<string?> ResolveAsync(string? persistedDefault, CancellationToken cancellationToken = default)
     {

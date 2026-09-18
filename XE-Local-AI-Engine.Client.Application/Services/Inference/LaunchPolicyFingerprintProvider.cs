@@ -23,14 +23,7 @@ public interface ILaunchPolicyFingerprintProvider
     Task<bool> MatchesAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct);
 }
 
-public sealed class LaunchPolicyFingerprintProvider(
-    IInstalledRuntimeStore installedRuntimeStore,
-    ILlamaCppBinaryManager binaryManager,
-    IGgufModelStore modelStore,
-    IGgufModelRegistry modelRegistry,
-    LlamaServerSupervisorOptions supervisorOptions,
-    LlamaServerLaunchPolicyOptions launchPolicyOptions,
-    LaunchPolicyFileHashCache fileHashCache) : ILaunchPolicyFingerprintProvider
+public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintProvider
 {
     // 5: the LoRA adapter member joined the model identity — a frozen replay captured before adapters existed cannot
     // prove whether an adapter was applied, so every v4 fingerprint is hard-rejected and re-fitted once.
@@ -42,24 +35,38 @@ public sealed class LaunchPolicyFingerprintProvider(
     private const string RuntimeDefaultMode = "llama-runtime-default";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly IInstalledRuntimeStore _installedRuntimeStore;
+    private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions;
+    private readonly LaunchPolicyFileHashCache _fileHashCache;
+    private readonly IGgufModelStore _modelStore;
+    private readonly IGgufModelRegistry _modelRegistry;
+    private readonly LlamaServerSupervisorOptions _supervisorOptions;
 
-    private readonly IInstalledRuntimeStore _installedRuntimeStore =
-        installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
-
-    private readonly ILlamaCppBinaryManager _binaryManager =
-        binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-
-    private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions =
-        launchPolicyOptions ?? throw new ArgumentNullException(nameof(launchPolicyOptions));
-
-    private readonly LaunchPolicyFileHashCache _fileHashCache = fileHashCache ?? throw new ArgumentNullException(nameof(fileHashCache));
-    private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-
-    private readonly IGgufModelRegistry _modelRegistry =
-        modelRegistry ?? throw new ArgumentNullException(nameof(modelRegistry));
-
-    private readonly LlamaServerSupervisorOptions _supervisorOptions =
-        supervisorOptions ?? throw new ArgumentNullException(nameof(supervisorOptions));
+    public LaunchPolicyFingerprintProvider(
+        IInstalledRuntimeStore installedRuntimeStore,
+        ILlamaCppBinaryManager binaryManager,
+        IGgufModelStore modelStore,
+        IGgufModelRegistry modelRegistry,
+        LlamaServerSupervisorOptions supervisorOptions,
+        LlamaServerLaunchPolicyOptions launchPolicyOptions,
+        LaunchPolicyFileHashCache fileHashCache)
+    {
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        ArgumentNullException.ThrowIfNull(launchPolicyOptions);
+        ArgumentNullException.ThrowIfNull(fileHashCache);
+        ArgumentNullException.ThrowIfNull(modelStore);
+        ArgumentNullException.ThrowIfNull(modelRegistry);
+        ArgumentNullException.ThrowIfNull(supervisorOptions);
+        _installedRuntimeStore = installedRuntimeStore;
+        _binaryManager = binaryManager;
+        _launchPolicyOptions = launchPolicyOptions;
+        _fileHashCache = fileHashCache;
+        _modelStore = modelStore;
+        _modelRegistry = modelRegistry;
+        _supervisorOptions = supervisorOptions;
+    }
 
     internal long FullFileHashComputationCount => _fileHashCache.FullHashComputationCount;
 

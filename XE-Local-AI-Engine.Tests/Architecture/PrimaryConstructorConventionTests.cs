@@ -23,7 +23,6 @@ public sealed class PrimaryConstructorConventionTests
     [
         "XE-Local-AI-Engine.AI.Agent.Tests",
         "XE-Local-AI-Engine.Client",
-        "XE-Local-AI-Engine.Client.Application",
         "XE-Local-AI-Engine.Client.Persistence.Tests",
         "XE-Local-AI-Engine.Tests",
         "XE-Local-AI-Engine.Tests.E2ETests"
@@ -37,10 +36,12 @@ public sealed class PrimaryConstructorConventionTests
 
     /// <summary>
     ///     Non-vacuity floors under today's counts, the way <see cref="ConfigureAwaitPolicyTests" /> sets its own: a
-    ///     renamed directory reads too few files and fails here rather than passing on an empty scan.
+    ///     renamed directory reads too few files and fails here rather than passing on an empty scan. Every entry
+    ///     removed from <see cref="NotYetMigrated" /> moves that project's files from the second count to the first,
+    ///     so the enforced floor rises and the ratchet floor falls as the migration proceeds.
     /// </summary>
-    private const int EnforcedFileFloor = 500;
-    private const int RatchetFileFloor = 3000;
+    private const int EnforcedFileFloor = 2300;
+    private const int RatchetFileFloor = 1900;
 
     /// <summary>Declarations the scan must find. A miss here is how this fence stops seeing code.</summary>
     private static readonly (string Case, string Source, string[] Types)[] MustBeFound =

@@ -4,10 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-internal sealed class AgentDefinitionService(
-    IAgentDefinitionStore store,
-    ILocalToolOfferProvider localToolOfferProvider,
-    ILogger<AgentDefinitionService> logger) : IAgentDefinitionService
+internal sealed class AgentDefinitionService : IAgentDefinitionService
 {
     // The triage plus at least one specialist: a single-participant orchestrator has nothing to hand off to and is a
     // user error (the runtime resolver also degrades below two capable participants, but authoring catches it first).
@@ -25,10 +22,23 @@ internal sealed class AgentDefinitionService(
         "auto"
     };
 
-    private readonly ILocalToolOfferProvider _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
-    private readonly ILogger<AgentDefinitionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILocalToolOfferProvider _localToolOfferProvider;
+    private readonly ILogger<AgentDefinitionService> _logger;
 
-    private readonly IAgentDefinitionStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IAgentDefinitionStore _store;
+
+    public AgentDefinitionService(
+        IAgentDefinitionStore store,
+        ILocalToolOfferProvider localToolOfferProvider,
+        ILogger<AgentDefinitionService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(localToolOfferProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(store);
+        _localToolOfferProvider = localToolOfferProvider;
+        _logger = logger;
+        _store = store;
+    }
 
     public async Task<AgentDefinitionRecord> CreateAsync(AgentDefinitionInput input, CancellationToken cancellationToken = default)
     {

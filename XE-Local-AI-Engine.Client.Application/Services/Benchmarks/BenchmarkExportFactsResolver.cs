@@ -22,12 +22,20 @@ public interface IBenchmarkExportFactsResolver
     BenchmarkExportRunFacts ResolveRun(BenchmarkRunRecord run);
 }
 
-internal sealed class BenchmarkExportFactsResolver(
-    IBenchmarkRuntimeSnapshotFactory snapshots,
-    ILogger<BenchmarkExportFactsResolver> logger) : IBenchmarkExportFactsResolver
+internal sealed class BenchmarkExportFactsResolver : IBenchmarkExportFactsResolver
 {
-    private readonly ILogger<BenchmarkExportFactsResolver> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots = snapshots ?? throw new ArgumentNullException(nameof(snapshots));
+    private readonly ILogger<BenchmarkExportFactsResolver> _logger;
+    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
+
+    public BenchmarkExportFactsResolver(
+        IBenchmarkRuntimeSnapshotFactory snapshots,
+        ILogger<BenchmarkExportFactsResolver> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(snapshots);
+        _logger = logger;
+        _snapshots = snapshots;
+    }
 
     public BenchmarkFidelityDisplayFacts ResolveProject(BenchmarkProjectRecord project)
     {

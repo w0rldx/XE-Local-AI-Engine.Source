@@ -2,14 +2,22 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopmentHostApplyPort applyPort) : IDevelopmentCoordinator
+public sealed class DevelopmentCoordinator : IDevelopmentCoordinator
 {
     private const string StartupInterruptedReason = "The node restarted while the Development attempt was running.";
     private const string StartupValidationRecoveryReason = "The node restarted before deterministic Development validation completed.";
     private const string AmbiguousApplyReason = "The host apply state did not match the approved base or exact approved result.";
 
-    private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IDevelopmentHostApplyPort _applyPort = applyPort ?? throw new ArgumentNullException(nameof(applyPort));
+    private readonly IDevelopmentStore _store;
+    private readonly IDevelopmentHostApplyPort _applyPort;
+
+    public DevelopmentCoordinator(IDevelopmentStore store, IDevelopmentHostApplyPort applyPort)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(applyPort);
+        _store = store;
+        _applyPort = applyPort;
+    }
 
     public Task<DevelopmentOperationResult> CreateProjectAsync(DevelopmentCreateProjectCommand command, CancellationToken cancellationToken = default) =>
         _store.CreateProjectAsync(command, cancellationToken);

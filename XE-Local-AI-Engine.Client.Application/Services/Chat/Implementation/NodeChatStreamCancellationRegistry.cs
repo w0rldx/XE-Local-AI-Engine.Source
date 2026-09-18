@@ -35,13 +35,23 @@ public sealed class NodeChatStreamCancellationRegistry : INodeChatStreamCancella
         return registration.TryCancel();
     }
 
-    private sealed class Registration(
-        ConcurrentDictionary<NodeChatMessageCorrelation, Registration> activeStreams,
-        NodeChatMessageCorrelation correlation,
-        Action cancel) : IDisposable
+    private sealed class Registration : IDisposable
     {
         private readonly Lock _gate = new();
+        private readonly ConcurrentDictionary<NodeChatMessageCorrelation, Registration> _activeStreams;
+        private readonly NodeChatMessageCorrelation _correlation;
+        private readonly Action _cancel;
         private bool _disposed;
+
+        public Registration(
+            ConcurrentDictionary<NodeChatMessageCorrelation, Registration> activeStreams,
+            NodeChatMessageCorrelation correlation,
+            Action cancel)
+        {
+            _activeStreams = activeStreams;
+            _correlation = correlation;
+            _cancel = cancel;
+        }
 
         public bool TryCancel()
         {
@@ -52,7 +62,7 @@ public sealed class NodeChatStreamCancellationRegistry : INodeChatStreamCancella
                     return false;
                 }
 
-                cancel();
+                _cancel();
                 return true;
             }
         }
@@ -67,7 +77,7 @@ public sealed class NodeChatStreamCancellationRegistry : INodeChatStreamCancella
                 }
 
                 _disposed = true;
-                _ = activeStreams.TryRemove(correlation, out _);
+                _ = _activeStreams.TryRemove(_correlation, out _);
             }
         }
     }

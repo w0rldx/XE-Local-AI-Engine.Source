@@ -15,12 +15,16 @@ internal sealed record CompleteWorkSessionRequest(string? Summary, bool? Objecti
 ///         request survive a crash between the tool call and the end of the step.
 ///     </para>
 /// </summary>
-internal sealed class CompleteWorkSessionToolHandler(
-    IServiceScopeFactory scopeFactory,
-    IOptions<WorkSessionOptions> options,
-    IWorkSessionEventPublisher publisher,
-    ILogger<CompleteWorkSessionToolHandler> logger) : WorkSessionToolHandler<CompleteWorkSessionRequest>(scopeFactory, options, publisher, logger)
+internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<CompleteWorkSessionRequest>
 {
+    public CompleteWorkSessionToolHandler(
+        IServiceScopeFactory scopeFactory,
+        IOptions<WorkSessionOptions> options,
+        IWorkSessionEventPublisher publisher,
+        ILogger<CompleteWorkSessionToolHandler> logger) : base(scopeFactory, options, publisher, logger)
+    {
+    }
+
     public override string ToolName => WorkSessionToolDefinitions.CompleteWorkSession.ToolName;
 
     public override string Description => WorkSessionToolDefinitions.CompleteWorkSession.Description;

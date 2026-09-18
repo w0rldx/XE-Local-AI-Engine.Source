@@ -22,12 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 ///         nothing, so an <c>approve</c> row would assert a decision nobody made.
 ///     </para>
 /// </summary>
-internal sealed class ToolInvocationService(
-    ILocalToolOfferProvider offerProvider,
-    IToolApprovalPolicy approvalPolicy,
-    IAgentToolRegistry toolRegistry,
-    IClientLocalToolRegistry clientLocalToolRegistry,
-    ILogger<ToolInvocationService> logger) : IToolInvocationService
+internal sealed class ToolInvocationService : IToolInvocationService
 {
     /// <summary>
     ///     The catalog <c>Source</c> tag for an in-process built-in, matched ORDINALLY rather than taking the first
@@ -38,11 +33,30 @@ internal sealed class ToolInvocationService(
 
     private static readonly JsonSerializerOptions ResultSerializerOptions = JsonSerializerOptions.Web;
 
-    private readonly IToolApprovalPolicy _approvalPolicy = approvalPolicy ?? throw new ArgumentNullException(nameof(approvalPolicy));
-    private readonly IClientLocalToolRegistry _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
-    private readonly ILogger<ToolInvocationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly ILocalToolOfferProvider _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
-    private readonly IAgentToolRegistry _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
+    private readonly IToolApprovalPolicy _approvalPolicy;
+    private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
+    private readonly ILogger<ToolInvocationService> _logger;
+    private readonly ILocalToolOfferProvider _offerProvider;
+    private readonly IAgentToolRegistry _toolRegistry;
+
+    public ToolInvocationService(
+        ILocalToolOfferProvider offerProvider,
+        IToolApprovalPolicy approvalPolicy,
+        IAgentToolRegistry toolRegistry,
+        IClientLocalToolRegistry clientLocalToolRegistry,
+        ILogger<ToolInvocationService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(approvalPolicy);
+        ArgumentNullException.ThrowIfNull(clientLocalToolRegistry);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(offerProvider);
+        ArgumentNullException.ThrowIfNull(toolRegistry);
+        _approvalPolicy = approvalPolicy;
+        _clientLocalToolRegistry = clientLocalToolRegistry;
+        _logger = logger;
+        _offerProvider = offerProvider;
+        _toolRegistry = toolRegistry;
+    }
 
     /// <inheritdoc />
     public async Task<ToolInvocationOutcome> InvokeAsync(string toolName,

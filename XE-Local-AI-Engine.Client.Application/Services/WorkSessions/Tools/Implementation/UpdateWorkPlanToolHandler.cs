@@ -38,11 +38,7 @@ internal sealed record UpdateWorkPlanRequest(IReadOnlyList<WorkPlanOperationRequ
 ///     <c>update_work_plan</c>: the model's only way to change the session's task list. The whole batch commits in one
 ///     store transaction, so a partially-applied plan is not a state the session can be observed in.
 /// </summary>
-internal sealed class UpdateWorkPlanToolHandler(
-    IServiceScopeFactory scopeFactory,
-    IOptions<WorkSessionOptions> options,
-    IWorkSessionEventPublisher publisher,
-    ILogger<UpdateWorkPlanToolHandler> logger) : WorkSessionToolHandler<UpdateWorkPlanRequest>(scopeFactory, options, publisher, logger)
+internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateWorkPlanRequest>
 {
     /// <summary>
     ///     How many added-task ids one result names. Deliberately under
@@ -50,6 +46,14 @@ internal sealed class UpdateWorkPlanToolHandler(
     ///     step's context echoing itself; anything past it reads back off the next state block.
     /// </summary>
     private const int MaxListedAddedTasks = 10;
+
+    public UpdateWorkPlanToolHandler(
+        IServiceScopeFactory scopeFactory,
+        IOptions<WorkSessionOptions> options,
+        IWorkSessionEventPublisher publisher,
+        ILogger<UpdateWorkPlanToolHandler> logger) : base(scopeFactory, options, publisher, logger)
+    {
+    }
 
     public override string ToolName => WorkSessionToolDefinitions.UpdateWorkPlan.ToolName;
 

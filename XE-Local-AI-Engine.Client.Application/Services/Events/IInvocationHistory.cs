@@ -16,7 +16,13 @@ public interface IInvocationHistory
 /// <summary>
 ///     Event payload for invocation history entry added notifications.
 /// </summary>
-public sealed class InvocationHistoryEntryAddedEventArgs(InvocationHistoryEntry entry) : EventArgs
+public sealed class InvocationHistoryEntryAddedEventArgs : EventArgs
 {
-    public InvocationHistoryEntry Entry { get; } = entry ?? throw new ArgumentNullException(nameof(entry));
+    public InvocationHistoryEntryAddedEventArgs(InvocationHistoryEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        Entry = entry;
+    }
+
+    public InvocationHistoryEntry Entry { get; }
 }

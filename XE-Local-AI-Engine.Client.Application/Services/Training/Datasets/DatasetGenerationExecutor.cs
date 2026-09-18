@@ -27,14 +27,7 @@ public interface IDatasetGenerationExecutor
 ///     terminalizes as <c>Cancelled</c> and returns normally; only a host shutdown rethrows, because the queue loop
 ///     reads that as its own stop signal rather than as a failure to log.
 /// </remarks>
-public sealed class DatasetGenerationExecutor(
-    ITrainingDatasetStore store,
-    IStructuredAgentRunner runner,
-    ISampleValidationPipeline pipeline,
-    ILocalModelProviderResolver providerResolver,
-    IDatasetGenerationEventBuffer events,
-    TrainingRunCancellationRegistry cancellations,
-    ILogger<DatasetGenerationExecutor> logger) : IDatasetGenerationExecutor
+public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
 {
     /// <summary>
     ///     The record schema the teacher is asked for and — crucially — the ORIGINAL schema every generated record is
@@ -54,13 +47,38 @@ public sealed class DatasetGenerationExecutor(
                                                                           }
                                                                           """).RootElement.Clone();
 
-    private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-    private readonly IDatasetGenerationEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly ILogger<DatasetGenerationExecutor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly ISampleValidationPipeline _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-    private readonly IStructuredAgentRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly TrainingRunCancellationRegistry _cancellations;
+    private readonly IDatasetGenerationEventBuffer _events;
+    private readonly ILogger<DatasetGenerationExecutor> _logger;
+    private readonly ISampleValidationPipeline _pipeline;
+    private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly IStructuredAgentRunner _runner;
+    private readonly ITrainingDatasetStore _store;
+
+    public DatasetGenerationExecutor(
+        ITrainingDatasetStore store,
+        IStructuredAgentRunner runner,
+        ISampleValidationPipeline pipeline,
+        ILocalModelProviderResolver providerResolver,
+        IDatasetGenerationEventBuffer events,
+        TrainingRunCancellationRegistry cancellations,
+        ILogger<DatasetGenerationExecutor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(cancellations);
+        ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(pipeline);
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        ArgumentNullException.ThrowIfNull(runner);
+        ArgumentNullException.ThrowIfNull(store);
+        _cancellations = cancellations;
+        _events = events;
+        _logger = logger;
+        _pipeline = pipeline;
+        _providerResolver = providerResolver;
+        _runner = runner;
+        _store = store;
+    }
 
     public async Task ExecuteAsync(DatasetGenerationClaimedWork work, CancellationToken cancellationToken)
     {

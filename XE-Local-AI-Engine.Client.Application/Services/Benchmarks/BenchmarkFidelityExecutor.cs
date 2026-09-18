@@ -29,21 +29,7 @@ public interface IBenchmarkFidelityExecutor
 ///             comparable at all.</item>
 ///     </list>
 /// </summary>
-public sealed class BenchmarkFidelityExecutor(
-    IBenchmarkStore store,
-    IBenchmarkRuntimeSnapshotFactory snapshots,
-    IBenchmarkInstalledModelLeaseProvider installedModels,
-    IGgufModelStore ggufModels,
-    ICapacityService capacity,
-    ILlamaCppBinaryManager binaries,
-    IBenchmarkPerplexityRunner perplexity,
-    BenchmarkKldBaseCache cache,
-    IOptions<BenchmarkKldCacheOptions> cacheOptions,
-    IRuntimeEnvironmentFactsProvider environmentFacts,
-    IBenchmarkCancellationRegistry cancellations,
-    BenchmarkAdmissionRetry admissionRetry,
-    ILogger<BenchmarkFidelityExecutor> logger,
-    TimeSpan? measurementTimeout = null) : IBenchmarkFidelityExecutor
+public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
 {
     /// <summary>
     ///     Mirrors the quantizer's refusal shape: this runtime cannot do the thing, and the message names the two
@@ -67,7 +53,52 @@ public sealed class BenchmarkFidelityExecutor(
     /// </summary>
     private static readonly TimeSpan DefaultMeasurementTimeout = TimeSpan.FromHours(2);
 
-    private readonly TimeSpan _measurementTimeout = measurementTimeout ?? DefaultMeasurementTimeout;
+    private readonly TimeSpan _measurementTimeout;
+    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly IGgufModelStore _ggufModels;
+    private readonly ICapacityService _capacity;
+    private readonly ILlamaCppBinaryManager _binaries;
+    private readonly IBenchmarkPerplexityRunner _perplexity;
+    private readonly BenchmarkKldBaseCache _cache;
+    private readonly IOptions<BenchmarkKldCacheOptions> _cacheOptions;
+    private readonly IRuntimeEnvironmentFactsProvider _environmentFacts;
+    private readonly IBenchmarkCancellationRegistry _cancellations;
+    private readonly BenchmarkAdmissionRetry _admissionRetry;
+    private readonly ILogger<BenchmarkFidelityExecutor> _logger;
+
+    public BenchmarkFidelityExecutor(
+        IBenchmarkStore store,
+        IBenchmarkRuntimeSnapshotFactory snapshots,
+        IBenchmarkInstalledModelLeaseProvider installedModels,
+        IGgufModelStore ggufModels,
+        ICapacityService capacity,
+        ILlamaCppBinaryManager binaries,
+        IBenchmarkPerplexityRunner perplexity,
+        BenchmarkKldBaseCache cache,
+        IOptions<BenchmarkKldCacheOptions> cacheOptions,
+        IRuntimeEnvironmentFactsProvider environmentFacts,
+        IBenchmarkCancellationRegistry cancellations,
+        BenchmarkAdmissionRetry admissionRetry,
+        ILogger<BenchmarkFidelityExecutor> logger,
+        TimeSpan? measurementTimeout = null)
+    {
+        _store = store;
+        _snapshots = snapshots;
+        _installedModels = installedModels;
+        _ggufModels = ggufModels;
+        _capacity = capacity;
+        _binaries = binaries;
+        _perplexity = perplexity;
+        _cache = cache;
+        _cacheOptions = cacheOptions;
+        _environmentFacts = environmentFacts;
+        _cancellations = cancellations;
+        _admissionRetry = admissionRetry;
+        _logger = logger;
+        _measurementTimeout = measurementTimeout ?? DefaultMeasurementTimeout;
+    }
 
     public async Task ExecuteAsync(BenchmarkClaimedWork work, CancellationToken cancellationToken)
     {
@@ -82,14 +113,14 @@ public sealed class BenchmarkFidelityExecutor(
             throw new ArgumentException("Fidelity work must name the attempt it measures.", nameof(work));
         }
 
-        using var registration = cancellations.Register(work.RunId, BenchmarkWorkKind.Fidelity, cancellationToken);
+        using var registration = _cancellations.Register(work.RunId, BenchmarkWorkKind.Fidelity, cancellationToken);
         var token = registration.Token;
         try
         {
-            var attempt = await store.GetFidelityAttemptAsync(attemptId, token)
+            var attempt = await _store.GetFidelityAttemptAsync(attemptId, token)
                           ?? throw new BenchmarkExecutionException("The fidelity attempt is no longer available.");
             var command = await MeasureAsync(work, attempt, token);
-            _ = await store.MarkFidelitySucceededAsync(command, CancellationToken.None);
+            _ = await _store.MarkFidelitySucceededAsync(command, CancellationToken.None);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -97,22 +128,22 @@ public sealed class BenchmarkFidelityExecutor(
         }
         catch (OperationCanceledException)
         {
-            _ = await store.MarkFidelityCancelledAsync(work.RunId, work.Version, CancellationToken.None);
+            _ = await _store.MarkFidelityCancelledAsync(work.RunId, work.Version, CancellationToken.None);
         }
         catch (BenchmarkFidelityRequeueException exception)
         {
             // NOT a failure: the blocker is another process's work, and it clears itself. The item goes back to Queued
             // carrying the reason, so the consumer moves on to whatever else is waiting and comes back to this.
-            logger.LogInformation("Benchmark fidelity work {RunId} was requeued: {Reason}", work.RunId, exception.Message);
-            _ = await store.RequeueFidelityAsync(work.RunId, work.Version, exception.Message, CancellationToken.None);
+            _logger.LogInformation("Benchmark fidelity work {RunId} was requeued: {Reason}", work.RunId, exception.Message);
+            _ = await _store.RequeueFidelityAsync(work.RunId, work.Version, exception.Message, CancellationToken.None);
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Benchmark fidelity work {RunId} failed.", work.RunId);
+            _logger.LogError(exception, "Benchmark fidelity work {RunId} failed.", work.RunId);
 
             // Fail CLOSED. A measurement that could not be taken is recorded as a failure with a reason, never as a
             // success carrying nulls — a null perplexity beside a real one reads as "this quant has no loss".
-            _ = await store.MarkFidelityFailedAsync(work.RunId,
+            _ = await _store.MarkFidelityFailedAsync(work.RunId,
                                work.Version,
                                exception is BenchmarkExecutionException or BenchmarkSnapshotException or LlamaRuntimeException
                                    ? exception.Message
@@ -125,25 +156,25 @@ public sealed class BenchmarkFidelityExecutor(
         BenchmarkFidelityAttemptRecord attempt,
         CancellationToken token)
     {
-        var snapshot = snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
-        var project = await store.GetProjectAsync(work.Run.ProjectId, token)
+        var snapshot = _snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
+        var project = await _store.GetProjectAsync(work.Run.ProjectId, token)
                       ?? throw new BenchmarkExecutionException("The benchmark project is no longer available.");
         var corpus = BenchmarkFidelityCorpus.Require();
         var chunks = BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks);
 
-        await using var modelLease = await installedModels.AcquireAsync(snapshot.PrimaryModel.ModelName, token);
+        await using var modelLease = await _installedModels.AcquireAsync(snapshot.PrimaryModel.ModelName, token);
         if (!BenchmarkSnapshotModelComparer.Matches(snapshot.PrimaryModel, modelLease.Snapshot))
         {
             throw new BenchmarkExecutionException(FingerprintChangedMessage);
         }
 
-        var modelPath = await ggufModels.ResolveModelFilePathAsync(snapshot.PrimaryModel.ModelName, token)
+        var modelPath = await _ggufModels.ResolveModelFilePathAsync(snapshot.PrimaryModel.ModelName, token)
                         ?? throw new BenchmarkExecutionException("The model file for this run is no longer on disk.");
 
         // Host facts captured before anything is reserved or spawned, exactly as the judge does. Non-throwing.
-        var environment = await environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token);
+        var environment = await _environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token);
 
-        var binary = await binaries.EnsureBinaryAsync(snapshot.PrimaryRuntime.Variant, token);
+        var binary = await _binaries.EnsureBinaryAsync(snapshot.PrimaryRuntime.Variant, token);
         if (binary.PerplexityExecutablePath is not { } executable)
         {
             throw new BenchmarkExecutionException(PerplexityUnavailableMessage);
@@ -161,7 +192,7 @@ public sealed class BenchmarkFidelityExecutor(
         // Sized on the PINNED 512 window rather than the project's context: that is what this process will allocate.
         // No launch admission, and the same retry the judge uses — a fidelity item is dequeued by the same FIFO
         // consumer that just ran the primary, so it routinely arrives while that llama-server is handing VRAM back.
-        var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+        var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                            new CapacityRequest(snapshot.PrimaryModel.ModelName,
                                                                ModelRole.Chat,
                                                                BenchmarkFidelityPolicy.ContextTokens,
@@ -172,8 +203,8 @@ public sealed class BenchmarkFidelityExecutor(
                                                                BenchmarkFidelityPolicy.ContextTokens,
                                                                snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                CapacityRejectedMessage),
-                                                           new BenchmarkWaitBudget(admissionRetry),
-                                                           logger,
+                                                           new BenchmarkWaitBudget(_admissionRetry),
+                                                           _logger,
                                                            token);
         using var reservation = decision.Reservation;
 
@@ -228,23 +259,23 @@ public sealed class BenchmarkFidelityExecutor(
         }
 
         var key = BenchmarkKldCacheKey.Create(baseFingerprint, corpus.Sha256, chunks);
-        if (cache.TryResolveExisting(key) is { } existing)
+        if (_cache.TryResolveExisting(key) is { } existing)
         {
             return new KldPreparation(key, existing, baseModelName, baseFingerprint);
         }
 
-        await using var baseLease = await installedModels.AcquireAsync(baseModelName, token);
+        await using var baseLease = await _installedModels.AcquireAsync(baseModelName, token);
         if (!string.Equals(baseLease.Snapshot.ModelContentFingerprint, baseFingerprint, StringComparison.Ordinal))
         {
             throw new BenchmarkExecutionException("The selected KL-divergence base model changed since it was chosen for this project.");
         }
 
-        var basePath = await ggufModels.ResolveModelFilePathAsync(baseModelName, token)
+        var basePath = await _ggufModels.ResolveModelFilePathAsync(baseModelName, token)
                        ?? throw new BenchmarkExecutionException("The KL-divergence base model file is no longer on disk.");
 
         // The lease is the crash-safe half: DeleteOnClose means a killed writer's lock is released by the OS, so a
         // later run takes over instead of waiting on a lock nobody will release.
-        await using var lease = cache.TryAcquireLease(key);
+        await using var lease = _cache.TryAcquireLease(key);
         if (lease is null)
         {
             // Another writer holds it, so this process must not write a second multi-gigabyte copy. Wait for theirs on
@@ -260,7 +291,7 @@ public sealed class BenchmarkFidelityExecutor(
         // published file, or a lease another process holds, allocates nothing and must reserve nothing. The
         // reservation is released when this method returns, i.e. after the base file is published, so the quant pass
         // is admitted against a ledger the base is no longer in.
-        var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+        var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                            new CapacityRequest(baseModelName,
                                                                ModelRole.Chat,
                                                                BenchmarkFidelityPolicy.ContextTokens,
@@ -271,12 +302,12 @@ public sealed class BenchmarkFidelityExecutor(
                                                                BenchmarkFidelityPolicy.ContextTokens,
                                                                snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                CapacityRejectedMessage),
-                                                           new BenchmarkWaitBudget(admissionRetry),
-                                                           logger,
+                                                           new BenchmarkWaitBudget(_admissionRetry),
+                                                           _logger,
                                                            token);
         using var reservation = decision.Reservation;
-        cache.EnsureSpaceFor(BenchmarkFidelityPolicy.EstimateKldBytes(chunks, BenchmarkFidelityPolicy.DefaultVocabSize));
-        var tempPath = cache.TempPathFor(key, Guid.NewGuid());
+        _cache.EnsureSpaceFor(BenchmarkFidelityPolicy.EstimateKldBytes(chunks, BenchmarkFidelityPolicy.DefaultVocabSize));
+        var tempPath = _cache.TempPathFor(key, Guid.NewGuid());
         try
         {
             var arguments = BuildArguments(basePath, corpus.Path, chunks, snapshot.PrimaryRuntime, tempPath, isBasePhase: true);
@@ -288,15 +319,15 @@ public sealed class BenchmarkFidelityExecutor(
 
             // Same-directory move, so it is atomic: a reader never observes a partial logit file, and a killed base
             // phase leaves a .tmp nobody will mistake for a measurement.
-            cache.Publish(key, tempPath);
+            _cache.Publish(key, tempPath);
         }
         finally
         {
             BenchmarkKldBaseCache.DeleteBestEffort(tempPath);
         }
 
-        _ = cache.Trim(cacheOptions.Value.KldCacheMaxBytes, await store.ListLiveFidelityDigestsAsync(token));
-        return new KldPreparation(key, cache.PathFor(key), baseModelName, baseFingerprint);
+        _ = _cache.Trim(_cacheOptions.Value.KldCacheMaxBytes, await _store.ListLiveFidelityDigestsAsync(token));
+        return new KldPreparation(key, _cache.PathFor(key), baseModelName, baseFingerprint);
     }
 
     /// <summary>
@@ -317,7 +348,7 @@ public sealed class BenchmarkFidelityExecutor(
         watchdog.CancelAfter(_measurementTimeout);
         try
         {
-            return await perplexity.RunAsync(executable, arguments, watchdog.Token);
+            return await _perplexity.RunAsync(executable, arguments, watchdog.Token);
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
         {
@@ -333,14 +364,14 @@ public sealed class BenchmarkFidelityExecutor(
     /// </summary>
     private async Task<string?> WaitForPublishedBaseAsync(BenchmarkKldCacheKey key, CancellationToken token)
     {
-        for (var attempt = 0; attempt <= admissionRetry.MaxRetries; attempt++)
+        for (var attempt = 0; attempt <= _admissionRetry.MaxRetries; attempt++)
         {
             if (attempt > 0)
             {
-                await Task.Delay(admissionRetry.Interval, token);
+                await Task.Delay(_admissionRetry.Interval, token);
             }
 
-            if (cache.TryResolveExisting(key) is { } published)
+            if (_cache.TryResolveExisting(key) is { } published)
             {
                 return published;
             }
@@ -477,4 +508,9 @@ public sealed class BenchmarkFidelityExecutor(
 ///     is still writing. It is deliberately not a <see cref="BenchmarkExecutionException" />: that path terminalizes
 ///     the attempt as failed, and a fidelity work item pins <c>attempt = 1</c>, so there is no retry behind it.
 /// </summary>
-internal sealed class BenchmarkFidelityRequeueException(string message) : InvalidOperationException(message);
+internal sealed class BenchmarkFidelityRequeueException : InvalidOperationException
+{
+    public BenchmarkFidelityRequeueException(string message) : base(message)
+    {
+    }
+}

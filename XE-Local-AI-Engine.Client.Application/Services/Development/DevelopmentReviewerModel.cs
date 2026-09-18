@@ -39,18 +39,32 @@ internal interface IDevelopmentReviewerModel
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class DevelopmentReviewerModel(
-    IChatClient chatClient,
-    IActiveCloudChatClientFactory cloudFactory,
-    ILocalModelProviderResolver localProviderResolver,
-    IModelTrustResolver modelTrustResolver,
-    ILogger<DevelopmentReviewerModel> logger) : IDevelopmentReviewerModel
+internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
 {
-    private readonly IChatClient _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
-    private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
-    private readonly ILocalModelProviderResolver _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-    private readonly ILogger<DevelopmentReviewerModel> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IChatClient _chatClient;
+    private readonly IActiveCloudChatClientFactory _cloudFactory;
+    private readonly ILocalModelProviderResolver _localProviderResolver;
+    private readonly IModelTrustResolver _modelTrustResolver;
+    private readonly ILogger<DevelopmentReviewerModel> _logger;
+
+    public DevelopmentReviewerModel(
+        IChatClient chatClient,
+        IActiveCloudChatClientFactory cloudFactory,
+        ILocalModelProviderResolver localProviderResolver,
+        IModelTrustResolver modelTrustResolver,
+        ILogger<DevelopmentReviewerModel> logger)
+    {
+        ArgumentNullException.ThrowIfNull(chatClient);
+        ArgumentNullException.ThrowIfNull(cloudFactory);
+        ArgumentNullException.ThrowIfNull(localProviderResolver);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        ArgumentNullException.ThrowIfNull(logger);
+        _chatClient = chatClient;
+        _cloudFactory = cloudFactory;
+        _localProviderResolver = localProviderResolver;
+        _modelTrustResolver = modelTrustResolver;
+        _logger = logger;
+    }
 
     public async Task<DevelopmentReviewerModelResult> RunAsync(string modelId,
         string prompt,
@@ -224,15 +238,22 @@ internal sealed class DevelopmentReviewerModel(
         }
     }
 
-    private sealed class ToolGateway(
-        IDevelopmentWorkspaceTools tools,
-        int maxToolCalls,
-        DevelopmentAttemptLiveProgress? liveProgress)
+    private sealed class ToolGateway
     {
-        private readonly int _maxToolCalls = maxToolCalls;
-        private readonly IDevelopmentWorkspaceTools _tools = tools;
-        private readonly DevelopmentAttemptLiveProgress? _liveProgress = liveProgress;
+        private readonly int _maxToolCalls;
+        private readonly IDevelopmentWorkspaceTools _tools;
+        private readonly DevelopmentAttemptLiveProgress? _liveProgress;
         private int _toolCalls;
+
+        public ToolGateway(
+            IDevelopmentWorkspaceTools tools,
+            int maxToolCalls,
+            DevelopmentAttemptLiveProgress? liveProgress)
+        {
+            _maxToolCalls = maxToolCalls;
+            _tools = tools;
+            _liveProgress = liveProgress;
+        }
 
         public DevelopmentReviewerSubmission? Submission { get; private set; }
 

@@ -4,18 +4,32 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
-public sealed class OllamaProviderMapBackfillCoordinator(
-    IOllamaModelService ollamaModelService,
-    IModelProviderMapLeaseCoordinator leaseCoordinator,
-    ICoordinatedModelProviderMapStore mapStore,
-    ILocalModelProviderResolver providerResolver,
-    ILogger<OllamaProviderMapBackfillCoordinator> logger) : IOllamaProviderMapBackfillCoordinator
+public sealed class OllamaProviderMapBackfillCoordinator : IOllamaProviderMapBackfillCoordinator
 {
-    private readonly IModelProviderMapLeaseCoordinator _leaseCoordinator = leaseCoordinator ?? throw new ArgumentNullException(nameof(leaseCoordinator));
-    private readonly ILogger<OllamaProviderMapBackfillCoordinator> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly ICoordinatedModelProviderMapStore _mapStore = mapStore ?? throw new ArgumentNullException(nameof(mapStore));
-    private readonly IOllamaModelService _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+    private readonly IModelProviderMapLeaseCoordinator _leaseCoordinator;
+    private readonly ILogger<OllamaProviderMapBackfillCoordinator> _logger;
+    private readonly ICoordinatedModelProviderMapStore _mapStore;
+    private readonly IOllamaModelService _ollamaModelService;
+    private readonly ILocalModelProviderResolver _providerResolver;
+
+    public OllamaProviderMapBackfillCoordinator(
+        IOllamaModelService ollamaModelService,
+        IModelProviderMapLeaseCoordinator leaseCoordinator,
+        ICoordinatedModelProviderMapStore mapStore,
+        ILocalModelProviderResolver providerResolver,
+        ILogger<OllamaProviderMapBackfillCoordinator> logger)
+    {
+        ArgumentNullException.ThrowIfNull(leaseCoordinator);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(mapStore);
+        ArgumentNullException.ThrowIfNull(ollamaModelService);
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _leaseCoordinator = leaseCoordinator;
+        _logger = logger;
+        _mapStore = mapStore;
+        _ollamaModelService = ollamaModelService;
+        _providerResolver = providerResolver;
+    }
 
     public async Task<int> BackfillAsync(CancellationToken cancellationToken = default)
     {

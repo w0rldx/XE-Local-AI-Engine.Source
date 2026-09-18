@@ -121,15 +121,21 @@ public sealed partial class WorkerEventDispatcher
     ///     Holds the shared invocation slot for the duration of a local run. Disposing it releases the slot so the
     ///     next queued invocation (local or remote) can proceed. Release is idempotent.
     /// </summary>
-    private sealed class LocalInvocationLease(SemaphoreSlim queue) : IAsyncDisposable
+    private sealed class LocalInvocationLease : IAsyncDisposable
     {
+        private readonly SemaphoreSlim _queue;
         private int _disposed;
+
+        public LocalInvocationLease(SemaphoreSlim queue)
+        {
+            _queue = queue;
+        }
 
         public ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
-                _ = queue.Release();
+                _ = _queue.Release();
             }
 
             return ValueTask.CompletedTask;

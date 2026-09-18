@@ -188,11 +188,18 @@ public sealed class KeyedCompositeLockDomain
         public bool Writer { get; set; }
     }
 
-    private sealed class Waiter(IReadOnlyList<string> keys, ModelCoordinationLockMode mode, OwnershipToken ownership)
+    private sealed class Waiter
     {
-        public IReadOnlyList<string> Keys { get; } = keys;
-        public ModelCoordinationLockMode Mode { get; } = mode;
-        public OwnershipToken Ownership { get; } = ownership;
+        public Waiter(IReadOnlyList<string> keys, ModelCoordinationLockMode mode, OwnershipToken ownership)
+        {
+            Keys = keys;
+            Mode = mode;
+            Ownership = ownership;
+        }
+
+        public IReadOnlyList<string> Keys { get; }
+        public ModelCoordinationLockMode Mode { get; }
+        public OwnershipToken Ownership { get; }
         public TaskCompletionSource<ModelCoordinationLockLease> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public LinkedListNode<Waiter>? Node { get; set; }
         public CancellationTokenRegistration CancellationRegistration { get; set; }

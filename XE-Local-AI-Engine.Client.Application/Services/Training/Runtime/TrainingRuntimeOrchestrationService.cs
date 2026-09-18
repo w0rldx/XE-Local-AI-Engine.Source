@@ -10,12 +10,18 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     refusals, and re-exposes only the members those four endpoints call. The interpreter-path lookup the run
 ///     executor and the export service use stays off this surface deliberately: no endpoint asks for it.
 /// </summary>
-public sealed class TrainingRuntimeOrchestrationService(ITrainingRuntimeService runtime, ITrainingRuntimePrerequisiteProbe prerequisiteProbe)
+public sealed class TrainingRuntimeOrchestrationService
 {
-    private readonly ITrainingRuntimeService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+    private readonly ITrainingRuntimeService _runtime;
+    private readonly ITrainingRuntimePrerequisiteProbe _prerequisiteProbe;
 
-    private readonly ITrainingRuntimePrerequisiteProbe _prerequisiteProbe =
-        prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
+    public TrainingRuntimeOrchestrationService(ITrainingRuntimeService runtime, ITrainingRuntimePrerequisiteProbe prerequisiteProbe)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(prerequisiteProbe);
+        _runtime = runtime;
+        _prerequisiteProbe = prerequisiteProbe;
+    }
 
     /// <summary>
     ///     Reports whether this machine can provision the Python training runtime. Read-only: probing never mutates

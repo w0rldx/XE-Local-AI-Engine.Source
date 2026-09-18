@@ -68,22 +68,7 @@ public interface IDevelopmentManagementService
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class DevelopmentManagementService(
-    IDevelopmentStore store,
-    IDevelopmentCoordinator coordinator,
-    IDevelopmentAttemptExecutionSupervisor supervisor,
-    IDevelopmentArtifactBlobStore blobStore,
-    IDevelopmentApplyService applyService,
-    IDevelopmentRepositoryBindingService repositoryBindings,
-    IActiveCloudChatClientFactory cloudFactory,
-    IModelTrustResolver modelTrustResolver,
-    IDevelopmentCommandProfileDetector profileDetector,
-    IDevelopmentProfileBackfillService profileBackfill,
-    IDevelopmentTemplateStore templateStore,
-    IDevWorkflowStore workflows,
-    IOptions<DevWorkflowOptions> workflowOptions,
-    TimeProvider timeProvider,
-    ILogger<DevelopmentManagementService> logger) : IDevelopmentManagementService
+internal sealed class DevelopmentManagementService : IDevelopmentManagementService
 {
     /// <summary>
     ///     Why a task with no rounds left was stood down — and, because it is PERSISTED as the task's reason and read
@@ -92,9 +77,9 @@ internal sealed class DevelopmentManagementService(
     /// </summary>
     private const string ReviewRoundLimitReason = "The configured maximum number of rounds has been reached.";
 
-    private readonly IDevelopmentApplyService _applyService = applyService ?? throw new ArgumentNullException(nameof(applyService));
-    private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-    private readonly IDevelopmentCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+    private readonly IDevelopmentApplyService _applyService;
+    private readonly IDevelopmentArtifactBlobStore _blobStore;
+    private readonly IDevelopmentCoordinator _coordinator;
 
     /// <summary>
     ///     Dev Mode moved tasks between statuses without a single line in the process log — the pass-4 evidence scan
@@ -103,17 +88,17 @@ internal sealed class DevelopmentManagementService(
     ///     literal phrase "task status", so one grep finds every hop <see cref="StartNextActionAsync" /> decides:
     ///     <c>Planned → Ready</c>, the round start, and the stand-down at the round cap.
     /// </summary>
-    private readonly ILogger<DevelopmentManagementService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<DevelopmentManagementService> _logger;
 
-    private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-    private readonly IDevelopmentProfileBackfillService _profileBackfill = profileBackfill ?? throw new ArgumentNullException(nameof(profileBackfill));
-    private readonly IDevelopmentCommandProfileDetector _profileDetector = profileDetector ?? throw new ArgumentNullException(nameof(profileDetector));
-    private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
-    private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IDevelopmentAttemptExecutionSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-    private readonly IDevelopmentTemplateStore _templateStore = templateStore ?? throw new ArgumentNullException(nameof(templateStore));
-    private readonly DevWorkflowOptions _workflowOptions = (workflowOptions ?? throw new ArgumentNullException(nameof(workflowOptions))).Value;
+    private readonly IActiveCloudChatClientFactory _cloudFactory;
+    private readonly IModelTrustResolver _modelTrustResolver;
+    private readonly IDevelopmentProfileBackfillService _profileBackfill;
+    private readonly IDevelopmentCommandProfileDetector _profileDetector;
+    private readonly IDevelopmentRepositoryBindingService _repositoryBindings;
+    private readonly IDevelopmentStore _store;
+    private readonly IDevelopmentAttemptExecutionSupervisor _supervisor;
+    private readonly IDevelopmentTemplateStore _templateStore;
+    private readonly DevWorkflowOptions _workflowOptions;
 
     /// <summary>
     ///     Read-only, and for one question: which workflow run — if any — owns the approval for a task.
@@ -124,9 +109,57 @@ internal sealed class DevelopmentManagementService(
     ///         call sites today and remembering to ask at the next one. Recorded so it is not re-litigated.
     ///     </para>
     /// </summary>
-    private readonly IDevWorkflowStore _workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
+    private readonly IDevWorkflowStore _workflows;
 
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly TimeProvider _timeProvider;
+
+    public DevelopmentManagementService(
+        IDevelopmentStore store,
+        IDevelopmentCoordinator coordinator,
+        IDevelopmentAttemptExecutionSupervisor supervisor,
+        IDevelopmentArtifactBlobStore blobStore,
+        IDevelopmentApplyService applyService,
+        IDevelopmentRepositoryBindingService repositoryBindings,
+        IActiveCloudChatClientFactory cloudFactory,
+        IModelTrustResolver modelTrustResolver,
+        IDevelopmentCommandProfileDetector profileDetector,
+        IDevelopmentProfileBackfillService profileBackfill,
+        IDevelopmentTemplateStore templateStore,
+        IDevWorkflowStore workflows,
+        IOptions<DevWorkflowOptions> workflowOptions,
+        TimeProvider timeProvider,
+        ILogger<DevelopmentManagementService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(applyService);
+        _applyService = applyService;
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        ArgumentNullException.ThrowIfNull(coordinator);
+        _coordinator = coordinator;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        ArgumentNullException.ThrowIfNull(cloudFactory);
+        _cloudFactory = cloudFactory;
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        _modelTrustResolver = modelTrustResolver;
+        ArgumentNullException.ThrowIfNull(profileBackfill);
+        _profileBackfill = profileBackfill;
+        ArgumentNullException.ThrowIfNull(profileDetector);
+        _profileDetector = profileDetector;
+        ArgumentNullException.ThrowIfNull(repositoryBindings);
+        _repositoryBindings = repositoryBindings;
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(supervisor);
+        _supervisor = supervisor;
+        ArgumentNullException.ThrowIfNull(templateStore);
+        _templateStore = templateStore;
+        _workflowOptions = (workflowOptions ?? throw new ArgumentNullException(nameof(workflowOptions))).Value;
+        ArgumentNullException.ThrowIfNull(workflows);
+        _workflows = workflows;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+    }
 
     public Task<DevelopmentRepositoryReference> RegisterRepositoryAsync(string displayAlias,
         string hostPath,

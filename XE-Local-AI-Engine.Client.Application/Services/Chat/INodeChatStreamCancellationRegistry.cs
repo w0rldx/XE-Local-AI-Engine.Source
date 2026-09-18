@@ -19,5 +19,9 @@ public interface INodeChatStreamCancellationRegistry
 ///     client double-invoke, not solely an internal invariant, so <c>LocalChatHub</c> translates it into a
 ///     <c>HubException</c> whose sentence the browser can show.
 /// </summary>
-public sealed class NodeChatStreamAlreadyActiveException()
-    : InvalidOperationException("This message is already being generated. Wait for it to finish or stop it first.");
+public sealed class NodeChatStreamAlreadyActiveException : InvalidOperationException
+{
+    public NodeChatStreamAlreadyActiveException() : base("This message is already being generated. Wait for it to finish or stop it first.")
+    {
+    }
+}

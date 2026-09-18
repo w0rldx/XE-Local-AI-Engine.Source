@@ -4,10 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 ///     Default <see cref="IConversationUploadIngestor" />. Holds the gate/extract/persist orchestration that used to live
 ///     in the upload endpoint handler. Stateless apart from its (singleton) collaborators.
 /// </summary>
-public sealed class ConversationUploadIngestor(
-    IConversationUploadedFileStore fileStore,
-    IDocumentTextExtractor extractor,
-    IDocumentExtractionAdmissionGate extractionGate) : IConversationUploadIngestor
+public sealed class ConversationUploadIngestor : IConversationUploadIngestor
 {
     private const string DefaultMimeType = "application/octet-stream";
 
@@ -25,9 +22,22 @@ public sealed class ConversationUploadIngestor(
         [".gif"] = "image/gif"
     };
 
-    private readonly IDocumentExtractionAdmissionGate _extractionGate = extractionGate ?? throw new ArgumentNullException(nameof(extractionGate));
-    private readonly IDocumentTextExtractor _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
-    private readonly IConversationUploadedFileStore _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
+    private readonly IDocumentExtractionAdmissionGate _extractionGate;
+    private readonly IDocumentTextExtractor _extractor;
+    private readonly IConversationUploadedFileStore _fileStore;
+
+    public ConversationUploadIngestor(
+        IConversationUploadedFileStore fileStore,
+        IDocumentTextExtractor extractor,
+        IDocumentExtractionAdmissionGate extractionGate)
+    {
+        ArgumentNullException.ThrowIfNull(extractionGate);
+        ArgumentNullException.ThrowIfNull(extractor);
+        ArgumentNullException.ThrowIfNull(fileStore);
+        _extractionGate = extractionGate;
+        _extractor = extractor;
+        _fileStore = fileStore;
+    }
 
     public bool IsSupportedExtension(string extension)
     {

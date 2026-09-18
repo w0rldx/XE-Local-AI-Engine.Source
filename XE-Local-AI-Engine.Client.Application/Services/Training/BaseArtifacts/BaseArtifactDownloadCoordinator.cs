@@ -17,17 +17,29 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 ///     counter written per chunk would be thousands of encrypted row updates for information nobody needs after the
 ///     transfer ends.
 /// </remarks>
-internal sealed class BaseArtifactDownloadCoordinator(
-    IServiceScopeFactory scopeFactory,
-    IBaseCheckpointStore checkpointStore,
-    INodeDataDirectory dataDirectory,
-    ILogger<BaseArtifactDownloadCoordinator> logger) : IDisposable
+internal sealed class BaseArtifactDownloadCoordinator : IDisposable
 {
-    private readonly IBaseCheckpointStore _checkpointStore = checkpointStore ?? throw new ArgumentNullException(nameof(checkpointStore));
-    private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
+    private readonly IBaseCheckpointStore _checkpointStore;
+    private readonly INodeDataDirectory _dataDirectory;
     private readonly ConcurrentDictionary<Guid, InFlightDownload> _inFlight = new();
-    private readonly ILogger<BaseArtifactDownloadCoordinator> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    private readonly ILogger<BaseArtifactDownloadCoordinator> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public BaseArtifactDownloadCoordinator(
+        IServiceScopeFactory scopeFactory,
+        IBaseCheckpointStore checkpointStore,
+        INodeDataDirectory dataDirectory,
+        ILogger<BaseArtifactDownloadCoordinator> logger)
+    {
+        ArgumentNullException.ThrowIfNull(checkpointStore);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _checkpointStore = checkpointStore;
+        _dataDirectory = dataDirectory;
+        _logger = logger;
+        _scopeFactory = scopeFactory;
+    }
 
     public bool IsDownloading(Guid artifactId)
     {

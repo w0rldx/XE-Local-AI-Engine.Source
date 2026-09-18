@@ -11,16 +11,25 @@ public interface IBenchmarkCancellationService
         CancellationToken cancellationToken = default);
 }
 
-public sealed class BenchmarkCancellationService(
-    IBenchmarkStore store,
-    IBenchmarkCancellationRegistry registry) : IBenchmarkCancellationService
+public sealed class BenchmarkCancellationService : IBenchmarkCancellationService
 {
+    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkCancellationRegistry _registry;
+
+    public BenchmarkCancellationService(
+        IBenchmarkStore store,
+        IBenchmarkCancellationRegistry registry)
+    {
+        _store = store;
+        _registry = registry;
+    }
+
     public async Task<BenchmarkRunRecord> CancelAsync(Guid runId,
         long expectedRunVersion,
         BenchmarkCancellationTarget target,
         CancellationToken cancellationToken = default)
     {
-        var current = await store.GetRunAsync(runId, cancellationToken)
+        var current = await _store.GetRunAsync(runId, cancellationToken)
                       ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
         if (target == BenchmarkCancellationTarget.Primary
             && current.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded)
@@ -36,14 +45,14 @@ public sealed class BenchmarkCancellationService(
             throw new BenchmarkConflictException("JudgeNotCancellable");
         }
 
-        var updated = await store.CancelAsync(runId, expectedRunVersion, cancellationToken);
+        var updated = await _store.CancelAsync(runId, expectedRunVersion, cancellationToken);
         if (target == BenchmarkCancellationTarget.Primary && updated.PrimaryStatus == BenchmarkPrimaryStatus.CancelRequested)
         {
-            _ = registry.TryCancel(runId, BenchmarkWorkKind.Primary);
+            _ = _registry.TryCancel(runId, BenchmarkWorkKind.Primary);
         }
         else if (target == BenchmarkCancellationTarget.Judge && updated.Judge?.State == BenchmarkRunJudgeStates.Cancelled)
         {
-            _ = registry.TryCancel(runId, BenchmarkWorkKind.Judge);
+            _ = _registry.TryCancel(runId, BenchmarkWorkKind.Judge);
         }
 
         return updated;

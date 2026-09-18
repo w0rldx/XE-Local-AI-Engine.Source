@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Persistence;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>Reads exact content/version/model matches from already-committed knowledge vectors.</summary>
-public sealed class KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scopeFactory) : IKnowledgeChunkEmbeddingReuseStore
+public sealed class KnowledgeChunkEmbeddingReuseStore : IKnowledgeChunkEmbeddingReuseStore
 {
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public KnowledgeChunkEmbeddingReuseStore(IServiceScopeFactory scopeFactory)
+    {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+    }
 
     public async Task<IReadOnlyDictionary<KnowledgeChunkEmbeddingCacheKey, byte[]>> FindManyAsync(IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys,
         DateTimeOffset notBeforeUtc,

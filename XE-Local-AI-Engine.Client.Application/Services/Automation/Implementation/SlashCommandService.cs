@@ -6,12 +6,18 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed partial class SlashCommandService(ISlashCommandStore store) : ISlashCommandService
+internal sealed partial class SlashCommandService : ISlashCommandService
 {
     private static readonly SlashCommandCatalogItem Ping = new(null, "ping", "Test the current chat agent.", "builtIn", SlashCommandActionType.SendPrompt,
         "Respond with exactly PONG and nothing else.");
 
-    private readonly ISlashCommandStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ISlashCommandStore _store;
+
+    public SlashCommandService(ISlashCommandStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     public async Task<IReadOnlyList<SlashCommandCatalogItem>> ListAsync(CancellationToken cancellationToken = default)
     {

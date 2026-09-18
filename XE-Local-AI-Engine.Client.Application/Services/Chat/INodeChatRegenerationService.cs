@@ -42,18 +42,26 @@ public interface INodeChatRegenerationService
 ///     conversation deleted on another device), not an internal invariant, so <c>LocalChatHub</c> translates it into
 ///     a <c>HubException</c> whose sentence the browser can show.
 /// </summary>
-public sealed class NodeChatConversationNotFoundException(Guid conversationId)
-    : InvalidOperationException($"Conversation {conversationId} was not found. It may have been deleted — reload the chat list.")
+public sealed class NodeChatConversationNotFoundException : InvalidOperationException
 {
-    public Guid ConversationId { get; } = conversationId;
+    public NodeChatConversationNotFoundException(Guid conversationId) : base($"Conversation {conversationId} was not found. It may have been deleted — reload the chat list.")
+    {
+        ConversationId = conversationId;
+    }
+
+    public Guid ConversationId { get; }
 }
 
 /// <summary>
 ///     Thrown when a regenerate names an assistant message the conversation no longer holds. Same caller-triggerable
 ///     class as <see cref="NodeChatConversationNotFoundException" /> and translated by <c>LocalChatHub</c> the same way.
 /// </summary>
-public sealed class NodeChatMessageNotFoundException(Guid messageId)
-    : InvalidOperationException($"Message {messageId} was not found in this conversation. Reload the conversation and try again.")
+public sealed class NodeChatMessageNotFoundException : InvalidOperationException
 {
-    public Guid MessageId { get; } = messageId;
+    public NodeChatMessageNotFoundException(Guid messageId) : base($"Message {messageId} was not found in this conversation. Reload the conversation and try again.")
+    {
+        MessageId = messageId;
+    }
+
+    public Guid MessageId { get; }
 }

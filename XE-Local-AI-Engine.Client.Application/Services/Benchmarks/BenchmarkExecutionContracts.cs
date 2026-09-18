@@ -59,9 +59,15 @@ public sealed record BenchmarkRunStreamEvent(
     BenchmarkRunStreamEventKind Kind,
     BenchmarkRunStreamPayload Payload);
 
-public sealed class BenchmarkRunStreamEventArgs(BenchmarkRunStreamEvent streamEvent) : EventArgs
+public sealed class BenchmarkRunStreamEventArgs : EventArgs
 {
-    public BenchmarkRunStreamEvent StreamEvent { get; } = streamEvent ?? throw new ArgumentNullException(nameof(streamEvent));
+    public BenchmarkRunStreamEventArgs(BenchmarkRunStreamEvent streamEvent)
+    {
+        ArgumentNullException.ThrowIfNull(streamEvent);
+        StreamEvent = streamEvent;
+    }
+
+    public BenchmarkRunStreamEvent StreamEvent { get; }
 }
 
 public sealed record BenchmarkReplayResult(
@@ -489,11 +495,16 @@ public static class BenchmarkOutputParts
     }
 }
 
-public sealed class BenchmarkContextAdmissionPolicy(int requiredContextTokens) : IInvocationGenerationAdmissionPolicy
+public sealed class BenchmarkContextAdmissionPolicy : IInvocationGenerationAdmissionPolicy
 {
-    private readonly int _requiredContextTokens = requiredContextTokens > 0
-        ? requiredContextTokens
-        : throw new ArgumentOutOfRangeException(nameof(requiredContextTokens));
+    private readonly int _requiredContextTokens;
+
+    public BenchmarkContextAdmissionPolicy(int requiredContextTokens)
+    {
+        _requiredContextTokens = requiredContextTokens > 0
+            ? requiredContextTokens
+            : throw new ArgumentOutOfRangeException(nameof(requiredContextTokens));
+    }
 
     public int? EffectiveContextTokens { get; private set; }
 

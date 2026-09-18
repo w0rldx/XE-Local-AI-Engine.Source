@@ -159,10 +159,16 @@ internal sealed class ExternalAppOperationRunner
         }
     }
 
-    private sealed class RunningOperation(CancellationTokenSource source, ExternalAppOperationKind kind)
+    private sealed class RunningOperation
     {
-        public CancellationTokenSource Source { get; } = source;
+        public RunningOperation(CancellationTokenSource source, ExternalAppOperationKind kind)
+        {
+            Source = source;
+            Kind = kind;
+        }
 
-        public ExternalAppOperationKind Kind { get; } = kind;
+        public CancellationTokenSource Source { get; }
+
+        public ExternalAppOperationKind Kind { get; }
     }
 }

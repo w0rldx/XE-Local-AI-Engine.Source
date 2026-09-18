@@ -13,20 +13,30 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     recovery and shutdown drain of the build service, and the activity gate's leases, stay off this surface
 ///     deliberately: no endpoint asks for them.
 /// </summary>
-public sealed class WhisperRuntimeOrchestrationService(
-    IWhisperCppSourceBuildService buildService,
-    IWhisperCppSourceBuildPrerequisiteProbe prerequisiteProbe,
-    IWhisperRuntimeActivityGate activityGate,
-    IWhisperBackendSelector backendSelector)
+public sealed class WhisperRuntimeOrchestrationService
 {
-    private readonly IWhisperRuntimeActivityGate _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
+    private readonly IWhisperRuntimeActivityGate _activityGate;
 
-    private readonly IWhisperBackendSelector _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
+    private readonly IWhisperBackendSelector _backendSelector;
 
-    private readonly IWhisperCppSourceBuildService _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+    private readonly IWhisperCppSourceBuildService _buildService;
+    private readonly IWhisperCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
 
-    private readonly IWhisperCppSourceBuildPrerequisiteProbe _prerequisiteProbe =
-        prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
+    public WhisperRuntimeOrchestrationService(
+        IWhisperCppSourceBuildService buildService,
+        IWhisperCppSourceBuildPrerequisiteProbe prerequisiteProbe,
+        IWhisperRuntimeActivityGate activityGate,
+        IWhisperBackendSelector backendSelector)
+    {
+        ArgumentNullException.ThrowIfNull(activityGate);
+        ArgumentNullException.ThrowIfNull(backendSelector);
+        ArgumentNullException.ThrowIfNull(buildService);
+        ArgumentNullException.ThrowIfNull(prerequisiteProbe);
+        _activityGate = activityGate;
+        _backendSelector = backendSelector;
+        _buildService = buildService;
+        _prerequisiteProbe = prerequisiteProbe;
+    }
 
     /// <summary>Returns the active runtime backend, or probes the host to select an exact prebuilt backend.</summary>
     public Task<WhisperBackend> SelectBackendAsync(CancellationToken ct)

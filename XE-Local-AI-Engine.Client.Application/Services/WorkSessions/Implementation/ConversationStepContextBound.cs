@@ -24,11 +24,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 ///         the raw transcript is the expendable half.
 ///     </para>
 /// </summary>
-internal sealed class ConversationStepContextBound(
-    INodeChatPersistenceService persistence,
-    IConversationCompactionService compaction,
-    ITokenEstimator estimator,
-    ILogger<ConversationStepContextBound> logger)
+internal sealed class ConversationStepContextBound
 {
     /// <summary>
     ///     What a forced session compaction keeps verbatim: the previous step's state block and its answer. Two is the
@@ -37,10 +33,26 @@ internal sealed class ConversationStepContextBound(
     /// </summary>
     internal const int SessionKeepVerbatim = 2;
 
-    private readonly IConversationCompactionService _compaction = compaction ?? throw new ArgumentNullException(nameof(compaction));
-    private readonly ITokenEstimator _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
-    private readonly ILogger<ConversationStepContextBound> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+    private readonly IConversationCompactionService _compaction;
+    private readonly ITokenEstimator _estimator;
+    private readonly ILogger<ConversationStepContextBound> _logger;
+    private readonly INodeChatPersistenceService _persistence;
+
+    public ConversationStepContextBound(
+        INodeChatPersistenceService persistence,
+        IConversationCompactionService compaction,
+        ITokenEstimator estimator,
+        ILogger<ConversationStepContextBound> logger)
+    {
+        ArgumentNullException.ThrowIfNull(compaction);
+        ArgumentNullException.ThrowIfNull(estimator);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(persistence);
+        _compaction = compaction;
+        _estimator = estimator;
+        _logger = logger;
+        _persistence = persistence;
+    }
 
     /// <summary>
     ///     Folds the session conversation's older turns when the next step would replay more than

@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     no policy of its own, because the definition service owns definitions and the generation service owns creation
 ///     and cancel.
 /// </summary>
-public sealed class TrainingDatasetService(ITrainingDatasetStore store)
+public sealed class TrainingDatasetService
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ITrainingDatasetStore _store;
+
+    public TrainingDatasetService(ITrainingDatasetStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     /// <summary>Every dataset the node holds, newest first, exactly as the store orders them.</summary>
     public Task<IReadOnlyList<TrainingDatasetRecord>> ListAsync(CancellationToken cancellationToken = default) =>

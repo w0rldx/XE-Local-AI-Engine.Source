@@ -16,16 +16,25 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     This type is intentionally not unit-tested against a live model; tests substitute a fake
 ///     <see cref="IMemoryExtractionAgent" /> (mirroring the analysis agent seam, so no Ollama is needed in CI).
 /// </summary>
-internal sealed class DefaultMemoryExtractionAgent(
-    ILocalModelProviderResolver providerResolver,
-    IOptions<MemoryExtractionOptions> options,
-    ILogger<DefaultMemoryExtractionAgent> logger) : IMemoryExtractionAgent
+internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly ILogger<DefaultMemoryExtractionAgent> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly MemoryExtractionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly ILogger<DefaultMemoryExtractionAgent> _logger;
+    private readonly MemoryExtractionOptions _options;
 
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+    private readonly ILocalModelProviderResolver _providerResolver;
+
+    public DefaultMemoryExtractionAgent(
+        ILocalModelProviderResolver providerResolver,
+        IOptions<MemoryExtractionOptions> options,
+        ILogger<DefaultMemoryExtractionAgent> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+    }
 
     public async Task<IReadOnlyList<ProposedMemory>> ProposeAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default)
     {

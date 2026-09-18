@@ -24,14 +24,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     writes one or two; a parallel stage would want a debounce here, keyed by run id, before the client turns each
 ///     ping into a refetch.
 /// </remarks>
-internal sealed class PublishingDevWorkflowStore(
-    IDevWorkflowStore inner,
-    IDevWorkflowEventPublisher publisher,
-    IServiceScopeFactory scopes,
-    DevWorkflowGraphCache graphs,
-    DevWorkflowNodeTelemetryCollectionPool collections,
-    ILogger<PublishingDevWorkflowStore> logger,
-    TimeSpan? collectionTimeout = null) : IDevWorkflowStore
+internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
 {
     /// <summary>
     ///     How long a cost collection may take before the settle goes ahead without it. It runs on a dispatcher tick,
@@ -75,13 +68,37 @@ internal sealed class PublishingDevWorkflowStore(
         "vramAdmittedBytes"
     };
 
-    private readonly IDevWorkflowStore _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-    private readonly IDevWorkflowEventPublisher _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-    private readonly IServiceScopeFactory _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
-    private readonly DevWorkflowGraphCache _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
-    private readonly ILogger<PublishingDevWorkflowStore> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly TimeSpan _collectionTimeout = collectionTimeout ?? DefaultCollectionTimeout;
-    private readonly DevWorkflowNodeTelemetryCollectionPool _collections = collections ?? throw new ArgumentNullException(nameof(collections));
+    private readonly IDevWorkflowStore _inner;
+    private readonly IDevWorkflowEventPublisher _publisher;
+    private readonly IServiceScopeFactory _scopes;
+    private readonly DevWorkflowGraphCache _graphs;
+    private readonly ILogger<PublishingDevWorkflowStore> _logger;
+    private readonly TimeSpan _collectionTimeout;
+    private readonly DevWorkflowNodeTelemetryCollectionPool _collections;
+
+    public PublishingDevWorkflowStore(
+        IDevWorkflowStore inner,
+        IDevWorkflowEventPublisher publisher,
+        IServiceScopeFactory scopes,
+        DevWorkflowGraphCache graphs,
+        DevWorkflowNodeTelemetryCollectionPool collections,
+        ILogger<PublishingDevWorkflowStore> logger,
+        TimeSpan? collectionTimeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+        ArgumentNullException.ThrowIfNull(publisher);
+        _publisher = publisher;
+        ArgumentNullException.ThrowIfNull(scopes);
+        _scopes = scopes;
+        ArgumentNullException.ThrowIfNull(graphs);
+        _graphs = graphs;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _collectionTimeout = collectionTimeout ?? DefaultCollectionTimeout;
+        ArgumentNullException.ThrowIfNull(collections);
+        _collections = collections;
+    }
 
     public Task<DevWorkflowWorkItemSnapshot> CreateWorkItemAsync(CreateDevWorkflowWorkItemCommand command, CancellationToken cancellationToken = default) =>
         _inner.CreateWorkItemAsync(command, cancellationToken);

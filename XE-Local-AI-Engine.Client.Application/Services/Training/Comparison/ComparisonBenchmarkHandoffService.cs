@@ -36,18 +36,32 @@ public interface IComparisonBenchmarkHandoffService
 ///         here); until then the hand-off is refused with that reason rather than failing later inside the freeze.
 ///     </para>
 /// </summary>
-public sealed class ComparisonBenchmarkHandoffService(
-    ITrainingEvaluationStore evaluations,
-    ITrainingRunStore runs,
-    IBenchmarkStore benchmarks,
-    IBenchmarkProjectService projects,
-    IBenchmarkRunFreezeService freeze) : IComparisonBenchmarkHandoffService
+public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHandoffService
 {
-    private readonly IBenchmarkStore _benchmarks = benchmarks ?? throw new ArgumentNullException(nameof(benchmarks));
-    private readonly ITrainingEvaluationStore _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
-    private readonly IBenchmarkRunFreezeService _freeze = freeze ?? throw new ArgumentNullException(nameof(freeze));
-    private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
-    private readonly ITrainingRunStore _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IBenchmarkStore _benchmarks;
+    private readonly ITrainingEvaluationStore _evaluations;
+    private readonly IBenchmarkRunFreezeService _freeze;
+    private readonly IBenchmarkProjectService _projects;
+    private readonly ITrainingRunStore _runs;
+
+    public ComparisonBenchmarkHandoffService(
+        ITrainingEvaluationStore evaluations,
+        ITrainingRunStore runs,
+        IBenchmarkStore benchmarks,
+        IBenchmarkProjectService projects,
+        IBenchmarkRunFreezeService freeze)
+    {
+        ArgumentNullException.ThrowIfNull(benchmarks);
+        ArgumentNullException.ThrowIfNull(evaluations);
+        ArgumentNullException.ThrowIfNull(freeze);
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(runs);
+        _benchmarks = benchmarks;
+        _evaluations = evaluations;
+        _freeze = freeze;
+        _projects = projects;
+        _runs = runs;
+    }
 
     public async Task<ComparisonBenchmarkHandoff> CreateAsync(CreateBenchmarkFromComparisonCommand command,
         CancellationToken cancellationToken = default)

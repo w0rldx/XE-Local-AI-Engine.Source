@@ -410,9 +410,14 @@ public static class BenchmarkNiahGenerator
     ///     detail the runtime has changed before, and a case whose text changes with a .NET upgrade would move its own
     ///     input hash and unrank every answer ever given to it.
     /// </summary>
-    private sealed class SplitMix64(ulong state)
+    private sealed class SplitMix64
     {
-        private ulong _state = state;
+        private ulong _state;
+
+        public SplitMix64(ulong state)
+        {
+            _state = state;
+        }
 
         public static SplitMix64 Seeded(Guid parentItemId, int contextTokens, int depthPercent, int seed)
         {

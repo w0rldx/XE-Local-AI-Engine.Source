@@ -54,13 +54,7 @@ public interface IHeadlessToolExecutor
 ///         generation; the interactive-chat recorder is not part of this audit path.
 ///     </para>
 /// </summary>
-internal sealed class HeadlessToolExecutor(
-    ILocalToolOfferProvider offerProvider,
-    IToolApprovalPolicy approvalPolicy,
-    ITrainingDatasetStore store,
-    IToolMockEngine mockEngine,
-    IToolMockStaticVerifier mockVerifier,
-    IToolInvocationService toolInvocation) : IHeadlessToolExecutor
+internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
 {
     /// <summary>
     ///     The node key the shared seam logs this caller under. Generation has no run or node of its own, so the two
@@ -76,12 +70,34 @@ internal sealed class HeadlessToolExecutor(
     /// </summary>
     private static readonly TimeSpan UnboundedBudget = TimeSpan.FromMilliseconds(int.MaxValue);
 
-    private readonly IToolApprovalPolicy _approvalPolicy = approvalPolicy ?? throw new ArgumentNullException(nameof(approvalPolicy));
-    private readonly IToolMockEngine _mockEngine = mockEngine ?? throw new ArgumentNullException(nameof(mockEngine));
-    private readonly IToolMockStaticVerifier _mockVerifier = mockVerifier ?? throw new ArgumentNullException(nameof(mockVerifier));
-    private readonly ILocalToolOfferProvider _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IToolInvocationService _toolInvocation = toolInvocation ?? throw new ArgumentNullException(nameof(toolInvocation));
+    private readonly IToolApprovalPolicy _approvalPolicy;
+    private readonly IToolMockEngine _mockEngine;
+    private readonly IToolMockStaticVerifier _mockVerifier;
+    private readonly ILocalToolOfferProvider _offerProvider;
+    private readonly ITrainingDatasetStore _store;
+    private readonly IToolInvocationService _toolInvocation;
+
+    public HeadlessToolExecutor(
+        ILocalToolOfferProvider offerProvider,
+        IToolApprovalPolicy approvalPolicy,
+        ITrainingDatasetStore store,
+        IToolMockEngine mockEngine,
+        IToolMockStaticVerifier mockVerifier,
+        IToolInvocationService toolInvocation)
+    {
+        ArgumentNullException.ThrowIfNull(approvalPolicy);
+        ArgumentNullException.ThrowIfNull(mockEngine);
+        ArgumentNullException.ThrowIfNull(mockVerifier);
+        ArgumentNullException.ThrowIfNull(offerProvider);
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(toolInvocation);
+        _approvalPolicy = approvalPolicy;
+        _mockEngine = mockEngine;
+        _mockVerifier = mockVerifier;
+        _offerProvider = offerProvider;
+        _store = store;
+        _toolInvocation = toolInvocation;
+    }
 
     public async Task<HeadlessToolOutcome> ExecuteAsync(string toolName,
         string argumentsJson,

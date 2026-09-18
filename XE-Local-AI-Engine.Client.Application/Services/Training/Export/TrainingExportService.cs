@@ -34,21 +34,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///         smoke state, and reason — with live progress on the run hub. A run that succeeded stays succeeded.
 ///     </para>
 /// </remarks>
-public sealed class TrainingExportService(
-    IServiceScopeFactory scopeFactory,
-    ITrainingRunEventBuffer events,
-    IGpuWorkGate gpuWorkGate,
-    ILlamaServerProcessSupervisor supervisor,
-    ITrainingRuntimeService runtime,
-    ITrainingProcessSpawner spawner,
-    IConvertScriptProvisioner convertScripts,
-    ILlamaCppBinaryManager binaryManager,
-    IGpuVariantSelector variantSelector,
-    IGgufImportInspector inspector,
-    ITrainedModelSmokeGate smokeGate,
-    TrainingRunWorkspace workspace,
-    INodeDataDirectory dataDirectory,
-    ILogger<TrainingExportService> logger) : ITrainingExportService
+public sealed class TrainingExportService : ITrainingExportService
 {
     private const string MergedCheckpointDirectoryName = "merged-hf";
 
@@ -61,20 +47,66 @@ public sealed class TrainingExportService(
     /// </summary>
     private static readonly TimeSpan ExportTimeout = TimeSpan.FromHours(3);
 
-    private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-    private readonly IConvertScriptProvisioner _convertScripts = convertScripts ?? throw new ArgumentNullException(nameof(convertScripts));
-    private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-    private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly IGpuWorkGate _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
-    private readonly IGgufImportInspector _inspector = inspector ?? throw new ArgumentNullException(nameof(inspector));
-    private readonly ILogger<TrainingExportService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly ITrainingRuntimeService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    private readonly ITrainedModelSmokeGate _smokeGate = smokeGate ?? throw new ArgumentNullException(nameof(smokeGate));
-    private readonly ITrainingProcessSpawner _spawner = spawner ?? throw new ArgumentNullException(nameof(spawner));
-    private readonly ILlamaServerProcessSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-    private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
-    private readonly TrainingRunWorkspace _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+    private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly IConvertScriptProvisioner _convertScripts;
+    private readonly INodeDataDirectory _dataDirectory;
+    private readonly ITrainingRunEventBuffer _events;
+    private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IGgufImportInspector _inspector;
+    private readonly ILogger<TrainingExportService> _logger;
+    private readonly ITrainingRuntimeService _runtime;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ITrainedModelSmokeGate _smokeGate;
+    private readonly ITrainingProcessSpawner _spawner;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly IGpuVariantSelector _variantSelector;
+    private readonly TrainingRunWorkspace _workspace;
+
+    public TrainingExportService(
+        IServiceScopeFactory scopeFactory,
+        ITrainingRunEventBuffer events,
+        IGpuWorkGate gpuWorkGate,
+        ILlamaServerProcessSupervisor supervisor,
+        ITrainingRuntimeService runtime,
+        ITrainingProcessSpawner spawner,
+        IConvertScriptProvisioner convertScripts,
+        ILlamaCppBinaryManager binaryManager,
+        IGpuVariantSelector variantSelector,
+        IGgufImportInspector inspector,
+        ITrainedModelSmokeGate smokeGate,
+        TrainingRunWorkspace workspace,
+        INodeDataDirectory dataDirectory,
+        ILogger<TrainingExportService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        ArgumentNullException.ThrowIfNull(convertScripts);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        ArgumentNullException.ThrowIfNull(inspector);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        ArgumentNullException.ThrowIfNull(smokeGate);
+        ArgumentNullException.ThrowIfNull(spawner);
+        ArgumentNullException.ThrowIfNull(supervisor);
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        ArgumentNullException.ThrowIfNull(workspace);
+        _binaryManager = binaryManager;
+        _convertScripts = convertScripts;
+        _dataDirectory = dataDirectory;
+        _events = events;
+        _gpuWorkGate = gpuWorkGate;
+        _inspector = inspector;
+        _logger = logger;
+        _runtime = runtime;
+        _scopeFactory = scopeFactory;
+        _smokeGate = smokeGate;
+        _spawner = spawner;
+        _supervisor = supervisor;
+        _variantSelector = variantSelector;
+        _workspace = workspace;
+    }
 
     /// <summary>Awaited by tests so a started export can be observed to completion; null when nothing is running.</summary>
     internal Task? InFlight { get; private set; }

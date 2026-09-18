@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     endpoints: read it, store it, clear it. The HTTP edge keeps the decoding, validation and reserved-flag
 ///     rejection it already owns; this type is the only path from those endpoints to the persisted override.
 /// </summary>
-public sealed class ModelLaunchArgumentsService(IModelLaunchArgumentsStore store)
+public sealed class ModelLaunchArgumentsService
 {
-    private readonly IModelLaunchArgumentsStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IModelLaunchArgumentsStore _store;
+
+    public ModelLaunchArgumentsService(IModelLaunchArgumentsStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     /// <summary>
     ///     Returns the raw override stored for <paramref name="modelName" />, or <see langword="null" /> when the

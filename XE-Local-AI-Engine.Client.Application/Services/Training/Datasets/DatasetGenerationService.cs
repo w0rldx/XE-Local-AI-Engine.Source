@@ -22,16 +22,28 @@ public interface IDatasetGenerationService
 }
 
 /// <inheritdoc />
-public sealed class DatasetGenerationService(
-    ITrainingDatasetStore store,
-    IGpuWorkGate gpuWorkGate,
-    TrainingRunCancellationRegistry cancellations,
-    IDatasetGenerationQueueSignal signal) : IDatasetGenerationService
+public sealed class DatasetGenerationService : IDatasetGenerationService
 {
-    private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-    private readonly IGpuWorkGate _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
-    private readonly IDatasetGenerationQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly TrainingRunCancellationRegistry _cancellations;
+    private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly IDatasetGenerationQueueSignal _signal;
+    private readonly ITrainingDatasetStore _store;
+
+    public DatasetGenerationService(
+        ITrainingDatasetStore store,
+        IGpuWorkGate gpuWorkGate,
+        TrainingRunCancellationRegistry cancellations,
+        IDatasetGenerationQueueSignal signal)
+    {
+        ArgumentNullException.ThrowIfNull(cancellations);
+        ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        ArgumentNullException.ThrowIfNull(signal);
+        ArgumentNullException.ThrowIfNull(store);
+        _cancellations = cancellations;
+        _gpuWorkGate = gpuWorkGate;
+        _signal = signal;
+        _store = store;
+    }
 
     public async Task<TrainingDatasetRecord> StartAsync(Guid definitionId,
         long expectedDefinitionVersion,

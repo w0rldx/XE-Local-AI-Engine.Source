@@ -11,20 +11,32 @@ public interface IDevelopmentAttemptExecutionSupervisor
     ValueTask<bool> TryCancelAsync(Guid attemptId);
 }
 
-internal sealed class DevelopmentAttemptExecutionSupervisor(
-    IServiceScopeFactory scopeFactory,
-    IDevelopmentAttemptLiveBroker liveBroker,
-    IDevelopmentAttemptLiveEventPublisher livePublisher,
-    ILogger<DevelopmentAttemptExecutionSupervisor> logger) : IDevelopmentAttemptExecutionSupervisor, IHostedService, IAsyncDisposable
+internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemptExecutionSupervisor, IHostedService, IAsyncDisposable
 {
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _attempts = new();
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _validations = new();
     private readonly CancellationTokenSource _shutdown = new();
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    private readonly IDevelopmentAttemptLiveBroker _liveBroker = liveBroker ?? throw new ArgumentNullException(nameof(liveBroker));
-    private readonly IDevelopmentAttemptLiveEventPublisher _livePublisher = livePublisher ?? throw new ArgumentNullException(nameof(livePublisher));
-    private readonly ILogger<DevelopmentAttemptExecutionSupervisor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IDevelopmentAttemptLiveBroker _liveBroker;
+    private readonly IDevelopmentAttemptLiveEventPublisher _livePublisher;
+    private readonly ILogger<DevelopmentAttemptExecutionSupervisor> _logger;
     private int _disposed;
+
+    public DevelopmentAttemptExecutionSupervisor(
+        IServiceScopeFactory scopeFactory,
+        IDevelopmentAttemptLiveBroker liveBroker,
+        IDevelopmentAttemptLiveEventPublisher livePublisher,
+        ILogger<DevelopmentAttemptExecutionSupervisor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        ArgumentNullException.ThrowIfNull(liveBroker);
+        ArgumentNullException.ThrowIfNull(livePublisher);
+        ArgumentNullException.ThrowIfNull(logger);
+        _scopeFactory = scopeFactory;
+        _liveBroker = liveBroker;
+        _livePublisher = livePublisher;
+        _logger = logger;
+    }
 
     public bool StartAttempt(Guid attemptId, DevelopmentAttemptRole role)
     {

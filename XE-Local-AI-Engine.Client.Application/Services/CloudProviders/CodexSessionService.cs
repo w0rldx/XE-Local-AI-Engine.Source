@@ -20,27 +20,31 @@ public sealed record CodexSessionStatus(bool SignedIn, string? AccountId, DateTi
 ///     report the session/login state, and sign out. The expiry decision and the post-logout cache invalidation live
 ///     here rather than in the endpoints, so the HTTP edge only maps this type onto its response DTOs.
 /// </summary>
-public sealed class CodexSessionService(
-    ICodexTokenStore tokenStore,
-    ICodexLoginCoordinator loginCoordinator,
-    IActiveCloudChatClientFactory activeCloudFactory,
-    IOptions<CodexOptions> codexOptions,
-    TimeProvider timeProvider)
+public sealed class CodexSessionService
 {
-    private readonly IActiveCloudChatClientFactory _activeCloudFactory =
-        activeCloudFactory ?? throw new ArgumentNullException(nameof(activeCloudFactory));
+    private readonly IActiveCloudChatClientFactory _activeCloudFactory;
+    private readonly CodexOptions _codexOptions;
+    private readonly ICodexLoginCoordinator _loginCoordinator;
+    private readonly TimeProvider _timeProvider;
+    private readonly ICodexTokenStore _tokenStore;
 
-    private readonly CodexOptions _codexOptions =
-        (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
-
-    private readonly ICodexLoginCoordinator _loginCoordinator =
-        loginCoordinator ?? throw new ArgumentNullException(nameof(loginCoordinator));
-
-    private readonly TimeProvider _timeProvider =
-        timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-
-    private readonly ICodexTokenStore _tokenStore =
-        tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+    public CodexSessionService(
+        ICodexTokenStore tokenStore,
+        ICodexLoginCoordinator loginCoordinator,
+        IActiveCloudChatClientFactory activeCloudFactory,
+        IOptions<CodexOptions> codexOptions,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(activeCloudFactory);
+        _activeCloudFactory = activeCloudFactory;
+        _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
+        ArgumentNullException.ThrowIfNull(loginCoordinator);
+        _loginCoordinator = loginCoordinator;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(tokenStore);
+        _tokenStore = tokenStore;
+    }
 
     /// <summary>
     ///     Starts a loopback PKCE login, superseding any in-flight attempt, and returns the authorize URL the

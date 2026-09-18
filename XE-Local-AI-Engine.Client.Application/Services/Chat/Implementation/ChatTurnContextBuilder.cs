@@ -8,13 +8,28 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <inheritdoc />
-public sealed class ChatTurnContextBuilder(
-    IConversationUploadedFileStore uploadedFileStore,
-    IUntrustedContentFenceSeedProvider fenceSeedProvider,
-    IServiceScopeFactory scopeFactory,
-    IOptions<LocalChatAgentOptions> localChatOptions,
-    ILogger<ChatTurnContextBuilder> logger) : IChatTurnContextBuilder
+public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
 {
+    private readonly IConversationUploadedFileStore _uploadedFileStore;
+    private readonly IUntrustedContentFenceSeedProvider _fenceSeedProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IOptions<LocalChatAgentOptions> _localChatOptions;
+    private readonly ILogger<ChatTurnContextBuilder> _logger;
+
+    public ChatTurnContextBuilder(
+        IConversationUploadedFileStore uploadedFileStore,
+        IUntrustedContentFenceSeedProvider fenceSeedProvider,
+        IServiceScopeFactory scopeFactory,
+        IOptions<LocalChatAgentOptions> localChatOptions,
+        ILogger<ChatTurnContextBuilder> logger)
+    {
+        _uploadedFileStore = uploadedFileStore;
+        _fenceSeedProvider = fenceSeedProvider;
+        _scopeFactory = scopeFactory;
+        _localChatOptions = localChatOptions;
+        _logger = logger;
+    }
+
     /// <inheritdoc />
     public async Task<bool> HasAttachmentContentAsync(Guid conversationId, IReadOnlyList<Guid>? requestedFileIds, CancellationToken cancellationToken = default)
     {
@@ -23,7 +38,7 @@ public sealed class ChatTurnContextBuilder(
             return true;
         }
 
-        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken);
+        var available = await _uploadedFileStore.ListAsync(conversationId, cancellationToken);
         return available.Any(file => file.ExtractionStatus is DocumentExtractionStatus.Extracted or DocumentExtractionStatus.Image);
     }
 
@@ -38,7 +53,7 @@ public sealed class ChatTurnContextBuilder(
         }
 
         var requested = attachmentFileIds.ToHashSet();
-        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken);
+        var available = await _uploadedFileStore.ListAsync(conversationId, cancellationToken);
         var attachments = available
                           .Where(file => requested.Contains(file.FileId) && file.ExtractionStatus == DocumentExtractionStatus.Extracted)
                           .ToList();
@@ -51,14 +66,14 @@ public sealed class ChatTurnContextBuilder(
         var parts = new List<AttachmentTextPart>(attachments.Count);
         foreach (var attachment in attachments)
         {
-            var markdown = await uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken);
+            var markdown = await _uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken);
             if (!string.IsNullOrEmpty(markdown))
             {
                 parts.Add(new AttachmentTextPart(attachment.OriginalFileName, markdown));
             }
         }
 
-        var content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars, fenceSeedProvider.DeriveSeed(conversationId));
+        var content = ConversationAttachmentContextComposer.Compose(parts, _localChatOptions.Value.MaxInlinedAttachmentChars, _fenceSeedProvider.DeriveSeed(conversationId));
         if (content is null)
         {
             return null;
@@ -83,7 +98,7 @@ public sealed class ChatTurnContextBuilder(
             return null;
         }
 
-        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken);
+        var available = await _uploadedFileStore.ListAsync(conversationId, cancellationToken);
 
         // Preserve the requested order so the caps deterministically keep the first-requested images.
         var imageFiles = attachmentFileIds
@@ -95,8 +110,8 @@ public sealed class ChatTurnContextBuilder(
             return null;
         }
 
-        var maxCount = localChatOptions.Value.MaxImageAttachments;
-        var maxBytes = localChatOptions.Value.MaxImageAttachmentBytes;
+        var maxCount = _localChatOptions.Value.MaxImageAttachments;
+        var maxBytes = _localChatOptions.Value.MaxImageAttachmentBytes;
 
         List<ConversationImagePart>? images = null;
         long totalBytes = 0;
@@ -109,7 +124,7 @@ public sealed class ChatTurnContextBuilder(
                 continue;
             }
 
-            var bytes = await uploadedFileStore.ReadBytesAsync(conversationId, file!.FileId, cancellationToken);
+            var bytes = await _uploadedFileStore.ReadBytesAsync(conversationId, file!.FileId, cancellationToken);
             if (bytes is not { } data)
             {
                 continue;
@@ -127,7 +142,7 @@ public sealed class ChatTurnContextBuilder(
 
         if (dropped > 0)
         {
-            logger.LogWarning("Dropped {Dropped} image attachment(s) for conversation {ConversationId} exceeding the per-turn image budget ({MaxCount} images / {MaxBytes} bytes).",
+            _logger.LogWarning("Dropped {Dropped} image attachment(s) for conversation {ConversationId} exceeding the per-turn image budget ({MaxCount} images / {MaxBytes} bytes).",
                 dropped, conversationId, maxCount, maxBytes);
         }
 
@@ -157,12 +172,12 @@ public sealed class ChatTurnContextBuilder(
 
         try
         {
-            var limit = localChatOptions.Value.KnowledgeChatTopK;
+            var limit = _localChatOptions.Value.KnowledgeChatTopK;
             var searchRequest = new KnowledgeSearchRequest(normalizedQuery, limit, DocumentId: null, ExpandNeighbors: false);
 
             // The hybrid search runs in a FRESH DI scope: IKnowledgeSearchService is scoped and drives a request-scoped
             // connection (mirrors SearchKnowledgeBaseToolHandler).
-            await using var scope = scopeFactory.CreateAsyncScope();
+            await using var scope = _scopeFactory.CreateAsyncScope();
             var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();
             var result = await searchService.SearchAsync(searchRequest, cancellationToken);
 
@@ -171,7 +186,7 @@ public sealed class ChatTurnContextBuilder(
                 return null;
             }
 
-            var composed = KnowledgeChatContextComposer.Compose(result.Results, localChatOptions.Value.MaxInlinedKnowledgeChars);
+            var composed = KnowledgeChatContextComposer.Compose(result.Results, _localChatOptions.Value.MaxInlinedKnowledgeChars);
             if (composed is null)
             {
                 return null;
@@ -197,11 +212,11 @@ public sealed class ChatTurnContextBuilder(
             // distinct so a log search still separates a send from a regenerate.
             if (isRegeneratedTurn)
             {
-                logger.LogWarning(exception, "Knowledge-base grounding failed for the regenerated plain-chat turn; proceeding without it.");
+                _logger.LogWarning(exception, "Knowledge-base grounding failed for the regenerated plain-chat turn; proceeding without it.");
             }
             else
             {
-                logger.LogWarning(exception, "Knowledge-base grounding failed for the plain-chat turn; proceeding without it.");
+                _logger.LogWarning(exception, "Knowledge-base grounding failed for the plain-chat turn; proceeding without it.");
             }
 
             return null;
@@ -211,7 +226,7 @@ public sealed class ChatTurnContextBuilder(
     /// <inheritdoc />
     public ConversationMessageDto? BuildAgentAttachmentHint(Guid conversationId, IReadOnlyList<string> stagedAttachmentPaths)
     {
-        var content = BuildAgentAttachmentHintContent(stagedAttachmentPaths, fenceSeedProvider.DeriveSeed(conversationId));
+        var content = BuildAgentAttachmentHintContent(stagedAttachmentPaths, _fenceSeedProvider.DeriveSeed(conversationId));
         if (content is null)
         {
             return null;

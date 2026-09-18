@@ -29,14 +29,24 @@ public interface IComparisonReportService
 ///     <see cref="ComputeDeltas" /> stays a pure function of the two evaluation records so the same numbers can be
 ///     recomputed from storage and checked against what was stored.
 /// </summary>
-public sealed class ComparisonReportService(
-    ITrainingEvaluationStore evaluations,
-    ITrainingRunStore runs,
-    IBenchmarkStore benchmarks) : IComparisonReportService
+public sealed class ComparisonReportService : IComparisonReportService
 {
-    private readonly IBenchmarkStore _benchmarks = benchmarks ?? throw new ArgumentNullException(nameof(benchmarks));
-    private readonly ITrainingEvaluationStore _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
-    private readonly ITrainingRunStore _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly IBenchmarkStore _benchmarks;
+    private readonly ITrainingEvaluationStore _evaluations;
+    private readonly ITrainingRunStore _runs;
+
+    public ComparisonReportService(
+        ITrainingEvaluationStore evaluations,
+        ITrainingRunStore runs,
+        IBenchmarkStore benchmarks)
+    {
+        ArgumentNullException.ThrowIfNull(benchmarks);
+        ArgumentNullException.ThrowIfNull(evaluations);
+        ArgumentNullException.ThrowIfNull(runs);
+        _benchmarks = benchmarks;
+        _evaluations = evaluations;
+        _runs = runs;
+    }
 
     public async Task<TrainingComparisonRecord> CreateAsync(CreateComparisonCommand command, CancellationToken cancellationToken = default)
     {

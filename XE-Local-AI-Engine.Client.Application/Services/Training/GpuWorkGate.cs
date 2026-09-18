@@ -108,15 +108,24 @@ public sealed class GpuWorkGate : IGpuWorkGate
         }
     }
 
-    private sealed class Handle(GpuWorkGate owner, GpuWorkKind kind, bool exclusive) : IDisposable
+    private sealed class Handle : IDisposable
     {
-        private GpuWorkGate? _owner = owner;
+        private readonly GpuWorkKind _kind;
+        private readonly bool _exclusive;
+        private GpuWorkGate? _owner;
+
+        public Handle(GpuWorkGate owner, GpuWorkKind kind, bool exclusive)
+        {
+            _kind = kind;
+            _exclusive = exclusive;
+            _owner = owner;
+        }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _owner, null) is { } released)
             {
-                released.Release(kind, exclusive);
+                released.Release(_kind, _exclusive);
             }
         }
     }

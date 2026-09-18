@@ -15,12 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// Resolves one immutable process allocation per content/role/backend/argument/policy identity.
 /// Global free VRAM is deliberately absent from the cache key and tier decision.
 /// </summary>
-public sealed class ProcessContextAllocationResolver(
-    IGgufModelStore modelStore,
-    IRuntimeDeviceAudit runtimeAudit,
-    IProcessVramBudgetProbe processVramBudgetProbe,
-    MemoryFitEstimator estimator,
-    LlamaServerLaunchPolicyOptions options) : IProcessContextAllocationResolver
+public sealed class ProcessContextAllocationResolver : IProcessContextAllocationResolver
 {
     private const int MaximumAutomaticDownTiers = 2;
 
@@ -38,14 +33,30 @@ public sealed class ProcessContextAllocationResolver(
     private readonly ConcurrentDictionary<string, Lazy<Task<ProcessContextAllocation?>>> _cache = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ProcessContextAllocation> _adjustedAllocations = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _oomDownTiers = new(StringComparer.Ordinal);
-    private readonly MemoryFitEstimator _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
-    private readonly IGgufModelStore _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
-    private readonly LlamaServerLaunchPolicyOptions _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly MemoryFitEstimator _estimator;
+    private readonly IGgufModelStore _modelStore;
+    private readonly LlamaServerLaunchPolicyOptions _options;
+    private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
+    private readonly IRuntimeDeviceAudit _runtimeAudit;
 
-    private readonly IProcessVramBudgetProbe _processVramBudgetProbe =
-        processVramBudgetProbe ?? throw new ArgumentNullException(nameof(processVramBudgetProbe));
-
-    private readonly IRuntimeDeviceAudit _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
+    public ProcessContextAllocationResolver(
+        IGgufModelStore modelStore,
+        IRuntimeDeviceAudit runtimeAudit,
+        IProcessVramBudgetProbe processVramBudgetProbe,
+        MemoryFitEstimator estimator,
+        LlamaServerLaunchPolicyOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(estimator);
+        ArgumentNullException.ThrowIfNull(modelStore);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(processVramBudgetProbe);
+        ArgumentNullException.ThrowIfNull(runtimeAudit);
+        _estimator = estimator;
+        _modelStore = modelStore;
+        _options = options;
+        _processVramBudgetProbe = processVramBudgetProbe;
+        _runtimeAudit = runtimeAudit;
+    }
 
     public Task<ProcessContextAllocation?> ResolveAsync(string modelName,
         ModelRole role,

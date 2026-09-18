@@ -16,16 +16,28 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 ///         if the install list can't be read, each row keeps its stored flag.
 ///     </para>
 /// </summary>
-public sealed class ModelFitQueryService(
-    IModelFitSnapshotStore snapshotStore,
-    IModelFitRecommendationStore recommendationStore,
-    IOllamaModelService ollamaModelService,
-    ILogger<ModelFitQueryService> logger) : IModelFitQueryService
+public sealed class ModelFitQueryService : IModelFitQueryService
 {
-    private readonly ILogger<ModelFitQueryService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IOllamaModelService _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
-    private readonly IModelFitRecommendationStore _recommendationStore = recommendationStore ?? throw new ArgumentNullException(nameof(recommendationStore));
-    private readonly IModelFitSnapshotStore _snapshotStore = snapshotStore ?? throw new ArgumentNullException(nameof(snapshotStore));
+    private readonly ILogger<ModelFitQueryService> _logger;
+    private readonly IOllamaModelService _ollamaModelService;
+    private readonly IModelFitRecommendationStore _recommendationStore;
+    private readonly IModelFitSnapshotStore _snapshotStore;
+
+    public ModelFitQueryService(
+        IModelFitSnapshotStore snapshotStore,
+        IModelFitRecommendationStore recommendationStore,
+        IOllamaModelService ollamaModelService,
+        ILogger<ModelFitQueryService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(ollamaModelService);
+        ArgumentNullException.ThrowIfNull(recommendationStore);
+        ArgumentNullException.ThrowIfNull(snapshotStore);
+        _logger = logger;
+        _ollamaModelService = ollamaModelService;
+        _recommendationStore = recommendationStore;
+        _snapshotStore = snapshotStore;
+    }
 
     public async Task<ModelFitLatestRecommendationsView?> GetLatestRecommendationsAsync(string? useCase,
         string providerName,

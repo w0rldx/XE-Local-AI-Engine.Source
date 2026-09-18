@@ -4,12 +4,20 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     Default <see cref="IKnowledgeIngestionAdmissionService" />. Holds the single admission rule that used to live in
 ///     the upload endpoint handler and, duplicated, in the repository importer's per-file loop.
 /// </summary>
-public sealed class KnowledgeIngestionAdmissionService(
-    IKnowledgeDocumentCatalogService catalogService,
-    IKnowledgeIngestionDispatcher ingestionDispatcher) : IKnowledgeIngestionAdmissionService
+public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmissionService
 {
-    private readonly IKnowledgeDocumentCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
-    private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher = ingestionDispatcher ?? throw new ArgumentNullException(nameof(ingestionDispatcher));
+    private readonly IKnowledgeDocumentCatalogService _catalogService;
+    private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher;
+
+    public KnowledgeIngestionAdmissionService(
+        IKnowledgeDocumentCatalogService catalogService,
+        IKnowledgeIngestionDispatcher ingestionDispatcher)
+    {
+        ArgumentNullException.ThrowIfNull(catalogService);
+        ArgumentNullException.ThrowIfNull(ingestionDispatcher);
+        _catalogService = catalogService;
+        _ingestionDispatcher = ingestionDispatcher;
+    }
 
     public async Task<KnowledgeIngestionAdmissionResult> AdmitStoredDocumentAsync(Guid documentId,
         bool wasWritten,

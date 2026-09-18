@@ -25,14 +25,24 @@ public interface IToolMockService
 }
 
 /// <inheritdoc />
-public sealed class ToolMockService(
-    ITrainingDatasetStore store,
-    IToolMockStaticVerifier verifier,
-    ILocalToolOfferProvider offerProvider) : IToolMockService
+public sealed class ToolMockService : IToolMockService
 {
-    private readonly ILocalToolOfferProvider _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IToolMockStaticVerifier _verifier = verifier ?? throw new ArgumentNullException(nameof(verifier));
+    private readonly ILocalToolOfferProvider _offerProvider;
+    private readonly ITrainingDatasetStore _store;
+    private readonly IToolMockStaticVerifier _verifier;
+
+    public ToolMockService(
+        ITrainingDatasetStore store,
+        IToolMockStaticVerifier verifier,
+        ILocalToolOfferProvider offerProvider)
+    {
+        ArgumentNullException.ThrowIfNull(offerProvider);
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(verifier);
+        _offerProvider = offerProvider;
+        _store = store;
+        _verifier = verifier;
+    }
 
     public Task<IReadOnlyList<ToolMockRecord>> ListAsync(CancellationToken cancellationToken = default) =>
         _store.ListMocksAsync(cancellationToken);

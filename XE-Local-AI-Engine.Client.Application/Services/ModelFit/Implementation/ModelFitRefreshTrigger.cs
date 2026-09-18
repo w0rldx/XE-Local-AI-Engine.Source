@@ -10,12 +10,18 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 ///     <c>model-recommendation-check</c> job, then delegates firing to the scheduler management service. It never runs
 ///     llmfit — the scheduler dispatcher and the model-fit handler own the run.
 /// </summary>
-public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService scheduledJobManagementService) : IModelFitRefreshTrigger
+public sealed class ModelFitRefreshTrigger : IModelFitRefreshTrigger
 {
     /// <summary>The minimum context-window target the advisor's KV-cache fit can be sized against (mirrors the handler schema).</summary>
     private const int MinCtxTarget = 256;
 
-    private readonly IScheduledJobManagementService _scheduledJobManagementService = scheduledJobManagementService ?? throw new ArgumentNullException(nameof(scheduledJobManagementService));
+    private readonly IScheduledJobManagementService _scheduledJobManagementService;
+
+    public ModelFitRefreshTrigger(IScheduledJobManagementService scheduledJobManagementService)
+    {
+        ArgumentNullException.ThrowIfNull(scheduledJobManagementService);
+        _scheduledJobManagementService = scheduledJobManagementService;
+    }
 
     public async Task TriggerRecommendationRefreshAsync(Guid scheduledJobId,
         string? useCaseOverride = null,

@@ -9,9 +9,15 @@ using static NodeChatPersistenceSql;
 ///     full conversation-with-messages load. Shares the single <see cref="NodeChatPersistenceWriter" /> so reads
 ///     serialize against in-flight writes on the same write key.
 /// </summary>
-internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
+internal sealed class NodeChatReadModel
 {
-    private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+    private readonly NodeChatPersistenceWriter _writer;
+
+    public NodeChatReadModel(NodeChatPersistenceWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        _writer = writer;
+    }
 
     public async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken = default)
     {

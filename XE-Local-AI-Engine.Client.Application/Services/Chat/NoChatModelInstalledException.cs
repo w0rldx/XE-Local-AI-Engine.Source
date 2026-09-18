@@ -7,5 +7,9 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 ///     ("No chat model installed. Pull a GGUF model to start chatting.") instead of routing the stale default to a dead
 ///     provider and reporting the generic "Provider unreachable.".
 /// </summary>
-public sealed class NoChatModelInstalledException()
-    : InvalidOperationException("No chat model installed. Pull a GGUF model to start chatting.");
+public sealed class NoChatModelInstalledException : InvalidOperationException
+{
+    public NoChatModelInstalledException() : base("No chat model installed. Pull a GGUF model to start chatting.")
+    {
+    }
+}

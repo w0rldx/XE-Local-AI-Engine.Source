@@ -1,8 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
-public sealed class DevelopmentStartupReconciler(IServiceScopeFactory scopeFactory) : IHostedService
+public sealed class DevelopmentStartupReconciler : IHostedService
 {
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public DevelopmentStartupReconciler(IServiceScopeFactory scopeFactory)
+    {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+    }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {

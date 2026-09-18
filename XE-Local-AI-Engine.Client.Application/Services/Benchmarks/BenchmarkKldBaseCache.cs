@@ -23,10 +23,17 @@ public sealed class BenchmarkKldCacheOptions
 ///         Windows. A plaintext sidecar carries the key beside it, so the directory stays readable to a human.
 ///     </para>
 /// </summary>
-public sealed class BenchmarkKldBaseCache(IFreeSpaceProbe freeSpace, string? rootDirectory = null)
+public sealed class BenchmarkKldBaseCache
 {
-    private readonly IFreeSpaceProbe _freeSpace = freeSpace ?? throw new ArgumentNullException(nameof(freeSpace));
-    private readonly string _root = rootDirectory ?? DefaultRoot();
+    private readonly IFreeSpaceProbe _freeSpace;
+    private readonly string _root;
+
+    public BenchmarkKldBaseCache(IFreeSpaceProbe freeSpace, string? rootDirectory = null)
+    {
+        ArgumentNullException.ThrowIfNull(freeSpace);
+        _freeSpace = freeSpace;
+        _root = rootDirectory ?? DefaultRoot();
+    }
 
     public string Root => _root;
 

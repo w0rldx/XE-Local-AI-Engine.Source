@@ -6,18 +6,31 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Insights;
 
-internal sealed class PlaybookAnalysisService(
-    IFeedbackInsightsService insightsService,
-    IPlaybookAnalysisAgent analysisAgent,
-    IPlaybookActionService playbookActionService,
-    IOptions<PlaybookAnalysisOptions> options,
-    ILogger<PlaybookAnalysisService> logger) : IPlaybookAnalysisService
+internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
 {
-    private readonly IPlaybookAnalysisAgent _analysisAgent = analysisAgent ?? throw new ArgumentNullException(nameof(analysisAgent));
-    private readonly IFeedbackInsightsService _insightsService = insightsService ?? throw new ArgumentNullException(nameof(insightsService));
-    private readonly ILogger<PlaybookAnalysisService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly PlaybookAnalysisOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
+    private readonly IPlaybookAnalysisAgent _analysisAgent;
+    private readonly IFeedbackInsightsService _insightsService;
+    private readonly ILogger<PlaybookAnalysisService> _logger;
+    private readonly PlaybookAnalysisOptions _options;
+    private readonly IPlaybookActionService _playbookActionService;
+
+    public PlaybookAnalysisService(
+        IFeedbackInsightsService insightsService,
+        IPlaybookAnalysisAgent analysisAgent,
+        IPlaybookActionService playbookActionService,
+        IOptions<PlaybookAnalysisOptions> options,
+        ILogger<PlaybookAnalysisService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(analysisAgent);
+        _analysisAgent = analysisAgent;
+        ArgumentNullException.ThrowIfNull(insightsService);
+        _insightsService = insightsService;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(playbookActionService);
+        _playbookActionService = playbookActionService;
+    }
 
     public async Task<PlaybookAnalysisOutcome> AnalyzeAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {

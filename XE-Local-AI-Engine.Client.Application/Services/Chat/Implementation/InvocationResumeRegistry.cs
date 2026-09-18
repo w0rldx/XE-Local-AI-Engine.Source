@@ -549,7 +549,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     ///     lock, so every tool event lands in a consumer's replayed history XOR on its channel — never both, never
     ///     neither.
     /// </summary>
-    private sealed class LiveInvocation(InvocationState initialState, ChatStreamBudgetOptions options)
+    private sealed class LiveInvocation
     {
         // Caps the replayed tool timeline for pathological turns; the iteration cap bounds real turns far below
         // this. When exceeded the oldest entries drop — the terminal-gated refetch restores the full persisted
@@ -564,6 +564,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         private readonly List<TurnNoticePayload> _noticeHistory = [];
         private readonly List<ResumeSubscriber> _subscribers = [];
         private readonly Lock _syncRoot = new();
+        private readonly ChatStreamBudgetOptions _options;
 
         // Latched under _syncRoot when Complete() runs (the terminal state has been published and the then-attached
         // subscribers completed). A Subscribe that races in AFTER Complete would otherwise register a channel that no
@@ -571,12 +572,18 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // registry at the same time, so no non-terminal publish can follow.
         private bool _completed;
 
+        public LiveInvocation(InvocationState initialState, ChatStreamBudgetOptions options)
+        {
+            _options = options;
+            LatestState = initialState;
+        }
+
         // The dispatcher hands every InvocationStateChanged subscriber a fresh, never-subsequently-mutated snapshot
         // (see WorkerEventDispatcher.PublishStateChanged), so a published state is effectively immutable: it can be
         // stored and fanned out by reference without a defensive copy. LatestState stays correct for a late resumer
         // because each publish swaps in the newest snapshot, and a zero-subscriber publish (the common case) does no
         // copying at all.
-        public InvocationState LatestState { get; private set; } = initialState;
+        public InvocationState LatestState { get; private set; }
 
         public void Publish(InvocationState state)
         {
@@ -638,7 +645,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             out IReadOnlyList<ToolCallLifecyclePayload> toolHistory,
             out IReadOnlyList<TurnNoticePayload> noticeHistory)
         {
-            var subscriber = new ResumeSubscriber(options.QueueCapacity);
+            var subscriber = new ResumeSubscriber(_options.QueueCapacity);
 
             lock (_syncRoot)
             {
@@ -654,9 +661,9 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 {
                     subscriber.Complete();
                 }
-                else if (_subscribers.Count >= options.MaxSubscribersPerInvocation)
+                else if (_subscribers.Count >= _options.MaxSubscribersPerInvocation)
                 {
-                    throw new InvalidOperationException($"Invocation {LatestState.InvocationId} already has the maximum of {options.MaxSubscribersPerInvocation} resume subscribers.");
+                    throw new InvalidOperationException($"Invocation {LatestState.InvocationId} already has the maximum of {_options.MaxSubscribersPerInvocation} resume subscribers.");
                 }
                 else
                 {

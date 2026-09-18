@@ -27,11 +27,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///         which is what they say anyway for every model the node did not load itself.
 ///     </para>
 /// </remarks>
-internal sealed class DevWorkflowNodeTelemetrySource(
-    IAgentWorkSessionStore workSessions,
-    IAgentExecutionLogStore executionLogs,
-    IDevelopmentStore? development = null,
-    NodeMetricsLlamaServerLoadTelemetry? localModelLoads = null) : IDevWorkflowNodeTelemetrySource
+internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetrySource
 {
     /// <summary>camelCase, matching the supervisor that wrote these rows.</summary>
     private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
@@ -69,10 +65,24 @@ internal sealed class DevWorkflowNodeTelemetrySource(
     /// <summary>The final element of a trimmed name list. One character, and unmistakably not a tool.</summary>
     private const string TruncatedToolNameMarker = "…";
 
-    private readonly IAgentWorkSessionStore _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
-    private readonly IAgentExecutionLogStore _executionLogs = executionLogs ?? throw new ArgumentNullException(nameof(executionLogs));
-    private readonly IDevelopmentStore? _development = development;
-    private readonly NodeMetricsLlamaServerLoadTelemetry? _localModelLoads = localModelLoads;
+    private readonly IAgentWorkSessionStore _workSessions;
+    private readonly IAgentExecutionLogStore _executionLogs;
+    private readonly IDevelopmentStore? _development;
+    private readonly NodeMetricsLlamaServerLoadTelemetry? _localModelLoads;
+
+    public DevWorkflowNodeTelemetrySource(
+        IAgentWorkSessionStore workSessions,
+        IAgentExecutionLogStore executionLogs,
+        IDevelopmentStore? development = null,
+        NodeMetricsLlamaServerLoadTelemetry? localModelLoads = null)
+    {
+        ArgumentNullException.ThrowIfNull(workSessions);
+        ArgumentNullException.ThrowIfNull(executionLogs);
+        _workSessions = workSessions;
+        _executionLogs = executionLogs;
+        _development = development;
+        _localModelLoads = localModelLoads;
+    }
 
     public async Task<DevWorkflowNodeTelemetry?> CollectAsync(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowNodeRunStatus targetStatus,

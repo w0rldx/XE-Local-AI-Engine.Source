@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     not reach into a store itself (the endpoint-dependency rule), so every read the store already filters by
 ///     record kind arrives here unchanged — this type adds no policy of its own and owns no writes.
 /// </summary>
-public sealed class AgentExecutionLogQueryService(IAgentExecutionLogStore executionLogs)
+public sealed class AgentExecutionLogQueryService
 {
-    private readonly IAgentExecutionLogStore _executionLogs = executionLogs ?? throw new ArgumentNullException(nameof(executionLogs));
+    private readonly IAgentExecutionLogStore _executionLogs;
+
+    public AgentExecutionLogQueryService(IAgentExecutionLogStore executionLogs)
+    {
+        ArgumentNullException.ThrowIfNull(executionLogs);
+        _executionLogs = executionLogs;
+    }
 
     /// <summary>
     ///     Returns a page of adaptive-memory diagnostics rows for <paramref name="agentDefinitionId" />, newest first.

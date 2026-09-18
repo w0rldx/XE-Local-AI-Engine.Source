@@ -18,23 +18,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     attempt, and the durable evidence — receipt, environment facts and the rank-cohort key — recorded against the
 ///     attempt rather than the run, because a run is judged many times.
 /// </summary>
-public sealed class BenchmarkJudgeExecutor(
-    IBenchmarkStore store,
-    IBenchmarkRuntimeSnapshotFactory snapshots,
-    IBenchmarkInstalledModelLeaseProvider installedModels,
-    ICapacityService capacity,
-    ILocalChatRuntimePackageBuilder packageBuilder,
-    IWorkerEventDispatcher dispatcher,
-    IInvocationRunner runner,
-    ILlamaServerProcessSupervisor supervisor,
-    IGpuVariantSelector variantSelector,
-    ILlamaServerEndpointBinding endpointBinding,
-    IBenchmarkEventBuffer events,
-    IBenchmarkCancellationRegistry cancellations,
-    IRuntimeEnvironmentFactsProvider environmentFacts,
-    BenchmarkAdmissionRetry admissionRetry,
-    IBenchmarkPythonTestsVerifier pythonTests,
-    ILogger<BenchmarkJudgeExecutor> logger) : IBenchmarkJudgeExecutor
+public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
 {
     private const string FingerprintChangedMessage = "The installed judge model changed after the benchmark was created.";
     private const string CapacityRejectedMessage = "The judge could not reserve enough local model capacity.";
@@ -52,6 +36,58 @@ public sealed class BenchmarkJudgeExecutor(
     ///     <see cref="JsonElement" /> does not outlive the <see cref="JsonDocument" /> it was read from.
     /// </summary>
     private static readonly JsonElement JudgeResponseFormatSchema = ParseJudgeResponseFormatSchema();
+    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly ICapacityService _capacity;
+    private readonly ILocalChatRuntimePackageBuilder _packageBuilder;
+    private readonly IWorkerEventDispatcher _dispatcher;
+    private readonly IInvocationRunner _runner;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly IGpuVariantSelector _variantSelector;
+    private readonly ILlamaServerEndpointBinding _endpointBinding;
+    private readonly IBenchmarkEventBuffer _events;
+    private readonly IBenchmarkCancellationRegistry _cancellations;
+    private readonly IRuntimeEnvironmentFactsProvider _environmentFacts;
+    private readonly BenchmarkAdmissionRetry _admissionRetry;
+    private readonly IBenchmarkPythonTestsVerifier _pythonTests;
+    private readonly ILogger<BenchmarkJudgeExecutor> _logger;
+
+    public BenchmarkJudgeExecutor(
+        IBenchmarkStore store,
+        IBenchmarkRuntimeSnapshotFactory snapshots,
+        IBenchmarkInstalledModelLeaseProvider installedModels,
+        ICapacityService capacity,
+        ILocalChatRuntimePackageBuilder packageBuilder,
+        IWorkerEventDispatcher dispatcher,
+        IInvocationRunner runner,
+        ILlamaServerProcessSupervisor supervisor,
+        IGpuVariantSelector variantSelector,
+        ILlamaServerEndpointBinding endpointBinding,
+        IBenchmarkEventBuffer events,
+        IBenchmarkCancellationRegistry cancellations,
+        IRuntimeEnvironmentFactsProvider environmentFacts,
+        BenchmarkAdmissionRetry admissionRetry,
+        IBenchmarkPythonTestsVerifier pythonTests,
+        ILogger<BenchmarkJudgeExecutor> logger)
+    {
+        _store = store;
+        _snapshots = snapshots;
+        _installedModels = installedModels;
+        _capacity = capacity;
+        _packageBuilder = packageBuilder;
+        _dispatcher = dispatcher;
+        _runner = runner;
+        _supervisor = supervisor;
+        _variantSelector = variantSelector;
+        _endpointBinding = endpointBinding;
+        _events = events;
+        _cancellations = cancellations;
+        _environmentFacts = environmentFacts;
+        _admissionRetry = admissionRetry;
+        _pythonTests = pythonTests;
+        _logger = logger;
+    }
 
     private static JsonElement ParseJudgeResponseFormatSchema()
     {
@@ -72,19 +108,19 @@ public sealed class BenchmarkJudgeExecutor(
             throw new ArgumentException("Judge work must name the attempt it judges.", nameof(work));
         }
 
-        using var registration = cancellations.Register(work.RunId, BenchmarkWorkKind.Judge, cancellationToken);
+        using var registration = _cancellations.Register(work.RunId, BenchmarkWorkKind.Judge, cancellationToken);
         var token = registration.Token;
         RuntimeEnvironmentFactsV1? environment = null;
         BenchmarkJudgeAttemptRecord? attempt = null;
         string? policyHash = null;
         try
         {
-            events.BeginActivePhase(work.RunId, work.Run.LastStreamSequence);
-            attempt = await store.GetJudgeAttemptAsync(attemptId, token)
+            _events.BeginActivePhase(work.RunId, work.Run.LastStreamSequence);
+            attempt = await _store.GetJudgeAttemptAsync(attemptId, token)
                       ?? throw new BenchmarkExecutionException("The judge attempt is no longer available.");
             // An attempt frozen under a different launch-identity scheme is failed before it launches.
             BenchmarkLaunchIdentityScheme.RequireCurrent(attempt.LaunchIntent);
-            var revision = await store.GetJudgePolicyRevisionAsync(attempt.PolicyRevisionId, token)
+            var revision = await _store.GetJudgePolicyRevisionAsync(attempt.PolicyRevisionId, token)
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");
             policyHash = revision.PolicyHash;
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
@@ -108,7 +144,7 @@ public sealed class BenchmarkJudgeExecutor(
                 ? BenchmarkJudgeSerialization.DeserializeRuntime(runtimeJson.Span)
                 : throw new BenchmarkExecutionException("The frozen judge runtime is unavailable.");
 
-            var snapshot = snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
+            var snapshot = _snapshots.Deserialize(work.Run.RuntimeSnapshotJson.Span);
             if (work.Run.PrimaryStatus != BenchmarkPrimaryStatus.Succeeded || work.Run.OutputPartsJson is not { } output)
             {
                 throw new BenchmarkExecutionException("The primary benchmark result is unavailable for judging.");
@@ -128,7 +164,7 @@ public sealed class BenchmarkJudgeExecutor(
                 // text; pythonTests runs the answer's code in the compute sandbox, so it is async and it refuses —
                 // fail-closed, with the run left unranked — on a host that cannot be trusted to run it.
                 verified.Add(BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind)
-                    ? await pythonTests.VerifyAsync(criterion, answerText, token)
+                    ? await _pythonTests.VerifyAsync(criterion, answerText, token)
                     : BenchmarkJudgeVerifiers.Verify(criterion, answerText));
             }
 
@@ -151,14 +187,14 @@ public sealed class BenchmarkJudgeExecutor(
                 }
             };
 
-            await using var modelLease = await installedModels.AcquireAsync(runtime.Model.ModelName, token);
+            await using var modelLease = await _installedModels.AcquireAsync(runtime.Model.ModelName, token);
             if (!BenchmarkSnapshotModelComparer.Matches(runtime.Model, modelLease.Snapshot))
             {
                 throw new BenchmarkExecutionException(FingerprintChangedMessage);
             }
 
             // The host facts this judging ran on, captured before anything is reserved or spawned. Non-throwing.
-            environment = await environmentFacts.CaptureAsync(runtime.Runtime.Variant, token);
+            environment = await _environmentFacts.CaptureAsync(runtime.Runtime.Variant, token);
 
             // Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒
             // f16), not the project's request.
@@ -168,8 +204,8 @@ public sealed class BenchmarkJudgeExecutor(
             // llama-server is still handing its VRAM back. Wait and re-decide instead of terminalizing the attempt.
             // ONE budget for the whole phase — see BenchmarkWaitBudget: the capacity wait and the exclusive-spawn
             // wait after it share this allowance rather than each taking a full one.
-            var waitBudget = new BenchmarkWaitBudget(admissionRetry);
-            var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+            var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
+            var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                                new CapacityRequest(runtime.Model.ModelName,
                                                                    ModelRole.Chat,
                                                                    runtime.Runtime.ContextTokens,
@@ -181,7 +217,7 @@ public sealed class BenchmarkJudgeExecutor(
                                                                    runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                    CapacityRejectedMessage),
                                                                waitBudget,
-                                                               logger,
+                                                               _logger,
                                                                token);
 
             using var reservation = decision.Reservation;
@@ -193,12 +229,12 @@ public sealed class BenchmarkJudgeExecutor(
                 BenchmarkPrimaryStopReasons.IsTruncated(work.Run.PrimaryStopReason),
                 BenchmarkPrimaryStopReasons.IsIncomplete(work.Run.PrimaryStopReason));
             var admission = new BenchmarkContextAdmissionPolicy(runtime.RequestedContextTokens);
-            using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
-            events.Append(work.RunId,
+            using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, _dispatcher, _events);
+            _events.Append(work.RunId,
                 BenchmarkRunStreamEventKind.JudgeState,
                 new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Running));
 
-            var currentVariant = await variantSelector.SelectVariantAsync(token);
+            var currentVariant = await _variantSelector.SelectVariantAsync(token);
             if (currentVariant != runtime.Runtime.Variant)
             {
                 throw new BenchmarkExecutionException("The selected judge llama.cpp runtime changed after the attempt was enqueued.");
@@ -209,7 +245,7 @@ public sealed class BenchmarkJudgeExecutor(
             // A refused pre-spawn eviction is transient — the model is serving a request that ends on its own — so the
             // spawn waits and retries rather than terminalizing this attempt. See BenchmarkExclusiveSpawn.
             _ = await BenchmarkExclusiveSpawn.RunAsync(spawnToken =>
-                                                     supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
+                                                     _supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
                                                          ModelRole.Chat,
                                                          runtime.Runtime.ToResolvedLaunchArguments(),
                                                          runtime.Runtime.LaunchPolicy,
@@ -218,19 +254,19 @@ public sealed class BenchmarkJudgeExecutor(
                                                              // Durable BEFORE any token is generated — including on an attempt an operator
                                                              // cancellation has already terminalized (the successor-version clause).
                                                              await CheckpointAsync(work, judgingAttempt, judgingPolicyHash, profiling.LaunchReceipt, environment);
-                                                             using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                                                             await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
+                                                             using var endpointScope = _endpointBinding.Bind(profiling.Endpoint);
+                                                             await using var assignment = await _dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
                                                              using var context = InvocationExecutionContext.CreatePlain(package,
                                                                  Guid.Empty,
                                                                  generationAdmissionPolicy: admission);
-                                                             await runner.RunAsync(context, profilingToken);
+                                                             await _runner.RunAsync(context, profilingToken);
                                                              return true;
                                                          },
                                                          spawnToken),
                                                  waitBudget,
                                                  work.RunId,
                                                  "judge",
-                                                 logger,
+                                                 _logger,
                                                  token);
             token.ThrowIfCancellationRequested();
             var terminal = capture.TerminalState;
@@ -244,26 +280,26 @@ public sealed class BenchmarkJudgeExecutor(
             var parsed = Merge(BenchmarkJudgeResultParser.Parse(terminal.StreamedContent, judgedPolicy.Rubric, runtime.Model.ModelContentFingerprint),
                 policy.Rubric,
                 verifierResults);
-            var terminalEvent = events.Reserve(work.RunId,
+            var terminalEvent = _events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
-            var persisted = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
+            var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
                                            work.Version,
                                            BenchmarkJudgeSerialization.SerializeResult(parsed),
                                            terminalEvent.Sequence,
                                            parsed.Score), CancellationToken.None);
-            events.PublishReserved(terminalEvent with
+            _events.PublishReserved(terminalEvent with
             {
                 Payload = terminalEvent.Payload with
                 {
                     RunVersion = persisted.Version
                 }
             });
-            events.EvictPlaintext(work.RunId);
+            _events.EvictPlaintext(work.RunId);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            events.EvictPlaintext(work.RunId);
+            _events.EvictPlaintext(work.RunId);
             throw;
         }
         catch (OperationCanceledException)
@@ -272,7 +308,7 @@ public sealed class BenchmarkJudgeExecutor(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Benchmark judge work {RunId} failed.", work.RunId);
+            _logger.LogError(exception, "Benchmark judge work {RunId} failed.", work.RunId);
             await TerminalizeFailedAsync(work,
                 attempt,
                 policyHash,
@@ -299,7 +335,7 @@ public sealed class BenchmarkJudgeExecutor(
             return policy;
         }
 
-        var items = await store.ListTaskItemsAsync(run.ProjectId, cancellationToken);
+        var items = await _store.ListTaskItemsAsync(run.ProjectId, cancellationToken);
         var item = items.FirstOrDefault(entry => entry.Id == itemId);
         if (item is null)
         {
@@ -397,7 +433,7 @@ public sealed class BenchmarkJudgeExecutor(
             BenchmarkJudgeOutputSchemaV2.Json,
             primaryOutputTruncated,
             primaryOutputIncomplete);
-        return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+        return _packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
             BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated, primaryOutputIncomplete),
             [
@@ -433,7 +469,7 @@ public sealed class BenchmarkJudgeExecutor(
         IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifiers,
         CancellationToken token)
     {
-        events.Append(work.RunId,
+        _events.Append(work.RunId,
             BenchmarkRunStreamEventKind.JudgeState,
             new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Running));
         token.ThrowIfCancellationRequested();
@@ -445,23 +481,23 @@ public sealed class BenchmarkJudgeExecutor(
                 policy.Model.ModelContentFingerprint),
             policy.Rubric,
             verifiers);
-        var terminalEvent = events.Reserve(work.RunId,
+        var terminalEvent = _events.Reserve(work.RunId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
-        var persisted = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
+        var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
                                        work.Version,
                                        BenchmarkJudgeSerialization.SerializeResult(result),
                                        terminalEvent.Sequence,
                                        result.Score,
                                        BenchmarkJudgeExecutionKey.VerifiedSentinel), CancellationToken.None);
-        events.PublishReserved(terminalEvent with
+        _events.PublishReserved(terminalEvent with
         {
             Payload = terminalEvent.Payload with
             {
                 RunVersion = persisted.Version
             }
         });
-        events.EvictPlaintext(work.RunId);
+        _events.EvictPlaintext(work.RunId);
     }
 
     /// <summary>
@@ -517,7 +553,7 @@ public sealed class BenchmarkJudgeExecutor(
 
         try
         {
-            _ = await store.MarkJudgeLaunchReadyAsync(attempt.Id,
+            _ = await _store.MarkJudgeLaunchReadyAsync(attempt.Id,
                                work.QueueSequence,
                                work.Version,
                                command,
@@ -528,7 +564,7 @@ public sealed class BenchmarkJudgeExecutor(
         {
             // Evidence is not worth a measurement. A version race with an operator cancel, or a busy database, must
             // not turn a healthy judging into a failed one — and the token here is None, so nothing caught is a shutdown.
-            logger.LogWarning(exception, "Benchmark judge {RunId}: the launch-evidence checkpoint could not be recorded.", work.RunId);
+            _logger.LogWarning(exception, "Benchmark judge {RunId}: the launch-evidence checkpoint could not be recorded.", work.RunId);
         }
     }
 
@@ -539,20 +575,20 @@ public sealed class BenchmarkJudgeExecutor(
     {
         await CheckpointAsync(work, attempt, policyHash, receipt: null, environment);
         var runId = work.RunId;
-        var run = await store.GetRunAsync(runId, CancellationToken.None);
+        var run = await _store.GetRunAsync(runId, CancellationToken.None);
         if (run is null || run.Judge?.State != BenchmarkRunJudgeStates.Running)
         {
-            events.EvictPlaintext(runId);
+            _events.EvictPlaintext(runId);
             return;
         }
 
-        var terminal = events.Reserve(runId,
+        var terminal = _events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Cancelled, RunVersion: run.Version + 1));
         try
         {
-            var persisted = await store.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
-            events.PublishReserved(terminal with
+            var persisted = await _store.MarkJudgeCancelledAsync(runId, work.Version, terminal.Sequence, CancellationToken.None);
+            _events.PublishReserved(terminal with
             {
                 Payload = terminal.Payload with
                 {
@@ -562,14 +598,14 @@ public sealed class BenchmarkJudgeExecutor(
         }
         catch (BenchmarkConflictException)
         {
-            var current = await store.GetRunAsync(runId, CancellationToken.None);
+            var current = await _store.GetRunAsync(runId, CancellationToken.None);
             if (current?.Judge?.State != BenchmarkRunJudgeStates.Cancelled)
             {
                 throw;
             }
         }
 
-        events.EvictPlaintext(runId);
+        _events.EvictPlaintext(runId);
     }
 
     private async Task TerminalizeFailedAsync(BenchmarkClaimedWork work,
@@ -580,25 +616,25 @@ public sealed class BenchmarkJudgeExecutor(
     {
         await CheckpointAsync(work, attempt, policyHash, receipt: null, environment);
         var runId = work.RunId;
-        var run = await store.GetRunAsync(runId, CancellationToken.None);
+        var run = await _store.GetRunAsync(runId, CancellationToken.None);
         if (run is null
             || run.Judge?.State is BenchmarkRunJudgeStates.Succeeded or BenchmarkRunJudgeStates.Failed or BenchmarkRunJudgeStates.Cancelled)
         {
-            events.EvictPlaintext(runId);
+            _events.EvictPlaintext(runId);
             return;
         }
 
-        var terminal = events.Reserve(runId,
+        var terminal = _events.Reserve(runId,
             BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
             new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Failed, RunVersion: run.Version + 1));
-        var persisted = await store.MarkJudgeFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None);
-        events.PublishReserved(terminal with
+        var persisted = await _store.MarkJudgeFailedAsync(runId, work.Version, message, terminal.Sequence, CancellationToken.None);
+        _events.PublishReserved(terminal with
         {
             Payload = terminal.Payload with
             {
                 RunVersion = persisted.Version
             }
         });
-        events.EvictPlaintext(runId);
+        _events.EvictPlaintext(runId);
     }
 }

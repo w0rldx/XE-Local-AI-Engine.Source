@@ -39,19 +39,7 @@ public interface ITrainingRunExecutor
 ///         recorded as <c>Cancelled</c>. Only the watchdog escalates to SIGKILL.
 ///     </para>
 /// </remarks>
-public sealed class TrainingRunExecutor(
-    ITrainingRunStore store,
-    ITrainingRunEventBuffer events,
-    ITrainingOptionDefaultsCalculator defaults,
-    ITrainingCapacityGate capacity,
-    ITrainingRuntimeService runtime,
-    ITrainingProcessSpawner spawner,
-    TrainingRunWorkspace workspace,
-    TrainingRunCancellationRegistry cancellations,
-    INodeDataDirectory dataDirectory,
-    IOptions<TrainingRunQueueOptions> options,
-    TimeProvider timeProvider,
-    ILogger<TrainingRunExecutor> logger) : ITrainingRunExecutor
+public sealed class TrainingRunExecutor : ITrainingRunExecutor
 {
     /// <summary>The exit status <c>train.py</c> uses for a cooperative stop, so a cancel is never read as a failure.</summary>
     public const int CancelledExitCode = 3;
@@ -66,18 +54,57 @@ public sealed class TrainingRunExecutor(
     /// <summary>How often progress and the log tail are flushed. A trainer logs every step; the database does not need to.</summary>
     private static readonly TimeSpan PersistInterval = TimeSpan.FromSeconds(1);
 
-    private readonly ITrainingCapacityGate _capacity = capacity ?? throw new ArgumentNullException(nameof(capacity));
-    private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-    private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-    private readonly ITrainingOptionDefaultsCalculator _defaults = defaults ?? throw new ArgumentNullException(nameof(defaults));
-    private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
-    private readonly ILogger<TrainingRunExecutor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly TrainingRunQueueOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly ITrainingRuntimeService _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-    private readonly ITrainingProcessSpawner _spawner = spawner ?? throw new ArgumentNullException(nameof(spawner));
-    private readonly ITrainingRunStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly TrainingRunWorkspace _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+    private readonly ITrainingCapacityGate _capacity;
+    private readonly TrainingRunCancellationRegistry _cancellations;
+    private readonly INodeDataDirectory _dataDirectory;
+    private readonly ITrainingOptionDefaultsCalculator _defaults;
+    private readonly ITrainingRunEventBuffer _events;
+    private readonly ILogger<TrainingRunExecutor> _logger;
+    private readonly TrainingRunQueueOptions _options;
+    private readonly ITrainingRuntimeService _runtime;
+    private readonly ITrainingProcessSpawner _spawner;
+    private readonly ITrainingRunStore _store;
+    private readonly TimeProvider _timeProvider;
+    private readonly TrainingRunWorkspace _workspace;
+
+    public TrainingRunExecutor(
+        ITrainingRunStore store,
+        ITrainingRunEventBuffer events,
+        ITrainingOptionDefaultsCalculator defaults,
+        ITrainingCapacityGate capacity,
+        ITrainingRuntimeService runtime,
+        ITrainingProcessSpawner spawner,
+        TrainingRunWorkspace workspace,
+        TrainingRunCancellationRegistry cancellations,
+        INodeDataDirectory dataDirectory,
+        IOptions<TrainingRunQueueOptions> options,
+        TimeProvider timeProvider,
+        ILogger<TrainingRunExecutor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(capacity);
+        _capacity = capacity;
+        ArgumentNullException.ThrowIfNull(cancellations);
+        _cancellations = cancellations;
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
+        ArgumentNullException.ThrowIfNull(defaults);
+        _defaults = defaults;
+        ArgumentNullException.ThrowIfNull(events);
+        _events = events;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(runtime);
+        _runtime = runtime;
+        ArgumentNullException.ThrowIfNull(spawner);
+        _spawner = spawner;
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+        ArgumentNullException.ThrowIfNull(workspace);
+        _workspace = workspace;
+    }
 
     public async Task ExecuteAsync(TrainingWorkClaim claim, CancellationToken stoppingToken)
     {
@@ -497,11 +524,18 @@ public sealed class TrainingRunExecutor(
     }
 
     /// <summary>Everything that survives across the stream loop. Mutable by design — it is one run's scratchpad.</summary>
-    private sealed class StreamState(DateTimeOffset startedAt)
+    private sealed class StreamState
     {
-        public DateTimeOffset StartedAt { get; } = startedAt;
-        public DateTimeOffset LastEventAt { get; set; } = startedAt;
-        public DateTimeOffset LastPersistAt { get; set; } = startedAt;
+        public StreamState(DateTimeOffset startedAt)
+        {
+            StartedAt = startedAt;
+            LastEventAt = startedAt;
+            LastPersistAt = startedAt;
+        }
+
+        public DateTimeOffset StartedAt { get; }
+        public DateTimeOffset LastEventAt { get; set; }
+        public DateTimeOffset LastPersistAt { get; set; }
         public StringBuilder Log { get; } = new();
         public TrainingRunProgressV1 Progress { get; set; } = new();
         public int? ContractVersion { get; set; }

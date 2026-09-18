@@ -46,9 +46,14 @@ internal sealed class IntegrationSessionGate
     public void Forget(Guid sessionId) =>
         _ = _gates.TryRemove(sessionId, out _);
 
-    private sealed class Lease(SemaphoreSlim gate) : IDisposable
+    private sealed class Lease : IDisposable
     {
-        private SemaphoreSlim? _gate = gate;
+        private SemaphoreSlim? _gate;
+
+        public Lease(SemaphoreSlim gate)
+        {
+            _gate = gate;
+        }
 
         public void Dispose()
         {

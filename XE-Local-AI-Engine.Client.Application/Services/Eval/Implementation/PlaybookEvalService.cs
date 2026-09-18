@@ -19,18 +19,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     <see cref="IChatClient" /> for the whole run (never the shared/cloud singleton) and passes it into the runner +
 ///     judge, so golden text + agent output never leave the node. Offline / batch only — never on the chat hot path.
 /// </summary>
-internal sealed class PlaybookEvalService(
-    IPlaybookActionService playbookActionService,
-    IPlaybookActionStore playbookActionStore,
-    IAgentDefinitionStore agentDefinitionStore,
-    IGoldenConversationStore goldenConversationStore,
-    IPlaybookEvalAgentRunner evalAgentRunner,
-    IPlaybookEvalJudge evalJudge,
-    ILocalModelProviderResolver providerResolver,
-    IEvalModelIdentityResolver modelIdentityResolver,
-    TimeProvider timeProvider,
-    IOptions<PlaybookEvalOptions> options,
-    ILogger<PlaybookEvalService> logger) : IPlaybookEvalService
+internal sealed class PlaybookEvalService : IPlaybookEvalService
 {
     /// <summary>
     ///     <see cref="PlaybookEvalCaseResult.ScoredBy" /> value for a golden case whose stored input turns are unusable
@@ -39,18 +28,54 @@ internal sealed class PlaybookEvalService(
     /// </summary>
     internal const string InvalidInputScoredBy = "invalid-input";
 
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-    private readonly IPlaybookEvalAgentRunner _evalAgentRunner = evalAgentRunner ?? throw new ArgumentNullException(nameof(evalAgentRunner));
-    private readonly IPlaybookEvalJudge _evalJudge = evalJudge ?? throw new ArgumentNullException(nameof(evalJudge));
-    private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
-    private readonly ILogger<PlaybookEvalService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly PlaybookEvalOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly IAgentDefinitionStore _agentDefinitionStore;
+    private readonly IPlaybookEvalAgentRunner _evalAgentRunner;
+    private readonly IPlaybookEvalJudge _evalJudge;
+    private readonly IGoldenConversationStore _goldenConversationStore;
+    private readonly ILogger<PlaybookEvalService> _logger;
+    private readonly PlaybookEvalOptions _options;
 
-    private readonly IEvalModelIdentityResolver _modelIdentityResolver = modelIdentityResolver ?? throw new ArgumentNullException(nameof(modelIdentityResolver));
-    private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
-    private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IEvalModelIdentityResolver _modelIdentityResolver;
+    private readonly IPlaybookActionService _playbookActionService;
+    private readonly IPlaybookActionStore _playbookActionStore;
+    private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly TimeProvider _timeProvider;
+
+    public PlaybookEvalService(
+        IPlaybookActionService playbookActionService,
+        IPlaybookActionStore playbookActionStore,
+        IAgentDefinitionStore agentDefinitionStore,
+        IGoldenConversationStore goldenConversationStore,
+        IPlaybookEvalAgentRunner evalAgentRunner,
+        IPlaybookEvalJudge evalJudge,
+        ILocalModelProviderResolver providerResolver,
+        IEvalModelIdentityResolver modelIdentityResolver,
+        TimeProvider timeProvider,
+        IOptions<PlaybookEvalOptions> options,
+        ILogger<PlaybookEvalService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitionStore);
+        _agentDefinitionStore = agentDefinitionStore;
+        ArgumentNullException.ThrowIfNull(evalAgentRunner);
+        _evalAgentRunner = evalAgentRunner;
+        ArgumentNullException.ThrowIfNull(evalJudge);
+        _evalJudge = evalJudge;
+        ArgumentNullException.ThrowIfNull(goldenConversationStore);
+        _goldenConversationStore = goldenConversationStore;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(modelIdentityResolver);
+        _modelIdentityResolver = modelIdentityResolver;
+        ArgumentNullException.ThrowIfNull(playbookActionService);
+        _playbookActionService = playbookActionService;
+        ArgumentNullException.ThrowIfNull(playbookActionStore);
+        _playbookActionStore = playbookActionStore;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+    }
 
     public async Task<PlaybookEvalOutcome> RunEvalAsync(Guid agentId, Guid actionId, CancellationToken cancellationToken = default)
     {

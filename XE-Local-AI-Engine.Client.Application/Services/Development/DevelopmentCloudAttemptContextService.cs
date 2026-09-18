@@ -21,22 +21,37 @@ internal interface IDevelopmentCloudAttemptContextService
 /// <summary>
 ///     Builds, durably records, and projects the one immutable cloud context authorized for an attempt.
 /// </summary>
-internal sealed class DevelopmentCloudAttemptContextService(
-    IDevelopmentCloudContextBuilder contextBuilder,
-    DevelopmentCloudRoleRouteFactory routeFactory,
-    IDevelopmentArtifactBlobStore blobStore,
-    IDevelopmentStore store,
-    IOptions<DevelopmentOptions> options,
-    TimeProvider timeProvider) : IDevelopmentCloudAttemptContextService
+internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudAttemptContextService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-    private readonly IDevelopmentCloudContextBuilder _contextBuilder = contextBuilder ?? throw new ArgumentNullException(nameof(contextBuilder));
-    private readonly DevelopmentOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly DevelopmentCloudRoleRouteFactory _routeFactory = routeFactory ?? throw new ArgumentNullException(nameof(routeFactory));
-    private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IDevelopmentArtifactBlobStore _blobStore;
+    private readonly IDevelopmentCloudContextBuilder _contextBuilder;
+    private readonly DevelopmentOptions _options;
+    private readonly DevelopmentCloudRoleRouteFactory _routeFactory;
+    private readonly IDevelopmentStore _store;
+    private readonly TimeProvider _timeProvider;
+
+    public DevelopmentCloudAttemptContextService(
+        IDevelopmentCloudContextBuilder contextBuilder,
+        DevelopmentCloudRoleRouteFactory routeFactory,
+        IDevelopmentArtifactBlobStore blobStore,
+        IDevelopmentStore store,
+        IOptions<DevelopmentOptions> options,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+        ArgumentNullException.ThrowIfNull(contextBuilder);
+        _contextBuilder = contextBuilder;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(routeFactory);
+        _routeFactory = routeFactory;
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+    }
 
     public async Task<DevelopmentCloudAttemptContext> CreateAsync(DevelopmentExecutionSnapshot snapshot,
         IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts,

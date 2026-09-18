@@ -16,16 +16,25 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     This type is intentionally not unit-tested against a live model; tests substitute a fake
 ///     <see cref="IPlaybookAnalysisAgent" />.
 /// </summary>
-internal sealed class DefaultPlaybookAnalysisAgent(
-    ILocalModelProviderResolver providerResolver,
-    IOptions<PlaybookAnalysisOptions> options,
-    ILogger<DefaultPlaybookAnalysisAgent> logger) : IPlaybookAnalysisAgent
+internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly ILogger<DefaultPlaybookAnalysisAgent> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly PlaybookAnalysisOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly ILogger<DefaultPlaybookAnalysisAgent> _logger;
+    private readonly PlaybookAnalysisOptions _options;
 
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+    private readonly ILocalModelProviderResolver _providerResolver;
+
+    public DefaultPlaybookAnalysisAgent(
+        ILocalModelProviderResolver providerResolver,
+        IOptions<PlaybookAnalysisOptions> options,
+        ILogger<DefaultPlaybookAnalysisAgent> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(providerResolver);
+        _providerResolver = providerResolver;
+    }
 
     public async Task<IReadOnlyList<ProposedPlaybookAction>> ProposeAsync(FeedbackInsightsResult aggregate, CancellationToken cancellationToken = default)
     {

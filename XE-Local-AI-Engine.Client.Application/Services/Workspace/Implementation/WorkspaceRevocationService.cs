@@ -2,14 +2,24 @@ namespace XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed class WorkspaceRevocationService(
-    INodeSelectedFolderStore store,
-    IWorkspaceRevocationPreparation preparation,
-    ILogger<WorkspaceRevocationService> logger) : IWorkspaceRevocationService
+internal sealed class WorkspaceRevocationService : IWorkspaceRevocationService
 {
-    private readonly ILogger<WorkspaceRevocationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IWorkspaceRevocationPreparation _preparation = preparation ?? throw new ArgumentNullException(nameof(preparation));
-    private readonly INodeSelectedFolderStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ILogger<WorkspaceRevocationService> _logger;
+    private readonly IWorkspaceRevocationPreparation _preparation;
+    private readonly INodeSelectedFolderStore _store;
+
+    public WorkspaceRevocationService(
+        INodeSelectedFolderStore store,
+        IWorkspaceRevocationPreparation preparation,
+        ILogger<WorkspaceRevocationService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(preparation);
+        ArgumentNullException.ThrowIfNull(store);
+        _logger = logger;
+        _preparation = preparation;
+        _store = store;
+    }
 
     public async Task RevokeAsync(string workspaceId, CancellationToken cancellationToken = default)
     {

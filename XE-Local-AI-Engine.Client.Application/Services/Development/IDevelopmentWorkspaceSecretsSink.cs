@@ -30,9 +30,15 @@ internal interface IDevelopmentWorkspaceSecretsSink
 ///     Dev Mode's sink: the task-scoped store write the provider did inline before the seam existed, forwarded verbatim
 ///     so a Development attempt records exactly the event it always did.
 /// </summary>
-internal sealed class DevelopmentStoreWorkspaceSecretsSink(IDevelopmentStore store) : IDevelopmentWorkspaceSecretsSink
+internal sealed class DevelopmentStoreWorkspaceSecretsSink : IDevelopmentWorkspaceSecretsSink
 {
-    private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IDevelopmentStore _store;
+
+    public DevelopmentStoreWorkspaceSecretsSink(IDevelopmentStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     public Task RecordAsync(Guid isolationKey,
         Guid attemptKey,

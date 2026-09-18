@@ -148,7 +148,12 @@ public sealed record TranscribeFileResult
 ///     The cap is enforced while the body is being read, not from a declared length: a streamed upload has no length
 ///     to inspect beforehand, and a cap checked afterwards has already let every byte reach the disk.
 /// </remarks>
-public sealed class TranscriptionUploadTooLargeException(string message) : Exception(message);
+public sealed class TranscriptionUploadTooLargeException : Exception
+{
+    public TranscriptionUploadTooLargeException(string message) : base(message)
+    {
+    }
+}
 
 /// <summary>Raised when engine-side transcoding could not produce a WAV. The message is sanitized for display.</summary>
 public sealed class AudioTranscodeException : Exception

@@ -64,21 +64,32 @@ public interface IBenchmarkPairwisePlanner
 }
 
 /// <inheritdoc />
-public sealed class BenchmarkPairwisePlanner(
-    IBenchmarkStore store,
-    IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
-    IBenchmarkPairwiseFitter fitter,
-    IBenchmarkQueueSignal queueSignal,
-    ILogger<BenchmarkPairwisePlanner> logger) : IBenchmarkPairwisePlanner
+public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
 {
-    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkJudgeRuntimeResolver _judgeRuntimeResolver;
+    private readonly IBenchmarkPairwiseFitter _fitter;
+    private readonly IBenchmarkQueueSignal _queueSignal;
+    private readonly ILogger<BenchmarkPairwisePlanner> _logger;
 
-    private readonly IBenchmarkJudgeRuntimeResolver _judgeRuntimeResolver =
-        judgeRuntimeResolver ?? throw new ArgumentNullException(nameof(judgeRuntimeResolver));
-
-    private readonly IBenchmarkPairwiseFitter _fitter = fitter ?? throw new ArgumentNullException(nameof(fitter));
-    private readonly IBenchmarkQueueSignal _queueSignal = queueSignal ?? throw new ArgumentNullException(nameof(queueSignal));
-    private readonly ILogger<BenchmarkPairwisePlanner> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    public BenchmarkPairwisePlanner(
+        IBenchmarkStore store,
+        IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
+        IBenchmarkPairwiseFitter fitter,
+        IBenchmarkQueueSignal queueSignal,
+        ILogger<BenchmarkPairwisePlanner> logger)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(judgeRuntimeResolver);
+        ArgumentNullException.ThrowIfNull(fitter);
+        ArgumentNullException.ThrowIfNull(queueSignal);
+        ArgumentNullException.ThrowIfNull(logger);
+        _store = store;
+        _judgeRuntimeResolver = judgeRuntimeResolver;
+        _fitter = fitter;
+        _queueSignal = queueSignal;
+        _logger = logger;
+    }
 
     /// <summary>
     ///     Every unordered pair of the eligible set, formed ONLY inside one task case. Two answers to different

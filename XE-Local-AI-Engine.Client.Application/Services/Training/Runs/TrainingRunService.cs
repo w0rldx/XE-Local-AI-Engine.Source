@@ -34,26 +34,48 @@ public interface ITrainingRunService
     Task<bool> CancelAsync(Guid runId, CancellationToken cancellationToken = default);
 }
 
-public sealed class TrainingRunService(
-    ITrainingRunStore runStore,
-    ITrainingDatasetStore datasetStore,
-    IDatasetExportService exportService,
-    ITrainingOptionDefaultsCalculator defaults,
-    ILicenseGateService licenseGate,
-    TrainingRunWorkspace workspace,
-    TrainingRunCancellationRegistry cancellations,
-    ITrainingRunQueueSignal signal,
-    IInstalledBaseModelLinker linker) : ITrainingRunService
+public sealed class TrainingRunService : ITrainingRunService
 {
-    private readonly IInstalledBaseModelLinker _linker = linker ?? throw new ArgumentNullException(nameof(linker));
-    private readonly TrainingRunCancellationRegistry _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
-    private readonly ITrainingDatasetStore _datasetStore = datasetStore ?? throw new ArgumentNullException(nameof(datasetStore));
-    private readonly ITrainingOptionDefaultsCalculator _defaults = defaults ?? throw new ArgumentNullException(nameof(defaults));
-    private readonly IDatasetExportService _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
-    private readonly ILicenseGateService _licenseGate = licenseGate ?? throw new ArgumentNullException(nameof(licenseGate));
-    private readonly ITrainingRunStore _runStore = runStore ?? throw new ArgumentNullException(nameof(runStore));
-    private readonly ITrainingRunQueueSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
-    private readonly TrainingRunWorkspace _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+    private readonly IInstalledBaseModelLinker _linker;
+    private readonly TrainingRunCancellationRegistry _cancellations;
+    private readonly ITrainingDatasetStore _datasetStore;
+    private readonly ITrainingOptionDefaultsCalculator _defaults;
+    private readonly IDatasetExportService _exportService;
+    private readonly ILicenseGateService _licenseGate;
+    private readonly ITrainingRunStore _runStore;
+    private readonly ITrainingRunQueueSignal _signal;
+    private readonly TrainingRunWorkspace _workspace;
+
+    public TrainingRunService(
+        ITrainingRunStore runStore,
+        ITrainingDatasetStore datasetStore,
+        IDatasetExportService exportService,
+        ITrainingOptionDefaultsCalculator defaults,
+        ILicenseGateService licenseGate,
+        TrainingRunWorkspace workspace,
+        TrainingRunCancellationRegistry cancellations,
+        ITrainingRunQueueSignal signal,
+        IInstalledBaseModelLinker linker)
+    {
+        ArgumentNullException.ThrowIfNull(linker);
+        ArgumentNullException.ThrowIfNull(cancellations);
+        ArgumentNullException.ThrowIfNull(datasetStore);
+        ArgumentNullException.ThrowIfNull(defaults);
+        ArgumentNullException.ThrowIfNull(exportService);
+        ArgumentNullException.ThrowIfNull(licenseGate);
+        ArgumentNullException.ThrowIfNull(runStore);
+        ArgumentNullException.ThrowIfNull(signal);
+        ArgumentNullException.ThrowIfNull(workspace);
+        _linker = linker;
+        _cancellations = cancellations;
+        _datasetStore = datasetStore;
+        _defaults = defaults;
+        _exportService = exportService;
+        _licenseGate = licenseGate;
+        _runStore = runStore;
+        _signal = signal;
+        _workspace = workspace;
+    }
 
     public async Task<TrainingRunRecord> CreateAsync(CreateTrainingRunCommand command, CancellationToken cancellationToken = default)
     {

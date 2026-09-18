@@ -8,9 +8,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     the chat template and cached per file) and surfaces the thinking/tools flags. A name that matches no installed
 ///     GGUF returns <see langword="null" /> so the caller falls back to the Ollama/Codex capability path.
 /// </summary>
-internal sealed class GgufModelCapabilityResolver(IGgufModelStore ggufModelStore) : IGgufModelCapabilityResolver
+internal sealed class GgufModelCapabilityResolver : IGgufModelCapabilityResolver
 {
-    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+    private readonly IGgufModelStore _ggufModelStore;
+
+    public GgufModelCapabilityResolver(IGgufModelStore ggufModelStore)
+    {
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        _ggufModelStore = ggufModelStore;
+    }
 
     /// <inheritdoc />
     public async Task<GgufModelCapabilities?> TryResolveAsync(string modelName, CancellationToken cancellationToken = default)

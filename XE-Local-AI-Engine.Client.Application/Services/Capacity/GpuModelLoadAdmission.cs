@@ -88,15 +88,21 @@ public sealed class GpuModelLoadAdmission : IGpuModelLoadAdmission, IDisposable
 
     // The admission ticket handed to a holder; disposing it once releases the gate for the next waiter. Idempotent so a
     // double-dispose (e.g. a using plus a defensive finally) cannot over-release the semaphore.
-    private sealed class Ticket(GpuModelLoadAdmission owner) : IDisposable
+    private sealed class Ticket : IDisposable
     {
+        private readonly GpuModelLoadAdmission _owner;
         private int _disposed;
+
+        public Ticket(GpuModelLoadAdmission owner)
+        {
+            _owner = owner;
+        }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
-                owner.Release();
+                _owner.Release();
             }
         }
     }

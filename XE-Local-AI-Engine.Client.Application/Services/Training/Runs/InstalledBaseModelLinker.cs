@@ -25,9 +25,15 @@ public interface IInstalledBaseModelLinker
     Task<InstalledBaseModelLink?> ResolveAsync(string baseRepoId, string? explicitModelName, CancellationToken cancellationToken = default);
 }
 
-public sealed class InstalledBaseModelLinker(IGgufModelRegistry registry) : IInstalledBaseModelLinker
+public sealed class InstalledBaseModelLinker : IInstalledBaseModelLinker
 {
-    private readonly IGgufModelRegistry _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+    private readonly IGgufModelRegistry _registry;
+
+    public InstalledBaseModelLinker(IGgufModelRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+    }
 
     public async Task<IReadOnlyList<InstalledBaseModelLink>> SuggestAsync(string baseRepoId, CancellationToken cancellationToken = default)
     {

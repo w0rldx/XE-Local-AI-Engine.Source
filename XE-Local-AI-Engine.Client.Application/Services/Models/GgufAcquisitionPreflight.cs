@@ -70,9 +70,15 @@ public interface IGgufAcquisitionPreflight
         CancellationToken cancellationToken = default);
 }
 
-public sealed class GgufAcquisitionIdentityResolver(ModelNameValidator modelNameValidator)
+public sealed class GgufAcquisitionIdentityResolver
 {
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly ModelNameValidator _modelNameValidator;
+
+    public GgufAcquisitionIdentityResolver(ModelNameValidator modelNameValidator)
+    {
+        ArgumentNullException.ThrowIfNull(modelNameValidator);
+        _modelNameValidator = modelNameValidator;
+    }
 
     public static IReadOnlyList<string> CanonicalQuantizationChoices => QuantLadder.CanonicalQuantizations;
 
@@ -217,14 +223,24 @@ public sealed class GgufAcquisitionConflictException : Exception
     }
 }
 
-public sealed class GgufAcquisitionPreflight(
-    GgufAcquisitionIdentityResolver identityResolver,
-    IInstalledModelSnapshotCoordinator snapshotCoordinator,
-    GgufAcquisitionStateProbe stateProbe) : IGgufAcquisitionPreflight
+public sealed class GgufAcquisitionPreflight : IGgufAcquisitionPreflight
 {
-    private readonly GgufAcquisitionIdentityResolver _identityResolver = identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));
-    private readonly IInstalledModelSnapshotCoordinator _snapshotCoordinator = snapshotCoordinator ?? throw new ArgumentNullException(nameof(snapshotCoordinator));
-    private readonly GgufAcquisitionStateProbe _stateProbe = stateProbe ?? throw new ArgumentNullException(nameof(stateProbe));
+    private readonly GgufAcquisitionIdentityResolver _identityResolver;
+    private readonly IInstalledModelSnapshotCoordinator _snapshotCoordinator;
+    private readonly GgufAcquisitionStateProbe _stateProbe;
+
+    public GgufAcquisitionPreflight(
+        GgufAcquisitionIdentityResolver identityResolver,
+        IInstalledModelSnapshotCoordinator snapshotCoordinator,
+        GgufAcquisitionStateProbe stateProbe)
+    {
+        ArgumentNullException.ThrowIfNull(identityResolver);
+        ArgumentNullException.ThrowIfNull(snapshotCoordinator);
+        ArgumentNullException.ThrowIfNull(stateProbe);
+        _identityResolver = identityResolver;
+        _snapshotCoordinator = snapshotCoordinator;
+        _stateProbe = stateProbe;
+    }
 
     public async Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
         CancellationToken cancellationToken = default)

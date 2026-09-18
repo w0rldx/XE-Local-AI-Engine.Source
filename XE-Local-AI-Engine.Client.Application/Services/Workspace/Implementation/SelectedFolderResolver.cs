@@ -5,10 +5,18 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore store, ILogger<SelectedFolderResolver> logger) : ISelectedFolderResolver
+internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
 {
-    private readonly ILogger<SelectedFolderResolver> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly INodeSelectedFolderStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ILogger<SelectedFolderResolver> _logger;
+    private readonly INodeSelectedFolderStore _store;
+
+    public SelectedFolderResolver(INodeSelectedFolderStore store, ILogger<SelectedFolderResolver> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(store);
+        _logger = logger;
+        _store = store;
+    }
 
     public async Task<SelectedFolderReference> RegisterAsync(SelectedFolderRegistration registration, CancellationToken cancellationToken = default)
     {

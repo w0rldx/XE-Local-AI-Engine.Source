@@ -17,14 +17,20 @@ internal sealed record SaveArtifactRequest(string? Name, string? MediaType, stri
 ///         store's business — it hands back the superseded id and this handler sweeps those bytes after the commit.
 ///     </para>
 /// </summary>
-internal sealed class SaveArtifactToolHandler(
-    IServiceScopeFactory scopeFactory,
-    IOptions<WorkSessionOptions> options,
-    IWorkSessionEventPublisher publisher,
-    IWorkSessionArtifactBlobStore blobStore,
-    ILogger<SaveArtifactToolHandler> logger) : WorkSessionToolHandler<SaveArtifactRequest>(scopeFactory, options, publisher, logger)
+internal sealed class SaveArtifactToolHandler : WorkSessionToolHandler<SaveArtifactRequest>
 {
-    private readonly IWorkSessionArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
+    private readonly IWorkSessionArtifactBlobStore _blobStore;
+
+    public SaveArtifactToolHandler(
+        IServiceScopeFactory scopeFactory,
+        IOptions<WorkSessionOptions> options,
+        IWorkSessionEventPublisher publisher,
+        IWorkSessionArtifactBlobStore blobStore,
+        ILogger<SaveArtifactToolHandler> logger) : base(scopeFactory, options, publisher, logger)
+    {
+        ArgumentNullException.ThrowIfNull(blobStore);
+        _blobStore = blobStore;
+    }
 
     public override string ToolName => WorkSessionToolDefinitions.SaveArtifact.ToolName;
 

@@ -9,9 +9,15 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 ///     must never grant the host-command-executing <c>process</c> provider. Non-Production tolerates an unset provider
 ///     (the selector resolves the deterministic fake). Wired with <c>ValidateOnStart</c>, so this throws at host start.
 /// </summary>
-public sealed class SandboxOptionsValidator(IHostEnvironment environment) : IValidateOptions<SandboxOptions>
+public sealed class SandboxOptionsValidator : IValidateOptions<SandboxOptions>
 {
-    private readonly IHostEnvironment _environment = environment ?? throw new ArgumentNullException(nameof(environment));
+    private readonly IHostEnvironment _environment;
+
+    public SandboxOptionsValidator(IHostEnvironment environment)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        _environment = environment;
+    }
 
     public ValidateOptionsResult Validate(string? name, SandboxOptions options)
     {

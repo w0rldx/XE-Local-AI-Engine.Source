@@ -19,14 +19,23 @@ public interface IArtifactQualityService
         CancellationToken cancellationToken = default);
 }
 
-public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEvaluationStore evaluations, TimeProvider timeProvider)
-    : IArtifactQualityService
+public sealed class ArtifactQualityService : IArtifactQualityService
 {
     public const string RevalidationEvidenceReusedCode = "RevalidationEvidenceReused";
     private const int MaxDecisionHistoryEntries = 64;
-    private readonly ITrainingEvaluationStore _evaluations = evaluations ?? throw new ArgumentNullException(nameof(evaluations));
-    private readonly ITrainingRunStore _runs = runs ?? throw new ArgumentNullException(nameof(runs));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly ITrainingEvaluationStore _evaluations;
+    private readonly ITrainingRunStore _runs;
+    private readonly TimeProvider _timeProvider;
+
+    public ArtifactQualityService(ITrainingRunStore runs, ITrainingEvaluationStore evaluations, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(evaluations);
+        ArgumentNullException.ThrowIfNull(runs);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _evaluations = evaluations;
+        _runs = runs;
+        _timeProvider = timeProvider;
+    }
 
     public async Task<TrainingArtifactRecord> DecideAsync(Guid artifactId, Guid comparisonId, long expectedVersion,
         CancellationToken cancellationToken = default)

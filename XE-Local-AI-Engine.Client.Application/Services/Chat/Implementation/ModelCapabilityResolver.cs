@@ -16,13 +16,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 ///     resolver resolves each participant's capabilities from its OWN effective model through it, and
 ///     <see cref="ChatTurnResolver" /> resolves the chat turn's active model through it too.
 /// </summary>
-public sealed class ModelCapabilityResolver(
-    IModelClassificationService modelClassificationService,
-    ILocalModelProviderResolver localModelProviderResolver,
-    IGgufModelCapabilityResolver ggufModelCapabilityResolver,
-    IActiveCloudChatClientFactory activeCloudChatClientFactory,
-    IModelTrustResolver modelTrustResolver,
-    ILogger<ModelCapabilityResolver> logger) : IModelCapabilityResolver
+public sealed class ModelCapabilityResolver : IModelCapabilityResolver
 {
     // What an ext: id resolves to when its registration is gone: not capable, and cloud, so the private-data gates
     // withhold. Reached for a deleted connection, a corrupt store, or a hand-edited id in a saved agent.
@@ -33,6 +27,28 @@ public sealed class ModelCapabilityResolver(
 
     // The safe default: not thinking-capable, not tool-capable, and node-local.
     private static readonly ModelCapabilitySnapshot NotCapableLocal = new(SupportsThinking: false, SupportsTools: false, IsCloud: false);
+    private readonly IModelClassificationService _modelClassificationService;
+    private readonly ILocalModelProviderResolver _localModelProviderResolver;
+    private readonly IGgufModelCapabilityResolver _ggufModelCapabilityResolver;
+    private readonly IActiveCloudChatClientFactory _activeCloudChatClientFactory;
+    private readonly IModelTrustResolver _modelTrustResolver;
+    private readonly ILogger<ModelCapabilityResolver> _logger;
+
+    public ModelCapabilityResolver(
+        IModelClassificationService modelClassificationService,
+        ILocalModelProviderResolver localModelProviderResolver,
+        IGgufModelCapabilityResolver ggufModelCapabilityResolver,
+        IActiveCloudChatClientFactory activeCloudChatClientFactory,
+        IModelTrustResolver modelTrustResolver,
+        ILogger<ModelCapabilityResolver> logger)
+    {
+        _modelClassificationService = modelClassificationService;
+        _localModelProviderResolver = localModelProviderResolver;
+        _ggufModelCapabilityResolver = ggufModelCapabilityResolver;
+        _activeCloudChatClientFactory = activeCloudChatClientFactory;
+        _modelTrustResolver = modelTrustResolver;
+        _logger = logger;
+    }
 
     public async Task<ModelCapabilitySnapshot> ResolveAsync(string? model, CancellationToken cancellationToken)
     {
@@ -63,7 +79,7 @@ public sealed class ModelCapabilityResolver(
         // that check would report it node-local and hand a hosted endpoint the private-data gates.
         if (ExternalModelId.HasExternalScheme(model))
         {
-            if (await modelTrustResolver.TryResolveExternalAsync(model, cancellationToken) is not { } registration)
+            if (await _modelTrustResolver.TryResolveExternalAsync(model, cancellationToken) is not { } registration)
             {
                 return UnresolvedExternal;
             }
@@ -87,7 +103,7 @@ public sealed class ModelCapabilityResolver(
         // cloud so the gate withholds. A non-Codex model that routes to a cloud provider is an Azure Foundry deployment,
         // so advertise Azure's capability matrix; on a fail-closed fault keep the conservative non-thinking/non-tools
         // default. IsCloud feeds ONLY the private-data gates — thinking/tools are separate fields of the snapshot.
-        var (routesToCloud, routingFaulted) = CloudRoutingClassifier.Classify(activeCloudChatClientFactory, logger, model);
+        var (routesToCloud, routingFaulted) = CloudRoutingClassifier.Classify(_activeCloudChatClientFactory, _logger, model);
         if (routesToCloud)
         {
             return routingFaulted
@@ -102,11 +118,11 @@ public sealed class ModelCapabilityResolver(
         // model-list classification (LocalModelsMapper.ToLlamaCppModelResponses). Skip the doomed probe for any
         // non-Ollama provider; for a llama.cpp model the GGUF detection supplies thinking/tools, otherwise the safe
         // default applies.
-        var providerName = await localModelProviderResolver
+        var providerName = await _localModelProviderResolver
                                  .ResolveProviderNameForModelAsync(model, cancellationToken);
         if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
         {
-            var ggufCapabilities = await ggufModelCapabilityResolver
+            var ggufCapabilities = await _ggufModelCapabilityResolver
                                          .TryResolveAsync(model, cancellationToken);
             // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL. Vision rides the GGUF descriptor's
             // projector-gated flag — the only path that can advertise it (cloud/Ollama stay non-vision here).
@@ -121,7 +137,7 @@ public sealed class ModelCapabilityResolver(
                 : NotCapableLocal;
         }
 
-        var classifications = await modelClassificationService
+        var classifications = await _modelClassificationService
                                     .ClassifyAsync([new ModelIdentity(model, Digest: null)], cancellationToken);
         if (!classifications.TryGetValue(model, out var classification))
         {

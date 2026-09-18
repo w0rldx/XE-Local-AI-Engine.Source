@@ -9,4 +9,9 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 ///     clean 500 instead of leaking the raw message. Derives from <see cref="InvalidOperationException" /> so the
 ///     precondition keeps its prior base type.
 /// </summary>
-public sealed class EntraConnectionNotConfiguredException(string message) : InvalidOperationException(message);
+public sealed class EntraConnectionNotConfiguredException : InvalidOperationException
+{
+    public EntraConnectionNotConfiguredException(string message) : base(message)
+    {
+    }
+}

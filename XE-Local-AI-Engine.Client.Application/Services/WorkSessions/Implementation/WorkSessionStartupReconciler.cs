@@ -8,16 +8,25 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     startup. Registered after the chat module so orphaned chat rows are terminalized first: a session that resumes
 ///     must not find its conversation still holding a half-written turn.
 /// </summary>
-public sealed class WorkSessionStartupReconciler(
-    IServiceScopeFactory scopeFactory,
-    IOptions<WorkSessionOptions> options,
-    ILogger<WorkSessionStartupReconciler> logger) : IHostedService
+public sealed class WorkSessionStartupReconciler : IHostedService
 {
     private const string InterruptedReason = "The host restarted while the work session was in flight.";
 
-    private readonly ILogger<WorkSessionStartupReconciler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly WorkSessionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    private readonly ILogger<WorkSessionStartupReconciler> _logger;
+    private readonly WorkSessionOptions _options;
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public WorkSessionStartupReconciler(
+        IServiceScopeFactory scopeFactory,
+        IOptions<WorkSessionOptions> options,
+        ILogger<WorkSessionStartupReconciler> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+    }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {

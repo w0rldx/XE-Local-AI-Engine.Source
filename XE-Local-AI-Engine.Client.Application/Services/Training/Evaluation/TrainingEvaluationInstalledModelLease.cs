@@ -16,12 +16,20 @@ public interface ITrainingEvaluationInstalledModelLeaseProvider
     Task<ITrainingEvaluationInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken);
 }
 
-internal sealed class TrainingEvaluationInstalledModelLeaseProvider(
-    IInstalledModelSnapshotCoordinator coordinator,
-    IGgufModelStore models) : ITrainingEvaluationInstalledModelLeaseProvider
+internal sealed class TrainingEvaluationInstalledModelLeaseProvider : ITrainingEvaluationInstalledModelLeaseProvider
 {
-    private readonly IInstalledModelSnapshotCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
-    private readonly IGgufModelStore _models = models ?? throw new ArgumentNullException(nameof(models));
+    private readonly IInstalledModelSnapshotCoordinator _coordinator;
+    private readonly IGgufModelStore _models;
+
+    public TrainingEvaluationInstalledModelLeaseProvider(
+        IInstalledModelSnapshotCoordinator coordinator,
+        IGgufModelStore models)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        ArgumentNullException.ThrowIfNull(models);
+        _coordinator = coordinator;
+        _models = models;
+    }
 
     public async Task<ITrainingEvaluationInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
     {
@@ -48,19 +56,30 @@ internal sealed class TrainingEvaluationInstalledModelLeaseProvider(
         }
     }
 
-    private sealed class EvaluationLease(
-        InstalledModelReadLease inner,
-        string modelFilePath,
-        string modelContentFingerprint,
-        string modelSha256,
-        long modelSizeBytes) : ITrainingEvaluationInstalledModelLease
+    private sealed class EvaluationLease : ITrainingEvaluationInstalledModelLease
     {
-        public string ModelFilePath { get; } = modelFilePath;
-        public string ModelContentFingerprint { get; } = modelContentFingerprint;
-        public string ModelSha256 { get; } = modelSha256;
-        public long ModelSizeBytes { get; } = modelSizeBytes;
+        private readonly InstalledModelReadLease _inner;
+
+        public EvaluationLease(
+            InstalledModelReadLease inner,
+            string modelFilePath,
+            string modelContentFingerprint,
+            string modelSha256,
+            long modelSizeBytes)
+        {
+            _inner = inner;
+            ModelFilePath = modelFilePath;
+            ModelContentFingerprint = modelContentFingerprint;
+            ModelSha256 = modelSha256;
+            ModelSizeBytes = modelSizeBytes;
+        }
+
+        public string ModelFilePath { get; }
+        public string ModelContentFingerprint { get; }
+        public string ModelSha256 { get; }
+        public long ModelSizeBytes { get; }
 
         public ValueTask DisposeAsync() =>
-            inner.DisposeAsync();
+            _inner.DisposeAsync();
     }
 }

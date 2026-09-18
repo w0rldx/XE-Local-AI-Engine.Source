@@ -42,18 +42,31 @@ public interface IDevelopmentTemplateService
 ///         lands in the template. Dropping <c>.git</c> removes the remote and the template's history along with it.
 ///     </para>
 /// </summary>
-internal sealed class DevelopmentTemplateService(
-    IDevelopmentTemplateStore templateStore,
-    IDevelopmentRepositoryBindingService repositoryBindings,
-    INodeDataDirectory dataDirectory,
-    IOptions<DevelopmentOptions> options,
-    TimeProvider timeProvider) : IDevelopmentTemplateService
+internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
 {
-    private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-    private readonly DevelopmentOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
-    private readonly IDevelopmentTemplateStore _templateStore = templateStore ?? throw new ArgumentNullException(nameof(templateStore));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly INodeDataDirectory _dataDirectory;
+    private readonly DevelopmentOptions _options;
+    private readonly IDevelopmentRepositoryBindingService _repositoryBindings;
+    private readonly IDevelopmentTemplateStore _templateStore;
+    private readonly TimeProvider _timeProvider;
+
+    public DevelopmentTemplateService(
+        IDevelopmentTemplateStore templateStore,
+        IDevelopmentRepositoryBindingService repositoryBindings,
+        INodeDataDirectory dataDirectory,
+        IOptions<DevelopmentOptions> options,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        _dataDirectory = dataDirectory;
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(repositoryBindings);
+        _repositoryBindings = repositoryBindings;
+        ArgumentNullException.ThrowIfNull(templateStore);
+        _templateStore = templateStore;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+    }
 
     public async Task<IReadOnlyList<DevelopmentTemplateReference>> ListTemplatesAsync(CancellationToken cancellationToken = default)
     {

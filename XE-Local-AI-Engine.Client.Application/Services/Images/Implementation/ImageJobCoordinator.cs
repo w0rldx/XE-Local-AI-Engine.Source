@@ -630,11 +630,18 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     ///     An <see cref="IProgress{T}" /> that invokes its handler inline on the reporting thread. See the comment at
     ///     its only construction site for why <see cref="Progress{T}" /> is unusable here.
     /// </summary>
-    private sealed class SynchronousProgress(Action<ImageGenProgress> handler) : IProgress<ImageGenProgress>
+    private sealed class SynchronousProgress : IProgress<ImageGenProgress>
     {
+        private readonly Action<ImageGenProgress> _handler;
+
+        public SynchronousProgress(Action<ImageGenProgress> handler)
+        {
+            _handler = handler;
+        }
+
         public void Report(ImageGenProgress value)
         {
-            handler(value);
+            _handler(value);
         }
     }
 
@@ -646,14 +653,21 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     ///     so concurrent publishes never collide on a seq or append out of order; <see cref="Snapshot" /> copies under the
     ///     same lock for a consistent ordered view.
     /// </summary>
-    private sealed class JobEventLog(int maxEvents, long createdAtUnixMs)
+    private sealed class JobEventLog
     {
         private readonly List<BufferedEvent> _events = [];
         private readonly Lock _gate = new();
+        private readonly int _maxEvents;
 
         private long _nextSeq;
 
-        public long CreatedAtUnixMs { get; } = createdAtUnixMs;
+        public JobEventLog(int maxEvents, long createdAtUnixMs)
+        {
+            _maxEvents = maxEvents;
+            CreatedAtUnixMs = createdAtUnixMs;
+        }
+
+        public long CreatedAtUnixMs { get; }
 
         /// <summary>Set to the terminal event's timestamp once a terminal status is buffered; drives eviction.</summary>
         public long? TerminalAtUnixMs { get; private set; }
@@ -676,7 +690,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                 if (buffer)
                 {
                     _events.Add(new BufferedEvent(methodName, payload, seq));
-                    if (_events.Count > maxEvents)
+                    if (_events.Count > _maxEvents)
                     {
                         _events.RemoveAt(index: 0);
                         truncated = true;

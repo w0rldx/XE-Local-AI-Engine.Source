@@ -11,11 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 ///     The command surface over a graph workflow run. Everything it does is validate, commit, signal, and answer with
 ///     what the rows now say — the dispatcher does the rest on its own clock.
 /// </summary>
-internal sealed class GraphWorkflowRunService(
-    IGraphWorkflowStore store,
-    IGraphWorkflowDispatcherSignal signal,
-    IToolInvocationService tools,
-    IOptions<GraphWorkflowOptions> options) : IGraphWorkflowRunService
+internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 {
     /// <summary>
     ///     The longest comment an answer may carry, matching the development-workflow gate's own cap. It is free text
@@ -23,10 +19,25 @@ internal sealed class GraphWorkflowRunService(
     /// </summary>
     private const int MaxDecisionComment = 500;
 
-    private readonly GraphWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly IGraphWorkflowDispatcherSignal _signal = signal ?? throw new ArgumentNullException(nameof(signal));
-    private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IToolInvocationService _tools = tools ?? throw new ArgumentNullException(nameof(tools));
+    private readonly GraphWorkflowOptions _options;
+    private readonly IGraphWorkflowDispatcherSignal _signal;
+    private readonly IGraphWorkflowStore _store;
+    private readonly IToolInvocationService _tools;
+
+    public GraphWorkflowRunService(
+        IGraphWorkflowStore store,
+        IGraphWorkflowDispatcherSignal signal,
+        IToolInvocationService tools,
+        IOptions<GraphWorkflowOptions> options)
+    {
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        ArgumentNullException.ThrowIfNull(signal);
+        _signal = signal;
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        ArgumentNullException.ThrowIfNull(tools);
+        _tools = tools;
+    }
 
     public async Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId,
         Guid requestId,

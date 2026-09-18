@@ -5,16 +5,28 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed class McpServerService(
-    IMcpServerStore store,
-    IMcpServerConnectionManager connectionManager,
-    IOptions<McpOptions> mcpOptions,
-    ILogger<McpServerService> logger) : IMcpServerService
+internal sealed class McpServerService : IMcpServerService
 {
-    private readonly IMcpServerConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
-    private readonly ILogger<McpServerService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IOptions<McpOptions> _mcpOptions = mcpOptions ?? throw new ArgumentNullException(nameof(mcpOptions));
-    private readonly IMcpServerStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IMcpServerConnectionManager _connectionManager;
+    private readonly ILogger<McpServerService> _logger;
+    private readonly IOptions<McpOptions> _mcpOptions;
+    private readonly IMcpServerStore _store;
+
+    public McpServerService(
+        IMcpServerStore store,
+        IMcpServerConnectionManager connectionManager,
+        IOptions<McpOptions> mcpOptions,
+        ILogger<McpServerService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(connectionManager);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(mcpOptions);
+        ArgumentNullException.ThrowIfNull(store);
+        _connectionManager = connectionManager;
+        _logger = logger;
+        _mcpOptions = mcpOptions;
+        _store = store;
+    }
 
     public async Task<McpServerRecord> CreateAsync(McpServerInput input, CancellationToken cancellationToken = default)
     {

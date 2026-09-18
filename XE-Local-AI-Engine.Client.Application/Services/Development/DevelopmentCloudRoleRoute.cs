@@ -12,9 +12,15 @@ public sealed record DevelopmentCloudRoleRoute(
 /// <summary>
 ///     Builds a cloud role request from one approved bundle. The API accepts no chat history or general tool catalog.
 /// </summary>
-public sealed class DevelopmentCloudRoleRouteFactory(IDevelopmentCloudContextCatalog contextCatalog)
+public sealed class DevelopmentCloudRoleRouteFactory
 {
-    private readonly IDevelopmentCloudContextCatalog _contextCatalog = contextCatalog ?? throw new ArgumentNullException(nameof(contextCatalog));
+    private readonly IDevelopmentCloudContextCatalog _contextCatalog;
+
+    public DevelopmentCloudRoleRouteFactory(IDevelopmentCloudContextCatalog contextCatalog)
+    {
+        ArgumentNullException.ThrowIfNull(contextCatalog);
+        _contextCatalog = contextCatalog;
+    }
 
     public DevelopmentCloudRoleRoute Create(DevelopmentCloudContextBundle bundle)
     {

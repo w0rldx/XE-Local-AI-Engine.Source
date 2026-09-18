@@ -36,10 +36,7 @@ public interface ITrainingOptionDefaultsCalculator
     Task<TrainingFootprintEstimate> EstimateAsync(Guid baseArtifactId, TrainingRunOptionsV1 options, CancellationToken cancellationToken = default);
 }
 
-public sealed class TrainingOptionDefaultsCalculator(
-    ITrainingBaseArtifactStore store,
-    INodeDataDirectory dataDirectory,
-    IRuntimeDeviceAudit deviceAudit) : ITrainingOptionDefaultsCalculator
+public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCalculator
 {
     /// <summary>Sequence-length ladder, longest first. Powers of two: every attention kernel on this stack likes them.</summary>
     private static readonly int[] SequenceLadder = [4096, 2048, 1024, 512];
@@ -48,9 +45,22 @@ public sealed class TrainingOptionDefaultsCalculator(
 
     private const long SmallModelParameterThreshold = 3_000_000_000L;
 
-    private readonly IRuntimeDeviceAudit _deviceAudit = deviceAudit ?? throw new ArgumentNullException(nameof(deviceAudit));
-    private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
-    private readonly ITrainingBaseArtifactStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IRuntimeDeviceAudit _deviceAudit;
+    private readonly INodeDataDirectory _dataDirectory;
+    private readonly ITrainingBaseArtifactStore _store;
+
+    public TrainingOptionDefaultsCalculator(
+        ITrainingBaseArtifactStore store,
+        INodeDataDirectory dataDirectory,
+        IRuntimeDeviceAudit deviceAudit)
+    {
+        ArgumentNullException.ThrowIfNull(deviceAudit);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(store);
+        _deviceAudit = deviceAudit;
+        _dataDirectory = dataDirectory;
+        _store = store;
+    }
 
     public async Task<TrainingRunDefaults> ComputeAsync(Guid baseArtifactId, CancellationToken cancellationToken = default)
     {

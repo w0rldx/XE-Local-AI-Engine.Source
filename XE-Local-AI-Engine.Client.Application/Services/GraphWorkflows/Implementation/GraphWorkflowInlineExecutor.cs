@@ -18,9 +18,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         them, so an executor cannot disagree with the routing the dispatcher will do a moment later.
 ///     </para>
 /// </summary>
-internal sealed class GraphWorkflowInlineExecutor(IOptions<GraphWorkflowOptions> options)
+internal sealed class GraphWorkflowInlineExecutor
 {
-    private readonly GraphWorkflowOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly GraphWorkflowOptions _options;
+
+    public GraphWorkflowInlineExecutor(IOptions<GraphWorkflowOptions> options)
+    {
+        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    }
 
     /// <summary>The kinds this executor owns. Everything else is a lane's, or has no executor in this build.</summary>
     public static bool Owns(GraphWorkflowNodeKind kind) =>

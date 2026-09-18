@@ -5,8 +5,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-public sealed class GgufAcquisitionStateProbe(HuggingFaceOptions? options = null)
+public sealed class GgufAcquisitionStateProbe
 {
+    private readonly HuggingFaceOptions? _options;
+
+    public GgufAcquisitionStateProbe(HuggingFaceOptions? options = null)
+    {
+        _options = options;
+    }
+
     public Task<GgufAcquisitionState> ProbeAsync(GgufAcquisitionIntent intent,
         ResolvedGgufAcquisitionIdentity identity,
         InstalledModelMutationLease lease,
@@ -34,15 +41,15 @@ public sealed class GgufAcquisitionStateProbe(HuggingFaceOptions? options = null
 
     private bool HasDestinationCollision(ResolvedGgufAcquisitionIdentity identity)
     {
-        if (options is null)
+        if (_options is null)
         {
             return false;
         }
 
-        return HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(options.ModelsDirectory, identity.RelativeGgufPath))
-               || HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(options.ModelsDirectory, identity.RelativeSidecarPath))
+        return HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, identity.RelativeGgufPath))
+               || HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, identity.RelativeSidecarPath))
                || identity.ProjectorRelativePath is not null
-               && HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(options.ModelsDirectory, identity.ProjectorRelativePath));
+               && HasCaseInsensitiveCollision(GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, identity.ProjectorRelativePath));
     }
 
     private static bool HasCaseInsensitiveCollision(string path)

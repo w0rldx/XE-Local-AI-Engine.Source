@@ -43,16 +43,26 @@ internal interface IDevelopmentEvidenceService
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class DevelopmentEvidenceService(
-    IDevelopmentStore store,
-    IDevelopmentArtifactBlobStore blobStore,
-    IDevelopmentPatchEvidenceService patchEvidence) : IDevelopmentEvidenceService
+internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-    private readonly IDevelopmentPatchEvidenceService _patchEvidence = patchEvidence ?? throw new ArgumentNullException(nameof(patchEvidence));
-    private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IDevelopmentArtifactBlobStore _blobStore;
+    private readonly IDevelopmentPatchEvidenceService _patchEvidence;
+    private readonly IDevelopmentStore _store;
+
+    public DevelopmentEvidenceService(
+        IDevelopmentStore store,
+        IDevelopmentArtifactBlobStore blobStore,
+        IDevelopmentPatchEvidenceService patchEvidence)
+    {
+        ArgumentNullException.ThrowIfNull(blobStore);
+        ArgumentNullException.ThrowIfNull(patchEvidence);
+        ArgumentNullException.ThrowIfNull(store);
+        _blobStore = blobStore;
+        _patchEvidence = patchEvidence;
+        _store = store;
+    }
 
     public async Task<DevelopmentEvidenceSet> ResolveCurrentAsync(Guid taskId,
         DevelopmentWorkspaceSession session,

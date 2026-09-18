@@ -7,15 +7,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-internal sealed class NodeSettingsAdministrationService(
-    INodeSettingsStore store,
-    INodeRuntimeSettings runtimeSettings,
-    ICapabilityReporter capabilityReporter,
-    DefaultModelSelectionPolicy defaultModelSelectionPolicy,
-    IGgufModelStore ggufModelStore,
-    IModelTrustResolver modelTrustResolver,
-    ILocalModelProviderResolver localModelProviderResolver,
-    ILogger<NodeSettingsAdministrationService> logger) : INodeSettingsAdministrationService
+internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministrationService
 {
     private const string AutoEffortFastModelNotLocalMessage =
         "The fast model for automatic reasoning effort must be an installed node-local model.";
@@ -31,14 +23,42 @@ internal sealed class NodeSettingsAdministrationService(
     // sides use the same instance; it is deliberately NOT the store's (private) one.
     private static readonly JsonSerializerOptions ComparisonSerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly ICapabilityReporter _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
-    private readonly DefaultModelSelectionPolicy _defaultModelSelectionPolicy = defaultModelSelectionPolicy ?? throw new ArgumentNullException(nameof(defaultModelSelectionPolicy));
-    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-    private readonly ILocalModelProviderResolver _localModelProviderResolver = localModelProviderResolver ?? throw new ArgumentNullException(nameof(localModelProviderResolver));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-    private readonly ILogger<NodeSettingsAdministrationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly INodeRuntimeSettings _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-    private readonly INodeSettingsStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ICapabilityReporter _capabilityReporter;
+    private readonly DefaultModelSelectionPolicy _defaultModelSelectionPolicy;
+    private readonly IGgufModelStore _ggufModelStore;
+    private readonly ILocalModelProviderResolver _localModelProviderResolver;
+    private readonly IModelTrustResolver _modelTrustResolver;
+    private readonly ILogger<NodeSettingsAdministrationService> _logger;
+    private readonly INodeRuntimeSettings _runtimeSettings;
+    private readonly INodeSettingsStore _store;
+
+    public NodeSettingsAdministrationService(
+        INodeSettingsStore store,
+        INodeRuntimeSettings runtimeSettings,
+        ICapabilityReporter capabilityReporter,
+        DefaultModelSelectionPolicy defaultModelSelectionPolicy,
+        IGgufModelStore ggufModelStore,
+        IModelTrustResolver modelTrustResolver,
+        ILocalModelProviderResolver localModelProviderResolver,
+        ILogger<NodeSettingsAdministrationService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(capabilityReporter);
+        ArgumentNullException.ThrowIfNull(defaultModelSelectionPolicy);
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        ArgumentNullException.ThrowIfNull(localModelProviderResolver);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        ArgumentNullException.ThrowIfNull(store);
+        _capabilityReporter = capabilityReporter;
+        _defaultModelSelectionPolicy = defaultModelSelectionPolicy;
+        _ggufModelStore = ggufModelStore;
+        _localModelProviderResolver = localModelProviderResolver;
+        _modelTrustResolver = modelTrustResolver;
+        _logger = logger;
+        _runtimeSettings = runtimeSettings;
+        _store = store;
+    }
 
     public async Task<StoredNodeSettings> GetTrustedSettingsAsync(CancellationToken cancellationToken = default) =>
         await _store.LoadAsync(cancellationToken) ?? new StoredNodeSettings();

@@ -27,9 +27,15 @@ public interface IBenchmarkInstalledModelLeaseProvider
     }
 }
 
-internal sealed class BenchmarkInstalledModelLeaseProvider(IInstalledModelSnapshotCoordinator coordinator) : IBenchmarkInstalledModelLeaseProvider
+internal sealed class BenchmarkInstalledModelLeaseProvider : IBenchmarkInstalledModelLeaseProvider
 {
-    private readonly IInstalledModelSnapshotCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+    private readonly IInstalledModelSnapshotCoordinator _coordinator;
+
+    public BenchmarkInstalledModelLeaseProvider(IInstalledModelSnapshotCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        _coordinator = coordinator;
+    }
 
     public async Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken)
     {
@@ -40,9 +46,15 @@ internal sealed class BenchmarkInstalledModelLeaseProvider(IInstalledModelSnapsh
     public Task<InstalledModelFacts?> ReadFactsAsync(string modelName, CancellationToken cancellationToken) =>
         _coordinator.ReadFactsAsync(modelName, cancellationToken);
 
-    private sealed class Lease(InstalledModelReadLease inner) : IBenchmarkInstalledModelLease
+    private sealed class Lease : IBenchmarkInstalledModelLease
     {
-        private readonly InstalledModelReadLease _inner = inner;
+        private readonly InstalledModelReadLease _inner;
+
+        public Lease(InstalledModelReadLease inner)
+        {
+            _inner = inner;
+        }
+
         public InstalledModelSnapshot Snapshot => _inner.Snapshot;
 
         public ValueTask DisposeAsync() =>

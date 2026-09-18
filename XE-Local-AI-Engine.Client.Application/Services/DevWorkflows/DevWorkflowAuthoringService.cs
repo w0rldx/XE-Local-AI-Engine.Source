@@ -19,9 +19,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         the runtime drives the store with directly.
 ///     </para>
 /// </summary>
-public sealed class DevWorkflowAuthoringService(IDevWorkflowStore store)
+public sealed class DevWorkflowAuthoringService
 {
-    private readonly IDevWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IDevWorkflowStore _store;
+
+    public DevWorkflowAuthoringService(IDevWorkflowStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+    }
 
     /// <summary>The definition picker's feed. Never loads a graph blob: the node count is a column, not a parse.</summary>
     public Task<IReadOnlyList<DevWorkflowDefinitionSummary>> ListDefinitionsAsync(bool includeArchived = false,

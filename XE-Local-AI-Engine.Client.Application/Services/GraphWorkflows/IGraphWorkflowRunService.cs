@@ -34,7 +34,12 @@ public sealed record GraphWorkflowDecisionResult(
 ///     acting on a version of this run that no longer exists: a stale <c>definitionVersion</c> at start, and a cancel of
 ///     a run that has already finished. Maps to a 409 through <c>ConflictExceptionHandler</c>.
 /// </summary>
-public sealed class GraphWorkflowRunConflictException(string message) : InvalidOperationException(message);
+public sealed class GraphWorkflowRunConflictException : InvalidOperationException
+{
+    public GraphWorkflowRunConflictException(string message) : base(message)
+    {
+    }
+}
 
 /// <summary>
 ///     Every way a caller changes or reads a graph workflow run.

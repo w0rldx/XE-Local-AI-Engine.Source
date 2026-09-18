@@ -36,9 +36,15 @@ public interface IModelProviderMapLeaseCoordinator
         CancellationToken cancellationToken = default);
 }
 
-public sealed class ModelProviderMapLeaseCoordinator(KeyedCompositeLockDomain lockDomain) : IModelProviderMapLeaseCoordinator
+public sealed class ModelProviderMapLeaseCoordinator : IModelProviderMapLeaseCoordinator
 {
-    private readonly KeyedCompositeLockDomain _lockDomain = lockDomain ?? throw new ArgumentNullException(nameof(lockDomain));
+    private readonly KeyedCompositeLockDomain _lockDomain;
+
+    public ModelProviderMapLeaseCoordinator(KeyedCompositeLockDomain lockDomain)
+    {
+        ArgumentNullException.ThrowIfNull(lockDomain);
+        _lockDomain = lockDomain;
+    }
 
     public ValueTask<ModelProviderMapReadLease> AcquireMapReadAsync(string modelName, CancellationToken cancellationToken = default) =>
         AcquireMapReadAsync([modelName], cancellationToken);

@@ -27,23 +27,7 @@ public interface IBenchmarkComparisonExecutor
 ///     stored, the task-case invariant is re-asserted before anything is leased, and the cohort's fit is re-attempted
 ///     after every success — a no-op until the last comparison of the cohort lands.
 /// </remarks>
-public sealed class BenchmarkComparisonExecutor(
-    IBenchmarkStore store,
-    IBenchmarkRuntimeSnapshotFactory snapshots,
-    IBenchmarkInstalledModelLeaseProvider installedModels,
-    ICapacityService capacity,
-    ILocalChatRuntimePackageBuilder packageBuilder,
-    IWorkerEventDispatcher dispatcher,
-    IInvocationRunner runner,
-    ILlamaServerProcessSupervisor supervisor,
-    IGpuVariantSelector variantSelector,
-    ILlamaServerEndpointBinding endpointBinding,
-    IBenchmarkEventBuffer events,
-    IBenchmarkCancellationRegistry cancellations,
-    IRuntimeEnvironmentFactsProvider environmentFacts,
-    IBenchmarkPairwiseFitter fitter,
-    BenchmarkAdmissionRetry admissionRetry,
-    ILogger<BenchmarkComparisonExecutor> logger) : IBenchmarkComparisonExecutor
+public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
 {
     private const string FingerprintChangedMessage = "The installed judge model changed after the benchmark was created.";
     private const string CapacityRejectedMessage = "The judge could not reserve enough local model capacity.";
@@ -56,6 +40,58 @@ public sealed class BenchmarkComparisonExecutor(
     internal const string CrossCaseMessage = "The two runs of this comparison no longer answer the same task case.";
 
     private static readonly JsonElement PairwiseResponseFormatSchema = ParseResponseFormatSchema();
+    private readonly IBenchmarkStore _store;
+    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly ICapacityService _capacity;
+    private readonly ILocalChatRuntimePackageBuilder _packageBuilder;
+    private readonly IWorkerEventDispatcher _dispatcher;
+    private readonly IInvocationRunner _runner;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly IGpuVariantSelector _variantSelector;
+    private readonly ILlamaServerEndpointBinding _endpointBinding;
+    private readonly IBenchmarkEventBuffer _events;
+    private readonly IBenchmarkCancellationRegistry _cancellations;
+    private readonly IRuntimeEnvironmentFactsProvider _environmentFacts;
+    private readonly IBenchmarkPairwiseFitter _fitter;
+    private readonly BenchmarkAdmissionRetry _admissionRetry;
+    private readonly ILogger<BenchmarkComparisonExecutor> _logger;
+
+    public BenchmarkComparisonExecutor(
+        IBenchmarkStore store,
+        IBenchmarkRuntimeSnapshotFactory snapshots,
+        IBenchmarkInstalledModelLeaseProvider installedModels,
+        ICapacityService capacity,
+        ILocalChatRuntimePackageBuilder packageBuilder,
+        IWorkerEventDispatcher dispatcher,
+        IInvocationRunner runner,
+        ILlamaServerProcessSupervisor supervisor,
+        IGpuVariantSelector variantSelector,
+        ILlamaServerEndpointBinding endpointBinding,
+        IBenchmarkEventBuffer events,
+        IBenchmarkCancellationRegistry cancellations,
+        IRuntimeEnvironmentFactsProvider environmentFacts,
+        IBenchmarkPairwiseFitter fitter,
+        BenchmarkAdmissionRetry admissionRetry,
+        ILogger<BenchmarkComparisonExecutor> logger)
+    {
+        _store = store;
+        _snapshots = snapshots;
+        _installedModels = installedModels;
+        _capacity = capacity;
+        _packageBuilder = packageBuilder;
+        _dispatcher = dispatcher;
+        _runner = runner;
+        _supervisor = supervisor;
+        _variantSelector = variantSelector;
+        _endpointBinding = endpointBinding;
+        _events = events;
+        _cancellations = cancellations;
+        _environmentFacts = environmentFacts;
+        _fitter = fitter;
+        _admissionRetry = admissionRetry;
+        _logger = logger;
+    }
 
     private static JsonElement ParseResponseFormatSchema()
     {
@@ -76,18 +112,18 @@ public sealed class BenchmarkComparisonExecutor(
             throw new ArgumentException("Comparison work must name the comparison it judges.", nameof(work));
         }
 
-        using var registration = cancellations.Register(work.RunId, BenchmarkWorkKind.Comparison, cancellationToken);
+        using var registration = _cancellations.Register(work.RunId, BenchmarkWorkKind.Comparison, cancellationToken);
         var token = registration.Token;
         RuntimeEnvironmentFactsV1? environment = null;
         BenchmarkComparisonRecord? comparison = null;
         string? policyHash = null;
         try
         {
-            comparison = await store.GetComparisonAsync(comparisonId, token)
+            comparison = await _store.GetComparisonAsync(comparisonId, token)
                          ?? throw new BenchmarkExecutionException("The comparison is no longer available.");
             // A comparison frozen under a different launch-identity scheme is failed before it launches.
             BenchmarkLaunchIdentityScheme.RequireCurrent(comparison.LaunchIntent);
-            var revision = await store.GetJudgePolicyRevisionAsync(comparison.PolicyRevisionId, token)
+            var revision = await _store.GetJudgePolicyRevisionAsync(comparison.PolicyRevisionId, token)
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");
             policyHash = revision.PolicyHash;
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
@@ -113,7 +149,7 @@ public sealed class BenchmarkComparisonExecutor(
                 : throw new BenchmarkExecutionException("The frozen judge runtime is unavailable.");
             var runA = await RequireAnsweredRunAsync(comparison.RunAId, work, token);
             var runB = await RequireAnsweredRunAsync(comparison.RunBId, work, token);
-            var snapshot = snapshots.Deserialize(runA.RuntimeSnapshotJson.Span);
+            var snapshot = _snapshots.Deserialize(runA.RuntimeSnapshotJson.Span);
 
             // HALF the judge window each, because both answers plus the task, the reference answer and the verdict
             // have to fit one context. A long answer is therefore cut harder here than it is pointwise — which is
@@ -124,21 +160,21 @@ public sealed class BenchmarkComparisonExecutor(
             var truncatedA = WasTruncated(answerA);
             var truncatedB = WasTruncated(answerB);
 
-            await using var modelLease = await installedModels.AcquireAsync(runtime.Model.ModelName, token);
+            await using var modelLease = await _installedModels.AcquireAsync(runtime.Model.ModelName, token);
             if (!BenchmarkSnapshotModelComparer.Matches(runtime.Model, modelLease.Snapshot))
             {
                 throw new BenchmarkExecutionException(FingerprintChangedMessage);
             }
 
-            environment = await environmentFacts.CaptureAsync(runtime.Runtime.Variant, token);
+            environment = await _environmentFacts.CaptureAsync(runtime.Runtime.Variant, token);
 
             // No launch admission, and a retry around the rejection: a comparison is dequeued by the same single
             // consumer that just ran the previous one, so it routinely arrives while that llama-server is still
             // handing its VRAM back. Wait and re-decide rather than terminalizing a comparison over a transient.
             // ONE budget for the whole phase — see BenchmarkWaitBudget: the capacity wait and the exclusive-spawn
             // wait after it share this allowance rather than each taking a full one.
-            var waitBudget = new BenchmarkWaitBudget(admissionRetry);
-            var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+            var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
+            var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                                new CapacityRequest(runtime.Model.ModelName,
                                                                    ModelRole.Chat,
                                                                    runtime.Runtime.ContextTokens,
@@ -150,7 +186,7 @@ public sealed class BenchmarkComparisonExecutor(
                                                                    runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
                                                                    CapacityRejectedMessage),
                                                                waitBudget,
-                                                               logger,
+                                                               _logger,
                                                                token);
             using var reservation = decision.Reservation;
             var package = BuildComparisonPackage(snapshot, policy, runtime, comparison.Order == 0 ? answerA : answerB,
@@ -162,8 +198,8 @@ public sealed class BenchmarkComparisonExecutor(
             // The capture is reused verbatim from the judge path, keyed by the work item's run. No active phase is
             // begun for it: a comparison is not a phase of either run, and claiming one would make a run's live view
             // report a judging that is not about it. The buffered deltas are evicted on the way out.
-            using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
-            var currentVariant = await variantSelector.SelectVariantAsync(token);
+            using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, _dispatcher, _events);
+            var currentVariant = await _variantSelector.SelectVariantAsync(token);
             if (currentVariant != runtime.Runtime.Variant)
             {
                 throw new BenchmarkExecutionException("The selected judge llama.cpp runtime changed after the comparison was enqueued.");
@@ -174,7 +210,7 @@ public sealed class BenchmarkComparisonExecutor(
             // A refused pre-spawn eviction is transient — the model is serving a request that ends on its own — so the
             // spawn waits and retries rather than terminalizing this comparison. See BenchmarkExclusiveSpawn.
             _ = await BenchmarkExclusiveSpawn.RunAsync(spawnToken =>
-                                                     supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
+                                                     _supervisor.RunExclusiveBenchmarkAsync(runtime.Model.ModelName,
                                                          ModelRole.Chat,
                                                          runtime.Runtime.ToResolvedLaunchArguments(),
                                                          runtime.Runtime.LaunchPolicy,
@@ -183,17 +219,17 @@ public sealed class BenchmarkComparisonExecutor(
                                                              // Durable BEFORE a token is generated: the receipt, the environment facts and
                                                              // the execution key the fit will insist every fitted comparison shares.
                                                              await CheckpointAsync(work, judged, judgedPolicyHash, profiling.LaunchReceipt, environment);
-                                                             using var endpointScope = endpointBinding.Bind(profiling.Endpoint);
-                                                             await using var assignment = await dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
+                                                             using var endpointScope = _endpointBinding.Bind(profiling.Endpoint);
+                                                             await using var assignment = await _dispatcher.ReportInvocationAssignedAsync(package, profilingToken);
                                                              using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty, generationAdmissionPolicy: admission);
-                                                             await runner.RunAsync(context, profilingToken);
+                                                             await _runner.RunAsync(context, profilingToken);
                                                              return true;
                                                          },
                                                          spawnToken),
                                                  waitBudget,
                                                  work.RunId,
                                                  "comparison",
-                                                 logger,
+                                                 _logger,
                                                  token);
             token.ThrowIfCancellationRequested();
             var terminal = capture.TerminalState;
@@ -203,18 +239,18 @@ public sealed class BenchmarkComparisonExecutor(
             }
 
             var parsed = BenchmarkPairwiseResultParser.Parse(terminal.StreamedContent);
-            await store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand(work.QueueSequence,
+            await _store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand(work.QueueSequence,
                            work.Version,
                            BenchmarkPairwiseResultParser.ToCanonicalVerdict(parsed.Verdict, comparison.Order),
                            new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(BenchmarkCanonicalJson.Serialize(parsed))),
                            truncatedA,
                            truncatedB), CancellationToken.None);
-            events.EvictPlaintext(work.RunId);
-            _ = await fitter.TryPublishAsync(comparison.ProjectId, CancellationToken.None);
+            _events.EvictPlaintext(work.RunId);
+            _ = await _fitter.TryPublishAsync(comparison.ProjectId, CancellationToken.None);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            events.EvictPlaintext(work.RunId);
+            _events.EvictPlaintext(work.RunId);
             throw;
         }
         catch (OperationCanceledException)
@@ -223,7 +259,7 @@ public sealed class BenchmarkComparisonExecutor(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Benchmark comparison {ComparisonId} failed.", comparisonId);
+            _logger.LogError(exception, "Benchmark comparison {ComparisonId} failed.", comparisonId);
             await TerminalizeAsync(work,
                 comparison,
                 policyHash,
@@ -237,7 +273,7 @@ public sealed class BenchmarkComparisonExecutor(
 
     private async Task<BenchmarkRunRecord> RequireAnsweredRunAsync(Guid runId, BenchmarkClaimedWork work, CancellationToken token)
     {
-        var run = work.Run.Id == runId ? work.Run : await store.GetRunAsync(runId, token);
+        var run = work.Run.Id == runId ? work.Run : await _store.GetRunAsync(runId, token);
         if (run is null || run.PrimaryStatus != BenchmarkPrimaryStatus.Succeeded || run.OutputPartsJson is null)
         {
             throw new BenchmarkExecutionException("A run of this comparison has no benchmark result to judge.");
@@ -268,7 +304,7 @@ public sealed class BenchmarkComparisonExecutor(
             BenchmarkPairwiseOutputSchemaV1.Json,
             firstTruncated,
             secondTruncated);
-        return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+        return _packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
             BenchmarkPairwisePromptV1.SystemPromptFor(firstTruncated || secondTruncated),
             [
@@ -306,7 +342,7 @@ public sealed class BenchmarkComparisonExecutor(
 
         try
         {
-            _ = await store.MarkComparisonLaunchReadyAsync(comparison.Id,
+            _ = await _store.MarkComparisonLaunchReadyAsync(comparison.Id,
                                work.QueueSequence,
                                work.Version,
                                command,
@@ -316,7 +352,7 @@ public sealed class BenchmarkComparisonExecutor(
         catch (Exception exception)
         {
             // Evidence is not worth a measurement, and the token here is None, so nothing caught is a shutdown.
-            logger.LogWarning(exception, "Benchmark comparison {ComparisonId}: the launch-evidence checkpoint could not be recorded.", comparison.Id);
+            _logger.LogWarning(exception, "Benchmark comparison {ComparisonId}: the launch-evidence checkpoint could not be recorded.", comparison.Id);
         }
     }
 
@@ -336,19 +372,19 @@ public sealed class BenchmarkComparisonExecutor(
         {
             if (cancelled)
             {
-                await store.MarkComparisonCancelledAsync(work.QueueSequence, work.Version, CancellationToken.None);
+                await _store.MarkComparisonCancelledAsync(work.QueueSequence, work.Version, CancellationToken.None);
             }
             else
             {
-                await store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, message ?? InvocationFailedMessage, CancellationToken.None);
+                await _store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, message ?? InvocationFailedMessage, CancellationToken.None);
             }
         }
         catch (BenchmarkStoreException exception)
         {
             // Already terminal, or claimed at a different version: the queue's own guard fails it closed either way.
-            logger.LogWarning(exception, "Benchmark comparison work {QueueSequence} could not be terminalized.", work.QueueSequence);
+            _logger.LogWarning(exception, "Benchmark comparison work {QueueSequence} could not be terminalized.", work.QueueSequence);
         }
 
-        events.EvictPlaintext(work.RunId);
+        _events.EvictPlaintext(work.RunId);
     }
 }

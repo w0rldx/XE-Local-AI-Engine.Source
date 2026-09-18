@@ -34,12 +34,19 @@ using XE_Local_AI_Engine.Client.Persistence;
 ///     moment they fall idle, so the map is bounded by the number of <em>concurrently active</em> conversations, not by
 ///     the number of conversations or messages ever seen.</para>
 /// </summary>
-public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory, ILogger<NodeChatPersistenceWriter>? logger = null)
+public sealed class NodeChatPersistenceWriter
 {
     private readonly Dictionary<Guid, ConversationGate> _gates = new();
     private readonly Lock _gatesSync = new();
-    private readonly ILogger<NodeChatPersistenceWriter>? _logger = logger;
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    private readonly ILogger<NodeChatPersistenceWriter>? _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory, ILogger<NodeChatPersistenceWriter>? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _logger = logger;
+        _scopeFactory = scopeFactory;
+    }
 
     /// <summary>
     ///     Runs <paramref name="persistenceOperation" /> under the conversation's exclusive (writer) lock. Use for

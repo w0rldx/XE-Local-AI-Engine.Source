@@ -10,20 +10,31 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     Validation and the store, in that order. The parse it runs is the RUNTIME's own, so a definition accepted here
 ///     is one that will start, and a rule added to the parser cannot be forgotten on the save path.
 /// </summary>
-internal sealed class GraphWorkflowDefinitionService(
-    IGraphWorkflowStore store,
-    IToolInvocationService tools,
-    ILocalModelProviderResolver providers,
-    IOptions<GraphWorkflowOptions> options)
-    : IGraphWorkflowDefinitionService
+internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionService
 {
-    private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IGraphWorkflowStore _store;
 
-    private readonly IToolInvocationService _tools = tools ?? throw new ArgumentNullException(nameof(tools));
+    private readonly IToolInvocationService _tools;
 
-    private readonly ILocalModelProviderResolver _providers = providers ?? throw new ArgumentNullException(nameof(providers));
+    private readonly ILocalModelProviderResolver _providers;
 
-    private readonly IOptions<GraphWorkflowOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly IOptions<GraphWorkflowOptions> _options;
+
+    public GraphWorkflowDefinitionService(
+        IGraphWorkflowStore store,
+        IToolInvocationService tools,
+        ILocalModelProviderResolver providers,
+        IOptions<GraphWorkflowOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(tools);
+        ArgumentNullException.ThrowIfNull(providers);
+        ArgumentNullException.ThrowIfNull(options);
+        _store = store;
+        _tools = tools;
+        _providers = providers;
+        _options = options;
+    }
 
     public async Task<GraphWorkflowValidationResult> ValidateAsync(string graphJson, CancellationToken cancellationToken = default)
     {

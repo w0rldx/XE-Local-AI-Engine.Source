@@ -11,14 +11,23 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     advisory: Flat/Regressed flag the action for human review (never an auto-disable), and a cohort below the minimum
 ///     sample size is InsufficientData and never flagged. Computed on read, off the hot path, model-free and deterministic.
 /// </summary>
-public sealed class PlaybookMonitorService(
-    IPlaybookMonitorStore monitorStore,
-    IPlaybookActionStore playbookActionStore,
-    IOptions<PlaybookMonitorOptions> monitorOptions) : IPlaybookMonitorService
+public sealed class PlaybookMonitorService : IPlaybookMonitorService
 {
-    private readonly IPlaybookMonitorStore _monitorStore = monitorStore ?? throw new ArgumentNullException(nameof(monitorStore));
-    private readonly PlaybookMonitorOptions _options = (monitorOptions ?? throw new ArgumentNullException(nameof(monitorOptions))).Value;
-    private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
+    private readonly IPlaybookMonitorStore _monitorStore;
+    private readonly PlaybookMonitorOptions _options;
+    private readonly IPlaybookActionStore _playbookActionStore;
+
+    public PlaybookMonitorService(
+        IPlaybookMonitorStore monitorStore,
+        IPlaybookActionStore playbookActionStore,
+        IOptions<PlaybookMonitorOptions> monitorOptions)
+    {
+        ArgumentNullException.ThrowIfNull(monitorStore);
+        _monitorStore = monitorStore;
+        _options = (monitorOptions ?? throw new ArgumentNullException(nameof(monitorOptions))).Value;
+        ArgumentNullException.ThrowIfNull(playbookActionStore);
+        _playbookActionStore = playbookActionStore;
+    }
 
     public async Task<IReadOnlyList<PlaybookActionMonitorView>> GetMonitorAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {

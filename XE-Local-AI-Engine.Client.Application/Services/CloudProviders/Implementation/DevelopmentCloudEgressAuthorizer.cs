@@ -5,16 +5,27 @@ using XE_Local_AI_Engine.Client.Services.Development;
 /// <summary>
 ///     Performs content-free, exact-match authorization immediately before each selected-cloud transport round.
 /// </summary>
-public sealed class DevelopmentCloudEgressAuthorizer(
-    IDevelopmentCloudContextCatalog contextCatalog,
-    IDevelopmentCloudEgressAuditSink auditSink,
-    TimeProvider timeProvider,
-    int maximumBundleBytes = DevelopmentCloudContextBuilder.DefaultMaximumBytes) : ICloudEgressAuthorizer
+public sealed class DevelopmentCloudEgressAuthorizer : ICloudEgressAuthorizer
 {
-    private readonly IDevelopmentCloudEgressAuditSink _auditSink = auditSink ?? throw new ArgumentNullException(nameof(auditSink));
-    private readonly IDevelopmentCloudContextCatalog _contextCatalog = contextCatalog ?? throw new ArgumentNullException(nameof(contextCatalog));
-    private readonly int _maximumBundleBytes = ValidateMaximumBundleBytes(maximumBundleBytes);
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IDevelopmentCloudEgressAuditSink _auditSink;
+    private readonly IDevelopmentCloudContextCatalog _contextCatalog;
+    private readonly int _maximumBundleBytes;
+    private readonly TimeProvider _timeProvider;
+
+    public DevelopmentCloudEgressAuthorizer(
+        IDevelopmentCloudContextCatalog contextCatalog,
+        IDevelopmentCloudEgressAuditSink auditSink,
+        TimeProvider timeProvider,
+        int maximumBundleBytes = DevelopmentCloudContextBuilder.DefaultMaximumBytes)
+    {
+        ArgumentNullException.ThrowIfNull(auditSink);
+        _auditSink = auditSink;
+        ArgumentNullException.ThrowIfNull(contextCatalog);
+        _contextCatalog = contextCatalog;
+        _maximumBundleBytes = ValidateMaximumBundleBytes(maximumBundleBytes);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+    }
 
     public void Authorize(CloudEgressAuthorizationRequest request)
     {

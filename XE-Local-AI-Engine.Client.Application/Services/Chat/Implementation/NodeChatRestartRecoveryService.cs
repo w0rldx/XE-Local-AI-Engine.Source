@@ -3,13 +3,19 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer)
+public sealed class NodeChatRestartRecoveryService
 {
     public const string RestartInterruptedError = "Interrupted by application restart before terminal status.";
 
     private const string AssistantRole = "assistant";
 
-    private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+    private readonly NodeChatPersistenceWriter _writer;
+
+    public NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        _writer = writer;
+    }
 
     public async Task<int> RecoverInterruptedMessagesAsync(long recoveredAtUtc, CancellationToken cancellationToken = default)
     {

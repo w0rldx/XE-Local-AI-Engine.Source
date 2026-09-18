@@ -13,18 +13,26 @@ using static NodeChatPersistenceSql;
 ///     archive/delete plus the conversation-scoped origin and selected-path accessors. Shares the single
 ///     <see cref="NodeChatPersistenceWriter" /> so the per-conversation write-key serialization is preserved.
 /// </summary>
-internal sealed class NodeChatConversationCommands(
-    NodeChatPersistenceWriter writer,
-    IConversationUploadedFileStore? uploadedFileStore,
-    IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore)
+internal sealed class NodeChatConversationCommands
 {
-    private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+    private readonly NodeChatPersistenceWriter _writer;
 
     // Optional: present in production (DI), absent in the single-arg test compositions that create no uploaded files.
-    private readonly IConversationUploadedFileStore? _uploadedFileStore = uploadedFileStore;
+    private readonly IConversationUploadedFileStore? _uploadedFileStore;
 
     // Optional for the same reason: a test composition that owns no work session has no artifact bytes to tear down.
-    private readonly IWorkSessionArtifactBlobStore? _workSessionArtifactBlobStore = workSessionArtifactBlobStore;
+    private readonly IWorkSessionArtifactBlobStore? _workSessionArtifactBlobStore;
+
+    public NodeChatConversationCommands(
+        NodeChatPersistenceWriter writer,
+        IConversationUploadedFileStore? uploadedFileStore,
+        IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        _writer = writer;
+        _uploadedFileStore = uploadedFileStore;
+        _workSessionArtifactBlobStore = workSessionArtifactBlobStore;
+    }
 
     public async Task<NodeChatConversationDto> CreateConversationAsync(NodeChatCreateConversationRequest request, CancellationToken cancellationToken = default)
     {

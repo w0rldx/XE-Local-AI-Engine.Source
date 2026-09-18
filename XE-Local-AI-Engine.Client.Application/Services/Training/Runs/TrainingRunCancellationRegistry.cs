@@ -39,9 +39,18 @@ public sealed class TrainingRunCancellationRegistry
     public bool IsRunning(Guid runId) =>
         _inFlight.ContainsKey(runId);
 
-    private sealed class Registration(TrainingRunCancellationRegistry owner, Guid runId) : IDisposable
+    private sealed class Registration : IDisposable
     {
+        private readonly TrainingRunCancellationRegistry _owner;
+        private readonly Guid _runId;
+
+        public Registration(TrainingRunCancellationRegistry owner, Guid runId)
+        {
+            _owner = owner;
+            _runId = runId;
+        }
+
         public void Dispose() =>
-            owner._inFlight.TryRemove(runId, out _);
+            _owner._inFlight.TryRemove(_runId, out _);
     }
 }

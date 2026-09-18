@@ -169,16 +169,22 @@ public sealed class NodeChatPartAccumulator
         }
     }
 
-    private sealed class MutablePart(string kind, long sequence)
+    private sealed class MutablePart
     {
         // Reasoning deltas append delta-by-delta; a StringBuilder keeps the whole segment O(n) to build instead of
         // the O(n^2) a repeated string concat costs. Tool parts never append text, so the builder stays null for them
         // and Text materializes once at Snapshot().
         private StringBuilder? _text;
 
-        public string Kind { get; } = kind;
+        public MutablePart(string kind, long sequence)
+        {
+            Kind = kind;
+            Sequence = sequence;
+        }
 
-        public long Sequence { get; } = sequence;
+        public string Kind { get; }
+
+        public long Sequence { get; }
 
         public string? ToolCallId { get; init; }
 

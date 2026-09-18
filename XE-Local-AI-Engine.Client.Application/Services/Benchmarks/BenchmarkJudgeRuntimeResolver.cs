@@ -44,13 +44,7 @@ public interface IBenchmarkPhaseLaunchResolver
 }
 
 /// <inheritdoc />
-public sealed class BenchmarkPhaseLaunchResolver(
-    IInferenceProfileResolver inferenceProfiles,
-    IGpuVariantSelector variantSelector,
-    ILlamaServerLaunchCapabilityInspector launchCapabilities,
-    ILlamaServerLaunchFallbackStore launchFallbackStore,
-    ILlamaServerLaunchPolicy launchPolicy,
-    LlamaServerLaunchPolicyOptions launchPolicyOptions) : IBenchmarkPhaseLaunchResolver
+public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
 {
     /// <summary>Auto stayed on f16 because the node selected a CPU llama.cpp build.</summary>
     public const string AutoReasonCpuVariant = "cpu-variant";
@@ -64,19 +58,34 @@ public sealed class BenchmarkPhaseLaunchResolver(
     /// <summary>Auto stayed on f16 because the optimized config was previously recorded as unable to start here.</summary>
     public const string AutoReasonFallbackDisabled = "fallback-disabled";
 
-    private readonly IInferenceProfileResolver _inferenceProfiles = inferenceProfiles ?? throw new ArgumentNullException(nameof(inferenceProfiles));
-    private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
+    private readonly IInferenceProfileResolver _inferenceProfiles;
+    private readonly IGpuVariantSelector _variantSelector;
+    private readonly ILlamaServerLaunchCapabilityInspector _launchCapabilities;
+    private readonly ILlamaServerLaunchFallbackStore _launchFallbackStore;
+    private readonly ILlamaServerLaunchPolicy _launchPolicy;
+    private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions;
 
-    private readonly ILlamaServerLaunchCapabilityInspector _launchCapabilities =
-        launchCapabilities ?? throw new ArgumentNullException(nameof(launchCapabilities));
-
-    private readonly ILlamaServerLaunchFallbackStore _launchFallbackStore =
-        launchFallbackStore ?? throw new ArgumentNullException(nameof(launchFallbackStore));
-
-    private readonly ILlamaServerLaunchPolicy _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
-
-    private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions =
-        launchPolicyOptions ?? throw new ArgumentNullException(nameof(launchPolicyOptions));
+    public BenchmarkPhaseLaunchResolver(
+        IInferenceProfileResolver inferenceProfiles,
+        IGpuVariantSelector variantSelector,
+        ILlamaServerLaunchCapabilityInspector launchCapabilities,
+        ILlamaServerLaunchFallbackStore launchFallbackStore,
+        ILlamaServerLaunchPolicy launchPolicy,
+        LlamaServerLaunchPolicyOptions launchPolicyOptions)
+    {
+        ArgumentNullException.ThrowIfNull(inferenceProfiles);
+        ArgumentNullException.ThrowIfNull(variantSelector);
+        ArgumentNullException.ThrowIfNull(launchCapabilities);
+        ArgumentNullException.ThrowIfNull(launchFallbackStore);
+        ArgumentNullException.ThrowIfNull(launchPolicy);
+        ArgumentNullException.ThrowIfNull(launchPolicyOptions);
+        _inferenceProfiles = inferenceProfiles;
+        _variantSelector = variantSelector;
+        _launchCapabilities = launchCapabilities;
+        _launchFallbackStore = launchFallbackStore;
+        _launchPolicy = launchPolicy;
+        _launchPolicyOptions = launchPolicyOptions;
+    }
 
     public async Task<LlamaServerLaunchCapabilities?> InspectAsync(CancellationToken cancellationToken)
     {
@@ -240,12 +249,20 @@ public interface IBenchmarkJudgeRuntimeResolver
 }
 
 /// <inheritdoc />
-public sealed class BenchmarkJudgeRuntimeResolver(
-    IBenchmarkInstalledModelLeaseProvider installedModels,
-    IBenchmarkPhaseLaunchResolver launchResolver) : IBenchmarkJudgeRuntimeResolver
+public sealed class BenchmarkJudgeRuntimeResolver : IBenchmarkJudgeRuntimeResolver
 {
-    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
-    private readonly IBenchmarkPhaseLaunchResolver _launchResolver = launchResolver ?? throw new ArgumentNullException(nameof(launchResolver));
+    private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly IBenchmarkPhaseLaunchResolver _launchResolver;
+
+    public BenchmarkJudgeRuntimeResolver(
+        IBenchmarkInstalledModelLeaseProvider installedModels,
+        IBenchmarkPhaseLaunchResolver launchResolver)
+    {
+        ArgumentNullException.ThrowIfNull(installedModels);
+        ArgumentNullException.ThrowIfNull(launchResolver);
+        _installedModels = installedModels;
+        _launchResolver = launchResolver;
+    }
 
     public async Task<BenchmarkJudgeRuntimeResolution> ResolveAsync(BenchmarkJudgePolicyV1 policy, CancellationToken cancellationToken)
     {

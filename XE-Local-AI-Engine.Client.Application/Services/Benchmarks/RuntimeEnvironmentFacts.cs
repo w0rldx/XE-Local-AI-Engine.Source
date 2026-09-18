@@ -74,14 +74,7 @@ public interface IRuntimeEnvironmentFactsProvider
 ///     one installed-runtime file read. Registered as a singleton, sharing the launch-policy file-hash cache rather
 ///     than starting a second set of file-system watchers over the same directory.
 /// </remarks>
-public sealed class RuntimeEnvironmentFactsProvider(
-    ILlamaCppBinaryManager binaryManager,
-    IInstalledRuntimeStore installedRuntimeStore,
-    IHardwareProfiler hardwareProfiler,
-    IRuntimeDeviceAudit deviceAudit,
-    LaunchPolicyFileHashCache fileHashCache,
-    TimeProvider timeProvider,
-    ILogger<RuntimeEnvironmentFactsProvider> logger) : IRuntimeEnvironmentFactsProvider
+public sealed class RuntimeEnvironmentFactsProvider : IRuntimeEnvironmentFactsProvider
 {
     public const int SchemaVersion = 1;
 
@@ -89,19 +82,41 @@ public sealed class RuntimeEnvironmentFactsProvider(
     private const string HardwarePart = "hardware";
     private const string LlamaRuntimePart = "llamaRuntime";
 
-    private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
-
-    private readonly IInstalledRuntimeStore _installedRuntimeStore =
-        installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
-
-    private readonly IHardwareProfiler _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
-    private readonly IRuntimeDeviceAudit _deviceAudit = deviceAudit ?? throw new ArgumentNullException(nameof(deviceAudit));
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly ILogger<RuntimeEnvironmentFactsProvider> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly IInstalledRuntimeStore _installedRuntimeStore;
+    private readonly IHardwareProfiler _hardwareProfiler;
+    private readonly IRuntimeDeviceAudit _deviceAudit;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<RuntimeEnvironmentFactsProvider> _logger;
 
     // Shared with the launch-policy fingerprint: the cache owns a file-system watcher per directory, and a second
     // instance would watch the same runtime directory twice for the same answers. Disposed by the container.
-    private readonly LaunchPolicyFileHashCache _fileHashCache = fileHashCache ?? throw new ArgumentNullException(nameof(fileHashCache));
+    private readonly LaunchPolicyFileHashCache _fileHashCache;
+
+    public RuntimeEnvironmentFactsProvider(
+        ILlamaCppBinaryManager binaryManager,
+        IInstalledRuntimeStore installedRuntimeStore,
+        IHardwareProfiler hardwareProfiler,
+        IRuntimeDeviceAudit deviceAudit,
+        LaunchPolicyFileHashCache fileHashCache,
+        TimeProvider timeProvider,
+        ILogger<RuntimeEnvironmentFactsProvider> logger)
+    {
+        ArgumentNullException.ThrowIfNull(binaryManager);
+        ArgumentNullException.ThrowIfNull(installedRuntimeStore);
+        ArgumentNullException.ThrowIfNull(hardwareProfiler);
+        ArgumentNullException.ThrowIfNull(deviceAudit);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(fileHashCache);
+        _binaryManager = binaryManager;
+        _installedRuntimeStore = installedRuntimeStore;
+        _hardwareProfiler = hardwareProfiler;
+        _deviceAudit = deviceAudit;
+        _timeProvider = timeProvider;
+        _logger = logger;
+        _fileHashCache = fileHashCache;
+    }
 
     public async Task<RuntimeEnvironmentFactsV1> CaptureAsync(GpuVariant variant, CancellationToken ct)
     {

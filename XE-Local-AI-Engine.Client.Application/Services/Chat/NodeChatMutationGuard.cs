@@ -21,9 +21,15 @@ public interface INodeChatMutationGuard
 /// <summary>
 ///     Represents node chat mutation guard.
 /// </summary>
-public sealed class NodeChatMutationGuard(INodeChatPersistenceService persistence) : INodeChatMutationGuard
+public sealed class NodeChatMutationGuard : INodeChatMutationGuard
 {
-    private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+    private readonly INodeChatPersistenceService _persistence;
+
+    public NodeChatMutationGuard(INodeChatPersistenceService persistence)
+    {
+        ArgumentNullException.ThrowIfNull(persistence);
+        _persistence = persistence;
+    }
 
     public async Task EnsureMutableAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
@@ -43,8 +49,12 @@ public sealed class NodeChatMutationGuard(INodeChatPersistenceService persistenc
 ///     <c>conflictType = ReadOnlyConversation</c> — endpoints must let it propagate, never catch it. The local
 ///     send/stream path lets it propagate to the caller.
 /// </summary>
-public sealed class NodeChatReadOnlyConversationException(Guid conversationId)
-    : InvalidOperationException($"Conversation {conversationId} is read-only because it has remote origin.")
+public sealed class NodeChatReadOnlyConversationException : InvalidOperationException
 {
-    public Guid ConversationId { get; } = conversationId;
+    public NodeChatReadOnlyConversationException(Guid conversationId) : base($"Conversation {conversationId} is read-only because it has remote origin.")
+    {
+        ConversationId = conversationId;
+    }
+
+    public Guid ConversationId { get; }
 }

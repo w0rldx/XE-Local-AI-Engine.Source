@@ -16,18 +16,32 @@ public interface IBenchmarkFreezeDependencyService
         CancellationToken cancellationToken);
 }
 
-public sealed class BenchmarkFreezeDependencyService(
-    IAgentDefinitionStore agentDefinitions,
-    IPlaybookActionStore playbooks,
-    IAgentSkillStore skills,
-    ICustomToolStore customTools,
-    IInferenceProfileStore inferenceProfiles) : IBenchmarkFreezeDependencyService
+public sealed class BenchmarkFreezeDependencyService : IBenchmarkFreezeDependencyService
 {
-    private readonly IAgentDefinitionStore _agentDefinitions = agentDefinitions ?? throw new ArgumentNullException(nameof(agentDefinitions));
-    private readonly IPlaybookActionStore _playbooks = playbooks ?? throw new ArgumentNullException(nameof(playbooks));
-    private readonly IAgentSkillStore _skills = skills ?? throw new ArgumentNullException(nameof(skills));
-    private readonly ICustomToolStore _customTools = customTools ?? throw new ArgumentNullException(nameof(customTools));
-    private readonly IInferenceProfileStore _inferenceProfiles = inferenceProfiles ?? throw new ArgumentNullException(nameof(inferenceProfiles));
+    private readonly IAgentDefinitionStore _agentDefinitions;
+    private readonly IPlaybookActionStore _playbooks;
+    private readonly IAgentSkillStore _skills;
+    private readonly ICustomToolStore _customTools;
+    private readonly IInferenceProfileStore _inferenceProfiles;
+
+    public BenchmarkFreezeDependencyService(
+        IAgentDefinitionStore agentDefinitions,
+        IPlaybookActionStore playbooks,
+        IAgentSkillStore skills,
+        ICustomToolStore customTools,
+        IInferenceProfileStore inferenceProfiles)
+    {
+        ArgumentNullException.ThrowIfNull(agentDefinitions);
+        ArgumentNullException.ThrowIfNull(playbooks);
+        ArgumentNullException.ThrowIfNull(skills);
+        ArgumentNullException.ThrowIfNull(customTools);
+        ArgumentNullException.ThrowIfNull(inferenceProfiles);
+        _agentDefinitions = agentDefinitions;
+        _playbooks = playbooks;
+        _skills = skills;
+        _customTools = customTools;
+        _inferenceProfiles = inferenceProfiles;
+    }
 
     public async Task<BenchmarkFreezeDependencySetV1> CaptureAsync(Guid agentDefinitionId,
         ResolvedAgentRuntime resolvedRuntime,

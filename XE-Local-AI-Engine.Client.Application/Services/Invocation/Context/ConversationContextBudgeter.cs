@@ -455,9 +455,14 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     ///     several rounds' content pulls all of them into one group, which is what stops an eviction from taking half
     ///     of a message's correlations.
     /// </summary>
-    private sealed class MessageUnion(int count)
+    private sealed class MessageUnion
     {
-        private readonly int[] _parent = [.. Enumerable.Range(0, count)];
+        private readonly int[] _parent;
+
+        public MessageUnion(int count)
+        {
+            _parent = [.. Enumerable.Range(0, count)];
+        }
 
         public void Merge(int left, int right)
         {

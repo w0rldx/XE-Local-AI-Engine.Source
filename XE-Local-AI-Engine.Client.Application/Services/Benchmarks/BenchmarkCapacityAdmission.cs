@@ -32,18 +32,26 @@ public sealed record BenchmarkAdmissionRetry(int MaxRetries, TimeSpan Interval)
 ///     once, before admission, and handed to both waits so their retries come out of the same allowance instead of
 ///     each getting a full one.
 /// </summary>
-internal sealed class BenchmarkWaitBudget(BenchmarkAdmissionRetry retry)
+internal sealed class BenchmarkWaitBudget
 {
+    private readonly BenchmarkAdmissionRetry _retry;
     private int _used;
 
+    public BenchmarkWaitBudget(BenchmarkAdmissionRetry retry)
+    {
+        _retry = retry;
+        Interval = retry.Interval;
+        Budget = retry.Budget;
+    }
+
     /// <summary>Delay before each re-decision.</summary>
-    public TimeSpan Interval { get; } = retry.Interval;
+    public TimeSpan Interval { get; }
 
     /// <summary>The phase's whole wall-clock maximum — what a spent budget reports, not what is left of it.</summary>
-    public TimeSpan Budget { get; } = retry.Budget;
+    public TimeSpan Budget { get; }
 
     /// <summary>Retries this phase still has, across all of its waits.</summary>
-    public int Remaining => retry.MaxRetries - _used;
+    public int Remaining => _retry.MaxRetries - _used;
 
     /// <summary>Takes one retry from the phase's share. Called immediately before each wait interval.</summary>
     public void Consume() =>
