@@ -20,10 +20,10 @@ internal sealed partial class ExternalAppService
     /// <summary>
     ///     Admission's own wording for a bridge this node did not open, naming the same setting the planner's refusal
     ///     names — the planner can add which service and which token failed, which admission has not looked at and must
-    ///     not invent. One copy, because install, update and the Start/Restart admission hand it to the same operator:
-    ///     a second copy would drift from this one without a gate noticing.
+    ///     not invent. One copy, because install, update, the Start/Restart admission and the boot reconciler hand it
+    ///     to the same operator: a second copy would drift from this one without a gate noticing.
     /// </summary>
-    private const string BridgeUnavailableDetail =
+    internal const string BridgeUnavailableDetail =
         "This application reads the node's container bridge, and this node did not open one. Turn it on with "
         + $"'{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.";
 

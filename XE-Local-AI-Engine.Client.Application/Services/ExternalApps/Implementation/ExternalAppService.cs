@@ -126,8 +126,13 @@ internal sealed partial class ExternalAppService
     /// <summary>
     ///     The same question for a stored row. The bridge check comes first so a node that opened one never pays
     ///     the snapshot deserialize — nor inherits its failure mode — for an answer that is already "no".
+    ///     <para>
+    ///         Internal rather than private because the boot reconciler asks it too: a row whose plan cannot be
+    ///         rebuilt because this node opened no bridge must be told that, not told to start it again — the very
+    ///         command the Start/Restart admission below refuses.
+    ///     </para>
     /// </summary>
-    private bool BridgeUnavailableFor(ExternalAppInstanceSnapshot row)
+    internal bool BridgeUnavailableFor(ExternalAppInstanceSnapshot row)
     {
         if (_bridgeEndpoints.Current is not null)
         {

@@ -335,6 +335,14 @@ describe("navigationLinks", () => {
 		expect(gatedLinks.some((link) => link.id === "benchmarks")).toBe(false);
 	});
 
+	it("hides the Invocations top-level entry when its capability is off", async () => {
+		expect(navigationLinks.some((link) => link.id === "invocations")).toBe(true);
+
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ invocationMonitor: false });
+
+		expect(gatedLinks.some((link) => link.id === "invocations")).toBe(false);
+	});
+
 	it("drops the scheduler child from Automation when scheduler is off", async () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ scheduler: false });
 		const automation = gatedLinks.find((link) => link.id === "automation");

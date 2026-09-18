@@ -499,6 +499,36 @@ public sealed class ExternalAppStartupReconcilerTests
     }
 
     /// <summary>
+    ///     The one unplannable cause the operator can act on, and the one a Start does NOT repair: the stored snapshot
+    ///     reads the container bridge and this node opened none. The generic verdict tells them to start it again —
+    ///     the very command <c>ExternalAppService</c>'s Start/Restart admission refuses with
+    ///     <c>ExternalAppBlockedReason.BridgeUnavailable</c> — so this branch has to say what admission says, in
+    ///     admission's own words.
+    /// </summary>
+    [Test]
+    public async Task BranchB_WhenTheSnapshotNeedsABridgeThisNodeDidNotOpen_NamesTheBridgeInsteadOfAskingForAStart()
+    {
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest(), withBridge: false);
+
+        // The snapshot is REPLACED rather than installed: admission refuses to install a manifest that reads the
+        // bridge on a node without one, so the only way a row reaches this shape is the way a real node reaches it —
+        // a stored snapshot that came to need a bridge which is not there. Same service and UI port, so the
+        // containers are still found and the verification plan gets as far as the unresolvable built-in.
+        await harness.ReplaceManifestSnapshotAsync(harness.InstalledId, BridgeReadingManifest());
+
+        var summary = await harness.CreateReconciler().ReconcileAsync();
+
+        AssertEx.Equal(expected: 1, summary.RowsChanged);
+
+        var failed = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId));
+        AssertEx.Equal(ExternalAppInstanceStatus.Failed, failed.Status);
+        AssertEx.Equal(ExternalAppFailureCategory.ConfigurationMissing, failed.FailureCategory, "A bridge this node never opened is a configuration answer, not an unidentified one.");
+        AssertEx.Equal(ExternalAppService.BridgeUnavailableDetail,
+            AssertEx.NotNull(failed.FailureSummary),
+            "The boot verdict and the Start refusal hand the operator ONE wording, or the two drift apart without a gate noticing.");
+    }
+
+    /// <summary>
     ///     The install-id filter is the security property. A container wearing this feature's owner label under a
     ///     different install id belongs to another installation of this engine — counted so it is visible, never
     ///     removed, because removing it would be this node deleting somebody else's running application.
@@ -694,6 +724,22 @@ public sealed class ExternalAppStartupReconcilerTests
         return ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)])]);
     }
 
+    /// <summary>
+    ///     <see cref="SingleServiceManifest" />'s service and UI port, plus an environment value that substitutes a
+    ///     bridge built-in — the one thing <c>DeploymentPlanner.Plan</c> cannot resolve without a grant.
+    /// </summary>
+    private static ApplicationManifest BridgeReadingManifest()
+    {
+        return ExternalAppTestManifests.Manifest([
+            ExternalAppTestManifests.Service("web",
+                environment: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["OPENAI_BASE_URL"] = "http://${XE_BRIDGE_ENDPOINT}/llm/v1"
+                },
+                ports: [ExternalAppTestManifests.UiPort(8080)])
+        ]);
+    }
+
     private static ApplicationManifest TwoServiceManifest()
     {
         return ExternalAppTestManifests.Manifest([
@@ -704,9 +750,9 @@ public sealed class ExternalAppStartupReconcilerTests
         ]);
     }
 
-    private static async Task<ExternalAppServiceHarness> RunningHarnessAsync(ApplicationManifest manifest)
+    private static async Task<ExternalAppServiceHarness> RunningHarnessAsync(ApplicationManifest manifest, bool withBridge = true)
     {
-        var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: withBridge);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
                                         DisplayName: null,
                                         manifest.ManifestVersion,

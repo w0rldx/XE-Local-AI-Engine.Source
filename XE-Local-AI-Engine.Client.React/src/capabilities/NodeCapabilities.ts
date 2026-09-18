@@ -37,6 +37,9 @@ export interface NodeCapabilityConfig {
 	// stored encrypted on this node — so it needs no Central Platform pairing and is on by default.
 	readonly externalProviders: boolean;
 	readonly modelManagement: boolean;
+	// Invocation monitor: the node's record of agent and tool invocations. This flag alone gates both the nav entry
+	// and the /invocations route. Compile-time only — there is no matching server switch, so the monitor endpoint
+	// stays reachable whichever way this is set.
 	readonly invocationMonitor: boolean;
 	readonly benchmarks: boolean;
 	// Training group (dataset generation, training runs, comparisons). Endpoints ship registered and Operator-gated

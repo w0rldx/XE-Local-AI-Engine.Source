@@ -407,15 +407,25 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         var plan = _service.TryPlanForVerification(row, manifest, ExternalAppService.ParseVariables(row.VariablesJson), identity);
         if (plan is null)
         {
-            // Not a policy violation — nothing was observed to violate anything — and not "stopped unexpectedly"
-            // either, because the containers are up. It is an instance this engine can no longer describe, and the
-            // recovery is the rebuild a Start performs.
+            // One cause of an unplannable snapshot is knowable and is NOT repaired by a Start: a manifest that reads
+            // the container bridge on a node that opened none. Telling that operator to start it again names the one
+            // command the Start/Restart admission refuses with ExternalAppBlockedReason.BridgeUnavailable, so this
+            // says what admission says, in admission's own words.
+            // The check is admission's own, and no finer: a manifest-wide "does this snapshot read the bridge, and
+            // did this node open one" — never a diagnosis of what actually failed to plan. So a row that is BOTH
+            // bridge-less and unplannable for some other reason is reported as the bridge, which is deliberate: it
+            // is the same answer admission would give that operator, and the one thing they can act on.
+            var bridgeUnavailable = _service.BridgeUnavailableFor(row);
+
+            // Anything else is not a policy violation — nothing was observed to violate anything — and not "stopped
+            // unexpectedly" either, because the containers are up. It is an instance this engine can no longer
+            // describe, and the recovery is the rebuild a Start performs.
             return await WriteAsync(store,
                     row,
                     ExternalAppInstanceStatus.Failed,
                     ExternalAppInstanceEventKind.Failed,
-                    ExternalAppFailureCategory.Unknown,
-                    UnverifiablePlanSummary,
+                    bridgeUnavailable ? ExternalAppFailureCategory.ConfigurationMissing : ExternalAppFailureCategory.Unknown,
+                    bridgeUnavailable ? ExternalAppService.BridgeUnavailableDetail : UnverifiablePlanSummary,
                     cancellationToken);
         }
 

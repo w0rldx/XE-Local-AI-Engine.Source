@@ -43,7 +43,8 @@ type NavigationCapabilityKey =
 	| "graphWorkflows"
 	| "integrations"
 	| "externalApps"
-	| "transcription";
+	| "transcription"
+	| "invocationMonitor";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -232,6 +233,7 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconListDetails,
 		translationKey: "navigation.invocations",
 		to: nodeRoutePaths.invocations,
+		capability: "invocationMonitor",
 	},
 	{
 		id: "usage",
