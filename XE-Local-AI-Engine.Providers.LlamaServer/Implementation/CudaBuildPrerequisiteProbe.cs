@@ -191,10 +191,12 @@ public sealed class CudaBuildPrerequisiteProbe : ICudaBuildPrerequisiteProbe
     {
         try
         {
-            // The build cache root may not exist yet on a fresh node; walk up to the nearest existing ancestor so
-            // DriveInfo resolves the real mount the build will write into.
+            // The build cache root may not exist yet on a fresh node; walk up to the nearest existing ancestor and
+            // hand THAT directory to DriveInfo, which then resolves the real mount the build will write into. The
+            // path's ROOT is not that mount: on Linux every absolute path roots at "/", so a root-based measurement
+            // reported the root filesystem for a cache on a redirected data volume.
             var probePath = NearestExistingAncestor(_buildCacheRoot);
-            var drive = new DriveInfo(Path.GetPathRoot(probePath) ?? probePath);
+            var drive = new DriveInfo(probePath);
             var freeBytes = drive.AvailableFreeSpace;
             var satisfied = freeBytes >= _requiredFreeDiskBytes;
             var freeGb = freeBytes / (1024.0 * 1024 * 1024);

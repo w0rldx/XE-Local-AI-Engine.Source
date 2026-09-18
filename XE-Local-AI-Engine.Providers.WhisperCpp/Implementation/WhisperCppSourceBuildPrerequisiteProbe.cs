@@ -121,8 +121,11 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
         try
         {
             Directory.CreateDirectory(_cacheRoot);
-            var root = Path.GetPathRoot(Path.GetFullPath(_cacheRoot));
-            var available = string.IsNullOrEmpty(root) ? 0 : new DriveInfo(root).AvailableFreeSpace;
+
+            // The cache root itself goes to DriveInfo, which resolves the mount actually holding it. Its path ROOT is
+            // not that mount: on Linux every absolute path roots at "/", so a root-based measurement reported the root
+            // filesystem for a cache on a redirected data volume.
+            var available = new DriveInfo(Path.GetFullPath(_cacheRoot)).AvailableFreeSpace;
             return new WhisperCppSourceBuildPrerequisiteItem("free-disk",
                 available >= _requiredFreeDiskBytes,
                 available >= _requiredFreeDiskBytes

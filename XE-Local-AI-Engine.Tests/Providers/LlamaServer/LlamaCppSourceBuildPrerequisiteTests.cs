@@ -62,6 +62,28 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
         AssertEx.True(report.Items.Any(static item => item.Key == "nvidia-smi" && !item.Satisfied));
     }
 
+    /// <summary>
+    ///     The free-disk row must describe the mount the build cache actually sits on. It measured the path's ROOT
+    ///     instead, which on Linux is <c>/</c> for every absolute path there is, so a cache on a redirected data
+    ///     volume was gated on the root filesystem's free space.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Probe_FreeDisk_MeasuresTheMountHoldingTheBuildCacheRootRatherThanTheRootFilesystem()
+    {
+        using var scratch = SeparateMountScratch.CreateOrSkip("xe-llama-source-prereq-disk");
+
+        // An empty PATH: the toolchain rows are not the subject and this keeps the probe from spawning six real tools.
+        using var path = new PathScope(scratch.Path);
+        var probe = new LlamaCppSourceBuildPrerequisiteProbe(new VendorProbe(), scratch.Path, scratch.ThresholdBetweenBytes);
+
+        var report = await probe.ProbeAsync(LlamaCppSourceBackend.Cpu, CancellationToken.None);
+
+        var freeDisk = report.Items.Single(static item => item.Key == "free-disk");
+        AssertEx.Equal(scratch.ExpectedSatisfied, freeDisk.Satisfied, scratch.WrongMountMessage);
+    }
+
     [UnsupportedOSPlatform("windows")]
     private static void WriteCommonTools(string directory)
     {

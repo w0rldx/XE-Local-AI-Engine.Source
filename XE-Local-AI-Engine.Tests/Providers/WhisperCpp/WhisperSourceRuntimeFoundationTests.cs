@@ -126,6 +126,24 @@ public sealed class WhisperSourceRuntimeFoundationTests
         AssertEx.False(cpuKeys.Contains("make"), "Ninja and Make share one row; neither may appear under its own key.");
     }
 
+    /// <summary>
+    ///     The free-disk row must describe the mount the cache root actually sits on. It measured the path's ROOT
+    ///     instead, which on Linux is <c>/</c> for every absolute path there is, so a cache on a redirected data
+    ///     volume was gated on the root filesystem's free space.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task PrerequisiteProbe_FreeDisk_MeasuresTheMountHoldingTheCacheRootRatherThanTheRootFilesystem()
+    {
+        using var scratch = SeparateMountScratch.CreateOrSkip("xe-whisper-source-prereq-disk");
+        var probe = new WhisperCppSourceBuildPrerequisiteProbe(scratch.Path, scratch.ThresholdBetweenBytes);
+
+        var report = await probe.ProbeAsync(WhisperBackend.Cpu, CancellationToken.None);
+
+        var freeDisk = report.Items.Single(static item => item.Key == "free-disk");
+        AssertEx.Equal(scratch.ExpectedSatisfied, freeDisk.Satisfied, scratch.WrongMountMessage);
+    }
+
     [Test]
     [RunOn(OS.Linux)]
     [UnsupportedOSPlatform("windows")]

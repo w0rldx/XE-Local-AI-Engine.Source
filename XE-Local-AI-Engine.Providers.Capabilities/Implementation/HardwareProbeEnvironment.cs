@@ -102,13 +102,18 @@ internal sealed class HardwareProbeEnvironment : IHardwareProbeEnvironment
 
         try
         {
-            var root = Path.GetPathRoot(Path.GetFullPath(path));
-            if (string.IsNullOrEmpty(root))
+            // The path itself goes to DriveInfo, which resolves the mount actually holding it (and on Windows still
+            // names its volume). Its path ROOT is not that mount: on Linux every absolute path roots at "/", so a
+            // root-based measurement reported the root filesystem for a models volume on a redirected data mount.
+            // The data directory may not exist yet on a fresh node, so the nearest existing ancestor is measured: it
+            // sits on the mount the directory will be created on. IsReady stays the "cannot be resolved" gate.
+            var existing = Path.GetFullPath(path);
+            while (!Directory.Exists(existing) && Path.GetDirectoryName(existing) is { Length: > 0 } parent)
             {
-                return 0;
+                existing = parent;
             }
 
-            var driveInfo = new DriveInfo(root);
+            var driveInfo = new DriveInfo(existing);
             return driveInfo.IsReady ? driveInfo.AvailableFreeSpace : 0;
         }
         catch (Exception exception) when (exception is IOException or ArgumentException or UnauthorizedAccessException)

@@ -282,6 +282,28 @@ public sealed class CudaBuildServiceTests
         AssertEx.NotNullOrEmpty(nvcc.Detail);
     }
 
+    /// <summary>
+    ///     The free-disk row must describe the mount the build cache actually sits on. It measured the path's ROOT
+    ///     instead, which on Linux is <c>/</c> for every absolute path there is, so a cache on a redirected data
+    ///     volume was gated on the root filesystem's free space.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Prereq_FreeDisk_MeasuresTheMountHoldingTheBuildCacheRootRatherThanTheRootFilesystem()
+    {
+        using var scratch = SeparateMountScratch.CreateOrSkip("xe-cuda-prereq-disk");
+
+        // An empty PATH: the toolchain rows are not the subject and this keeps the probe from spawning six real tools.
+        using var restore = SetExactPath(scratch.Path);
+        var probe = new CudaBuildPrerequisiteProbe(new StubVendorProbe(DetectedGpuVendor.Nvidia), scratch.Path, scratch.ThresholdBetweenBytes);
+
+        var report = await probe.ProbeAsync(CancellationToken.None);
+
+        var freeDisk = report.Items.Single(static item => item.Key == "free-disk");
+        AssertEx.Equal(scratch.ExpectedSatisfied, freeDisk.Satisfied, scratch.WrongMountMessage);
+    }
+
     private static (CudaBuildService Service, IInstalledRuntimeStore Store) CreateService(string cacheRoot, HttpClient http)
     {
         var store = new InstalledRuntimeStore(cacheRoot);
