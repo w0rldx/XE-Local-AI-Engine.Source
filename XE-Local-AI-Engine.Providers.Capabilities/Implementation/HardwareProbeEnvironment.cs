@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Capabilities.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 
 /// <summary>
@@ -10,6 +11,9 @@ internal sealed class HardwareProbeEnvironment : IHardwareProbeEnvironment
 {
     private const string ProcMemInfoPath = "/proc/meminfo";
     private const string DrmClassPath = "/sys/class/drm";
+
+    // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
+    private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
 
     /// <inheritdoc />
     public bool IsWindows => OperatingSystem.IsWindows();
@@ -102,21 +106,13 @@ internal sealed class HardwareProbeEnvironment : IHardwareProbeEnvironment
 
         try
         {
-            // The path itself goes to DriveInfo, which resolves the mount actually holding it (and on Windows still
-            // names its volume). Its path ROOT is not that mount: on Linux every absolute path roots at "/", so a
-            // root-based measurement reported the root filesystem for a models volume on a redirected data mount.
-            // The data directory may not exist yet on a fresh node, so the nearest existing ancestor is measured: it
-            // sits on the mount the directory will be created on. IsReady stays the "cannot be resolved" gate.
-            var existing = Path.GetFullPath(path);
-            while (!Directory.Exists(existing) && Path.GetDirectoryName(existing) is { Length: > 0 } parent)
-            {
-                existing = parent;
-            }
-
-            var driveInfo = new DriveInfo(existing);
-            return driveInfo.IsReady ? driveInfo.AvailableFreeSpace : 0;
+            return FreeSpace.GetAvailableFreeBytes(path);
         }
-        catch (Exception exception) when (exception is IOException or ArgumentException or UnauthorizedAccessException)
+        // An unmeasurable path is this probe's 0, never a throw: the profiler falls through to its CPU-mode floor.
+        // InvalidOperationException is the shared probe's "nothing exists at or above the path"; a drive that is not
+        // ready arrives as an IOException out of DriveInfo, which is the same 0 the old IsReady gate answered.
+        catch (Exception exception)
+            when (exception is IOException or ArgumentException or UnauthorizedAccessException or InvalidOperationException)
         {
             return 0;
         }

@@ -51,4 +51,20 @@ public sealed class HardwareProbeEnvironmentTests
             scratch.WrongMountMessage + $" It answered {measured} bytes.");
         AssertEx.False(Directory.Exists(missing), "Measuring free space must not create the directory.");
     }
+
+    /// <summary>
+    ///     The shared <c>IFreeSpaceProbe</c> refuses a path with no existing ancestor rather than answering a figure.
+    ///     This probe's contract is the opposite — 0, never a throw — because the profiler behind it degrades every
+    ///     failed read to its CPU-mode floor, and an exception out of here takes the whole hardware profile with it.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Windows)]
+    public void GetFreeDiskBytes_WhenNothingExistsAtOrAboveThePath_AnswersZeroRatherThanThrowing()
+    {
+        // Unix has no such path: every absolute path walks up to "/", which always exists. Q: is assumed to be
+        // unmounted on the runner, the same assumption DriveInfoFreeSpaceProbeTests makes for the throwing side.
+        AssertEx.Equal(0L,
+            new HardwareProbeEnvironment().GetFreeDiskBytes(@"Q:\xe-hardware-probe-disk"),
+            "An unmeasurable path must read 0 here; anything else means the probe's refusal escaped this catch.");
+    }
 }

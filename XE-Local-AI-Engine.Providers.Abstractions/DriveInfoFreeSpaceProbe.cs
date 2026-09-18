@@ -1,9 +1,9 @@
-namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
-
-using XE_Local_AI_Engine.Providers.Abstractions;
+namespace XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Production <see cref="IFreeSpaceProbe" /> backed by <see cref="DriveInfo" />.
+///     Production <see cref="IFreeSpaceProbe" /> backed by <see cref="DriveInfo" />, and the ONE free-disk
+///     measurement in the node: every runtime gate, source-build prerequisite checklist and hardware profile goes
+///     through it rather than re-deriving the walk.
 ///     <para>
 ///         Measured on the closest EXISTING ancestor of the path, which is also the directory handed to
 ///         <see cref="DriveInfo" />. The path ROOT is not that filesystem: on Linux every absolute path roots at

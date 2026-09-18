@@ -1359,6 +1359,10 @@ Development surveys know the host workspace and call managed `WorkspaceFileScann
 - Verify packaged policy files explicitly; `CopyToPublishDirectory=Always` can leave a disturbed destination missing until the source timestamp changes.
 - Use junction tests for directory reparse guards; symlink tests may skip without Developer Mode. Junctions cannot prove a file-swap guard.
 
+### Measure free disk through `IFreeSpaceProbe`, never on `Path.GetPathRoot` of a path
+
+**Rule:** `DriveInfoFreeSpaceProbe` hands the nearest *existing* directory to `new DriveInfo(dir)`: on Unix .NET `statvfs`-es that path and resolves the real mount; on Windows `DriveInfo` normalises a directory to its volume root, so the one form is right on both. **Failure prevented:** on Linux `GetPathRoot` is `/` for every absolute path, so a root-based gate passes or blocks on a filesystem the work never touches — invisible on a single-volume dev box; and a missing path gives `IsReady=false`/throws, so an unwalked path reads 0. Six hand-written copies existed before they were folded into the one probe. **Authority:** `Providers.Abstractions/DriveInfoFreeSpaceProbe.cs` next to `IFreeSpaceProbe`, so every provider can reach it under the one-reference rule, and `Tests/Providers/Abstractions/DriveInfoFreeSpaceProbeTests.cs`; `Tests/Testing/SeparateMountScratch.cs` — a test only catches this against a real second mount, a same-filesystem temp dir proves nothing. The probe throws `InvalidOperationException` when nothing exists at or above the path, which is not a zero-byte answer: each caller's catch decides what unmeasurable means for its own gate.
+
 ---
 
 ## 3. Models, inference, retrieval

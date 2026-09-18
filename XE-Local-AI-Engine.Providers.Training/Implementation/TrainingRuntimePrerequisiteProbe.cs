@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
 using System.Globalization;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
@@ -23,6 +24,9 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
     internal const long RequiredSystemMemoryBytes = 16L * 1024 * 1024 * 1024;
 
     private static readonly TimeSpan NvidiaSmiTimeout = TimeSpan.FromSeconds(20);
+
+    // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
+    private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
     private readonly string _cacheRoot;
     private readonly ITrainingProcessRunner _processRunner;
     private readonly string _scriptsDirectory;
@@ -74,17 +78,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         var required = FormatGigabytes(RequiredFreeDiskBytes);
         try
         {
-            // The cache root may not exist yet on a first install; measure the nearest existing ancestor, which is the
-            // same volume the install will land on.
-            var existing = NearestExistingDirectory(_cacheRoot);
-            if (existing is null)
-            {
-                return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.FreeDisk,
-                    Satisfied: false,
-                    "The free disk space could not be determined.");
-            }
-
-            var available = new DriveInfo(existing).AvailableFreeSpace;
+            var available = FreeSpace.GetAvailableFreeBytes(_cacheRoot);
             return available >= RequiredFreeDiskBytes
                 ? new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.FreeDisk,
                     Satisfied: true,
@@ -93,7 +87,10 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
                     Satisfied: false,
                     $"Only {FormatGigabytes(available)} free; {required} is required.");
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        // InvalidOperationException is the shared probe's "nothing exists at or above the cache root", which is the
+        // same "could not be determined" row the null-ancestor branch reported.
+        catch (Exception exception)
+            when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
             return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.FreeDisk,
                 Satisfied: false,
@@ -175,23 +172,6 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.NvidiaDriver,
             Satisfied: true,
             $"NVIDIA driver detected: {lines[0].Trim()}.");
-    }
-
-    private static string? NearestExistingDirectory(string path)
-    {
-        var current = Path.GetFullPath(path);
-        while (!Directory.Exists(current))
-        {
-            var parent = Path.GetDirectoryName(current);
-            if (string.IsNullOrEmpty(parent) || string.Equals(parent, current, StringComparison.Ordinal))
-            {
-                return null;
-            }
-
-            current = parent;
-        }
-
-        return current;
     }
 
     private static string FormatGigabytes(long bytes)

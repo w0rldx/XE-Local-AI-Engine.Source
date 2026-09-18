@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -23,6 +24,9 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
     internal const long RequiredFreeDiskBytes = 15L * 1024 * 1024 * 1024;
 
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(8);
+
+    // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
+    private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
     private readonly string _cacheRoot;
     private readonly long _requiredFreeDiskBytes;
 
@@ -122,17 +126,14 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
         {
             Directory.CreateDirectory(_cacheRoot);
 
-            // The cache root itself goes to DriveInfo, which resolves the mount actually holding it. Its path ROOT is
-            // not that mount: on Linux every absolute path roots at "/", so a root-based measurement reported the root
-            // filesystem for a cache on a redirected data volume.
-            var available = new DriveInfo(Path.GetFullPath(_cacheRoot)).AvailableFreeSpace;
+            var available = FreeSpace.GetAvailableFreeBytes(_cacheRoot);
             return new WhisperCppSourceBuildPrerequisiteItem("free-disk",
                 available >= _requiredFreeDiskBytes,
                 available >= _requiredFreeDiskBytes
                     ? "Sufficient free disk space detected."
                     : "At least 15 GiB of free disk space is required.");
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
             return new WhisperCppSourceBuildPrerequisiteItem("free-disk", false, "Free disk space could not be verified.");
         }

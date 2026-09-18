@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -18,6 +19,9 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
 {
     // Hard cap per probed tool, mirroring ProcessGpuVendorProbe: a hung tool can never block the checklist past this.
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(8);
+
+    // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
+    private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
 
     /// <summary>
     ///     Conservative free-disk floor for a CUDA source build. The clone + the cmake/CUDA object tree for a single
@@ -201,13 +205,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
     {
         try
         {
-            // The build cache root may not exist yet on a fresh node; walk up to the nearest existing ancestor and
-            // hand THAT directory to DriveInfo, which then resolves the real mount the build will write into. The
-            // path's ROOT is not that mount: on Linux every absolute path roots at "/", so a root-based measurement
-            // reported the root filesystem for a cache on a redirected data volume.
-            var probePath = NearestExistingAncestor(_buildCacheRoot);
-            var drive = new DriveInfo(probePath);
-            var freeBytes = drive.AvailableFreeSpace;
+            var freeBytes = FreeSpace.GetAvailableFreeBytes(_buildCacheRoot);
             var satisfied = freeBytes >= _requiredFreeDiskBytes;
             var freeGb = freeBytes / (1024.0 * 1024 * 1024);
             var requiredGb = _requiredFreeDiskBytes / (1024.0 * 1024 * 1024);
@@ -222,23 +220,6 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
             // A disk query failure must not throw out of the probe; report it as unsatisfied so the build stays gated.
             return new LlamaCppSourceBuildPrerequisiteItem("free-disk", Satisfied: false, "Free disk space could not be determined.");
         }
-    }
-
-    private static string NearestExistingAncestor(string path)
-    {
-        var current = path;
-        while (!string.IsNullOrEmpty(current) && !Directory.Exists(current))
-        {
-            var parent = Path.GetDirectoryName(current);
-            if (string.IsNullOrEmpty(parent) || string.Equals(parent, current, StringComparison.Ordinal))
-            {
-                break;
-            }
-
-            current = parent;
-        }
-
-        return string.IsNullOrEmpty(current) ? path : current;
     }
 
     private static string FirstLine(string? text)
